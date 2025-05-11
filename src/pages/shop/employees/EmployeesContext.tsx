@@ -46,14 +46,14 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
       if (error) throw new Error(error.message);
       
       // Transform data to match the Employee interface
-      return (data || []).map((profile: any) => ({
+      return (data || []).map((profile: any): Employee => ({
         id: profile.id,
         first_name: profile.first_name || '',
         last_name: profile.last_name || '',
         email: profile.email,
         phone: profile.phone,
         role: profile.role,
-        status: 'active' // Assuming all employees are active by default
+        status: 'active' as const // Type assertion to ensure it matches the Employee interface
       }));
     }
   });
@@ -92,7 +92,7 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
   // Use demo data if no real data is available yet
   const displayEmployees = employees || demoEmployees;
 
-  const value = {
+  const value: EmployeesContextType = {
     employees: displayEmployees,
     isLoading,
     error: error as Error | null,
