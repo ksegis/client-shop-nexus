@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
+import { useEmployees } from './EmployeesContext';
 
 interface EmployeeDialogProps {
   open: boolean;
@@ -45,6 +46,8 @@ type FormValues = z.infer<typeof formSchema>;
 
 export function EmployeeDialog({ open, onOpenChange, onSuccess }: EmployeeDialogProps) {
   const { toast } = useToast();
+  const { refetchEmployees } = useEmployees();
+  
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -84,6 +87,11 @@ export function EmployeeDialog({ open, onOpenChange, onSuccess }: EmployeeDialog
       // Reset form and close dialog
       form.reset();
       onOpenChange(false);
+      
+      // Refresh employees list
+      refetchEmployees();
+      
+      // Call onSuccess if provided
       if (onSuccess) onSuccess();
     } catch (error: any) {
       toast({
