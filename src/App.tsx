@@ -15,6 +15,7 @@ import CustomerLogin from "./pages/customer/Login";
 import CustomerProfile from "./pages/customer/Profile";
 import CustomerEstimates from "./pages/customer/Estimates";
 import CustomerEstimateDetail from "./pages/customer/EstimateDetail";
+import CustomerInvoices from "./pages/customer/Invoices"; // New import
 
 // Shop Portal Pages
 import ShopDashboard from "./pages/shop/Dashboard";
@@ -25,7 +26,7 @@ import ShopWorkOrders from "./pages/shop/WorkOrders";
 import ShopCustomers from "./pages/shop/Customers";
 import ShopEstimates from "./pages/shop/Estimates";
 import ShopInvoices from "./pages/shop/invoices";
-import ShopProfile from "./pages/shop/Profile"; // Import the new profile page
+import ShopProfile from "./pages/shop/Profile";
 
 // Not Found Page
 import NotFound from "./pages/NotFound";
@@ -74,6 +75,15 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <CustomerEstimateDetail />
+                </ProtectedRoute>
+              } 
+            />
+            {/* New Customer Invoices Route */}
+            <Route 
+              path="/customer/invoices" 
+              element={
+                <ProtectedRoute>
+                  <CustomerInvoices />
                 </ProtectedRoute>
               } 
             />
