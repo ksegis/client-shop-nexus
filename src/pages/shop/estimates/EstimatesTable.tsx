@@ -31,14 +31,7 @@ interface EstimatesTableProps {
   estimates: Estimate[];
   onUpdateEstimate: (id: string, estimate: Partial<Estimate>) => Promise<void>;
   onDeleteEstimate: (id: string) => Promise<void>;
-  onCreateEstimate: (estimate: {
-    customer_id: string;
-    vehicle_id: string;
-    title: string;
-    description?: string | null;
-    total_amount?: number;
-    status?: Database['public']['Enums']['estimate_status'];
-  }) => Promise<void>;
+  onCreateEstimate: (estimate: EstimateFormValues) => Promise<void>;
 }
 
 export function EstimatesTable({

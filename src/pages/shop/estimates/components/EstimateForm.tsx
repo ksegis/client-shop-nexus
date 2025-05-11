@@ -1,4 +1,3 @@
-
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Estimate } from "../EstimatesContext";
 import { estimateFormSchema, EstimateFormValues, EstimateStatus } from "../schemas/estimateSchema";
-import { useEstimateFormData, Customer, Vehicle } from "../hooks/useEstimateFormData";
+import { useEstimateFormData } from "../hooks/useEstimateFormData";
 
 interface EstimateFormProps {
   estimate?: Estimate;
@@ -58,14 +57,13 @@ export function EstimateForm({ estimate, onSubmit, onCancel, mode }: EstimateFor
     }
   }, [estimate, form]);
 
-  const handleFormSubmit = async (values: EstimateFormValues) => {
+  async function handleFormSubmit(values: EstimateFormValues) {
     try {
       await onSubmit(values);
-      form.reset(); // Reset the form after successful submission
     } catch (error) {
       console.error("Failed to submit estimate:", error);
     }
-  };
+  }
 
   return (
     <Form {...form}>

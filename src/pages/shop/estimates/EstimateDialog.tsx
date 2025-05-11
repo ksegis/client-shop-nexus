@@ -19,6 +19,15 @@ export function EstimateDialog({
   onSubmit, 
   mode 
 }: EstimateDialogProps) {
+  const handleSubmit = async (values: EstimateFormValues) => {
+    try {
+      await onSubmit(values);
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Failed to submit estimate:", error);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
@@ -29,7 +38,7 @@ export function EstimateDialog({
         </DialogHeader>
         <EstimateForm
           estimate={estimate}
-          onSubmit={onSubmit}
+          onSubmit={handleSubmit}
           onCancel={() => onOpenChange(false)}
           mode={mode}
         />

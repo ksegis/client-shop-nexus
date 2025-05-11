@@ -3,6 +3,7 @@ import Layout from "@/components/layout/Layout";
 import { EstimatesProvider, useEstimates } from "./estimates/EstimatesContext";
 import EstimatesTable from "./estimates/EstimatesTable";
 import { Loader2 } from "lucide-react";
+import { EstimateFormValues } from "./estimates/schemas/estimateSchema";
 
 function EstimatesContent() {
   const { 
