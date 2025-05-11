@@ -1,5 +1,5 @@
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Estimate } from "./EstimatesContext";
 import { EstimateFormValues } from "./schemas/estimateSchema";
 import { EstimateForm } from "./components/EstimateForm";
@@ -32,11 +32,14 @@ export function EstimateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[800px]">
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? "Create New Estimate" : "Edit Estimate"}
           </DialogTitle>
+          <DialogDescription>
+            Fill out the details below to {mode === "create" ? "create a new" : "edit the"} estimate.
+          </DialogDescription>
         </DialogHeader>
         <EstimateForm
           estimate={estimate}

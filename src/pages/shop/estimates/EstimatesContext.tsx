@@ -17,6 +17,14 @@ export type Estimate = Database['public']['Tables']['estimates']['Row'] & {
     last_name: string | null;
     email: string;
   };
+  line_items?: {
+    id: string;
+    description: string;
+    quantity: number;
+    price: number;
+    part_number?: string;
+    vendor?: string;
+  }[];
 };
 
 interface EstimatesContextType {
@@ -53,13 +61,27 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
               first_name,
               last_name,
               email
+            ),
+            estimate_items (
+              id,
+              description,
+              quantity,
+              price,
+              part_number,
+              vendor
             )
           `)
           .order('created_at', { ascending: false });
           
         if (queryError) throw queryError;
         
-        return (data as Estimate[]) || [];
+        // Process the data to have line_items property
+        const processedData = data?.map(est => ({
+          ...est,
+          line_items: est.estimate_items || []
+        }));
+        
+        return (processedData as Estimate[]) || [];
       } catch (error) {
         setError(error as Error);
         return [];
@@ -99,6 +121,34 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
       
       console.log("EstimatesContext - Insert successful, data:", data);
       
+      // If line items exist, insert them
+      if (formValues.line_items && formValues.line_items.length > 0 && data && data.length > 0) {
+        const estimateId = data[0].id;
+        
+        const lineItems = formValues.line_items.map(item => ({
+          estimate_id: estimateId,
+          description: item.description,
+          quantity: item.quantity || 1,
+          price: item.price || 0,
+          part_number: item.part_number || null,
+          vendor: item.vendor || null
+        }));
+        
+        const { error: lineItemError } = await supabase
+          .from('estimate_items')
+          .insert(lineItems);
+        
+        if (lineItemError) {
+          console.error("EstimatesContext - Line item insert error:", lineItemError);
+          // We don't throw here to avoid rolling back the estimate creation
+          toast({
+            variant: "destructive",
+            title: "Warning",
+            description: "Estimate created but some line items failed to save",
+          });
+        }
+      }
+      
       await refetch();
       toast({
         title: "Success",
@@ -117,12 +167,67 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
 
   const updateEstimate = async (id: string, updatedEstimate: Partial<Estimate>) => {
     try {
+      // Extract line_items to handle separately
+      const { line_items, ...estimateData } = updatedEstimate;
+      
+      // Update the estimate record
       const { error: updateError } = await supabase
         .from('estimates')
-        .update(updatedEstimate)
+        .update(estimateData)
         .eq('id', id);
       
       if (updateError) throw updateError;
+      
+      // Handle line items if they were updated
+      if (line_items) {
+        // Get existing line items to determine what to delete
+        const { data: existingItems } = await supabase
+          .from('estimate_items')
+          .select('id')
+          .eq('estimate_id', id);
+        
+        const existingIds = existingItems?.map(item => item.id) || [];
+        const updatedIds = line_items.filter(item => item.id).map(item => item.id);
+        
+        // Items to delete (exist in database but not in the updated list)
+        const idsToDelete = existingIds.filter(existId => !updatedIds.includes(existId));
+        
+        if (idsToDelete.length > 0) {
+          await supabase
+            .from('estimate_items')
+            .delete()
+            .in('id', idsToDelete);
+        }
+        
+        // Update existing items and insert new ones
+        for (const item of line_items) {
+          if (item.id) {
+            // Update existing item
+            await supabase
+              .from('estimate_items')
+              .update({
+                description: item.description,
+                quantity: item.quantity,
+                price: item.price,
+                part_number: item.part_number || null,
+                vendor: item.vendor || null
+              })
+              .eq('id', item.id);
+          } else {
+            // Insert new item
+            await supabase
+              .from('estimate_items')
+              .insert({
+                estimate_id: id,
+                description: item.description,
+                quantity: item.quantity,
+                price: item.price,
+                part_number: item.part_number || null,
+                vendor: item.vendor || null
+              });
+          }
+        }
+      }
       
       await refetch();
       toast({
@@ -165,6 +270,17 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
 
   const deleteEstimate = async (id: string) => {
     try {
+      // First delete related line items
+      const { error: deleteItemsError } = await supabase
+        .from('estimate_items')
+        .delete()
+        .eq('estimate_id', id);
+      
+      if (deleteItemsError) {
+        console.warn("Warning: Failed to delete some estimate items:", deleteItemsError);
+      }
+      
+      // Then delete the estimate
       const { error: deleteError } = await supabase
         .from('estimates')
         .delete()
