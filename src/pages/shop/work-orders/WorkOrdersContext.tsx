@@ -27,7 +27,7 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
       try {
         // Using the generic query method instead of the typed methods
         const { data, error: queryError } = await supabase
-          .from('work_orders')
+          .from('work_orders' as any)
           .select(`
             *,
             vehicle:vehicles(*),
@@ -49,8 +49,8 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     try {
       // Using the generic query method
       const { error: insertError } = await supabase
-        .from('work_orders')
-        .insert([workOrder]);
+        .from('work_orders' as any)
+        .insert([workOrder as any]);
       
       if (insertError) throw insertError;
       
@@ -73,8 +73,8 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     try {
       // Using the generic query method
       const { error: updateError } = await supabase
-        .from('work_orders')
-        .update(updatedWorkOrder)
+        .from('work_orders' as any)
+        .update(updatedWorkOrder as any)
         .eq('id', id);
       
       if (updateError) throw updateError;
@@ -98,7 +98,7 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     try {
       // Using the generic query method
       const { error: deleteError } = await supabase
-        .from('work_orders')
+        .from('work_orders' as any)
         .delete()
         .eq('id', id);
       

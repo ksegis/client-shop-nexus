@@ -23,26 +23,34 @@ const WorkOrders = () => {
 
         <WorkOrdersProvider>
           <div className="rounded-md border">
-            <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <Tabs 
-                defaultValue="active" 
-                value={activeTab}
-                onValueChange={setActiveTab}
-                className="w-full"
-              >
+            <Tabs 
+              defaultValue="active" 
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
+              <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <TabsList>
                   <TabsTrigger value="active">Active</TabsTrigger>
                   <TabsTrigger value="completed">Completed</TabsTrigger>
                   <TabsTrigger value="all">All Orders</TabsTrigger>
                 </TabsList>
-              </Tabs>
-              
-              <WorkOrderDialog />
-            </div>
+                
+                <WorkOrderDialog />
+              </div>
 
-            <TabsContent value={activeTab} className="m-0">
-              <WorkOrdersTable status={activeTab} />
-            </TabsContent>
+              <TabsContent value="active">
+                <WorkOrdersTable status="active" />
+              </TabsContent>
+              
+              <TabsContent value="completed">
+                <WorkOrdersTable status="completed" />
+              </TabsContent>
+              
+              <TabsContent value="all">
+                <WorkOrdersTable status="all" />
+              </TabsContent>
+            </Tabs>
           </div>
         </WorkOrdersProvider>
       </div>
