@@ -52,8 +52,12 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
 
   const createCustomer = async (customer: Partial<Customer>) => {
     try {
-      // Set role to customer
-      const customerData = { ...customer, role: 'customer' };
+      // Set role to customer and ensure required fields
+      const customerData = { 
+        ...customer, 
+        role: 'customer',
+        email: customer.email || '' // Ensure email is not undefined
+      };
       
       const { error: insertError } = await supabase
         .from('profiles')

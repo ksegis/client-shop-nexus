@@ -29,9 +29,14 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+// Wrap TooltipProvider in a functional component to fix the useState hook error
+const TooltipProviderWrapper = ({ children }: { children: React.ReactNode }) => {
+  return <TooltipProvider>{children}</TooltipProvider>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
+    <TooltipProviderWrapper>
       <Toaster />
       <Sonner />
       <BrowserRouter>
@@ -135,7 +140,7 @@ const App = () => (
           </Routes>
         </AuthProvider>
       </BrowserRouter>
-    </TooltipProvider>
+    </TooltipProviderWrapper>
   </QueryClientProvider>
 );
 
