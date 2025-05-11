@@ -19,6 +19,7 @@ import CustomerEstimateDetail from "./pages/customer/EstimateDetail";
 // Shop Portal Pages
 import ShopDashboard from "./pages/shop/Dashboard";
 import ShopReports from "./pages/shop/Reports";
+import ShopEmployees from "./pages/shop/Employees";
 
 // Not Found Page
 import NotFound from "./pages/NotFound";
@@ -76,12 +77,22 @@ const App = () => (
               } 
             />
             
-            {/* Add Reports Route */}
+            {/* Reports Route */}
             <Route 
               path="/shop/reports" 
               element={
                 <ProtectedRoute>
                   <ShopReports />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Employees Route */}
+            <Route 
+              path="/shop/employees" 
+              element={
+                <ProtectedRoute>
+                  <ShopEmployees />
                 </ProtectedRoute>
               } 
             />
