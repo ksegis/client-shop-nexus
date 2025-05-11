@@ -15,7 +15,8 @@ import CustomerLogin from "./pages/customer/Login";
 import CustomerProfile from "./pages/customer/Profile";
 import CustomerEstimates from "./pages/customer/Estimates";
 import CustomerEstimateDetail from "./pages/customer/EstimateDetail";
-import CustomerInvoices from "./pages/customer/Invoices"; // New import
+import CustomerInvoices from "./pages/customer/Invoices"; 
+import CustomerTransactions from "./pages/customer/Transactions"; // New import
 
 // Shop Portal Pages
 import ShopDashboard from "./pages/shop/Dashboard";
@@ -78,12 +79,20 @@ const App = () => (
                 </ProtectedRoute>
               } 
             />
-            {/* New Customer Invoices Route */}
             <Route 
               path="/customer/invoices" 
               element={
                 <ProtectedRoute>
                   <CustomerInvoices />
+                </ProtectedRoute>
+              } 
+            />
+            {/* New Customer Transactions Route */}
+            <Route 
+              path="/customer/transactions" 
+              element={
+                <ProtectedRoute>
+                  <CustomerTransactions />
                 </ProtectedRoute>
               } 
             />
