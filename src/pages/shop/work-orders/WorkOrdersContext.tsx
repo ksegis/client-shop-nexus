@@ -25,7 +25,8 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     queryKey: ['workOrders'],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
+        // Using the generic query method instead of the typed methods
+        const { data, error: queryError } = await supabase
           .from('work_orders')
           .select(`
             *,
@@ -34,9 +35,9 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
           `)
           .order('created_at', { ascending: false });
           
-        if (error) throw error;
+        if (queryError) throw queryError;
         
-        return data as unknown as WorkOrder[];
+        return (data || []) as unknown as WorkOrder[];
       } catch (error) {
         setError(error as Error);
         return [];
@@ -46,9 +47,10 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
 
   const createWorkOrder = async (workOrder: Partial<WorkOrder>) => {
     try {
+      // Using the generic query method
       const { error: insertError } = await supabase
         .from('work_orders')
-        .insert([workOrder as any]);
+        .insert([workOrder]);
       
       if (insertError) throw insertError;
       
@@ -69,9 +71,10 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
 
   const updateWorkOrder = async (id: string, updatedWorkOrder: Partial<WorkOrder>) => {
     try {
+      // Using the generic query method
       const { error: updateError } = await supabase
         .from('work_orders')
-        .update(updatedWorkOrder as any)
+        .update(updatedWorkOrder)
         .eq('id', id);
       
       if (updateError) throw updateError;
@@ -93,6 +96,7 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
 
   const deleteWorkOrder = async (id: string) => {
     try {
+      // Using the generic query method
       const { error: deleteError } = await supabase
         .from('work_orders')
         .delete()
