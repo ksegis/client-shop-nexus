@@ -1,87 +1,89 @@
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
 
-export type TransactionStatus = 'completed' | 'pending' | 'failed';
-
-export interface Transaction {
+// Define Transaction type
+interface Transaction {
   id: string;
-  customer_id: string;
-  amount: number;
-  description: string;
-  status: TransactionStatus;
-  payment_method: string;
   created_at: string;
-  invoice_id?: string;
+  invoice_id: string;
+  amount: number;
+  payment_method: string;
+  status: string;
+  description?: string;
+  invoice_title?: string;
 }
 
 interface TransactionHistoryContextType {
   transactions: Transaction[];
-  isLoading: boolean;
+  loading: boolean;
   error: Error | null;
-  refreshTransactions: () => Promise<void>;
 }
 
-const TransactionHistoryContext = createContext<TransactionHistoryContextType | undefined>(undefined);
+const TransactionHistoryContext = createContext<TransactionHistoryContextType>({
+  transactions: [],
+  loading: false,
+  error: null,
+});
 
-export function TransactionHistoryProvider({ children }: { children: ReactNode }) {
+export const useTransactionHistory = () => useContext(TransactionHistoryContext);
+
+export const TransactionHistoryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const { user } = useAuth();
+  const { toast } = useToast();
 
-  const { data: transactions = [], isLoading, refetch } = useQuery({
-    queryKey: ['customer-transactions', user?.id],
-    queryFn: async () => {
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      if (!user?.id) return;
+
       try {
-        if (!user?.id) return [];
+        setLoading(true);
         
-        // Fetch completed payments for this customer
-        const { data, error: queryError } = await supabase
-          .from('transactions')
-          .select(`
-            *,
-            invoices (
-              id,
-              title
-            )
-          `)
-          .eq('customer_id', user.id)
-          .order('created_at', { ascending: false });
-          
-        if (queryError) throw queryError;
-        
-        return (data as Transaction[]) || [];
-      } catch (error) {
-        setError(error as Error);
-        return [];
-      }
-    },
-    enabled: !!user?.id,
-  });
+        // For now, we'll fetch invoices and use them as transactions
+        // since we don't have a dedicated transactions table yet
+        const { data, error: fetchError } = await supabase
+          .from('invoices')
+          .select('id, created_at, title, total_amount, status, customer_id')
+          .eq('customer_id', user.id);
 
-  const refreshTransactions = async () => {
-    await refetch();
-  };
+        if (fetchError) throw fetchError;
+
+        // Convert invoices to transactions format
+        const formattedTransactions: Transaction[] = data.map(invoice => ({
+          id: invoice.id,
+          created_at: invoice.created_at,
+          invoice_id: invoice.id,
+          amount: invoice.total_amount,
+          payment_method: 'Credit Card', // Default value for now
+          status: invoice.status === 'paid' ? 'completed' : 'pending',
+          description: 'Payment for invoice',
+          invoice_title: invoice.title
+        }));
+
+        setTransactions(formattedTransactions);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch transactions'));
+        toast({
+          title: 'Error',
+          description: 'Failed to load transaction history.',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, [user, toast]);
 
   return (
-    <TransactionHistoryContext.Provider
-      value={{
-        transactions,
-        isLoading,
-        error,
-        refreshTransactions
-      }}
-    >
+    <TransactionHistoryContext.Provider value={{ transactions, loading, error }}>
       {children}
     </TransactionHistoryContext.Provider>
   );
-}
-
-export function useTransactionHistory() {
-  const context = useContext(TransactionHistoryContext);
-  if (context === undefined) {
-    throw new Error('useTransactionHistory must be used within a TransactionHistoryProvider');
-  }
-  return context;
-}
+};

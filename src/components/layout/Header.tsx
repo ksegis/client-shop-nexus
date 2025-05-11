@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -16,8 +15,7 @@ const Header = ({ portalType }: HeaderProps) => {
     { name: 'Profile', path: '/customer/profile' },
     { name: 'Estimates', path: '/customer/estimates' },
     { name: 'Invoices', path: '/customer/invoices' },
-    { name: 'Transaction History', path: '/customer/transactions' },
-    { name: 'Inventory Lookup', path: '/customer/inventory' }
+    { name: 'Transaction History', path: '/customer/transactions' }
   ];
   
   const shopLinks = [
