@@ -87,8 +87,23 @@ const Inventory = () => {
   // Add inventory item mutation
   const addItemMutation = useMutation({
     mutationFn: async (values: InventoryFormValues) => {
-      // Fix: Ensure name is passed as a required field
-      const { error } = await supabase.from('inventory').insert(values);
+      // Fix: Ensure the values object has all required fields including name
+      if (!values.name) {
+        throw new Error("Name is required");
+      }
+      
+      const { error } = await supabase.from('inventory').insert({
+        name: values.name,
+        description: values.description,
+        sku: values.sku,
+        quantity: values.quantity,
+        price: values.price,
+        cost: values.cost,
+        category: values.category,
+        supplier: values.supplier,
+        reorder_level: values.reorder_level
+      });
+      
       if (error) throw error;
     },
     onSuccess: () => {
@@ -113,6 +128,12 @@ const Inventory = () => {
   const updateItemMutation = useMutation({
     mutationFn: async (values: InventoryFormValues & { id: string }) => {
       const { id, ...itemData } = values;
+      
+      // Fix: Ensure name is included and not undefined
+      if (!itemData.name) {
+        throw new Error("Name is required");
+      }
+      
       const { error } = await supabase
         .from('inventory')
         .update(itemData)
