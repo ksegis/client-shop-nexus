@@ -25,6 +25,7 @@ import StatusBadge from "./components/StatusBadge";
 import EstimateDialog from "./EstimateDialog";
 import DeleteConfirmationDialog from "./components/DeleteConfirmationDialog";
 import EmptyState from "./components/EmptyState";
+import { EstimateFormValues } from "./schemas/estimateSchema";
 
 interface EstimatesTableProps {
   estimates: Estimate[];
