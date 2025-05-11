@@ -20,6 +20,7 @@ import CustomerEstimateDetail from "./pages/customer/EstimateDetail";
 import ShopDashboard from "./pages/shop/Dashboard";
 import ShopReports from "./pages/shop/Reports";
 import ShopEmployees from "./pages/shop/Employees";
+import ShopInventory from "./pages/shop/Inventory";
 
 // Not Found Page
 import NotFound from "./pages/NotFound";
@@ -93,6 +94,16 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ShopEmployees />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* Inventory Route */}
+            <Route 
+              path="/shop/inventory" 
+              element={
+                <ProtectedRoute>
+                  <ShopInventory />
                 </ProtectedRoute>
               } 
             />

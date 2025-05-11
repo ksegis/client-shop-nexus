@@ -108,6 +108,51 @@ export type Database = {
           },
         ]
       }
+      inventory: {
+        Row: {
+          category: string | null
+          cost: number | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          price: number
+          quantity: number
+          reorder_level: number | null
+          sku: string | null
+          supplier: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          cost?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          price?: number
+          quantity?: number
+          reorder_level?: number | null
+          sku?: string | null
+          supplier?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          cost?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          price?: number
+          quantity?: number
+          reorder_level?: number | null
+          sku?: string | null
+          supplier?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
