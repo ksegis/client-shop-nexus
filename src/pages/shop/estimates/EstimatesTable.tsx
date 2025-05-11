@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
-import { Estimate } from "./EstimatesContext";
+import { Estimate } from "./types/estimateTypes";
 import StatusBadge from "./components/StatusBadge";
 import EstimateDialog from "./EstimateDialog";
 import DeleteConfirmationDialog from "./components/DeleteConfirmationDialog";
