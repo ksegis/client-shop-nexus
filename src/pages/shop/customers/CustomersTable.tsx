@@ -7,7 +7,7 @@ import EmptyState from './components/EmptyState';
 import DeleteConfirmationDialog from './components/DeleteConfirmationDialog';
 import { useState } from 'react';
 import { CustomerDialog } from './CustomerDialog';
-import { format } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 
 interface CustomersTableProps {
   filter: 'all' | 'recent';
@@ -57,6 +57,16 @@ export function CustomersTable({ filter, searchQuery }: CustomersTableProps) {
     return <EmptyState filter={filter} searchQuery={searchQuery} />;
   }
 
+  // Helper function to safely format dates
+  const safeFormatDate = (dateStr: string) => {
+    try {
+      const date = parseISO(dateStr);
+      return isValid(date) ? format(date, 'MMM d, yyyy') : 'Invalid Date';
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
+
   return (
     <div>
       <Table>
@@ -95,7 +105,7 @@ export function CustomersTable({ filter, searchQuery }: CustomersTableProps) {
               <TableCell className="hidden md:table-cell">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
-                  {format(new Date(customer.created_at), 'MMM d, yyyy')}
+                  {safeFormatDate(customer.created_at)}
                 </div>
               </TableCell>
               <TableCell className="text-right">
