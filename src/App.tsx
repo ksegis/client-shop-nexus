@@ -23,6 +23,7 @@ import ShopEmployees from "./pages/shop/Employees";
 import ShopInventory from "./pages/shop/Inventory";
 import ShopWorkOrders from "./pages/shop/WorkOrders";
 import ShopCustomers from "./pages/shop/Customers";
+import ShopEstimates from "./pages/shop/Estimates";
 
 // Not Found Page
 import NotFound from "./pages/NotFound";
@@ -131,6 +132,16 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ShopCustomers />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Estimates Route */}
+            <Route 
+              path="/shop/estimates" 
+              element={
+                <ProtectedRoute>
+                  <ShopEstimates />
                 </ProtectedRoute>
               } 
             />
