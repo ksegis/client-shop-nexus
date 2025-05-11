@@ -22,7 +22,14 @@ interface EstimatesContextType {
   estimates: Estimate[];
   isLoading: boolean;
   error: Error | null;
-  createEstimate: (estimate: Partial<Estimate>) => Promise<void>;
+  createEstimate: (estimate: {
+    customer_id: string;
+    vehicle_id: string;
+    title: string;
+    description?: string | null;
+    total_amount?: number;
+    status?: Database['public']['Enums']['estimate_status'];
+  }) => Promise<void>;
   updateEstimate: (id: string, estimate: Partial<Estimate>) => Promise<void>;
   updateEstimateStatus: (id: string, status: Database['public']['Enums']['estimate_status']) => Promise<void>;
   deleteEstimate: (id: string) => Promise<void>;
@@ -66,7 +73,14 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const createEstimate = async (estimate: Partial<Estimate>) => {
+  const createEstimate = async (estimate: {
+    customer_id: string;
+    vehicle_id: string;
+    title: string;
+    description?: string | null;
+    total_amount?: number;
+    status?: Database['public']['Enums']['estimate_status'];
+  }) => {
     try {
       const { error: insertError } = await supabase
         .from('estimates')

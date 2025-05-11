@@ -24,6 +24,7 @@ import ShopInventory from "./pages/shop/Inventory";
 import ShopWorkOrders from "./pages/shop/WorkOrders";
 import ShopCustomers from "./pages/shop/Customers";
 import ShopEstimates from "./pages/shop/Estimates";
+import ShopInvoices from "./pages/shop/invoices";
 
 // Not Found Page
 import NotFound from "./pages/NotFound";
@@ -142,6 +143,16 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ShopEstimates />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Invoices Route */}
+            <Route 
+              path="/shop/invoices" 
+              element={
+                <ProtectedRoute>
+                  <ShopInvoices />
                 </ProtectedRoute>
               } 
             />

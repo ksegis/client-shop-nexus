@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Menu, X, User } from 'lucide-react';
 
@@ -10,6 +10,7 @@ interface HeaderProps {
 
 const Header = ({ portalType }: HeaderProps) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const location = useLocation();
   
   const customerLinks = [
     { name: 'Profile', path: '/customer/profile' },
@@ -51,7 +52,9 @@ const Header = ({ portalType }: HeaderProps) => {
               <Link 
                 key={link.name}
                 to={link.path}
-                className="text-gray-600 hover:text-shop-primary font-medium"
+                className={`text-gray-600 hover:text-shop-primary font-medium ${
+                  location.pathname === link.path ? 'text-shop-primary' : ''
+                }`}
               >
                 {link.name}
               </Link>
@@ -90,7 +93,9 @@ const Header = ({ portalType }: HeaderProps) => {
                 <Link
                   key={link.name}
                   to={link.path}
-                  className="text-gray-600 hover:text-shop-primary px-3 py-2 rounded-md font-medium"
+                  className={`text-gray-600 hover:text-shop-primary px-3 py-2 rounded-md font-medium ${
+                    location.pathname === link.path ? 'text-shop-primary' : ''
+                  }`}
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {link.name}
