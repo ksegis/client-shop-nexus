@@ -15,27 +15,33 @@ export type Database = {
           description: string
           estimate_id: string
           id: string
+          part_number: string | null
           price: number
           quantity: number
           updated_at: string
+          vendor: string | null
         }
         Insert: {
           created_at?: string
           description: string
           estimate_id: string
           id?: string
+          part_number?: string | null
           price: number
           quantity?: number
           updated_at?: string
+          vendor?: string | null
         }
         Update: {
           created_at?: string
           description?: string
           estimate_id?: string
           id?: string
+          part_number?: string | null
           price?: number
           quantity?: number
           updated_at?: string
+          vendor?: string | null
         }
         Relationships: [
           {
@@ -159,27 +165,33 @@ export type Database = {
           description: string
           id: string
           invoice_id: string
+          part_number: string | null
           price: number
           quantity: number
           updated_at: string
+          vendor: string | null
         }
         Insert: {
           created_at?: string
           description: string
           id?: string
           invoice_id: string
+          part_number?: string | null
           price: number
           quantity?: number
           updated_at?: string
+          vendor?: string | null
         }
         Update: {
           created_at?: string
           description?: string
           id?: string
           invoice_id?: string
+          part_number?: string | null
           price?: number
           quantity?: number
           updated_at?: string
+          vendor?: string | null
         }
         Relationships: [
           {

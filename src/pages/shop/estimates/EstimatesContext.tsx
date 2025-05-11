@@ -22,8 +22,8 @@ export type Estimate = Database['public']['Tables']['estimates']['Row'] & {
     description: string;
     quantity: number;
     price: number;
-    part_number?: string;
-    vendor?: string;
+    part_number?: string | null;
+    vendor?: string | null;
   }[];
 };
 
@@ -48,6 +48,7 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
     queryKey: ['estimates'],
     queryFn: async () => {
       try {
+        console.log("Fetching estimates with line items");
         const { data, error: queryError } = await supabase
           .from('estimates')
           .select(`
@@ -78,11 +79,15 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
         // Process the data to have line_items property
         const processedData = data?.map(est => ({
           ...est,
-          line_items: est.estimate_items || []
+          line_items: est.estimate_items || [],
+          // Remove estimate_items to avoid duplicated data
+          estimate_items: undefined
         }));
         
-        return (processedData as Estimate[]) || [];
+        console.log("Processed estimate data:", processedData);
+        return (processedData as unknown) as Estimate[];
       } catch (error) {
+        console.error("Error fetching estimates:", error);
         setError(error as Error);
         return [];
       }
@@ -133,6 +138,8 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
           part_number: item.part_number || null,
           vendor: item.vendor || null
         }));
+        
+        console.log("EstimatesContext - Inserting line items:", lineItems);
         
         const { error: lineItemError } = await supabase
           .from('estimate_items')
@@ -187,7 +194,7 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
           .eq('estimate_id', id);
         
         const existingIds = existingItems?.map(item => item.id) || [];
-        const updatedIds = line_items.filter(item => item.id).map(item => item.id);
+        const updatedIds = line_items.filter(item => item.id).map(item => item.id as string);
         
         // Items to delete (exist in database but not in the updated list)
         const idsToDelete = existingIds.filter(existId => !updatedIds.includes(existId));

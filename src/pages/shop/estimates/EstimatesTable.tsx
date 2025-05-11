@@ -64,6 +64,33 @@ export function EstimatesTable({
     return onCreateEstimate(values);
   };
 
+  // For updating an estimate with correct typing
+  const handleUpdateSubmit = async (values: EstimateFormValues) => {
+    if (selectedEstimate) {
+      // Ensure line_items has the correct structure if present
+      const updateData: Partial<Estimate> = {
+        title: values.title,
+        description: values.description,
+        total_amount: values.total_amount,
+        status: values.status,
+      };
+
+      if (values.line_items) {
+        updateData.line_items = values.line_items.map(item => ({
+          id: item.id || "",
+          description: item.description,
+          quantity: item.quantity,
+          price: item.price,
+          part_number: item.part_number,
+          vendor: item.vendor
+        }));
+      }
+
+      return onUpdateEstimate(selectedEstimate.id, updateData);
+    }
+    return Promise.reject("No estimate selected");
+  };
+
   if (estimates.length === 0) {
     return <EmptyState onCreateNew={handleCreateNewClick} />;
   }
@@ -147,12 +174,7 @@ export function EstimatesTable({
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         estimate={selectedEstimate}
-        onSubmit={(values) => {
-          if (selectedEstimate) {
-            return onUpdateEstimate(selectedEstimate.id, values);
-          }
-          return Promise.reject("No estimate selected");
-        }}
+        onSubmit={handleUpdateSubmit}
         mode="edit"
       />
 
