@@ -1,13 +1,21 @@
 
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    navigate("/shop");
-  }, [navigate]);
+    if (loading) return;
+    
+    if (user) {
+      navigate("/shop");
+    } else {
+      navigate("/auth");
+    }
+  }, [navigate, user, loading]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
