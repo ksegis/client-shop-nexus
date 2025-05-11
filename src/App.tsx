@@ -25,6 +25,7 @@ import ShopWorkOrders from "./pages/shop/WorkOrders";
 import ShopCustomers from "./pages/shop/Customers";
 import ShopEstimates from "./pages/shop/Estimates";
 import ShopInvoices from "./pages/shop/invoices";
+import ShopProfile from "./pages/shop/Profile"; // Import the new profile page
 
 // Not Found Page
 import NotFound from "./pages/NotFound";
@@ -83,6 +84,16 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ShopDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Profile Route */}
+            <Route 
+              path="/shop/profile" 
+              element={
+                <ProtectedRoute>
+                  <ShopProfile />
                 </ProtectedRoute>
               } 
             />
