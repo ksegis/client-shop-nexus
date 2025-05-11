@@ -79,8 +79,10 @@ export function EstimateDialog({ open, onOpenChange, estimate, onSubmit, mode }:
       }
     };
 
-    fetchCustomers();
-  }, []);
+    if (open) {
+      fetchCustomers();
+    }
+  }, [open]);
 
   // Fetch vehicles for the dropdown based on selected customer
   useEffect(() => {
@@ -107,17 +109,29 @@ export function EstimateDialog({ open, onOpenChange, estimate, onSubmit, mode }:
 
   // Reset form when the dialog opens/closes or estimate changes
   useEffect(() => {
-    if (open && estimate) {
-      form.reset({
-        title: estimate.title || "",
-        description: estimate.description || "",
-        customer_id: estimate.customer_id || "",
-        vehicle_id: estimate.vehicle_id || "",
-        total_amount: estimate.total_amount || 0,
-        status: estimate.status || "pending",
-      });
-    } else if (!open) {
-      form.reset();
+    if (open) {
+      if (estimate) {
+        form.reset({
+          title: estimate.title || "",
+          description: estimate.description || "",
+          customer_id: estimate.customer_id || "",
+          vehicle_id: estimate.vehicle_id || "",
+          total_amount: estimate.total_amount || 0,
+          status: estimate.status || "pending",
+        });
+        setSelectedCustomerId(estimate.customer_id);
+      } else {
+        // Reset form for create mode
+        form.reset({
+          title: "",
+          description: "",
+          customer_id: "",
+          vehicle_id: "",
+          total_amount: 0,
+          status: "pending",
+        });
+        setSelectedCustomerId(null);
+      }
     }
   }, [open, estimate, form]);
 
@@ -125,6 +139,7 @@ export function EstimateDialog({ open, onOpenChange, estimate, onSubmit, mode }:
     try {
       await onSubmit(values);
       onOpenChange(false);
+      form.reset(); // Reset the form after successful submission
     } catch (error) {
       console.error("Failed to submit estimate:", error);
     }
