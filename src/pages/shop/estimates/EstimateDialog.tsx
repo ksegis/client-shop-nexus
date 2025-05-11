@@ -43,7 +43,7 @@ interface EstimateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   estimate?: Estimate;
-  onSubmit: (values: Partial<Estimate>) => Promise<void>;
+  onSubmit: (values: EstimateFormValues) => Promise<void>;
   mode: "create" | "edit";
 }
 

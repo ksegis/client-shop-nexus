@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,11 +18,21 @@ export type Estimate = Database['public']['Tables']['estimates']['Row'] & {
   };
 };
 
+// Define a type that matches what Supabase expects for insertion
+type EstimateInsert = {
+  customer_id: string;
+  vehicle_id: string;
+  title: string;
+  description?: string | null;
+  total_amount?: number;
+  status?: Database['public']['Enums']['estimate_status'];
+};
+
 interface EstimatesContextType {
   estimates: Estimate[];
   isLoading: boolean;
   error: Error | null;
-  createEstimate: (estimate: Partial<Estimate>) => Promise<void>;
+  createEstimate: (estimate: EstimateInsert) => Promise<void>;
   updateEstimate: (id: string, estimate: Partial<Estimate>) => Promise<void>;
   updateEstimateStatus: (id: string, status: Database['public']['Enums']['estimate_status']) => Promise<void>;
   deleteEstimate: (id: string) => Promise<void>;
@@ -65,7 +76,7 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const createEstimate = async (estimate: Partial<Estimate>) => {
+  const createEstimate = async (estimate: EstimateInsert) => {
     try {
       const { error: insertError } = await supabase
         .from('estimates')
