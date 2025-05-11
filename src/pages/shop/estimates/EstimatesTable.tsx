@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Edit, MoreHorizontal, Trash } from "lucide-react";
@@ -19,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { Estimate } from "./EstimatesContext";
+import { Database } from "@/integrations/supabase/types";
 import StatusBadge from "./components/StatusBadge";
 import EstimateDialog from "./EstimateDialog";
 import DeleteConfirmationDialog from "./components/DeleteConfirmationDialog";
