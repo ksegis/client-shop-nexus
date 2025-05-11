@@ -5,6 +5,16 @@ import EstimatesTable from "./estimates/EstimatesTable";
 import { Loader2 } from "lucide-react";
 import { EstimateFormValues } from "./estimates/schemas/estimateSchema";
 
+export default function Estimates() {
+  return (
+    <Layout portalType="shop">
+      <EstimatesProvider>
+        <EstimatesContent />
+      </EstimatesProvider>
+    </Layout>
+  );
+}
+
 function EstimatesContent() {
   const { 
     estimates, 
@@ -38,15 +48,5 @@ function EstimatesContent() {
         onCreateEstimate={createEstimate}
       />
     </div>
-  );
-}
-
-export default function Estimates() {
-  return (
-    <Layout portalType="shop">
-      <EstimatesProvider>
-        <EstimatesContent />
-      </EstimatesProvider>
-    </Layout>
   );
 }

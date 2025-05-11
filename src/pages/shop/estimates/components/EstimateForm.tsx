@@ -59,6 +59,7 @@ export function EstimateForm({ estimate, onSubmit, onCancel, mode }: EstimateFor
 
   async function handleFormSubmit(values: EstimateFormValues) {
     try {
+      console.log("Form values before submission:", values);
       await onSubmit(values);
     } catch (error) {
       console.error("Failed to submit estimate:", error);

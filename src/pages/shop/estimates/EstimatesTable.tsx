@@ -20,7 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { Estimate } from "./EstimatesContext";
-import { Database } from "@/integrations/supabase/types";
 import StatusBadge from "./components/StatusBadge";
 import EstimateDialog from "./EstimateDialog";
 import DeleteConfirmationDialog from "./components/DeleteConfirmationDialog";
@@ -54,16 +53,21 @@ export function EstimatesTable({
     setSelectedEstimate(estimate);
     setDeleteDialogOpen(true);
   };
+  
+  const handleCreateNewClick = () => {
+    console.log("Opening create dialog");
+    setCreateDialogOpen(true);
+  };
 
   if (estimates.length === 0) {
-    return <EmptyState onCreateNew={() => setCreateDialogOpen(true)} />;
+    return <EmptyState onCreateNew={handleCreateNewClick} />;
   }
 
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold">Estimates</h2>
-        <Button onClick={() => setCreateDialogOpen(true)}>
+        <Button onClick={handleCreateNewClick}>
           Create New Estimate
         </Button>
       </div>

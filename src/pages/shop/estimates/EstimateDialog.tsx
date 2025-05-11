@@ -21,6 +21,7 @@ export function EstimateDialog({
 }: EstimateDialogProps) {
   const handleSubmit = async (values: EstimateFormValues) => {
     try {
+      console.log("Submitting estimate:", values);
       await onSubmit(values);
       onOpenChange(false);
     } catch (error) {
