@@ -12,7 +12,7 @@ import {
   FormControl,
   FormMessage,
 } from '@/components/ui/form';
-import { InventoryItem, InventoryFormValues, inventoryFormSchema } from './types';
+import { InventoryFormValues, inventoryFormSchema } from './types';
 
 interface InventoryFormProps {
   defaultValues?: InventoryFormValues;

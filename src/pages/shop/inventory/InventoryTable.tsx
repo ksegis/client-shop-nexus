@@ -10,26 +10,23 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 import { InventoryItem } from './types';
+import { useInventoryContext } from './InventoryContext';
 
 interface InventoryTableProps {
-  items: InventoryItem[];
-  isLoading: boolean;
-  sortField: keyof InventoryItem;
-  sortDirection: 'asc' | 'desc';
-  onSort: (field: keyof InventoryItem) => void;
   onEdit: (item: InventoryItem) => void;
 }
 
-export const InventoryTable = ({
-  items,
-  isLoading,
-  sortField,
-  sortDirection,
-  onSort,
-  onEdit,
-}: InventoryTableProps) => {
+export const InventoryTable = ({ onEdit }: InventoryTableProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  const { 
+    inventoryItems,
+    isLoading,
+    sortField,
+    sortDirection,
+    handleSort
+  } = useInventoryContext();
   
   // Delete inventory item mutation
   const deleteItemMutation = useMutation({
@@ -61,7 +58,7 @@ export const InventoryTable = ({
     return <div className="text-center py-4">Loading inventory data...</div>;
   }
 
-  if (items.length === 0) {
+  if (inventoryItems.length === 0) {
     return (
       <div className="rounded-md border">
         <Table>
@@ -92,7 +89,7 @@ export const InventoryTable = ({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[200px] cursor-pointer" onClick={() => onSort('name')}>
+            <TableHead className="w-[200px] cursor-pointer" onClick={() => handleSort('name')}>
               <div className="flex items-center">
                 Name
                 {sortField === 'name' && (
@@ -101,7 +98,7 @@ export const InventoryTable = ({
               </div>
             </TableHead>
             <TableHead>Category</TableHead>
-            <TableHead className="cursor-pointer" onClick={() => onSort('quantity')}>
+            <TableHead className="cursor-pointer" onClick={() => handleSort('quantity')}>
               <div className="flex items-center">
                 Quantity
                 {sortField === 'quantity' && (
@@ -109,7 +106,7 @@ export const InventoryTable = ({
                 )}
               </div>
             </TableHead>
-            <TableHead className="cursor-pointer" onClick={() => onSort('price')}>
+            <TableHead className="cursor-pointer" onClick={() => handleSort('price')}>
               <div className="flex items-center">
                 Price
                 {sortField === 'price' && (
@@ -122,7 +119,7 @@ export const InventoryTable = ({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((item) => {
+          {inventoryItems.map((item) => {
             // Calculate stock status
             const reorderLevel = item.reorder_level || 10;
             const stockStatus = 

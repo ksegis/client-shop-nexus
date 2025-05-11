@@ -1,31 +1,30 @@
 
 import { useState } from 'react';
-import { AlertCircle, Plus, Search } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import Layout from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { AlertCircle } from 'lucide-react';
 
 import { InventoryItem, InventoryFormValues } from './inventory/types';
 import { InventoryTable } from './inventory/InventoryTable';
 import { InventoryDialog } from './inventory/InventoryDialog';
-import { useInventory } from './inventory/useInventory';
+import { SearchFilter } from './inventory/SearchFilter';
+import { InventoryProvider, useInventoryContext } from './inventory/InventoryContext';
 
-const Inventory = () => {
+// This is the container component that uses the context
+const InventoryContent = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   
   const {
     inventoryItems,
-    isLoading,
     error,
-    sortField,
-    sortDirection,
-    handleSort,
-    addItemMutation,
-    updateItemMutation
-  } = useInventory();
+    addItem,
+    updateItem,
+    isSubmitting
+  } = useInventoryContext();
 
   // Filter items by search term
   const filteredItems = inventoryItems.filter(item => 
@@ -39,10 +38,14 @@ const Inventory = () => {
   // Handle form submission
   const onSubmit = (values: InventoryFormValues) => {
     if (editingItem) {
-      updateItemMutation.mutate({ ...values, id: editingItem.id });
+      updateItem({ ...values, id: editingItem.id });
     } else {
-      addItemMutation.mutate(values);
+      addItem(values);
     }
+    
+    // Close the dialog after submission
+    setShowAddDialog(false);
+    setEditingItem(null);
   };
 
   // Handle dialog close
@@ -54,7 +57,7 @@ const Inventory = () => {
   };
 
   return (
-    <Layout portalType="shop">
+    <>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
@@ -80,15 +83,7 @@ const Inventory = () => {
           </CardHeader>
           <CardContent>
             <div className="flex items-center mb-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search inventory items..."
-                  className="pl-8"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+              <SearchFilter searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
             </div>
 
             {error ? (
@@ -97,14 +92,7 @@ const Inventory = () => {
                 Error loading inventory data
               </div>
             ) : (
-              <InventoryTable
-                items={filteredItems}
-                isLoading={isLoading}
-                sortField={sortField}
-                sortDirection={sortDirection}
-                onSort={handleSort}
-                onEdit={setEditingItem}
-              />
+              <InventoryTable onEdit={setEditingItem} />
             )}
           </CardContent>
         </Card>
@@ -116,8 +104,19 @@ const Inventory = () => {
         onOpenChange={handleDialogOpenChange}
         onSubmit={onSubmit}
         editingItem={editingItem}
-        isSubmitting={addItemMutation.isPending || updateItemMutation.isPending}
+        isSubmitting={isSubmitting}
       />
+    </>
+  );
+};
+
+// The main Inventory component that wraps everything with the provider
+const Inventory = () => {
+  return (
+    <Layout portalType="shop">
+      <InventoryProvider>
+        <InventoryContent />
+      </InventoryProvider>
     </Layout>
   );
 };
