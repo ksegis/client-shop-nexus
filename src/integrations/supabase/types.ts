@@ -153,6 +153,105 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_items: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          invoice_id: string
+          price: number
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          invoice_id: string
+          price: number
+          quantity?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id?: string
+          price?: number
+          quantity?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          created_at: string
+          customer_id: string
+          description: string | null
+          id: string
+          staff_id: string | null
+          status: Database["public"]["Enums"]["invoice_status"]
+          title: string
+          total_amount: number
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          description?: string | null
+          id?: string
+          staff_id?: string | null
+          status?: Database["public"]["Enums"]["invoice_status"]
+          title: string
+          total_amount?: number
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          description?: string | null
+          id?: string
+          staff_id?: string | null
+          status?: Database["public"]["Enums"]["invoice_status"]
+          title?: string
+          total_amount?: number
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -252,6 +351,7 @@ export type Database = {
     }
     Enums: {
       estimate_status: "pending" | "approved" | "declined" | "completed"
+      invoice_status: "draft" | "pending" | "paid" | "overdue"
       user_role: "customer" | "staff" | "admin"
       vehicle_type: "car" | "truck" | "motorcycle" | "other"
     }
@@ -370,6 +470,7 @@ export const Constants = {
   public: {
     Enums: {
       estimate_status: ["pending", "approved", "declined", "completed"],
+      invoice_status: ["draft", "pending", "paid", "overdue"],
       user_role: ["customer", "staff", "admin"],
       vehicle_type: ["car", "truck", "motorcycle", "other"],
     },

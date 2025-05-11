@@ -56,12 +56,14 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
       const customerData = { 
         ...customer, 
         role: 'customer',
-        email: customer.email || '' // Ensure email is not undefined
+        // Ensure we have all the required fields for the insert
+        id: customer.id || undefined, // Only include if provided
+        email: customer.email || ''    // Ensure email is not undefined
       };
       
       const { error: insertError } = await supabase
         .from('profiles')
-        .insert([customerData]);
+        .insert(customerData);
       
       if (insertError) throw insertError;
       
