@@ -1,3 +1,4 @@
+
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,6 +34,11 @@ export function EstimateForm({ estimate, onSubmit, onCancel, mode }: EstimateFor
   const selectedCustomerId = form.watch("customer_id");
   const { customers, vehicles, isLoading } = useEstimateFormData(selectedCustomerId);
 
+  console.log("EstimateForm - Rendering with mode:", mode);
+  console.log("EstimateForm - Current form values:", form.getValues());
+  console.log("EstimateForm - Available customers:", customers);
+  console.log("EstimateForm - Available vehicles for selected customer:", vehicles);
+
   // Reset form when the dialog opens/closes or estimate changes
   useEffect(() => {
     if (estimate) {
@@ -59,10 +65,10 @@ export function EstimateForm({ estimate, onSubmit, onCancel, mode }: EstimateFor
 
   async function handleFormSubmit(values: EstimateFormValues) {
     try {
-      console.log("Form values before submission:", values);
+      console.log("EstimateForm - Form values before submission:", values);
       await onSubmit(values);
     } catch (error) {
-      console.error("Failed to submit estimate:", error);
+      console.error("EstimateForm - Failed to submit estimate:", error);
     }
   }
 
@@ -109,7 +115,12 @@ export function EstimateForm({ estimate, onSubmit, onCancel, mode }: EstimateFor
               <FormItem>
                 <FormLabel>Customer</FormLabel>
                 <Select
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    console.log("Customer selected:", value);
+                    field.onChange(value);
+                    // Reset vehicle when customer changes
+                    form.setValue("vehicle_id", "");
+                  }}
                   defaultValue={field.value}
                   value={field.value}
                   disabled={isLoading}
@@ -139,7 +150,10 @@ export function EstimateForm({ estimate, onSubmit, onCancel, mode }: EstimateFor
               <FormItem>
                 <FormLabel>Vehicle</FormLabel>
                 <Select
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    console.log("Vehicle selected:", value);
+                    field.onChange(value);
+                  }}
                   defaultValue={field.value}
                   value={field.value}
                   disabled={!selectedCustomerId || isLoading}
@@ -181,6 +195,7 @@ export function EstimateForm({ estimate, onSubmit, onCancel, mode }: EstimateFor
                     step="0.01"
                     placeholder="0.00"
                     {...field}
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                   />
                 </FormControl>
                 <FormMessage />

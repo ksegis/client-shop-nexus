@@ -69,18 +69,35 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
 
   const createEstimate = async (formValues: EstimateFormValues) => {
     try {
-      const { error: insertError } = await supabase
-        .from('estimates')
-        .insert({
-          customer_id: formValues.customer_id,
-          vehicle_id: formValues.vehicle_id,
-          title: formValues.title,
-          description: formValues.description || null,
-          total_amount: formValues.total_amount || 0,
-          status: formValues.status || 'pending'
-        });
+      console.log("EstimatesContext - createEstimate called with:", formValues);
       
-      if (insertError) throw insertError;
+      // Validate required fields
+      if (!formValues.customer_id) throw new Error("Customer is required");
+      if (!formValues.vehicle_id) throw new Error("Vehicle is required");
+      if (!formValues.title) throw new Error("Title is required");
+      
+      const newEstimate = {
+        customer_id: formValues.customer_id,
+        vehicle_id: formValues.vehicle_id,
+        title: formValues.title,
+        description: formValues.description || null,
+        total_amount: formValues.total_amount || 0,
+        status: formValues.status || 'pending'
+      };
+      
+      console.log("EstimatesContext - Inserting new estimate:", newEstimate);
+      
+      const { error: insertError, data } = await supabase
+        .from('estimates')
+        .insert(newEstimate)
+        .select();
+      
+      if (insertError) {
+        console.error("EstimatesContext - Insert error:", insertError);
+        throw insertError;
+      }
+      
+      console.log("EstimatesContext - Insert successful, data:", data);
       
       await refetch();
       toast({
@@ -88,6 +105,7 @@ export function EstimatesProvider({ children }: { children: ReactNode }) {
         description: "Estimate created successfully",
       });
     } catch (error) {
+      console.error("EstimatesContext - Create estimate error:", error);
       toast({
         variant: "destructive",
         title: "Error",

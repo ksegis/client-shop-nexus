@@ -21,11 +21,12 @@ export function EstimateDialog({
 }: EstimateDialogProps) {
   const handleSubmit = async (values: EstimateFormValues) => {
     try {
-      console.log("Submitting estimate:", values);
+      console.log("EstimateDialog - handleSubmit called with:", values);
       await onSubmit(values);
+      console.log("EstimateDialog - onSubmit completed successfully");
       onOpenChange(false);
     } catch (error) {
-      console.error("Failed to submit estimate:", error);
+      console.error("EstimateDialog - Failed to submit estimate:", error);
     }
   };
 

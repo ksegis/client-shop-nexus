@@ -59,6 +59,11 @@ export function EstimatesTable({
     setCreateDialogOpen(true);
   };
 
+  const handleCreateSubmit = async (values: EstimateFormValues) => {
+    console.log("EstimatesTable - handleCreateSubmit called with:", values);
+    return onCreateEstimate(values);
+  };
+
   if (estimates.length === 0) {
     return <EmptyState onCreateNew={handleCreateNewClick} />;
   }
@@ -155,7 +160,7 @@ export function EstimatesTable({
       <EstimateDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
-        onSubmit={onCreateEstimate}
+        onSubmit={handleCreateSubmit}
         mode="create"
       />
 
