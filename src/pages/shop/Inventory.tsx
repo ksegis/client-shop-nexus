@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Edit, Trash2, AlertCircle, ArrowUpDown } from 'lucide-react';
@@ -73,7 +72,7 @@ const Inventory = () => {
 
   // Fetch inventory items
   const { data: inventoryItems, isLoading, error } = useQuery({
-    queryKey: ['inventory'],
+    queryKey: ['inventory', sortField, sortDirection],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('inventory')
@@ -88,7 +87,8 @@ const Inventory = () => {
   // Add inventory item mutation
   const addItemMutation = useMutation({
     mutationFn: async (values: InventoryFormValues) => {
-      const { error } = await supabase.from('inventory').insert([values]);
+      // Fix: Ensure name is passed as a required field
+      const { error } = await supabase.from('inventory').insert(values);
       if (error) throw error;
     },
     onSuccess: () => {
