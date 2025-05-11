@@ -1,4 +1,3 @@
-
 import Layout from '@/components/layout/Layout';
 import { useState } from 'react';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
@@ -8,6 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { UserPlus, UserX, UserCheck, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { EmployeeDialog } from './employees/EmployeeDialog';
 
 interface Employee {
   id: string;
@@ -22,8 +22,9 @@ interface Employee {
 const Employees = () => {
   const { toast } = useToast();
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
-  const { data: employees, isLoading, error } = useQuery({
+  const { data: employees, isLoading, error, refetch } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
       // Fetch employees from profiles table where role is staff or admin
@@ -94,7 +95,7 @@ const Employees = () => {
               Manage your shop staff and admin accounts.
             </p>
           </div>
-          <Button className="flex gap-2">
+          <Button className="flex gap-2" onClick={() => setAddDialogOpen(true)}>
             <UserPlus className="h-4 w-4" />
             <span>Add Employee</span>
           </Button>
@@ -208,6 +209,13 @@ const Employees = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Add Employee Dialog */}
+      <EmployeeDialog 
+        open={addDialogOpen} 
+        onOpenChange={setAddDialogOpen} 
+        onSuccess={() => refetch()}
+      />
     </Layout>
   );
 };
