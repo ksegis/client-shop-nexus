@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Layout from '@/components/layout/Layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { WorkOrdersContext } from './work-orders/WorkOrdersContext';
+import { WorkOrdersProvider } from './work-orders/WorkOrdersContext';
 import { WorkOrdersTable } from './work-orders/WorkOrdersTable';
 import { WorkOrderDialog } from './work-orders/WorkOrderDialog';
 
@@ -21,7 +21,7 @@ const WorkOrders = () => {
           </div>
         </div>
 
-        <WorkOrdersContext>
+        <WorkOrdersProvider>
           <div className="rounded-md border">
             <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <Tabs 
@@ -44,7 +44,7 @@ const WorkOrders = () => {
               <WorkOrdersTable status={activeTab} />
             </TabsContent>
           </div>
-        </WorkOrdersContext>
+        </WorkOrdersProvider>
       </div>
     </Layout>
   );

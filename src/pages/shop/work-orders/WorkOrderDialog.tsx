@@ -14,7 +14,7 @@ import {
 import { WorkOrderForm } from './WorkOrderForm';
 import { useWorkOrders } from './WorkOrdersContext';
 import { WorkOrder } from './types';
-import { Plus } from 'lucide-react';
+import { Plus, Edit } from 'lucide-react';
 
 // Schema for form validation
 export const workOrderSchema = z.object({

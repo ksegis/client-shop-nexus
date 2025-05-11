@@ -36,7 +36,7 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
           
         if (error) throw error;
         
-        return data as WorkOrder[];
+        return data as unknown as WorkOrder[];
       } catch (error) {
         setError(error as Error);
         return [];
@@ -48,7 +48,7 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     try {
       const { error: insertError } = await supabase
         .from('work_orders')
-        .insert([workOrder]);
+        .insert([workOrder as any]);
       
       if (insertError) throw insertError;
       
@@ -71,7 +71,7 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     try {
       const { error: updateError } = await supabase
         .from('work_orders')
-        .update(updatedWorkOrder)
+        .update(updatedWorkOrder as any)
         .eq('id', id);
       
       if (updateError) throw updateError;
