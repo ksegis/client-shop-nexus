@@ -18,6 +18,7 @@ import CustomerEstimateDetail from "./pages/customer/EstimateDetail";
 
 // Shop Portal Pages
 import ShopDashboard from "./pages/shop/Dashboard";
+import ShopReports from "./pages/shop/Reports";
 
 // Not Found Page
 import NotFound from "./pages/NotFound";
@@ -71,6 +72,16 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ShopDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Add Reports Route */}
+            <Route 
+              path="/shop/reports" 
+              element={
+                <ProtectedRoute>
+                  <ShopReports />
                 </ProtectedRoute>
               } 
             />
