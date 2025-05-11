@@ -26,8 +26,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Redirect root to customer login */}
-          <Route path="/" element={<Navigate to="/customer/login" replace />} />
+          {/* Redirect root to shop dashboard */}
+          <Route path="/" element={<Navigate to="/shop" replace />} />
 
           {/* Customer Portal Routes */}
           <Route path="/customer/login" element={<CustomerLogin />} />
