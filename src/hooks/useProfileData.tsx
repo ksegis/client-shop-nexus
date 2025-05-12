@@ -79,10 +79,12 @@ export const useProfileData = () => {
             
             try {
               // Update the profile with metadata from the user object
-              await supabase
+              const { error: updateError } = await supabase
                 .from('profiles')
                 .update(updateData)
                 .eq('id', user.id);
+                
+              if (updateError) throw updateError;
                 
               // Update the local data with the metadata
               data.first_name = first_name || data.first_name;
@@ -102,7 +104,7 @@ export const useProfileData = () => {
         const userEmail = user.email || '';
         const firstName = user.user_metadata?.first_name || '';
         const lastName = user.user_metadata?.last_name || '';
-        const role = user.user_metadata?.role || 'staff'; // Default to staff for shop portal users
+        const role = user.user_metadata?.role || 'customer'; // Default to customer role unless specified
         const extendedRole = role as ExtendedUserRole;
         
         console.log('Creating profile from user metadata:', { firstName, lastName, role });
@@ -124,13 +126,15 @@ export const useProfileData = () => {
           // When saving to the database, we need to map the extended role to a database role
           const dbRole: DatabaseUserRole = mapExtendedRoleToDbRole(extendedRole);
           
-          await supabase.from('profiles').insert({
+          const { error: insertError } = await supabase.from('profiles').insert({
             id: user.id,
             email: userEmail,
             first_name: firstName,
             last_name: lastName,
             role: dbRole // Use the database role type
           });
+          
+          if (insertError) throw insertError;
           
           console.log('Created new profile for user:', user.id);
         } catch (insertError) {

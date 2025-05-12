@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -62,21 +61,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) throw error;
-      
-      // If signUp succeeds, explicitly update the profiles table as well
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            first_name: firstName,
-            last_name: lastName
-          })
-          .eq('id', data.user.id);
-        
-        if (profileError) {
-          console.error('Error updating profile:', profileError);
-        }
-      }
       
       toast({
         title: "Account created",

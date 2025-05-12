@@ -20,7 +20,7 @@ const SignUpForm = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Sign up the user with explicitly set first and last name
+      // Sign up the user with user metadata for first and last name
       const { error: signUpError, data } = await supabase.auth.signUp({
         email,
         password,
@@ -34,20 +34,6 @@ const SignUpForm = () => {
       });
       
       if (signUpError) throw signUpError;
-      
-      // If signup successful, explicitly update the profiles table
-      if (data?.user) {
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ 
-            role: 'staff',
-            first_name: firstName, 
-            last_name: lastName,   
-          })
-          .eq('id', data.user.id);
-        
-        if (updateError) throw updateError;
-      }
       
       toast({
         title: "Account created",
