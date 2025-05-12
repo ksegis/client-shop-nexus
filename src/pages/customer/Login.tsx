@@ -4,34 +4,106 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 
 const CustomerLogin = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // Simulate login process
-    setTimeout(() => {
-      setLoading(false);
-      console.log('Login attempt with:', { email, password });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+      
       toast({
-        title: "Login Placeholder",
-        description: "This would trigger the GHL login webhook in production.",
+        title: "Login Successful",
+        description: "Welcome back to your customer portal.",
       });
       
-      // For demo purposes only - would be removed in production
-      if (email && password) {
-        window.location.href = '/customer/profile';
-      }
-    }, 1000);
-
-    // TODO: trigger GHL login webhook
-    console.log('<!-- TODO: trigger GHL login webhook -->');
+      navigate('/customer/profile');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: error.message || "Failed to log in. Please try again.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleSocialLogin = async (provider: 'google') => {
+    try {
+      setLoading(true);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/customer/profile`
+        }
+      });
+      
+      if (error) throw error;
+    } catch (error: any) {
+      console.error('Social login error:', error);
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: error.message || "Failed to log in. Please try again.",
+      });
+      setLoading(false);
+    }
+  };
+  
+  const handleResetPassword = async () => {
+    if (!email) {
+      toast({
+        variant: "destructive",
+        title: "Email Required",
+        description: "Please enter your email address to reset your password.",
+      });
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth?reset=true`,
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Password Reset Email Sent",
+        description: "Check your email for a link to reset your password.",
+      });
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+      toast({
+        variant: "destructive",
+        title: "Reset Failed",
+        description: error.message || "Failed to send reset email. Please try again.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -44,7 +116,7 @@ const CustomerLogin = () => {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">Email</label>
+            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
             <Input
               id="email"
               type="email" 
@@ -57,7 +129,7 @@ const CustomerLogin = () => {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium">Password</label>
+            <Label htmlFor="password" className="text-sm font-medium">Password</Label>
             <Input
               id="password"
               type="password"
@@ -68,6 +140,30 @@ const CustomerLogin = () => {
               className="w-full"
             />
           </div>
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="remember-me" 
+                checked={rememberMe} 
+                onCheckedChange={(checked) => setRememberMe(!!checked)} 
+              />
+              <label 
+                htmlFor="remember-me"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Remember me
+              </label>
+            </div>
+            
+            <button 
+              type="button" 
+              className="text-shop-primary hover:underline text-sm font-medium"
+              onClick={handleResetPassword}
+            >
+              Forgot password?
+            </button>
+          </div>
 
           <div>
             <Button 
@@ -75,7 +171,12 @@ const CustomerLogin = () => {
               className="w-full bg-shop-primary hover:bg-shop-primary/90"
               disabled={loading}
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Logging in...
+                </>
+              ) : 'Login'}
             </Button>
           </div>
 
@@ -92,14 +193,8 @@ const CustomerLogin = () => {
             type="button"
             variant="outline"
             className="w-full"
-            onClick={() => {
-              console.log('Google login clicked');
-              toast({
-                title: "Google Login",
-                description: "This would trigger the Google OAuth flow in production.",
-              });
-              // TODO: trigger Google OAuth flow
-            }}
+            disabled={loading}
+            onClick={() => handleSocialLogin('google')}
           >
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
               <path
@@ -123,16 +218,11 @@ const CustomerLogin = () => {
           </Button>
 
           <div className="text-center text-sm text-gray-500 mt-4">
-            <a href="#" className="text-shop-primary hover:underline">Forgot password?</a>
             <div className="mt-2">
-              New customer? <a href="#" className="text-shop-primary hover:underline">Create an account</a>
+              New customer? <a href="/auth" className="text-shop-primary hover:underline">Create an account</a>
             </div>
           </div>
         </form>
-
-        {/* Integration placeholder comment */}
-        {/* <!-- TODO: trigger GHL login webhook --> */}
-        {/* <!-- TODO: store login state via GHL webhook → Zapier → Supabase --> */}
       </Card>
     </div>
   );

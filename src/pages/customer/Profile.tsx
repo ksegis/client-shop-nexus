@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Layout from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -7,6 +7,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { useProfileData } from '@/hooks/useProfileData';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface Vehicle {
   id: string;
@@ -17,10 +22,10 @@ interface Vehicle {
 }
 
 const ProfilePage = () => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([
-    { id: '1', make: 'Toyota', model: 'Camry', year: '2019', vin: '1HGBH41JXMN109186' },
-    { id: '2', make: 'Honda', model: 'Accord', year: '2020', vin: '5FNRL38755B024633' }
-  ]);
+  const { user } = useAuth();
+  const { profileData, isLoading, updateProfileData } = useProfileData();
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehiclesLoading, setVehiclesLoading] = useState(true);
   
   const [newVehicle, setNewVehicle] = useState<Omit<Vehicle, 'id'>>({
     make: '',
@@ -31,23 +36,121 @@ const ProfilePage = () => {
   
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
   
-  const handleAddVehicle = () => {
-    const id = Math.random().toString(36).substr(2, 9);
-    const vehicle = { ...newVehicle, id };
+  useEffect(() => {
+    async function fetchVehicles() {
+      if (!user) return;
+      
+      try {
+        setVehiclesLoading(true);
+        const { data, error } = await supabase
+          .from('vehicles')
+          .select('*')
+          .eq('owner_id', user.id);
+          
+        if (error) throw error;
+        
+        setVehicles(data || []);
+      } catch (error: any) {
+        console.error('Error fetching vehicles:', error);
+        toast({
+          variant: "destructive",
+          title: "Failed to load vehicles",
+          description: error.message
+        });
+      } finally {
+        setVehiclesLoading(false);
+      }
+    }
     
-    setVehicles([...vehicles, vehicle]);
-    setNewVehicle({ make: '', model: '', year: '', vin: '' });
-    setDialogOpen(false);
+    fetchVehicles();
+  }, [user, toast]);
+  
+  const handleAddVehicle = async () => {
+    if (!user) return;
     
-    toast({
-      title: "Vehicle Added",
-      description: "Your vehicle has been added to your profile."
-    });
-    
-    // Integration placeholder
-    console.log('<!-- TODO: POST vehicle data via GHL webhook → Zapier → Supabase -->');
+    try {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .insert({
+          owner_id: user.id,
+          make: newVehicle.make,
+          model: newVehicle.model,
+          year: parseInt(newVehicle.year) || new Date().getFullYear(),
+          vin: newVehicle.vin
+        })
+        .select();
+      
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setVehicles([...vehicles, data[0] as Vehicle]);
+      }
+      
+      setNewVehicle({ make: '', model: '', year: '', vin: '' });
+      setDialogOpen(false);
+      
+      toast({
+        title: "Vehicle Added",
+        description: "Your vehicle has been added to your profile."
+      });
+    } catch (error: any) {
+      console.error('Error adding vehicle:', error);
+      toast({
+        variant: "destructive",
+        title: "Failed to add vehicle",
+        description: error.message
+      });
+    }
   };
+  
+  const handleRemoveVehicle = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('vehicles')
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw error;
+      
+      setVehicles(vehicles.filter(vehicle => vehicle.id !== id));
+      
+      toast({
+        title: "Vehicle Removed",
+        description: "The vehicle has been removed from your profile."
+      });
+    } catch (error: any) {
+      console.error('Error removing vehicle:', error);
+      toast({
+        variant: "destructive",
+        title: "Failed to remove vehicle",
+        description: error.message
+      });
+    }
+  };
+  
+  if (isLoading || vehiclesLoading) {
+    return (
+      <Layout portalType="customer">
+        <div className="flex justify-center items-center h-[60vh]">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </Layout>
+    );
+  }
+  
+  if (!profileData) {
+    return (
+      <Layout portalType="customer">
+        <div className="text-center py-10">
+          <h2 className="text-xl font-medium mb-2">Profile Not Found</h2>
+          <p className="text-gray-500 mb-4">Your profile information could not be loaded</p>
+          <Button onClick={() => navigate('/customer/login')}>Return to Login</Button>
+        </div>
+      </Layout>
+    );
+  }
   
   return (
     <Layout portalType="customer">
@@ -63,29 +166,40 @@ const ProfilePage = () => {
           <Card className="p-6">
             <h2 className="text-xl font-semibold mb-4">Personal Information</h2>
             
-            {/* Personal Information - Hardcoded for demo */}
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="name">Full Name</Label>
-                <Input id="name" value="John Doe" readOnly className="bg-gray-50" />
+                <Input 
+                  id="name" 
+                  value={`${profileData.first_name || ''} ${profileData.last_name || ''}`} 
+                  readOnly 
+                  className="bg-gray-50" 
+                />
               </div>
               
               <div>
                 <Label htmlFor="email">Email Address</Label>
-                <Input id="email" value="john.doe@example.com" readOnly className="bg-gray-50" />
+                <Input 
+                  id="email" 
+                  value={profileData.email || ''} 
+                  readOnly 
+                  className="bg-gray-50" 
+                />
               </div>
               
               <div>
                 <Label htmlFor="phone">Phone Number</Label>
-                <Input id="phone" value="(555) 123-4567" readOnly className="bg-gray-50" />
+                <Input 
+                  id="phone" 
+                  value={profileData.phone || 'Not provided'} 
+                  readOnly 
+                  className="bg-gray-50" 
+                />
               </div>
             </div>
             
-            {/* Integration placeholder comment */}
-            {/* <!-- TODO: fetch customer data via GHL webhook → Zapier → Supabase --> */}
-            
             <div className="mt-4">
-              <Button variant="outline">Edit Profile</Button>
+              <Button variant="outline" onClick={() => navigate('/auth')}>Edit Profile</Button>
             </div>
           </Card>
           
@@ -174,12 +288,23 @@ const ProfilePage = () => {
                   >
                     <div>
                       <h3 className="font-medium">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
-                      <p className="text-sm text-gray-500">VIN: {vehicle.vin}</p>
+                      <p className="text-sm text-gray-500">VIN: {vehicle.vin || 'Not provided'}</p>
                     </div>
                     
                     <div className="space-x-2">
-                      <Button variant="outline" size="sm">Edit</Button>
-                      <Button variant="outline" size="sm" className="text-red-500 hover:text-red-700">
+                      <Button variant="outline" size="sm" onClick={() => {
+                        // Future implementation: Edit vehicle
+                        toast({
+                          title: "Coming Soon",
+                          description: "Vehicle editing will be available in a future update."
+                        });
+                      }}>Edit</Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-red-500 hover:text-red-700"
+                        onClick={() => handleRemoveVehicle(vehicle.id)}
+                      >
                         Remove
                       </Button>
                     </div>
@@ -187,10 +312,6 @@ const ProfilePage = () => {
                 ))}
               </div>
             )}
-            
-            {/* Integration placeholder comment */}
-            {/* <!-- TODO: fetch vehicles via GHL webhook → Zapier → Supabase --> */}
-            {/* <!-- TODO: POST vehicle updates via GHL webhook --> */}
           </Card>
         </div>
       </div>
