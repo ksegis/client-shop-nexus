@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -104,10 +103,11 @@ export default function InvoiceDialog({
         // Transform the data to ensure it matches the Estimate type
         const typedData = data?.map(item => ({
           ...item,
+          // Add proper null check for profiles
           profiles: item.profiles && typeof item.profiles === 'object' ? {
-            first_name: item.profiles.first_name || '',
-            last_name: item.profiles.last_name || '',
-            email: item.profiles.email || '',
+            first_name: (item.profiles.first_name !== null) ? item.profiles.first_name : '',
+            last_name: (item.profiles.last_name !== null) ? item.profiles.last_name : '',
+            email: (item.profiles.email !== null) ? item.profiles.email : '',
           } : null,
           vehicles: item.vehicles
         })) as Estimate[];
