@@ -1,9 +1,8 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
 import { Invoice, InvoiceStatus } from './types';
+import { useInvoiceOperations } from './hooks/useInvoiceOperations';
 
 interface InvoicesContextType {
   invoices: Invoice[];
@@ -32,37 +31,18 @@ interface InvoicesContextType {
 const InvoicesContext = createContext<InvoicesContextType | undefined>(undefined);
 
 export function InvoicesProvider({ children }: { children: ReactNode }) {
-  const [error, setError] = useState<Error | null>(null);
+  const {
+    error,
+    fetchInvoices,
+    createInvoice: createInvoiceOperation,
+    updateInvoice: updateInvoiceOperation,
+    updateInvoiceStatus: updateInvoiceStatusOperation,
+    deleteInvoice: deleteInvoiceOperation
+  } = useInvoiceOperations();
 
   const { data: invoices = [], isLoading, refetch } = useQuery({
     queryKey: ['invoices'],
-    queryFn: async () => {
-      try {
-        const { data, error: queryError } = await supabase
-          .from('invoices')
-          .select(`
-            *,
-            vehicles (
-              make,
-              model,
-              year
-            ),
-            profiles!invoices_customer_id_fkey (
-              first_name,
-              last_name,
-              email
-            )
-          `)
-          .order('created_at', { ascending: false });
-          
-        if (queryError) throw queryError;
-        
-        return (data as Invoice[]) || [];
-      } catch (error) {
-        setError(error as Error);
-        return [];
-      }
-    },
+    queryFn: fetchInvoices,
   });
 
   const createInvoice = async (invoice: { 
@@ -74,49 +54,8 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
     status?: InvoiceStatus;
     estimate_id?: string;
   }) => {
-    try {
-      // Map our application's InvoiceStatus to the database's expected values
-      let dbStatus: 'draft' | 'pending' | 'paid' | 'overdue';
-      
-      // Convert 'sent' to 'pending' and 'void' to 'draft' for database compatibility
-      switch (invoice.status) {
-        case 'sent': 
-          dbStatus = 'pending'; 
-          break;
-        case 'void': 
-          dbStatus = 'draft';
-          break;
-        default:
-          dbStatus = (invoice.status as 'draft' | 'paid' | 'overdue') || 'draft';
-      }
-      
-      const { error: insertError } = await supabase
-        .from('invoices')
-        .insert({
-          customer_id: invoice.customer_id,
-          vehicle_id: invoice.vehicle_id,
-          title: invoice.title,
-          description: invoice.description,
-          total_amount: invoice.total_amount || 0,
-          status: dbStatus,
-          estimate_id: invoice.estimate_id
-        });
-      
-      if (insertError) throw insertError;
-      
-      await refetch();
-      toast({
-        title: "Success",
-        description: "Invoice created successfully",
-      });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: `Failed to create invoice: ${(error as Error).message}`,
-      });
-      throw error;
-    }
+    await createInvoiceOperation(invoice);
+    await refetch();
   };
 
   const updateInvoice = async (id: string, invoice: {
@@ -125,114 +64,18 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
     total_amount?: number;
     status?: InvoiceStatus;
   }) => {
-    try {
-      // Map our application's InvoiceStatus to the database's expected values
-      let dbStatus: 'draft' | 'pending' | 'paid' | 'overdue' | undefined;
-      
-      if (invoice.status) {
-        // Convert 'sent' to 'pending' and 'void' to 'draft' for database compatibility
-        switch (invoice.status) {
-          case 'sent': 
-            dbStatus = 'pending'; 
-            break;
-          case 'void': 
-            dbStatus = 'draft';
-            break;
-          default:
-            dbStatus = invoice.status as 'draft' | 'paid' | 'overdue';
-        }
-      }
-      
-      const updatePayload = {
-        title: invoice.title,
-        description: invoice.description,
-        total_amount: invoice.total_amount,
-        status: dbStatus
-      };
-
-      const { error: updateError } = await supabase
-        .from('invoices')
-        .update(updatePayload)
-        .eq('id', id);
-      
-      if (updateError) throw updateError;
-      
-      await refetch();
-      toast({
-        title: "Success",
-        description: "Invoice updated successfully",
-      });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: `Failed to update invoice: ${(error as Error).message}`,
-      });
-      throw error;
-    }
+    await updateInvoiceOperation(id, invoice);
+    await refetch();
   };
 
   const updateInvoiceStatus = async (id: string, status: InvoiceStatus) => {
-    try {
-      // Map our application's InvoiceStatus to the database's expected values
-      let dbStatus: 'draft' | 'pending' | 'paid' | 'overdue';
-      
-      // Convert 'sent' to 'pending' and 'void' to 'draft' for database compatibility
-      switch (status) {
-        case 'sent': 
-          dbStatus = 'pending'; 
-          break;
-        case 'void': 
-          dbStatus = 'draft';
-          break;
-        default:
-          dbStatus = status as 'draft' | 'paid' | 'overdue';
-      }
-      
-      const { error: updateError } = await supabase
-        .from('invoices')
-        .update({ status: dbStatus })
-        .eq('id', id);
-      
-      if (updateError) throw updateError;
-      
-      await refetch();
-      toast({
-        title: "Success",
-        description: `Invoice status updated to ${status}`,
-      });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: `Failed to update invoice status: ${(error as Error).message}`,
-      });
-      throw error;
-    }
+    await updateInvoiceStatusOperation(id, status);
+    await refetch();
   };
 
   const deleteInvoice = async (id: string) => {
-    try {
-      const { error: deleteError } = await supabase
-        .from('invoices')
-        .delete()
-        .eq('id', id);
-      
-      if (deleteError) throw deleteError;
-      
-      await refetch();
-      toast({
-        title: "Success",
-        description: "Invoice deleted successfully",
-      });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: `Failed to delete invoice: ${(error as Error).message}`,
-      });
-      throw error;
-    }
+    await deleteInvoiceOperation(id);
+    await refetch();
   };
 
   const refreshInvoices = async () => {
