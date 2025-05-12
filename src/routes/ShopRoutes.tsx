@@ -16,10 +16,8 @@ import ShopUserManagement from "@/pages/shop/UserManagement";
 const ShopRoutes = () => {
   return (
     <>
-      {/* Shop Login Route */}
       <Route path="/shop/login" element={<ShopLogin />} />
       
-      {/* Shop Protected Routes */}
       <Route 
         path="/shop" 
         element={

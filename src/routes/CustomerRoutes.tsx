@@ -11,7 +11,6 @@ import CustomerTransactions from "@/pages/customer/Transactions";
 const CustomerRoutes = () => {
   return (
     <>
-      {/* Customer Portal Routes */}
       <Route path="/customer/login" element={<CustomerLogin />} />
       <Route 
         path="/customer/profile" 
