@@ -20,7 +20,7 @@ interface EmployeesContextType {
   error: Error | null;
   selectedEmployeeId: string | null;
   setSelectedEmployeeId: (id: string | null) => void;
-  refetchEmployees: () => void;
+  refetchEmployees: () => Promise<void>;
 }
 
 const EmployeesContext = createContext<EmployeesContextType | undefined>(undefined);
@@ -33,7 +33,7 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
     data: employees, 
     isLoading, 
     error, 
-    refetch: refetchEmployees 
+    refetch 
   } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
@@ -53,7 +53,7 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
         email: profile.email,
         phone: profile.phone,
         role: profile.role,
-        status: 'active' as const // Type assertion to ensure it matches the Employee interface
+        status: profile.status || 'active' // Default to active if status is not set
       }));
     }
   });
@@ -91,6 +91,10 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
 
   // Use demo data if no real data is available yet
   const displayEmployees = employees || demoEmployees;
+
+  const refetchEmployees = async () => {
+    await refetch();
+  };
 
   const value: EmployeesContextType = {
     employees: displayEmployees,

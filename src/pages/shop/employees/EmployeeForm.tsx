@@ -17,9 +17,10 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useEmployees } from './EmployeesContext';
+import { useEmployees, Employee } from './EmployeesContext';
 
-export const formSchema = z.object({
+// Schema for creating new employees
+const createFormSchema = z.object({
   first_name: z.string().min(1, 'First name is required'),
   last_name: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
@@ -28,52 +29,106 @@ export const formSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-export type EmployeeFormValues = z.infer<typeof formSchema>;
+// Schema for updating existing employees (password optional)
+const updateFormSchema = z.object({
+  first_name: z.string().min(1, 'First name is required'),
+  last_name: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Invalid email address'),
+  phone: z.string().optional(),
+  role: z.enum(['staff', 'admin']),
+  password: z.string().optional(),
+});
+
+export type EmployeeFormCreateValues = z.infer<typeof createFormSchema>;
+export type EmployeeFormUpdateValues = z.infer<typeof updateFormSchema>;
 
 interface EmployeeFormProps {
   onCancel: () => void;
   onSuccess: () => void;
+  employeeData?: Employee | null;
 }
 
-export function EmployeeForm({ onCancel, onSuccess }: EmployeeFormProps) {
+export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeFormProps) {
   const { toast } = useToast();
   const { refetchEmployees } = useEmployees();
+  const isEditing = !!employeeData;
   
-  const form = useForm<EmployeeFormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      first_name: '',
-      last_name: '',
-      email: '',
-      phone: '',
-      role: 'staff',
-      password: '',
-    },
+  const form = useForm<EmployeeFormCreateValues | EmployeeFormUpdateValues>({
+    resolver: zodResolver(isEditing ? updateFormSchema : createFormSchema),
+    defaultValues: isEditing 
+      ? {
+          first_name: employeeData.first_name || '',
+          last_name: employeeData.last_name || '',
+          email: employeeData.email || '',
+          phone: employeeData.phone || '',
+          role: employeeData.role as 'staff' | 'admin',
+        }
+      : {
+          first_name: '',
+          last_name: '',
+          email: '',
+          phone: '',
+          role: 'staff',
+          password: '',
+        },
   });
 
-  const onSubmit = async (values: EmployeeFormValues) => {
+  const onSubmit = async (values: EmployeeFormCreateValues | EmployeeFormUpdateValues) => {
     try {
-      // Sign up the user with email and password
-      const { error: signUpError } = await supabase.auth.signUp({
-        email: values.email,
-        password: values.password,
-        options: {
-          data: {
+      if (isEditing) {
+        // Update existing employee
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
             first_name: values.first_name,
             last_name: values.last_name,
+            email: values.email,
             phone: values.phone,
             role: values.role,
+          })
+          .eq('id', employeeData.id);
+
+        if (updateError) throw updateError;
+
+        // If password was provided, update it (would require special auth handling)
+        if ('password' in values && values.password && values.password.trim() !== '') {
+          // In a real application, you'd need admin privileges to reset passwords
+          // This is a simplified example
+          toast({
+            description: "Password updates require admin API access and aren't supported in this demo.",
+            variant: 'default',
+          });
+        }
+
+        toast({
+          title: 'Employee updated',
+          description: `${values.first_name} ${values.last_name} has been updated successfully`,
+        });
+      } else {
+        // Create new employee
+        const createValues = values as EmployeeFormCreateValues;
+        
+        // Sign up the user with email and password
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: createValues.email,
+          password: createValues.password,
+          options: {
+            data: {
+              first_name: createValues.first_name,
+              last_name: createValues.last_name,
+              phone: createValues.phone,
+              role: createValues.role,
+            },
           },
-        },
-      });
+        });
 
-      if (signUpError) throw signUpError;
+        if (signUpError) throw signUpError;
 
-      // Success
-      toast({
-        title: 'Employee added',
-        description: `${values.first_name} ${values.last_name} has been added successfully`,
-      });
+        toast({
+          title: 'Employee added',
+          description: `${createValues.first_name} ${createValues.last_name} has been added successfully`,
+        });
+      }
 
       // Reset form and notify parent
       form.reset();
@@ -81,7 +136,7 @@ export function EmployeeForm({ onCancel, onSuccess }: EmployeeFormProps) {
       onSuccess();
     } catch (error: any) {
       toast({
-        title: 'Failed to add employee',
+        title: isEditing ? 'Failed to update employee' : 'Failed to add employee',
         description: error.message || 'An unexpected error occurred',
         variant: 'destructive',
       });
@@ -171,20 +226,39 @@ export function EmployeeForm({ onCancel, onSuccess }: EmployeeFormProps) {
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Password</FormLabel>
-              <FormControl>
-                <Input type="password" {...field} />
-              </FormControl>
-              <FormDescription>Minimum 6 characters</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {!isEditing && (
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Password</FormLabel>
+                <FormControl>
+                  <Input type="password" {...field} />
+                </FormControl>
+                <FormDescription>Minimum 6 characters</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {isEditing && (
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>New Password (Optional)</FormLabel>
+                <FormControl>
+                  <Input type="password" {...field} />
+                </FormControl>
+                <FormDescription>Leave blank to keep current password</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <div className="flex justify-end space-x-2 pt-4">
           <Button 
@@ -194,7 +268,7 @@ export function EmployeeForm({ onCancel, onSuccess }: EmployeeFormProps) {
           >
             Cancel
           </Button>
-          <Button type="submit">Add Employee</Button>
+          <Button type="submit">{isEditing ? 'Update Employee' : 'Add Employee'}</Button>
         </div>
       </form>
     </Form>

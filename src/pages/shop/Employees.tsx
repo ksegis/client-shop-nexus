@@ -40,8 +40,9 @@ const Employees = () => {
             open={addDialogOpen} 
             onOpenChange={setAddDialogOpen} 
             onSuccess={() => {
-              /* We don't need to call refetch directly here since we'll use the context in EmployeeDialog */
+              setAddDialogOpen(false);
             }}
+            employee={null}
           />
         </div>
       </EmployeesProvider>
