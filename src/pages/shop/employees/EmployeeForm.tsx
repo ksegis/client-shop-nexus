@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -61,7 +60,9 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
           last_name: employeeData.last_name || '',
           email: employeeData.email || '',
           phone: employeeData.phone || '',
-          role: employeeData.role as 'staff' | 'admin',
+          role: employeeData.role.startsWith('inactive_') 
+            ? employeeData.role.substring('inactive_'.length) as 'staff' | 'admin'
+            : employeeData.role as 'staff' | 'admin',
         }
       : {
           first_name: '',
@@ -76,6 +77,12 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
   const onSubmit = async (values: EmployeeFormCreateValues | EmployeeFormUpdateValues) => {
     try {
       if (isEditing) {
+        // Determine if the employee is currently inactive
+        const isCurrentlyInactive = employeeData.role.startsWith('inactive_');
+        
+        // Preserve inactive status if employee is currently inactive
+        const updatedRole = isCurrentlyInactive ? `inactive_${values.role}` : values.role;
+        
         // Update existing employee
         const { error: updateError } = await supabase
           .from('profiles')
@@ -84,7 +91,7 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
             last_name: values.last_name,
             email: values.email,
             phone: values.phone,
-            role: values.role,
+            role: updatedRole,
           })
           .eq('id', employeeData.id);
 

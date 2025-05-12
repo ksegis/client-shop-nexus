@@ -10,7 +10,7 @@ export interface Employee {
   last_name: string;
   email: string;
   phone: string | null;
-  role: string;
+  role: string; // Changed from specific enum types to string to accommodate all role types
 }
 
 interface EmployeesContextType {
