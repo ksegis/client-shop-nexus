@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -8,6 +7,7 @@ import { useInventorySearch } from '@/hooks/useInventorySearch';
 import { InvoiceLineItem } from '../types';
 import { Trash } from 'lucide-react';
 import { InventoryItem } from '@/pages/shop/inventory/types';
+import { supabase } from '@/integrations/supabase/client';
 
 interface LineItemWithSearchProps {
   item: InvoiceLineItem;
@@ -27,6 +27,9 @@ export const LineItemWithSearch = ({
   const { searchTerm, setSearchTerm, searchResults, searchInventory } = useInventorySearch();
   const [showItemResults, setShowItemResults] = useState(false);
   const [description, setDescription] = useState(item.description);
+  const [partSearchTerm, setPartSearchTerm] = useState('');
+  const [showPartResults, setShowPartResults] = useState(false);
+  const [partSearchResults, setPartSearchResults] = useState<InventoryItem[]>([]);
 
   // Sync description with parent component
   useEffect(() => {
@@ -43,6 +46,38 @@ export const LineItemWithSearch = ({
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, searchInventory]);
+
+  // Handle part number search
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (partSearchTerm && partSearchTerm.length >= 2) {
+        searchInventoryByPart(partSearchTerm);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [partSearchTerm]);
+
+  const searchInventoryByPart = async (term: string) => {
+    if (!term || term.length < 2) {
+      setPartSearchResults([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .or(`sku.ilike.%${term}%,part_number.ilike.%${term}%`)
+        .limit(10);
+
+      if (error) throw error;
+      setPartSearchResults(data as InventoryItem[]);
+    } catch (error) {
+      console.error('Error searching inventory by part number:', error);
+      setPartSearchResults([]);
+    }
+  };
 
   const handleSelectInventoryItem = (inventoryItem: InventoryItem) => {
     console.log("Selected inventory item:", inventoryItem);
@@ -73,11 +108,17 @@ export const LineItemWithSearch = ({
     
     // Close search and reset search term
     setShowItemResults(false);
+    setShowPartResults(false);
     setSearchTerm('');
+    setPartSearchTerm('');
   };
 
   const handleCloseSearch = () => {
     setShowItemResults(false);
+  };
+
+  const handleClosePartSearch = () => {
+    setShowPartResults(false);
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,6 +126,12 @@ export const LineItemWithSearch = ({
     setDescription(value);
     onUpdate(index, 'description', value);
     setSearchTerm(value);
+  };
+
+  const handlePartNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    onUpdate(index, 'part_number', value);
+    setPartSearchTerm(value);
   };
 
   const handleFocusDescription = () => {
@@ -95,15 +142,34 @@ export const LineItemWithSearch = ({
     }
   };
 
+  const handleFocusPartNumber = () => {
+    setShowPartResults(true);
+    if (item.part_number) {
+      setPartSearchTerm(item.part_number);
+      searchInventoryByPart(item.part_number);
+    }
+  };
+
   return (
     <div className="grid grid-cols-12 gap-2 p-3 border-t">
-      {/* Part Number */}
+      {/* Part Number with search */}
       <div className="col-span-2">
-        <Input 
-          value={item.part_number || ''} 
-          onChange={(e) => onUpdate(index, 'part_number', e.target.value)}
-          placeholder="Part #"
-        />
+        <InventorySearchPopover
+          isOpen={showPartResults}
+          onClose={handleClosePartSearch}
+          results={partSearchResults}
+          onSelect={handleSelectInventoryItem}
+          searchTerm={partSearchTerm}
+          onSearchChange={setPartSearchTerm}
+        >
+          <Input 
+            value={item.part_number || ''} 
+            onChange={handlePartNumberChange}
+            onClick={handleFocusPartNumber}
+            placeholder="Part #"
+            className="w-full cursor-text"
+          />
+        </InventorySearchPopover>
       </div>
       
       {/* Description with search */}
