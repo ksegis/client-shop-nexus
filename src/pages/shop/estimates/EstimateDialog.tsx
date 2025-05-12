@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,7 +33,7 @@ import { Estimate, EstimateStatus, LineItem } from "./types";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash } from "lucide-react";
+import { Plus, Trash, Save } from "lucide-react";
 
 // Line item schema for validation
 const lineItemSchema = z.object({
@@ -230,6 +229,46 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
       onClose();
     } catch (error) {
       console.error("Failed to save estimate:", error);
+    }
+  };
+
+  const saveAsDraft = async () => {
+    try {
+      const values = form.getValues();
+      
+      // Validate required fields for draft
+      if (!values.customer_id || !values.vehicle_id || !values.title) {
+        // Set specific field errors
+        if (!values.customer_id) form.setError("customer_id", { message: "Customer is required" });
+        if (!values.vehicle_id) form.setError("vehicle_id", { message: "Vehicle is required" });
+        if (!values.title) form.setError("title", { message: "Title is required" });
+        return;
+      }
+      
+      const formData = {
+        customer_id: values.customer_id,
+        vehicle_id: values.vehicle_id,
+        title: values.title,
+        description: values.description || "",
+        total_amount: values.total_amount || 0,
+        status: "pending" as EstimateStatus, // Always save as pending for draft
+        line_items: lineItems
+      };
+      
+      if (isEditing && estimate) {
+        await updateEstimate(estimate.id, {
+          title: formData.title,
+          description: formData.description,
+          total_amount: formData.total_amount,
+          status: "pending",
+        });
+      } else {
+        await createEstimate(formData);
+      }
+      
+      onClose();
+    } catch (error) {
+      console.error("Failed to save draft estimate:", error);
     }
   };
 
@@ -516,9 +555,18 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
               />
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="gap-2 flex-wrap justify-end sm:gap-0">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
+              </Button>
+              <Button 
+                type="button" 
+                variant="secondary" 
+                onClick={saveAsDraft}
+                className="flex gap-2 items-center"
+              >
+                <Save className="h-4 w-4" />
+                Save as Draft
               </Button>
               <Button type="submit">
                 {isEditing ? "Update Estimate" : "Create Estimate"}

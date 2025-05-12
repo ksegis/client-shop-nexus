@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,7 +33,7 @@ import { Invoice, InvoiceStatus } from "./types";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash } from "lucide-react";
+import { Plus, Trash, Save } from "lucide-react";
 
 // Line item schema for validation
 const lineItemSchema = z.object({
@@ -231,6 +230,46 @@ export function InvoiceDialog({ invoice, open, onClose }: { invoice?: Invoice; o
       onClose();
     } catch (error) {
       console.error("Failed to save invoice:", error);
+    }
+  };
+
+  const saveAsDraft = async () => {
+    try {
+      const values = form.getValues();
+      
+      // Validate required fields for draft
+      if (!values.customer_id || !values.vehicle_id || !values.title) {
+        // Set specific field errors
+        if (!values.customer_id) form.setError("customer_id", { message: "Customer is required" });
+        if (!values.vehicle_id) form.setError("vehicle_id", { message: "Vehicle is required" });
+        if (!values.title) form.setError("title", { message: "Title is required" });
+        return;
+      }
+      
+      const formData = {
+        customer_id: values.customer_id,
+        vehicle_id: values.vehicle_id,
+        title: values.title,
+        description: values.description || "",
+        total_amount: values.total_amount || 0,
+        status: "draft" as InvoiceStatus, // Always save as draft
+        line_items: lineItems
+      };
+      
+      if (isEditing && invoice) {
+        await updateInvoice(invoice.id, {
+          title: formData.title,
+          description: formData.description,
+          total_amount: formData.total_amount,
+          status: "draft",
+        });
+      } else {
+        await createInvoice(formData);
+      }
+      
+      onClose();
+    } catch (error) {
+      console.error("Failed to save draft invoice:", error);
     }
   };
 
@@ -517,9 +556,18 @@ export function InvoiceDialog({ invoice, open, onClose }: { invoice?: Invoice; o
               />
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="gap-2 flex-wrap justify-end sm:gap-0">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
+              </Button>
+              <Button 
+                type="button" 
+                variant="secondary" 
+                onClick={saveAsDraft}
+                className="flex gap-2 items-center"
+              >
+                <Save className="h-4 w-4" />
+                Save as Draft
               </Button>
               <Button type="submit">
                 {isEditing ? "Update Invoice" : "Create Invoice"}

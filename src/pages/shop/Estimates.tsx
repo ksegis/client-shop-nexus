@@ -68,7 +68,7 @@ function EstimatesContent() {
 
 export default function Estimates() {
   return (
-    <Layout>
+    <Layout portalType="shop">
       <EstimatesProvider>
         <EstimatesContent />
       </EstimatesProvider>
