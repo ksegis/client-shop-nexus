@@ -124,18 +124,26 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
 
   const deleteCustomer = async (id: string) => {
     try {
-      // We only need to delete the auth user, 
-      // the profile will be automatically deleted via cascade
-      const { error: adminDeleteError } = await supabase.auth.admin.deleteUser(id);
+      // First, delete the profile directly
+      const { error: profileDeleteError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', id);
       
-      if (adminDeleteError) {
-        // If admin delete fails, just delete the profile
-        const { error: deleteError } = await supabase
-          .from('profiles')
-          .delete()
-          .eq('id', id);
-        
-        if (deleteError) throw deleteError;
+      if (profileDeleteError) throw profileDeleteError;
+      
+      // Then attempt to delete from auth.users through a dedicated API endpoint
+      // Note: This requires server-side handling or an edge function
+      const { error: authDeleteError } = await supabase.functions.invoke('delete-auth-user', {
+        body: { userId: id }
+      }).catch(() => {
+        // If the function doesn't exist, we'll just continue
+        // The admin can manage auth users in the Supabase dashboard
+        return { error: null };
+      });
+      
+      if (authDeleteError) {
+        console.error('Could not delete auth user, but profile was deleted:', authDeleteError);
       }
       
       await refetch();
