@@ -1,5 +1,6 @@
 
 import { RefreshCw, Check, AlertTriangle, X } from 'lucide-react';
+import React from 'react';
 
 export const getStatusIcon = (status: string) => {
   switch (status) {

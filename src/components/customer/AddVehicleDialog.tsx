@@ -1,9 +1,12 @@
+
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NewVehicleData } from '@/types/vehicle';
+import { useToast } from '@/components/ui/use-toast';
 
 interface AddVehicleDialogProps {
   open: boolean;
@@ -21,20 +24,45 @@ const AddVehicleDialog = ({ open, onOpenChange, onAddVehicle }: AddVehicleDialog
     color: '',
     license_plate: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
 
   const handleAddVehicle = async () => {
-    const success = await onAddVehicle(newVehicle);
-    if (success) {
-      setNewVehicle({
-        make: '', 
-        model: '', 
-        year: '', 
-        vin: '', 
-        vehicle_type: 'car',
-        color: '',
-        license_plate: ''
+    if (!newVehicle.make || !newVehicle.model || !newVehicle.year) {
+      toast({
+        title: 'Validation Error',
+        description: 'Make, model, and year are required fields.',
+        variant: 'destructive'
       });
-      onOpenChange(false);
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      console.log('Adding vehicle:', newVehicle);
+      const success = await onAddVehicle(newVehicle);
+      
+      if (success) {
+        setNewVehicle({
+          make: '', 
+          model: '', 
+          year: '', 
+          vin: '', 
+          vehicle_type: 'car',
+          color: '',
+          license_plate: ''
+        });
+        onOpenChange(false);
+      }
+    } catch (error: any) {
+      console.error('Error adding vehicle:', error);
+      toast({
+        title: 'Error adding vehicle',
+        description: error.message || 'Please try again later',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -89,14 +117,58 @@ const AddVehicleDialog = ({ open, onOpenChange, onAddVehicle }: AddVehicleDialog
               />
             </div>
           </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="color">Color</Label>
+              <Input 
+                id="color" 
+                value={newVehicle.color || ''} 
+                onChange={(e) => setNewVehicle({...newVehicle, color: e.target.value})}
+                placeholder="Blue"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="license_plate">License Plate</Label>
+              <Input 
+                id="license_plate" 
+                value={newVehicle.license_plate || ''} 
+                onChange={(e) => setNewVehicle({...newVehicle, license_plate: e.target.value})}
+                placeholder="ABC123"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <Label htmlFor="vehicle_type">Vehicle Type</Label>
+            <Select 
+              value={newVehicle.vehicle_type} 
+              onValueChange={(value) => setNewVehicle({
+                ...newVehicle, 
+                vehicle_type: value as 'car' | 'truck' | 'motorcycle' | 'other'
+              })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select vehicle type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="car">Car</SelectItem>
+                <SelectItem value="truck">Truck</SelectItem>
+                <SelectItem value="motorcycle">Motorcycle</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         
         <DialogFooter>
           <Button 
             className="bg-shop-primary hover:bg-shop-primary/90" 
             onClick={handleAddVehicle}
+            disabled={isSubmitting}
           >
-            Add Vehicle
+            {isSubmitting ? 'Adding...' : 'Add Vehicle'}
           </Button>
         </DialogFooter>
       </DialogContent>

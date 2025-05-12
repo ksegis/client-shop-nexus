@@ -14,4 +14,7 @@ export interface Vehicle {
   images?: string[] | null; // Array of image URLs
 }
 
-export type NewVehicleData = Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>;
+export type NewVehicleData = Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'> & {
+  color?: string;
+  license_plate?: string;
+};

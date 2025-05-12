@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -49,10 +48,13 @@ export const useVehicleCrud = () => {
     }
 
     try {
+      console.log('User ID for vehicle:', user.id);
+      console.log('Vehicle data to insert:', vehicleData);
+      
       // Convert year to number for database insertion
       const dbVehicleData = {
         ...vehicleData,
-        year: Number(vehicleData.year), // Convert string to number explicitly
+        year: parseInt(vehicleData.year, 10), // Convert string to number explicitly
         owner_id: user.id
       };
 
@@ -62,7 +64,10 @@ export const useVehicleCrud = () => {
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase insert error:', error);
+        throw error;
+      }
       
       // Convert back to our interface format
       const newVehicle: Vehicle = {
@@ -77,9 +82,10 @@ export const useVehicleCrud = () => {
       
       return newVehicle;
     } catch (error: any) {
+      console.error('Full error adding vehicle:', error);
       toast({
         title: 'Error adding vehicle',
-        description: error.message,
+        description: error.message || 'Failed to add vehicle',
         variant: 'destructive',
       });
       throw error;
