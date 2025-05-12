@@ -33,6 +33,19 @@ export function InvoicesTable({ onOpenInvoiceDialog }: InvoicesTableProps) {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Get current tab from parent component's state via URL or context
+  const activeTab = window.location.hash.replace('#', '') || 'unpaid';
+  
+  // Filter invoices based on the active tab
+  const filteredInvoices = invoices.filter(invoice => {
+    if (activeTab === 'paid') {
+      return invoice.status === 'paid';
+    } else if (activeTab === 'unpaid') {
+      return ['draft', 'sent', 'overdue'].includes(invoice.status);
+    }
+    return true; // 'all' tab
+  });
+
   const handleDeleteClick = (id: string) => {
     setSelectedInvoiceId(id);
     setDeleteDialogOpen(true);
@@ -59,7 +72,7 @@ export function InvoicesTable({ onOpenInvoiceDialog }: InvoicesTableProps) {
     );
   }
 
-  if (invoices.length === 0) {
+  if (filteredInvoices.length === 0) {
     return <EmptyState onCreateNew={() => onOpenInvoiceDialog()} />;
   }
 
@@ -80,7 +93,7 @@ export function InvoicesTable({ onOpenInvoiceDialog }: InvoicesTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {invoices.map((invoice) => {
+            {filteredInvoices.map((invoice) => {
               const customerName = invoice.profiles ? 
                 `${invoice.profiles.first_name || ''} ${invoice.profiles.last_name || ''}`.trim() || 
                 invoice.profiles.email : 
