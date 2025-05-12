@@ -56,7 +56,7 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
         .eq('work_order_id', workOrderId);
         
       if (fetchError) throw fetchError;
-      return data || [];
+      return (data || []) as WorkOrderLineItem[];
     } catch (error) {
       console.error("Error fetching work order line items:", error);
       toast({
@@ -194,7 +194,8 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
         
         const lineItemsWithWorkOrderId = lineItems.map(item => ({
           ...item,
-          work_order_id: workOrderId
+          work_order_id: workOrderId,
+          id: undefined // Remove any existing IDs for insertion
         }));
         
         const { error: lineItemError } = await supabase

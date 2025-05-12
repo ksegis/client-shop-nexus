@@ -1,4 +1,5 @@
 
+
 export type WorkOrderStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 
 export interface Customer {
@@ -67,3 +68,4 @@ export interface WorkOrderFormValues {
   assigned_to?: string | null;
   lineItems: WorkOrderLineItem[];
 }
+

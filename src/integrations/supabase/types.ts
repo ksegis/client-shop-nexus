@@ -426,6 +426,50 @@ export type Database = {
           },
         ]
       }
+      work_order_line_items: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          part_number: string | null
+          price: number
+          quantity: number
+          updated_at: string
+          vendor: string | null
+          work_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          part_number?: string | null
+          price?: number
+          quantity?: number
+          updated_at?: string
+          vendor?: string | null
+          work_order_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          part_number?: string | null
+          price?: number
+          quantity?: number
+          updated_at?: string
+          vendor?: string | null
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_order_line_items_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       work_orders: {
         Row: {
           actual_cost: number | null

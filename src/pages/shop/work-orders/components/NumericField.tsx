@@ -1,7 +1,8 @@
 
+
 import { Input } from '@/components/ui/input';
 import { UseFormReturn } from 'react-hook-form';
-import { WorkOrderFormValues } from '../WorkOrderDialog';
+import { WorkOrderFormValues } from '../types';
 import { FormFieldWrapper } from './FormField';
 
 interface NumericFieldProps {
@@ -51,3 +52,4 @@ export const NumericField = ({
     </FormFieldWrapper>
   );
 };
+

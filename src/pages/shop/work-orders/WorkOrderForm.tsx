@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { Form } from '@/components/ui/form';
-import { WorkOrderFormValues } from './WorkOrderDialog';
+import { WorkOrderFormValues, WorkOrderLineItem } from './types';
 import { CustomerSelect } from './components/CustomerSelect';
 import { VehicleSelect } from './components/VehicleSelect';
 import { StatusSelect } from './components/StatusSelect';
@@ -12,7 +12,6 @@ import { DescriptionField } from './components/DescriptionField';
 import { FormActions } from './components/FormActions';
 import { LineItems } from './components/LineItems';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { WorkOrderLineItem } from './types';
 
 interface WorkOrderFormProps {
   form: UseFormReturn<WorkOrderFormValues>;
