@@ -15,7 +15,7 @@ declare module './types' {
         user_role: ExtendedUserRole;
       } & Omit<Database['public']['Enums'], 'user_role'>;
     } & Omit<Database['public'], 'Enums'>;
-  } & Omit<Database, 'public'>;
+  }
 }
 
 // Export the extended types to ensure they're used throughout the application
