@@ -75,8 +75,20 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
     estimate_id?: string;
   }) => {
     try {
-      // Type assertion to ensure compatibility with database enum
-      const status = invoice.status || 'draft';
+      // Map our application's InvoiceStatus to the database's expected values
+      let dbStatus: 'draft' | 'pending' | 'paid' | 'overdue';
+      
+      // Convert 'sent' to 'pending' and 'void' to 'draft' for database compatibility
+      switch (invoice.status) {
+        case 'sent': 
+          dbStatus = 'pending'; 
+          break;
+        case 'void': 
+          dbStatus = 'draft';
+          break;
+        default:
+          dbStatus = (invoice.status as 'draft' | 'paid' | 'overdue') || 'draft';
+      }
       
       const { error: insertError } = await supabase
         .from('invoices')
@@ -86,7 +98,7 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
           title: invoice.title,
           description: invoice.description,
           total_amount: invoice.total_amount || 0,
-          status: status,
+          status: dbStatus,
           estimate_id: invoice.estimate_id
         });
       
@@ -114,14 +126,33 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
     status?: InvoiceStatus;
   }) => {
     try {
+      // Map our application's InvoiceStatus to the database's expected values
+      let dbStatus: 'draft' | 'pending' | 'paid' | 'overdue' | undefined;
+      
+      if (invoice.status) {
+        // Convert 'sent' to 'pending' and 'void' to 'draft' for database compatibility
+        switch (invoice.status) {
+          case 'sent': 
+            dbStatus = 'pending'; 
+            break;
+          case 'void': 
+            dbStatus = 'draft';
+            break;
+          default:
+            dbStatus = invoice.status as 'draft' | 'paid' | 'overdue';
+        }
+      }
+      
+      const updatePayload = {
+        title: invoice.title,
+        description: invoice.description,
+        total_amount: invoice.total_amount,
+        status: dbStatus
+      };
+
       const { error: updateError } = await supabase
         .from('invoices')
-        .update({
-          title: invoice.title,
-          description: invoice.description,
-          total_amount: invoice.total_amount,
-          status: invoice.status
-        })
+        .update(updatePayload)
         .eq('id', id);
       
       if (updateError) throw updateError;
@@ -143,9 +174,24 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
 
   const updateInvoiceStatus = async (id: string, status: InvoiceStatus) => {
     try {
+      // Map our application's InvoiceStatus to the database's expected values
+      let dbStatus: 'draft' | 'pending' | 'paid' | 'overdue';
+      
+      // Convert 'sent' to 'pending' and 'void' to 'draft' for database compatibility
+      switch (status) {
+        case 'sent': 
+          dbStatus = 'pending'; 
+          break;
+        case 'void': 
+          dbStatus = 'draft';
+          break;
+        default:
+          dbStatus = status as 'draft' | 'paid' | 'overdue';
+      }
+      
       const { error: updateError } = await supabase
         .from('invoices')
-        .update({ status })
+        .update({ status: dbStatus })
         .eq('id', id);
       
       if (updateError) throw updateError;
