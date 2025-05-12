@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
 
 import { useCustomers } from "@/hooks/useCustomers";
 import { useVehicles } from "@/hooks/useVehicles";
@@ -46,24 +47,34 @@ export default function InvoiceDialog({
     sourceEstimateId,
     setSourceEstimateId,
     openEstimates,
+    loading,
     handleEstimateSelection,
   } = useInvoiceData();
 
   // Initialize form data from props
   useEffect(() => {
     if (invoice) {
-      setCustomerId(invoice.customer_id);
-      setVehicleId(invoice.vehicle_id);
+      setCustomerId(invoice.customer_id || '');
+      setVehicleId(invoice.vehicle_id || '');
       setSourceEstimateId(invoice.estimate_id || null);
     } else if (estimateData) {
       setCustomerId(estimateData.customer_id || '');
       setVehicleId(estimateData.vehicle_id || '');
-      setSourceEstimateId(estimateData.id);
+      setSourceEstimateId(estimateData.id || null);
     }
   }, [invoice, estimateData]);
 
   const onSubmit = async (data: any) => {
     try {
+      if (!customerId) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Please select a customer",
+        });
+        return;
+      }
+
       let newInvoiceData: any = {
         title: data.title,
         description: data.description,
@@ -96,6 +107,7 @@ export default function InvoiceDialog({
       }
       onClose();
     } catch (error) {
+      console.error("Error saving invoice:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -118,22 +130,29 @@ export default function InvoiceDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <InvoiceForm
-          invoice={invoice}
-          estimateData={estimateData}
-          openEstimates={openEstimates}
-          sourceEstimateId={sourceEstimateId}
-          setSourceEstimateId={setSourceEstimateId}
-          customerId={customerId}
-          setCustomerId={setCustomerId}
-          selectedVehicleId={selectedVehicleId}
-          setVehicleId={setVehicleId}
-          customerDetails={customerDetails}
-          vehicleOptions={vehicleOptions}
-          handleEstimateSelection={handleEstimateSelection}
-          onSubmit={onSubmit}
-          customers={customers}
-        />
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-muted-foreground">Loading estimates data...</span>
+          </div>
+        ) : (
+          <InvoiceForm
+            invoice={invoice}
+            estimateData={estimateData}
+            openEstimates={openEstimates || []}
+            sourceEstimateId={sourceEstimateId}
+            setSourceEstimateId={setSourceEstimateId}
+            customerId={customerId}
+            setCustomerId={setCustomerId}
+            selectedVehicleId={selectedVehicleId}
+            setVehicleId={setVehicleId}
+            customerDetails={customerDetails}
+            vehicleOptions={vehicleOptions}
+            handleEstimateSelection={handleEstimateSelection}
+            onSubmit={onSubmit}
+            customers={customers}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

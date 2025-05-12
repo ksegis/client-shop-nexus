@@ -57,22 +57,33 @@ export function useInvoiceData() {
   }, []);
 
   const fetchCustomerDetails = async (customerId: string) => {
-    if (!customerId) return;
+    if (!customerId) {
+      setCustomerDetails(null);
+      return;
+    }
     
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', customerId)
-        .single();
+        .maybeSingle();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching customer details:', error);
+        setCustomerDetails(null);
+        return;
+      }
       
-      setCustomerDetails({
-        first_name: data.first_name || undefined,
-        last_name: data.last_name || undefined,
-        email: data.email,
-      });
+      if (data) {
+        setCustomerDetails({
+          first_name: data.first_name || undefined,
+          last_name: data.last_name || undefined,
+          email: data.email,
+        });
+      } else {
+        setCustomerDetails(null);
+      }
     } catch (error) {
       console.error('Error fetching customer details:', error);
       setCustomerDetails(null);
@@ -91,7 +102,11 @@ export function useInvoiceData() {
         .select('*')
         .eq('owner_id', customerId);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching vehicle options:', error);
+        setVehicleOptions([]);
+        return;
+      }
       
       const options = (data || []).map(vehicle => ({
         value: vehicle.id,
@@ -117,6 +132,12 @@ export function useInvoiceData() {
   }, [customerId]);
 
   const handleEstimateSelection = (estimateId: string) => {
+    // Validate that we have estimates and the selected ID exists
+    if (!Array.isArray(openEstimates) || openEstimates.length === 0) {
+      console.error('No estimates available for selection');
+      return;
+    }
+    
     const selectedEstimate = openEstimates.find(est => est.id === estimateId);
     if (!selectedEstimate) {
       console.error('Selected estimate not found');
