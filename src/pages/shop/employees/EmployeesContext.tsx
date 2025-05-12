@@ -4,13 +4,16 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 
+// Extending the role type to include inactive variants
+export type ExtendedRole = "customer" | "staff" | "admin" | "inactive_staff" | "inactive_admin";
+
 export interface Employee {
   id: string;
   first_name: string;
   last_name: string;
   email: string;
   phone: string | null;
-  role: string; // Changed from specific enum types to string to accommodate all role types
+  role: ExtendedRole;
 }
 
 interface EmployeesContextType {
@@ -51,7 +54,7 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
         last_name: profile.last_name || '',
         email: profile.email,
         phone: profile.phone,
-        role: profile.role
+        role: profile.role as ExtendedRole
       }));
     }
   });

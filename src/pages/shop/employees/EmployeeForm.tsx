@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useEmployees, Employee } from './EmployeesContext';
+import { useEmployees, Employee, ExtendedRole } from './EmployeesContext';
 
 // Schema for creating new employees
 const createFormSchema = z.object({
@@ -40,6 +40,7 @@ const updateFormSchema = z.object({
 
 export type EmployeeFormCreateValues = z.infer<typeof createFormSchema>;
 export type EmployeeFormUpdateValues = z.infer<typeof updateFormSchema>;
+type StaffRole = 'staff' | 'admin';
 
 interface EmployeeFormProps {
   onCancel: () => void;
@@ -52,6 +53,18 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
   const { refetchEmployees } = useEmployees();
   const isEditing = !!employeeData;
   
+  // Helper function to get base role (remove inactive_ prefix)
+  const getBaseRole = (role: ExtendedRole): StaffRole => {
+    return role.startsWith('inactive_') 
+      ? role.substring('inactive_'.length) as StaffRole
+      : role as StaffRole;
+  };
+  
+  // Helper function to check if a role is inactive
+  const isRoleInactive = (role: ExtendedRole): boolean => {
+    return role.startsWith('inactive_');
+  };
+  
   const form = useForm<EmployeeFormCreateValues | EmployeeFormUpdateValues>({
     resolver: zodResolver(isEditing ? updateFormSchema : createFormSchema),
     defaultValues: isEditing 
@@ -60,9 +73,7 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
           last_name: employeeData.last_name || '',
           email: employeeData.email || '',
           phone: employeeData.phone || '',
-          role: employeeData.role.startsWith('inactive_') 
-            ? employeeData.role.substring('inactive_'.length) as 'staff' | 'admin'
-            : employeeData.role as 'staff' | 'admin',
+          role: getBaseRole(employeeData.role),
         }
       : {
           first_name: '',
@@ -76,12 +87,14 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
 
   const onSubmit = async (values: EmployeeFormCreateValues | EmployeeFormUpdateValues) => {
     try {
-      if (isEditing) {
+      if (isEditing && employeeData) {
         // Determine if the employee is currently inactive
-        const isCurrentlyInactive = employeeData.role.startsWith('inactive_');
+        const isCurrentlyInactive = isRoleInactive(employeeData.role);
         
         // Preserve inactive status if employee is currently inactive
-        const updatedRole = isCurrentlyInactive ? `inactive_${values.role}` : values.role;
+        const updatedRole = isCurrentlyInactive ? 
+          `inactive_${values.role}` as ExtendedRole : 
+          values.role as ExtendedRole;
         
         // Update existing employee
         const { error: updateError } = await supabase
