@@ -9,18 +9,18 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { UseFormReturn } from 'react-hook-form';
+import { Control } from 'react-hook-form';
 import { EmployeeFormCreateValues, EmployeeFormUpdateValues } from '../employeeFormSchema';
 
 interface PasswordFieldProps {
-  form: UseFormReturn<EmployeeFormCreateValues | EmployeeFormUpdateValues>;
+  control: Control<EmployeeFormCreateValues | EmployeeFormUpdateValues>;
   isEditing: boolean;
 }
 
-export function PasswordField({ form, isEditing }: PasswordFieldProps) {
+export function PasswordField({ control, isEditing }: PasswordFieldProps) {
   return (
     <FormField
-      control={form.control}
+      control={control}
       name="password"
       render={({ field }) => (
         <FormItem>

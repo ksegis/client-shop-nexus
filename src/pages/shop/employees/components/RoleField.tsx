@@ -8,17 +8,17 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { UseFormReturn } from 'react-hook-form';
+import { Control } from 'react-hook-form';
 import { EmployeeFormCreateValues, EmployeeFormUpdateValues } from '../employeeFormSchema';
 
 interface RoleFieldProps {
-  form: UseFormReturn<EmployeeFormCreateValues | EmployeeFormUpdateValues>;
+  control: Control<EmployeeFormCreateValues | EmployeeFormUpdateValues>;
 }
 
-export function RoleField({ form }: RoleFieldProps) {
+export function RoleField({ control }: RoleFieldProps) {
   return (
     <FormField
-      control={form.control}
+      control={control}
       name="role"
       render={({ field }) => (
         <FormItem>

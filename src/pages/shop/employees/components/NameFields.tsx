@@ -8,18 +8,18 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { UseFormReturn } from 'react-hook-form';
+import { Control } from 'react-hook-form';
 import { EmployeeFormCreateValues, EmployeeFormUpdateValues } from '../employeeFormSchema';
 
 interface NameFieldsProps {
-  form: UseFormReturn<EmployeeFormCreateValues | EmployeeFormUpdateValues>;
+  control: Control<EmployeeFormCreateValues | EmployeeFormUpdateValues>;
 }
 
-export function NameFields({ form }: NameFieldsProps) {
+export function NameFields({ control }: NameFieldsProps) {
   return (
     <div className="grid grid-cols-2 gap-4">
       <FormField
-        control={form.control}
+        control={control}
         name="first_name"
         render={({ field }) => (
           <FormItem>
@@ -32,7 +32,7 @@ export function NameFields({ form }: NameFieldsProps) {
         )}
       />
       <FormField
-        control={form.control}
+        control={control}
         name="last_name"
         render={({ field }) => (
           <FormItem>

@@ -2,20 +2,17 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Form, FormField } from '@/components/ui/form';
+import { Form } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { NameFields } from './components/NameFields';
 import { ContactFields } from './components/ContactFields';
 import { RoleField } from './components/RoleField';
 import { PasswordField } from './components/PasswordField';
-import { useEmployeesContext } from './EmployeesContext';
+import { useEmployees } from './EmployeesContext';
 import { Employee } from './types';
-import { employeeFormSchema } from './employeeFormSchema';
+import { employeeFormSchema, EmployeeFormUpdateValues } from './employeeFormSchema';
 import { getEmployeeFormValues } from './employeeFormUtils';
-import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
-
-type FormValues = z.infer<typeof employeeFormSchema>;
+import { DatabaseUserRole } from '@/integrations/supabase/types-extensions';
 
 interface EmployeeFormProps {
   employeeData: Employee | null;
@@ -24,22 +21,22 @@ interface EmployeeFormProps {
 }
 
 export function EmployeeForm({ employeeData, onCancel, onSuccess }: EmployeeFormProps) {
-  const { createEmployee, updateEmployee } = useEmployeesContext();
+  const { createEmployee, updateEmployee } = useEmployees();
   const isEditing = !!employeeData;
   
-  const form = useForm<FormValues>({
+  const form = useForm<EmployeeFormUpdateValues>({
     resolver: zodResolver(employeeFormSchema),
     defaultValues: getEmployeeFormValues(employeeData),
   });
 
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (values: EmployeeFormUpdateValues) => {
     try {
       if (isEditing && employeeData) {
         await updateEmployee(
           employeeData.id,
           {
             ...values,
-            role: values.role as ExtendedUserRole,
+            role: values.role as unknown as DatabaseUserRole,
           },
           values.password || undefined
         );
@@ -47,7 +44,7 @@ export function EmployeeForm({ employeeData, onCancel, onSuccess }: EmployeeForm
         await createEmployee(
           {
             ...values,
-            role: values.role as ExtendedUserRole,
+            role: values.role as unknown as DatabaseUserRole,
           }, 
           values.password || ''
         );

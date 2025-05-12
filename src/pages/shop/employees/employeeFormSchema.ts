@@ -25,5 +25,8 @@ export const updateFormSchema = z.object({
   password: z.string().optional(),
 });
 
+// Export a unified schema for the form that can be used for both create and update
+export const employeeFormSchema = updateFormSchema;
+
 export type EmployeeFormCreateValues = z.infer<typeof createFormSchema>;
 export type EmployeeFormUpdateValues = z.infer<typeof updateFormSchema>;

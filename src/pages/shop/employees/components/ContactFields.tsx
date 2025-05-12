@@ -9,24 +9,29 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { UseFormReturn } from 'react-hook-form';
+import { Control } from 'react-hook-form';
 import { EmployeeFormCreateValues, EmployeeFormUpdateValues } from '../employeeFormSchema';
 
 interface ContactFieldsProps {
-  form: UseFormReturn<EmployeeFormCreateValues | EmployeeFormUpdateValues>;
+  control: Control<EmployeeFormCreateValues | EmployeeFormUpdateValues>;
+  emailReadOnly?: boolean;
 }
 
-export function ContactFields({ form }: ContactFieldsProps) {
+export function ContactFields({ control, emailReadOnly }: ContactFieldsProps) {
   return (
     <>
       <FormField
-        control={form.control}
+        control={control}
         name="email"
         render={({ field }) => (
           <FormItem>
             <FormLabel>Email</FormLabel>
             <FormControl>
-              <Input type="email" {...field} />
+              <Input 
+                type="email" 
+                readOnly={emailReadOnly}
+                {...field} 
+              />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -34,7 +39,7 @@ export function ContactFields({ form }: ContactFieldsProps) {
       />
 
       <FormField
-        control={form.control}
+        control={control}
         name="phone"
         render={({ field }) => (
           <FormItem>

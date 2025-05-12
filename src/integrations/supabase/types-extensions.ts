@@ -22,3 +22,6 @@ export interface ExtendedDatabase {
 
 // Export the original database type with a different name for reference if needed
 export type { OriginalDatabase };
+
+// Export a type that OriginalDatabase's user_role can be assigned to
+export type DatabaseUserRole = OriginalDatabase['public']['Enums']['user_role'];

@@ -52,5 +52,8 @@ export function useEmployees() {
   return context;
 }
 
+// Export the useEmployeesContext as an alias of useEmployees to maintain compatibility
+export const useEmployeesContext = useEmployees;
+
 // Re-export types
 export type { Employee, ExtendedRole, BaseRole } from './types';
