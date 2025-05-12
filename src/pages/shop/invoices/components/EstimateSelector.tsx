@@ -7,7 +7,6 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Estimate } from "../../estimates/types";
 import { formatCurrency } from "@/lib/utils";
-import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 interface EstimateSelectorProps {
@@ -24,7 +23,7 @@ export function EstimateSelector({
   const [estimateSelectOpen, setEstimateSelectOpen] = useState(false);
   const { toast } = useToast();
 
-  // Ensure estimates is always an array
+  // Ensure estimates is always a valid array to prevent "undefined is not iterable" error
   const estimates = Array.isArray(openEstimates) ? openEstimates : [];
 
   const handleEstimateSelection = (estimateId: string) => {

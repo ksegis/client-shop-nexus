@@ -56,7 +56,7 @@ export function InvoiceForm({
     },
   });
 
-  // Ensure we have an array for openEstimates
+  // Ensure we have a valid array for openEstimates
   const estimates = Array.isArray(openEstimates) ? openEstimates : [];
 
   return (

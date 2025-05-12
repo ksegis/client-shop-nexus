@@ -12,10 +12,12 @@ export function useInvoiceData() {
   const [customerDetails, setCustomerDetails] = useState<{ first_name?: string; last_name?: string; email: string; } | null>(null);
   const [sourceEstimateId, setSourceEstimateId] = useState<string | null>(null);
   const [openEstimates, setOpenEstimates] = useState<Estimate[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
 
   // Fetch open estimates
   useEffect(() => {
     const fetchOpenEstimates = async () => {
+      setLoading(true);
       try {
         const { data, error } = await supabase
           .from('estimates')
@@ -46,6 +48,8 @@ export function useInvoiceData() {
       } catch (error) {
         console.error('Error fetching estimates:', error);
         setOpenEstimates([]);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -114,7 +118,10 @@ export function useInvoiceData() {
 
   const handleEstimateSelection = (estimateId: string) => {
     const selectedEstimate = openEstimates.find(est => est.id === estimateId);
-    if (!selectedEstimate) return;
+    if (!selectedEstimate) {
+      console.error('Selected estimate not found');
+      return;
+    }
     
     setSourceEstimateId(selectedEstimate.id);
     
@@ -144,6 +151,7 @@ export function useInvoiceData() {
     sourceEstimateId,
     setSourceEstimateId,
     openEstimates,
+    loading,
     handleEstimateSelection,
     fetchCustomerDetails,
     fetchVehicleOptions,
