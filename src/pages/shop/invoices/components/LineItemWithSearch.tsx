@@ -45,12 +45,23 @@ export const LineItemWithSearch = ({
 
   const handleSelectInventoryItem = (inventoryItem: any) => {
     console.log("Selected inventory item:", inventoryItem);
-    // Make sure to update all fields from inventory item
-    onUpdate(index, 'part_number', inventoryItem.sku || '');
-    onUpdate(index, 'description', inventoryItem.name || '');
-    onUpdate(index, 'price', parseFloat(inventoryItem.price) || 0);
-    onUpdate(index, 'vendor', inventoryItem.supplier || '');
-    setDescription(inventoryItem.name || '');
+    
+    // Ensure all fields are properly updated with inventory item data
+    const partNumber = inventoryItem.sku || '';
+    const itemDescription = inventoryItem.name || '';
+    const price = parseFloat(inventoryItem.price) || 0;
+    const vendor = inventoryItem.supplier || '';
+    
+    // Update all fields
+    onUpdate(index, 'part_number', partNumber);
+    onUpdate(index, 'description', itemDescription);
+    onUpdate(index, 'price', price);
+    onUpdate(index, 'vendor', vendor);
+    
+    // Update local state
+    setDescription(itemDescription);
+    
+    // Close search and reset search term
     setShowItemResults(false);
     setSearchTerm('');
   };
@@ -78,7 +89,7 @@ export const LineItemWithSearch = ({
       </div>
       
       {/* Description with search */}
-      <div className="col-span-4 relative">
+      <div className="col-span-4">
         <InventorySearchPopover
           isOpen={showItemResults}
           onClose={handleCloseSearch}
@@ -97,7 +108,7 @@ export const LineItemWithSearch = ({
         </InventorySearchPopover>
       </div>
 
-      {/* Quantity - increased column span from 1 to 1.5 */}
+      {/* Quantity - with proper width */}
       <div className="col-span-1.5">
         <Input 
           type="number" 
@@ -107,7 +118,7 @@ export const LineItemWithSearch = ({
         />
       </div>
 
-      {/* Price - decreased column span from 2 to 1.5 */}
+      {/* Price - with proper width */}
       <div className="col-span-1.5">
         <Input 
           type="text" 
@@ -122,8 +133,8 @@ export const LineItemWithSearch = ({
         />
       </div>
 
-      {/* Vendor */}
-      <div className="col-span-2">
+      {/* Vendor - increased column width */}
+      <div className="col-span-2.5">
         <Select
           value={item.vendor || ''}
           onValueChange={(value) => onUpdate(index, 'vendor', value)}
@@ -141,8 +152,8 @@ export const LineItemWithSearch = ({
         </Select>
       </div>
 
-      {/* Remove button */}
-      <div className="col-span-1 flex items-center justify-end">
+      {/* Remove button - decreased width */}
+      <div className="col-span-0.5 flex items-center justify-end">
         <Button 
           variant="ghost" 
           size="icon" 

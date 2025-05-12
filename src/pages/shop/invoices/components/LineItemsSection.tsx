@@ -54,8 +54,8 @@ export const LineItemsSection = ({
             <div className="col-span-4">Description</div>
             <div className="col-span-1.5">Qty</div>
             <div className="col-span-1.5">Price</div>
-            <div className="col-span-2">Vendor</div>
-            <div className="col-span-1"></div>
+            <div className="col-span-2.5">Vendor</div>
+            <div className="col-span-0.5"></div>
           </div>
           
           {lineItems.map((item, index) => (
