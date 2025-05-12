@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,6 +35,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Plus, Trash, Save } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 // Line item schema for validation
 const lineItemSchema = z.object({
@@ -42,6 +44,17 @@ const lineItemSchema = z.object({
   quantity: z.coerce.number().min(1, { message: "Quantity must be at least 1" }),
   price: z.coerce.number().min(0, { message: "Price must be positive" }),
   vendor: z.string().optional(),
+});
+
+// Vehicle schema for the add vehicle form
+const vehicleSchema = z.object({
+  make: z.string().min(1, { message: "Make is required" }),
+  model: z.string().min(1, { message: "Model is required" }),
+  year: z.coerce.number().int().min(1900, { message: "Please enter a valid year" }).max(new Date().getFullYear() + 1, { message: "Year cannot be in the future" }),
+  color: z.string().optional(),
+  license_plate: z.string().optional(),
+  vin: z.string().optional(),
+  vehicle_type: z.enum(["car", "truck", "motorcycle", "other"]).default("car"),
 });
 
 const formSchema = z.object({
@@ -56,6 +69,7 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 type LineItemValues = z.infer<typeof lineItemSchema>;
+type VehicleFormValues = z.infer<typeof vehicleSchema>;
 
 export function InvoiceDialog({ invoice, open, onClose }: { invoice?: Invoice; open: boolean; onClose: () => void }) {
   const { createInvoice, updateInvoice } = useInvoices();
@@ -64,6 +78,9 @@ export function InvoiceDialog({ invoice, open, onClose }: { invoice?: Invoice; o
   const [itemSearchTerm, setItemSearchTerm] = useState("");
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
   const [showItemResults, setShowItemResults] = useState(false);
+  const [showAddVehicle, setShowAddVehicle] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const { toast } = useToast();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -76,6 +93,19 @@ export function InvoiceDialog({ invoice, open, onClose }: { invoice?: Invoice; o
       status: invoice?.status || "draft",
       line_items: [],
     },
+  });
+
+  const vehicleForm = useForm<VehicleFormValues>({
+    resolver: zodResolver(vehicleSchema),
+    defaultValues: {
+      make: "",
+      model: "",
+      year: new Date().getFullYear(),
+      color: "",
+      license_plate: "",
+      vin: "",
+      vehicle_type: "car",
+    }
   });
 
   // Reset form when the dialog opens or invoice changes
@@ -91,6 +121,7 @@ export function InvoiceDialog({ invoice, open, onClose }: { invoice?: Invoice; o
       });
       // Reset line items
       setLineItems([]);
+      setShowAddVehicle(false);
     }
   }, [open, invoice, form]);
 
@@ -117,7 +148,7 @@ export function InvoiceDialog({ invoice, open, onClose }: { invoice?: Invoice; o
   });
 
   // Fetch vehicles for the dropdown
-  const { data: vehicles = [] } = useQuery({
+  const { data: vehicles = [], refetch: refetchVehicles } = useQuery({
     queryKey: ['vehicles', form.watch('customer_id')],
     queryFn: async () => {
       const customerId = form.watch('customer_id');
@@ -131,6 +162,70 @@ export function InvoiceDialog({ invoice, open, onClose }: { invoice?: Invoice; o
     },
     enabled: !!form.watch('customer_id'),
   });
+
+  // Handle customer selection
+  const handleCustomerChange = async (customerId: string) => {
+    form.setValue('customer_id', customerId);
+    
+    // Find the selected customer
+    const customer = customers.find(c => c.id === customerId);
+    setSelectedCustomer(customer);
+    
+    // Reset vehicle selection since we changed customers
+    form.setValue('vehicle_id', '');
+
+    // Wait for vehicles to load after customer change
+    await refetchVehicles();
+  };
+
+  // Handle add vehicle submission
+  const handleAddVehicle = async (data: VehicleFormValues) => {
+    try {
+      const customerId = form.getValues('customer_id');
+      if (!customerId) {
+        toast({
+          title: "Error",
+          description: "Please select a customer before adding a vehicle",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data: newVehicle, error } = await supabase
+        .from('vehicles')
+        .insert({
+          ...data,
+          owner_id: customerId
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Vehicle added",
+        description: `${data.year} ${data.make} ${data.model} added successfully`,
+      });
+
+      // Refresh vehicles list
+      await refetchVehicles();
+      
+      // Select the new vehicle
+      if (newVehicle) {
+        form.setValue('vehicle_id', newVehicle.id);
+      }
+      
+      // Close the add vehicle form
+      setShowAddVehicle(false);
+      vehicleForm.reset();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add vehicle",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Fetch vendors for dropdown
   const { data: vendors = [] } = useQuery({
@@ -293,8 +388,8 @@ export function InvoiceDialog({ invoice, open, onClose }: { invoice?: Invoice; o
                   <FormItem>
                     <FormLabel>Customer</FormLabel>
                     <Select 
-                      onValueChange={field.onChange} 
-                      defaultValue={field.value}
+                      onValueChange={handleCustomerChange} 
+                      value={field.value}
                       disabled={isEditing}
                     >
                       <FormControl>
@@ -321,29 +416,161 @@ export function InvoiceDialog({ invoice, open, onClose }: { invoice?: Invoice; o
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Vehicle</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      defaultValue={field.value}
-                      disabled={isEditing || !form.watch('customer_id')}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a vehicle" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {vehicles.map((vehicle) => (
-                          <SelectItem key={vehicle.id} value={vehicle.id}>
-                            {`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-2">
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value}
+                        disabled={isEditing || !form.watch('customer_id')}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Select a vehicle" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {vehicles.length > 0 ? (
+                            vehicles.map((vehicle) => (
+                              <SelectItem key={vehicle.id} value={vehicle.id}>
+                                {`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="py-2 px-2 text-sm text-muted-foreground">
+                              No vehicles found
+                            </div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      {!isEditing && form.watch('customer_id') && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setShowAddVehicle(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-1" /> Add
+                        </Button>
+                      )}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+            
+            {showAddVehicle && (
+              <div className="border rounded p-4 space-y-4 bg-muted/30">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-base font-medium">Add New Vehicle</h3>
+                  <Button
+                    type="button" 
+                    variant="ghost" 
+                    onClick={() => setShowAddVehicle(false)}
+                    size="sm"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Make</label>
+                    <Input 
+                      {...vehicleForm.register('make')} 
+                      placeholder="Make" 
+                      className="mt-1"
+                    />
+                    {vehicleForm.formState.errors.make && (
+                      <p className="text-sm font-medium text-destructive mt-1">
+                        {vehicleForm.formState.errors.make.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Model</label>
+                    <Input 
+                      {...vehicleForm.register('model')} 
+                      placeholder="Model" 
+                      className="mt-1"
+                    />
+                    {vehicleForm.formState.errors.model && (
+                      <p className="text-sm font-medium text-destructive mt-1">
+                        {vehicleForm.formState.errors.model.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Year</label>
+                    <Input 
+                      type="number" 
+                      {...vehicleForm.register('year', { valueAsNumber: true })} 
+                      placeholder="Year" 
+                      className="mt-1"
+                    />
+                    {vehicleForm.formState.errors.year && (
+                      <p className="text-sm font-medium text-destructive mt-1">
+                        {vehicleForm.formState.errors.year.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Color</label>
+                    <Input 
+                      {...vehicleForm.register('color')} 
+                      placeholder="Color" 
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Type</label>
+                    <Select 
+                      onValueChange={(value) => vehicleForm.setValue('vehicle_type', value as any)}
+                      defaultValue={vehicleForm.getValues('vehicle_type')}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="car">Car</SelectItem>
+                        <SelectItem value="truck">Truck</SelectItem>
+                        <SelectItem value="motorcycle">Motorcycle</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">License Plate</label>
+                    <Input 
+                      {...vehicleForm.register('license_plate')} 
+                      placeholder="License Plate" 
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">VIN</label>
+                    <Input 
+                      {...vehicleForm.register('vin')} 
+                      placeholder="VIN" 
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    onClick={() => vehicleForm.handleSubmit(handleAddVehicle)()}
+                  >
+                    Add Vehicle
+                  </Button>
+                </div>
+              </div>
+            )}
             
             <FormField
               control={form.control}
@@ -537,7 +764,7 @@ export function InvoiceDialog({ invoice, open, onClose }: { invoice?: Invoice; o
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select status" />
