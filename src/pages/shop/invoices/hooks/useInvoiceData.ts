@@ -41,28 +41,8 @@ export function useInvoiceData() {
           return;
         }
         
-        // Initialize with empty array if data is undefined
-        const transformedData = data ? data.map(item => {
-          const profileData = item.profiles ? {
-            first_name: item.profiles.first_name || '',
-            last_name: item.profiles.last_name || '',
-            email: item.profiles.email || ''
-          } : null;
-          
-          const vehicleData = item.vehicles ? {
-            make: item.vehicles.make || '',
-            model: item.vehicles.model || '',
-            year: item.vehicles.year || 0
-          } : null;
-          
-          return {
-            ...item,
-            profiles: profileData,
-            vehicles: vehicleData
-          };
-        }) : [];
-
-        setOpenEstimates(transformedData);
+        // Ensure we always return an array
+        setOpenEstimates(data || []);
       } catch (error) {
         console.error('Error fetching estimates:', error);
         setOpenEstimates([]);
@@ -111,7 +91,7 @@ export function useInvoiceData() {
       
       const options = (data || []).map(vehicle => ({
         value: vehicle.id,
-        label: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+        label: `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'Vehicle details unavailable',
       }));
       
       setVehicleOptions(options);

@@ -17,12 +17,15 @@ interface EstimateSelectorProps {
 }
 
 export function EstimateSelector({ 
-  openEstimates, 
+  openEstimates = [], 
   sourceEstimateId, 
   onEstimateSelected 
 }: EstimateSelectorProps) {
   const [estimateSelectOpen, setEstimateSelectOpen] = useState(false);
   const { toast } = useToast();
+
+  // Ensure estimates is always an array
+  const estimates = Array.isArray(openEstimates) ? openEstimates : [];
 
   const handleEstimateSelection = (estimateId: string) => {
     onEstimateSelected(estimateId);
@@ -33,9 +36,14 @@ export function EstimateSelector({
     });
   };
 
-  if (openEstimates.length === 0) {
+  if (estimates.length === 0) {
     return null;
   }
+
+  // Find the selected estimate safely
+  const selectedEstimate = sourceEstimateId 
+    ? estimates.find(est => est.id === sourceEstimateId)
+    : undefined;
 
   return (
     <div className="space-y-2">
@@ -48,8 +56,8 @@ export function EstimateSelector({
             aria-expanded={estimateSelectOpen}
             className="w-full justify-between"
           >
-            {sourceEstimateId
-              ? `${openEstimates.find(est => est.id === sourceEstimateId)?.title || 'Selected estimate'} (#${sourceEstimateId.substring(0, 8)})`
+            {sourceEstimateId && selectedEstimate
+              ? `${selectedEstimate.title || 'Selected estimate'} (#${sourceEstimateId.substring(0, 8)})`
               : "Select an estimate..."}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
@@ -59,24 +67,28 @@ export function EstimateSelector({
             <CommandInput placeholder="Search estimates..." />
             <CommandEmpty>No estimates found.</CommandEmpty>
             <CommandGroup>
-              {openEstimates.map((estimate) => (
+              {estimates.map((estimate) => (
                 <CommandItem
                   key={estimate.id}
                   onSelect={() => handleEstimateSelection(estimate.id)}
                   className="flex flex-col items-start py-3"
                 >
                   <div className="flex w-full justify-between">
-                    <div className="font-medium">{estimate.title}</div>
+                    <div className="font-medium">{estimate.title || 'Untitled Estimate'}</div>
                     <div className="text-muted-foreground text-sm">
                       {formatCurrency(estimate.total_amount)}
                     </div>
                   </div>
                   <div className="flex justify-between w-full text-xs text-muted-foreground mt-1">
                     <div>
-                      {estimate.profiles ? `${estimate.profiles.first_name || ''} ${estimate.profiles.last_name || ''}`.trim() || estimate.profiles.email : 'Unknown customer'}
+                      {estimate.profiles 
+                        ? `${estimate.profiles.first_name || ''} ${estimate.profiles.last_name || ''}`.trim() || estimate.profiles.email 
+                        : 'Unknown customer'}
                     </div>
                     <div>
-                      {estimate.vehicles ? `${estimate.vehicles.year} ${estimate.vehicles.make} ${estimate.vehicles.model}` : 'Unknown vehicle'}
+                      {estimate.vehicles 
+                        ? `${estimate.vehicles.year || ''} ${estimate.vehicles.make || ''} ${estimate.vehicles.model || ''}`.trim() || 'Vehicle details unavailable'
+                        : 'Unknown vehicle'}
                     </div>
                   </div>
                   {sourceEstimateId === estimate.id && (

@@ -33,7 +33,7 @@ interface InvoiceFormProps {
 export function InvoiceForm({
   invoice,
   estimateData,
-  openEstimates,
+  openEstimates = [],
   sourceEstimateId,
   setSourceEstimateId,
   customerId,
@@ -41,7 +41,7 @@ export function InvoiceForm({
   selectedVehicleId,
   setVehicleId,
   customerDetails,
-  vehicleOptions,
+  vehicleOptions = [],
   handleEstimateSelection,
   onSubmit,
   customers = []
@@ -49,12 +49,15 @@ export function InvoiceForm({
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: {
-      title: invoice?.title || estimateData?.title ? `Invoice for ${estimateData?.title}` : "",
+      title: invoice?.title || (estimateData?.title ? `Invoice for ${estimateData?.title}` : ""),
       description: invoice?.description || estimateData?.description || "",
       total_amount: invoice?.total_amount || estimateData?.total_amount || 0,
       status: invoice?.status || 'draft',
     },
   });
+
+  // Ensure we have an array for openEstimates
+  const estimates = Array.isArray(openEstimates) ? openEstimates : [];
 
   return (
     <>
@@ -74,9 +77,9 @@ export function InvoiceForm({
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          {!invoice && !estimateData && openEstimates.length > 0 && (
+          {!invoice && !estimateData && estimates.length > 0 && (
             <EstimateSelector
-              openEstimates={openEstimates}
+              openEstimates={estimates}
               sourceEstimateId={sourceEstimateId}
               onEstimateSelected={handleEstimateSelection}
             />
