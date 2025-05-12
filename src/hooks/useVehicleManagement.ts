@@ -26,7 +26,14 @@ export const useVehicleManagement = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setVehicles(data || []);
+      
+      // Ensure all data is properly typed
+      const typedVehicles: Vehicle[] = data?.map(vehicle => ({
+        ...vehicle,
+        year: vehicle.year.toString() // Convert number to string to match our interface
+      })) || [];
+      
+      setVehicles(typedVehicles);
     } catch (error: any) {
       toast({
         title: 'Error fetching vehicles',
@@ -45,25 +52,35 @@ export const useVehicleManagement = () => {
     }
 
     try {
+      // Convert year to number for database insertion
+      const dbVehicleData = {
+        ...vehicleData,
+        year: parseInt(vehicleData.year),
+        owner_id: user.id
+      };
+
       const { data, error } = await supabase
         .from('vehicles')
-        .insert({
-          ...vehicleData,
-          owner_id: user.id,
-        })
+        .insert(dbVehicleData)
         .select()
         .single();
       
       if (error) throw error;
       
-      setVehicles(prev => [data, ...prev]);
+      // Convert back to our interface format
+      const newVehicle: Vehicle = {
+        ...data,
+        year: data.year.toString()
+      };
+      
+      setVehicles(prev => [newVehicle, ...prev]);
       
       toast({
         title: 'Vehicle added',
         description: `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} added successfully`,
       });
       
-      return data;
+      return true;
     } catch (error: any) {
       toast({
         title: 'Error adding vehicle',
@@ -76,23 +93,35 @@ export const useVehicleManagement = () => {
 
   const updateVehicle = async (id: string, vehicleData: Partial<Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>>) => {
     try {
+      // Convert year to number if it's included in the update data
+      const dbVehicleData = { ...vehicleData };
+      if (vehicleData.year) {
+        dbVehicleData.year = parseInt(vehicleData.year);
+      }
+
       const { data, error } = await supabase
         .from('vehicles')
-        .update(vehicleData)
+        .update(dbVehicleData)
         .eq('id', id)
         .select()
         .single();
       
       if (error) throw error;
       
-      setVehicles(prev => prev.map(vehicle => vehicle.id === id ? data : vehicle));
+      // Convert back to our interface format
+      const updatedVehicle: Vehicle = {
+        ...data,
+        year: data.year.toString()
+      };
+      
+      setVehicles(prev => prev.map(vehicle => vehicle.id === id ? updatedVehicle : vehicle));
       
       toast({
         title: 'Vehicle updated',
         description: `Vehicle information updated successfully`,
       });
       
-      return data;
+      return true;
     } catch (error: any) {
       toast({
         title: 'Error updating vehicle',
@@ -118,12 +147,15 @@ export const useVehicleManagement = () => {
         title: 'Vehicle removed',
         description: 'Vehicle has been removed from your account',
       });
+      
+      return true;
     } catch (error: any) {
       toast({
         title: 'Error removing vehicle',
         description: error.message,
         variant: 'destructive',
       });
+      return false;
     }
   };
 

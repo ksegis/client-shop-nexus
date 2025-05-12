@@ -276,33 +276,48 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
           created_at: string
           email: string
+          facebook_url: string | null
           first_name: string | null
           id: string
+          instagram_url: string | null
           last_name: string | null
+          linkedin_url: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
+          twitter_url: string | null
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           email: string
+          facebook_url?: string | null
           first_name?: string | null
           id: string
+          instagram_url?: string | null
           last_name?: string | null
+          linkedin_url?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          twitter_url?: string | null
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           email?: string
+          facebook_url?: string | null
           first_name?: string | null
           id?: string
+          instagram_url?: string | null
           last_name?: string | null
+          linkedin_url?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          twitter_url?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -312,6 +327,7 @@ export type Database = {
           color: string | null
           created_at: string
           id: string
+          images: string[] | null
           license_plate: string | null
           make: string
           model: string
@@ -325,6 +341,7 @@ export type Database = {
           color?: string | null
           created_at?: string
           id?: string
+          images?: string[] | null
           license_plate?: string | null
           make: string
           model: string
@@ -338,6 +355,7 @@ export type Database = {
           color?: string | null
           created_at?: string
           id?: string
+          images?: string[] | null
           license_plate?: string | null
           make?: string
           model?: string

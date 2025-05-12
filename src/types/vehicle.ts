@@ -11,6 +11,7 @@ export interface Vehicle {
   vehicle_type: 'car' | 'truck' | 'motorcycle' | 'other';
   created_at: string;
   updated_at: string;
+  images?: string[] | null; // Add images array property
 }
 
-export type NewVehicleData = Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>;
+export type NewVehicleData = Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>;
