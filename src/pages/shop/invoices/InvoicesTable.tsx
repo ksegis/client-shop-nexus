@@ -81,9 +81,9 @@ export function InvoicesTable({ onOpenInvoiceDialog }: InvoicesTableProps) {
           </TableHeader>
           <TableBody>
             {invoices.map((invoice) => {
-              const customerName = invoice.customer ? 
-                `${invoice.customer.first_name || ''} ${invoice.customer.last_name || ''}`.trim() || 
-                invoice.customer.email : 
+              const customerName = invoice.profiles ? 
+                `${invoice.profiles.first_name || ''} ${invoice.profiles.last_name || ''}`.trim() || 
+                invoice.profiles.email : 
                 'Unknown';
               
               const vehicleInfo = invoice.vehicles ? 

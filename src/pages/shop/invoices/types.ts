@@ -1,3 +1,4 @@
+
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'void' | 'overdue';
 
 export interface Invoice {

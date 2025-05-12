@@ -1,8 +1,8 @@
+
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { v4 as uuidv4 } from 'uuid';
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -25,7 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 import { useCustomers } from "@/hooks/useCustomers";
 import { useVehicles } from "@/hooks/useVehicles";
@@ -38,7 +37,7 @@ const invoiceFormSchema = z.object({
     message: "Title must be at least 2 characters.",
   }),
   description: z.string().optional(),
-  total_amount: z.number(),
+  total_amount: z.coerce.number(),
   status: z.enum(['draft', 'sent', 'paid', 'void', 'overdue']),
 });
 
@@ -66,7 +65,7 @@ export default function InvoiceDialog({
   const [sourceEstimateId, setSourceEstimateId] = useState<string | null>(null);
 
   const { customers } = useCustomers();
-  const { vehicles, fetchVehiclesByCustomerId } = useVehicles();
+  const { vehicles } = useVehicles();
 
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
@@ -90,17 +89,15 @@ export default function InvoiceDialog({
       setSelectedVehicleId(invoice.vehicle_id);
       setCustomerDetails(invoice.profiles || null);
     } else if (estimateData) {
-      reset({
+      form.reset({
         title: `Invoice for ${estimateData.title}`,
         description: estimateData.description || '',
         total_amount: estimateData.total_amount || 0,
-        customer_id: estimateData.customer_id || '',
-        vehicle_id: estimateData.vehicle_id || '',
         status: 'draft' as InvoiceStatus,
       });
 
       setCustomerId(estimateData.customer_id || '');
-      setVehicleId(estimateData.vehicle_id || '');
+      setSelectedVehicleId(estimateData.vehicle_id || '');
       
       setSourceEstimateId(estimateData.id);
 
@@ -122,7 +119,7 @@ export default function InvoiceDialog({
       setSelectedVehicleId('');
       setCustomerDetails(null);
     }
-  }, [invoice, estimateData, reset]);
+  }, [invoice, estimateData, form]);
 
   useEffect(() => {
     if (customerId) {
@@ -132,14 +129,14 @@ export default function InvoiceDialog({
       setVehicleOptions([]);
       setSelectedVehicleId('');
     }
-  }, [customerId, fetchVehicleOptions]);
+  }, [customerId]);
 
   const fetchCustomerDetails = async (customerId: string) => {
     const selectedCustomer = customers?.find(c => c.id === customerId);
     if (selectedCustomer) {
       setCustomerDetails({
-        first_name: selectedCustomer.first_name,
-        last_name: selectedCustomer.last_name,
+        first_name: selectedCustomer.first_name || undefined,
+        last_name: selectedCustomer.last_name || undefined,
         email: selectedCustomer.email,
       });
     } else {
@@ -149,8 +146,10 @@ export default function InvoiceDialog({
 
   const fetchVehicleOptions = async (customerId: string) => {
     if (customerId) {
-      const vehiclesForCustomer = await fetchVehiclesByCustomerId(customerId);
-      const options = vehiclesForCustomer.map(vehicle => ({
+      // Filter vehicles by customer ID
+      const customerVehicles = vehicles.filter(v => v.owner_id === customerId);
+      
+      const options = customerVehicles.map(vehicle => ({
         value: vehicle.id,
         label: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
       }));
@@ -255,7 +254,7 @@ export default function InvoiceDialog({
               <div className="space-y-2">
                 <FormItem>
                   <FormLabel>Customer</FormLabel>
-                  <Select onValueChange={setCustomerId}>
+                  <Select value={customerId} onValueChange={setCustomerId}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a customer" />
@@ -284,7 +283,7 @@ export default function InvoiceDialog({
               <div className="space-y-2">
                 <FormItem>
                   <FormLabel>Vehicle</FormLabel>
-                  <Select onValueChange={setVehicleId}>
+                  <Select value={selectedVehicleId} onValueChange={setVehicleId}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a vehicle" />

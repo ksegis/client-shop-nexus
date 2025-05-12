@@ -16,6 +16,7 @@ interface InvoicesContextType {
     description?: string;
     total_amount?: number;
     status?: InvoiceStatus;
+    estimate_id?: string;
   }) => Promise<void>;
   updateInvoice: (id: string, invoice: {
     title?: string;
@@ -71,11 +72,20 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
     description?: string;
     total_amount?: number;
     status?: InvoiceStatus;
+    estimate_id?: string;
   }) => {
     try {
       const { error: insertError } = await supabase
         .from('invoices')
-        .insert(invoice);
+        .insert({
+          customer_id: invoice.customer_id,
+          vehicle_id: invoice.vehicle_id,
+          title: invoice.title,
+          description: invoice.description,
+          total_amount: invoice.total_amount || 0,
+          status: invoice.status || 'draft',
+          estimate_id: invoice.estimate_id
+        });
       
       if (insertError) throw insertError;
       
@@ -103,7 +113,12 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
     try {
       const { error: updateError } = await supabase
         .from('invoices')
-        .update(invoice)
+        .update({
+          title: invoice.title,
+          description: invoice.description,
+          total_amount: invoice.total_amount,
+          status: invoice.status
+        })
         .eq('id', id);
       
       if (updateError) throw updateError;
