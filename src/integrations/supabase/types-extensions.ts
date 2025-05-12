@@ -1,5 +1,5 @@
 
-import { Database as OriginalDatabase } from './types';
+import type { Database as OriginalDatabase } from './types';
 
 // Extend the user_role enum from Supabase to include inactive roles
 export type ExtendedUserRole = 

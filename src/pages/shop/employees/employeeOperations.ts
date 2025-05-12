@@ -9,7 +9,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
 
   const createEmployee = async (employee: Partial<Employee>, password: string) => {
     try {
-      // Sign up the user with email and password
+      // Sign up the employee with email and password
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: employee.email || '',
         password: password,
@@ -27,13 +27,12 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
 
       // Directly update the profile since signUp already creates it
       if (authData?.user) {
-        // Ensure the role is correctly typed
-        const role = (employee.role || 'staff') as ExtendedRole;
+        const role = (employee.role || 'staff') as ExtendedUserRole;
         
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
-            role: role as unknown as ExtendedUserRole,
+            role: role,
             first_name: employee.first_name || '',
             last_name: employee.last_name || '',
             phone: employee.phone || '',
@@ -48,11 +47,11 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
         title: "Success",
         description: "Employee created successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: `Failed to create employee: ${(error as Error).message}`,
+        description: `Failed to create employee: ${error.message}`,
       });
       throw error;
     }
@@ -60,9 +59,6 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
 
   const updateEmployee = async (id: string, employee: Partial<Employee>, password?: string) => {
     try {
-      // Ensure role is correctly typed
-      const roleValue = employee.role as ExtendedRole | undefined;
-      
       // Update profile data
       const { error: updateError } = await supabase
         .from('profiles')
@@ -71,7 +67,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
           last_name: employee.last_name,
           email: employee.email,
           phone: employee.phone,
-          role: roleValue as unknown as ExtendedUserRole,
+          role: employee.role as ExtendedUserRole,
         })
         .eq('id', id);
       
@@ -79,7 +75,6 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
       
       // Update password if provided (this would require admin API in a real app)
       if (password && password.trim() !== '') {
-        // In a real application, you'd need to use Supabase admin API or a server function
         toast({
           description: "Password updates require admin API access and are simulated in this demo",
         });
@@ -90,11 +85,11 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
         title: "Success",
         description: "Employee updated successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: `Failed to update employee: ${(error as Error).message}`,
+        description: `Failed to update employee: ${error.message}`,
       });
       throw error;
     }
@@ -102,24 +97,29 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
 
   const toggleEmployeeActive = async (id: string, currentRole: ExtendedRole) => {
     try {
-      let newRole: ExtendedRole;
+      let newRole: ExtendedUserRole;
       
       // Toggle between active and inactive states
-      if (currentRole === 'staff') {
-        newRole = 'inactive_staff';
-      } else if (currentRole === 'admin') {
-        newRole = 'inactive_admin';
-      } else if (currentRole === 'inactive_staff') {
-        newRole = 'staff';
-      } else if (currentRole === 'inactive_admin') {
-        newRole = 'admin';
-      } else {
-        throw new Error(`Cannot toggle role: ${currentRole}`);
+      switch (currentRole) {
+        case 'staff':
+          newRole = 'inactive_staff';
+          break;
+        case 'admin':
+          newRole = 'inactive_admin';
+          break;
+        case 'inactive_staff':
+          newRole = 'staff';
+          break;
+        case 'inactive_admin':
+          newRole = 'admin';
+          break;
+        default:
+          newRole = currentRole as ExtendedUserRole;
       }
       
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ role: newRole as unknown as ExtendedUserRole })
+        .update({ role: newRole })
         .eq('id', id);
       
       if (updateError) throw updateError;
@@ -131,11 +131,11 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
         title: "Success",
         description: `Employee ${actionText} successfully`,
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: `Failed to update employee status: ${(error as Error).message}`,
+        description: `Failed to update employee status: ${error.message}`,
       });
       throw error;
     }

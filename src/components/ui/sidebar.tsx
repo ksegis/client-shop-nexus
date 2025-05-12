@@ -11,7 +11,7 @@ import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarItem } from "./SidebarItem";
 import { useAuth } from "@/contexts/AuthContext";
-import { Shield, Users, BarChart, Package, ListChecks, UserPlus, FileBarGraph, Settings } from "lucide-react";
+import { Shield, Users, BarChart, Package, ListChecks, UserPlus, Settings } from "lucide-react";
 
 interface Props {
   children: React.ReactNode;
@@ -26,7 +26,7 @@ const navigationItems = [
   {
     title: "Reports",
     href: "/shop/reports",
-    icon: FileBarGraph,
+    icon: BarChart,
   },
   {
     title: "Employees",
@@ -48,7 +48,7 @@ const navigationItems = [
     href: "/shop/customers",
     icon: UserPlus,
   },
-    {
+  {
     title: "Estimates",
     href: "/shop/estimates",
     icon: ListChecks,
