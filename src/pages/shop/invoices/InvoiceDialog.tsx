@@ -113,27 +113,30 @@ export default function InvoiceDialog({
           return;
         }
         
-        // Transform the data to ensure it matches the Estimate type
         // Initialize with empty array if data is undefined
-        const typedData = (data || []).map(item => {
-          // Create a properly typed profiles object with null checks
-          const profilesData = item.profiles ? {
+        const transformedData = data ? data.map(item => {
+          const profileData = item.profiles ? {
             first_name: item.profiles.first_name || '',
             last_name: item.profiles.last_name || '',
             email: item.profiles.email || ''
           } : null;
           
+          const vehicleData = item.vehicles ? {
+            make: item.vehicles.make || '',
+            model: item.vehicles.model || '',
+            year: item.vehicles.year || 0
+          } : null;
+          
           return {
             ...item,
-            profiles: profilesData,
-            vehicles: item.vehicles
+            profiles: profileData,
+            vehicles: vehicleData
           };
-        }) as Estimate[];
+        }) : [];
 
-        setOpenEstimates(typedData);
+        setOpenEstimates(transformedData);
       } catch (error) {
         console.error('Error fetching estimates:', error);
-        // Initialize with empty array on error
         setOpenEstimates([]);
       }
     };
@@ -331,7 +334,7 @@ export default function InvoiceDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            {!invoice && !estimateData && (
+            {!invoice && !estimateData && openEstimates.length > 0 && (
               <div className="space-y-2">
                 <FormLabel>Reference Estimate (Optional)</FormLabel>
                 <Popover open={estimateSelectOpen} onOpenChange={setEstimateSelectOpen}>
@@ -353,7 +356,7 @@ export default function InvoiceDialog({
                       <CommandInput placeholder="Search estimates..." />
                       <CommandEmpty>No estimates found.</CommandEmpty>
                       <CommandGroup>
-                        {(openEstimates || []).map((estimate) => (
+                        {openEstimates.map((estimate) => (
                           <CommandItem
                             key={estimate.id}
                             onSelect={() => {
