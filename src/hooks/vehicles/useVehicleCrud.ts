@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -44,19 +45,25 @@ export const useVehicleCrud = () => {
 
   const addVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>) => {
     if (!user?.id) {
+      toast({
+        title: 'Authentication required',
+        description: 'You must be logged in to add a vehicle',
+        variant: 'destructive',
+      });
       throw new Error('User not authenticated');
     }
 
     try {
-      console.log('User ID for vehicle:', user.id);
-      console.log('Vehicle data to insert:', vehicleData);
+      console.log('Adding vehicle with user ID:', user.id);
       
       // Convert year to number for database insertion
       const dbVehicleData = {
         ...vehicleData,
         year: parseInt(vehicleData.year, 10), // Convert string to number explicitly
-        owner_id: user.id
+        owner_id: user.id // This is crucial for RLS - make sure owner_id is set to the current user's ID
       };
+
+      console.log('Vehicle data to insert:', dbVehicleData);
 
       const { data, error } = await supabase
         .from('vehicles')

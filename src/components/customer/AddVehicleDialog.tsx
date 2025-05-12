@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NewVehicleData } from '@/types/vehicle';
 import { useToast } from '@/components/ui/use-toast';
+import { Loader2 } from 'lucide-react';
 
 interface AddVehicleDialogProps {
   open: boolean;
@@ -168,7 +169,14 @@ const AddVehicleDialog = ({ open, onOpenChange, onAddVehicle }: AddVehicleDialog
             onClick={handleAddVehicle}
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Adding...' : 'Add Vehicle'}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Adding...
+              </>
+            ) : (
+              'Add Vehicle'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
