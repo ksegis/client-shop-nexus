@@ -9,6 +9,33 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      api_keys: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          name: string
+          service: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          name: string
+          service: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          name?: string
+          service?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       estimate_items: {
         Row: {
           created_at: string
@@ -319,6 +346,30 @@ export type Database = {
           role?: Database["public"]["Enums"]["user_role"]
           twitter_url?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      sync_history: {
+        Row: {
+          id: string
+          records: number
+          service: string
+          status: string
+          timestamp: string
+        }
+        Insert: {
+          id?: string
+          records?: number
+          service: string
+          status: string
+          timestamp?: string
+        }
+        Update: {
+          id?: string
+          records?: number
+          service?: string
+          status?: string
+          timestamp?: string
         }
         Relationships: []
       }

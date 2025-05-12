@@ -16,6 +16,7 @@ interface ApiKey {
   key: string;
   service: string;
   created_at: string;
+  updated_at: string;
 }
 
 const ApiKeysManager = () => {
@@ -34,10 +35,14 @@ const ApiKeysManager = () => {
   const fetchApiKeys = async () => {
     try {
       setLoading(true);
+      // Use type assertion to handle the table that's not in the TypeScript definitions yet
       const { data, error } = await supabase
         .from('api_keys')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false }) as { 
+          data: ApiKey[] | null; 
+          error: Error | null 
+        };
       
       if (error) throw error;
       
@@ -65,6 +70,7 @@ const ApiKeysManager = () => {
     }
     
     try {
+      // Use type assertion to handle the table that's not in the TypeScript definitions yet
       const { data, error } = await supabase
         .from('api_keys')
         .insert({
@@ -72,11 +78,17 @@ const ApiKeysManager = () => {
           key: newKey.trim(),
           service: newKeyService,
         })
-        .select();
+        .select() as {
+          data: ApiKey[] | null;
+          error: Error | null
+        };
       
       if (error) throw error;
       
-      setApiKeys([...(data || []), ...apiKeys]);
+      if (data) {
+        setApiKeys([...data, ...apiKeys]);
+      }
+      
       setIsDialogOpen(false);
       setNewKeyName('');
       setNewKeyService('distributor');
@@ -100,10 +112,13 @@ const ApiKeysManager = () => {
 
   const handleDeleteKey = async (id: string) => {
     try {
+      // Use type assertion to handle the table that's not in the TypeScript definitions yet
       const { error } = await supabase
         .from('api_keys')
         .delete()
-        .eq('id', id);
+        .eq('id', id) as {
+          error: Error | null
+        };
       
       if (error) throw error;
       

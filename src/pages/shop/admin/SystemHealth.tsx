@@ -81,11 +81,15 @@ const SystemHealth = () => {
 
   const fetchSyncHistory = async () => {
     try {
+      // Use type assertion to handle the table that's not in the TypeScript definitions yet
       const { data, error } = await supabase
         .from('sync_history')
         .select('*')
         .order('timestamp', { ascending: false })
-        .limit(5);
+        .limit(5) as {
+          data: SyncStatus[] | null;
+          error: Error | null;
+        };
         
       if (error) throw error;
       setSyncHistory(data || []);
@@ -133,27 +137,59 @@ const SystemHealth = () => {
   const triggerSync = async () => {
     setIsSyncing(true);
     
-    // This would normally be an API call to trigger a sync
-    // For demo purposes, we'll simulate a delay
-    setTimeout(() => {
-      setIsSyncing(false);
-      
-      toast({
-        title: "Sync Completed",
-        description: "Data synchronization completed successfully",
-      });
-      
-      // Add a new sync record to the history
+    try {
+      // Create a new sync record to represent the current sync operation
       const newSync: SyncStatus = {
         id: Date.now().toString(),
         service: 'Full System Sync',
-        status: 'success',
-        records: Math.floor(Math.random() * 1000) + 200,
+        status: 'in_progress',
+        records: 0,
         timestamp: new Date().toISOString(),
       };
       
-      setSyncHistory([newSync, ...syncHistory.slice(0, 4)]);
-    }, 3000);
+      // Add to Supabase
+      await supabase.from('sync_history').insert({
+        service: newSync.service,
+        status: newSync.status,
+        records: newSync.records
+      } as any);
+      
+      // For demo purposes, simulate a delay and then update the status
+      setTimeout(async () => {
+        const completedSync = {
+          ...newSync,
+          status: 'success' as const,
+          records: Math.floor(Math.random() * 1000) + 200,
+        };
+        
+        // Update the record in Supabase
+        await supabase
+          .from('sync_history')
+          .update({
+            status: completedSync.status,
+            records: completedSync.records
+          } as any)
+          .eq('service', newSync.service)
+          .eq('timestamp', newSync.timestamp);
+        
+        setIsSyncing(false);
+        fetchSyncHistory(); // Refresh the sync history
+        
+        toast({
+          title: "Sync Completed",
+          description: "Data synchronization completed successfully",
+        });
+      }, 3000);
+    } catch (error) {
+      console.error('Error triggering sync:', error);
+      setIsSyncing(false);
+      
+      toast({
+        variant: "destructive",
+        title: "Sync Failed",
+        description: "There was an error syncing the data",
+      });
+    }
   };
 
   const formatDate = (dateString: string) => {
