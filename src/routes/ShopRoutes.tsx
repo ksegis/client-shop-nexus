@@ -19,17 +19,22 @@ import Layout from "@/components/layout/Layout";
 
 const ShopRoutes = () => {
   return (
-    <Layout portalType="shop">
       <Routes>
         {/* Login route should be accessible without authentication */}
-        <Route path="login" element={<ShopLogin />} />
+        <Route path="login" element={
+          <Layout portalType="shop">
+            <ShopLogin />
+          </Layout>
+        } />
         
         {/* All protected routes */}
         <Route 
           path="/" 
           element={
             <ProtectedRoute>
-              <ShopDashboard />
+              <Layout portalType="shop">
+                <ShopDashboard />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -37,7 +42,9 @@ const ShopRoutes = () => {
           path="profile" 
           element={
             <ProtectedRoute>
-              <ShopProfile />
+              <Layout portalType="shop">
+                <ShopProfile />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -45,7 +52,9 @@ const ShopRoutes = () => {
           path="settings" 
           element={
             <ProtectedRoute>
-              <ShopProfile />
+              <Layout portalType="shop">
+                <ShopProfile />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -53,7 +62,9 @@ const ShopRoutes = () => {
           path="reports" 
           element={
             <ProtectedRoute>
-              <ShopReports />
+              <Layout portalType="shop">
+                <ShopReports />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -61,7 +72,9 @@ const ShopRoutes = () => {
           path="employees" 
           element={
             <ProtectedRoute>
-              <ShopEmployees />
+              <Layout portalType="shop">
+                <ShopEmployees />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -69,7 +82,9 @@ const ShopRoutes = () => {
           path="inventory" 
           element={
             <ProtectedRoute>
-              <ShopInventory />
+              <Layout portalType="shop">
+                <ShopInventory />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -77,7 +92,9 @@ const ShopRoutes = () => {
           path="work-orders" 
           element={
             <ProtectedRoute>
-              <ShopWorkOrders />
+              <Layout portalType="shop">
+                <ShopWorkOrders />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -85,7 +102,9 @@ const ShopRoutes = () => {
           path="customers" 
           element={
             <ProtectedRoute>
-              <ShopCustomers />
+              <Layout portalType="shop">
+                <ShopCustomers />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -93,7 +112,9 @@ const ShopRoutes = () => {
           path="estimates" 
           element={
             <ProtectedRoute>
-              <ShopEstimates />
+              <Layout portalType="shop">
+                <ShopEstimates />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -101,7 +122,9 @@ const ShopRoutes = () => {
           path="invoices" 
           element={
             <ProtectedRoute>
-              <ShopInvoices />
+              <Layout portalType="shop">
+                <ShopInvoices />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -109,7 +132,9 @@ const ShopRoutes = () => {
           path="users" 
           element={
             <ProtectedRoute requiredRole="admin">
-              <ShopUserManagement />
+              <Layout portalType="shop">
+                <ShopUserManagement />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -117,7 +142,9 @@ const ShopRoutes = () => {
           path="admin" 
           element={
             <ProtectedRoute requiredRole="admin">
-              <ShopAdminDashboard />
+              <Layout portalType="shop">
+                <ShopAdminDashboard />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -125,7 +152,9 @@ const ShopRoutes = () => {
           path="admin/system-health" 
           element={
             <ProtectedRoute requiredRole="admin">
-              <SystemHealth />
+              <Layout portalType="shop">
+                <SystemHealth />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -133,7 +162,6 @@ const ShopRoutes = () => {
         {/* Catch any unknown routes within /shop/ */}
         <Route path="*" element={<NotFound />} />
       </Routes>
-    </Layout>
   );
 };
 

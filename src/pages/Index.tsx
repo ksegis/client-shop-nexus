@@ -9,14 +9,19 @@ const Index = () => {
   const { user, loading } = useAuth();
 
   useEffect(() => {
+    // Only redirect after authentication state is confirmed
     if (loading) return;
+    
+    console.log("Index: Auth state determined", { user: !!user, loading });
     
     if (user) {
       // If user exists, redirect to the shop dashboard
-      navigate("/shop");
+      console.log("Index: Redirecting to shop dashboard");
+      navigate("/shop", { replace: true });
     } else {
       // If no user, redirect to login
-      navigate("/shop/login");
+      console.log("Index: Redirecting to login");
+      navigate("/shop/login", { replace: true });
     }
   }, [navigate, user, loading]);
 
@@ -25,6 +30,7 @@ const Index = () => {
       <div className="text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
         <h1 className="text-2xl font-bold mb-4">Loading Shop Management System...</h1>
+        <p className="text-gray-500">Please wait while we prepare your dashboard</p>
       </div>
     </div>
   );
