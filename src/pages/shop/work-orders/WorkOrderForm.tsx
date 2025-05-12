@@ -81,40 +81,45 @@ export const WorkOrderForm = ({
           </div>
 
           <DescriptionField form={form} />
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <NumericField 
-              form={form} 
-              name="estimated_hours" 
-              label="Estimated Hours" 
-            />
 
-            <NumericField 
-              form={form} 
-              name="estimated_cost" 
-              label="Estimated Cost" 
-            />
-
-            <NumericField 
-              form={form} 
-              name="actual_hours" 
-              label="Actual Hours" 
-            />
-
-            <NumericField 
-              form={form} 
-              name="actual_cost" 
-              label="Actual Cost" 
+          {/* Line Items Section - Moved before estimated hours/cost */}
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="text-lg font-medium mb-4">Line Items</h3>
+            <LineItems 
+              items={lineItems}
+              onChange={onLineItemsChange}
             />
           </div>
-        </div>
+          
+          {/* Estimated Hours/Cost Section - Moved after line items */}
+          <div className="border-t border-gray-200 pt-6">
+            <h3 className="text-lg font-medium mb-4">Labor & Cost Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <NumericField 
+                form={form} 
+                name="estimated_hours" 
+                label="Estimated Hours" 
+              />
 
-        <div className="border-t border-gray-200 pt-6">
-          <h3 className="text-lg font-medium mb-4">Line Items</h3>
-          <LineItems 
-            items={lineItems}
-            onChange={onLineItemsChange}
-          />
+              <NumericField 
+                form={form} 
+                name="estimated_cost" 
+                label="Estimated Cost" 
+              />
+
+              <NumericField 
+                form={form} 
+                name="actual_hours" 
+                label="Actual Hours" 
+              />
+
+              <NumericField 
+                form={form} 
+                name="actual_cost" 
+                label="Actual Cost" 
+              />
+            </div>
+          </div>
         </div>
         
         <div className="border-t border-gray-200 pt-6">

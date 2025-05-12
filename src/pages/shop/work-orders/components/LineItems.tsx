@@ -74,10 +74,10 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[120px]">Part #</TableHead>
+            <TableHead className="w-[180px]">Part #</TableHead>
             <TableHead className="w-full">Description</TableHead>
             <TableHead className="w-[100px] text-right">Quantity</TableHead>
-            <TableHead className="w-[120px] text-right">Price</TableHead>
+            <TableHead className="w-[180px] text-right">Price</TableHead>
             <TableHead className="w-[120px] text-right">Total</TableHead>
             {!readOnly && <TableHead className="w-10"></TableHead>}
           </TableRow>
@@ -92,29 +92,29 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
           ) : (
             items.map((item, index) => (
               <TableRow key={item.id || index}>
-                <TableCell>
+                <TableCell className="py-3">
                   {readOnly ? (
                     item.part_number || '-'
                   ) : (
                     <Input 
                       value={item.part_number || ''}
                       onChange={(e) => handleItemChange(index, 'part_number', e.target.value)}
-                      className="h-12 text-base"
+                      className="h-12 text-base w-full"
                     />
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="py-3">
                   {readOnly ? (
                     item.description
                   ) : (
                     <Input 
                       value={item.description}
                       onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                      className="h-12 text-base"
+                      className="h-12 text-base w-full"
                     />
                   )}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right py-3">
                   {readOnly ? (
                     item.quantity
                   ) : (
@@ -122,11 +122,11 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
                       type="number"
                       value={item.quantity}
                       onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                      className="h-12 text-base text-right"
+                      className="h-12 text-base text-right w-full"
                     />
                   )}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right py-3">
                   {readOnly ? (
                     `$${item.price.toFixed(2)}`
                   ) : (
@@ -135,15 +135,15 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
                       step="0.01"
                       value={item.price}
                       onChange={(e) => handleItemChange(index, 'price', e.target.value)}
-                      className="h-12 text-base text-right"
+                      className="h-12 text-base text-right w-full"
                     />
                   )}
                 </TableCell>
-                <TableCell className="text-right font-medium">
+                <TableCell className="text-right font-medium py-3">
                   ${calculateItemTotal(item.quantity, item.price).toFixed(2)}
                 </TableCell>
                 {!readOnly && (
-                  <TableCell>
+                  <TableCell className="py-3">
                     <Button 
                       variant="ghost" 
                       size="icon"
@@ -159,45 +159,45 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
           
           {!readOnly && (
             <TableRow>
-              <TableCell>
+              <TableCell className="py-3">
                 <Input 
                   placeholder="Part #"
                   value={newItem.part_number || ''}
                   onChange={(e) => setNewItem({...newItem, part_number: e.target.value})}
-                  className="h-12 text-base"
+                  className="h-12 text-base w-full"
                 />
               </TableCell>
-              <TableCell>
+              <TableCell className="py-3">
                 <Input 
                   placeholder="Description"
                   value={newItem.description || ''}
                   onChange={(e) => setNewItem({...newItem, description: e.target.value})}
-                  className="h-12 text-base"
+                  className="h-12 text-base w-full"
                 />
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-right py-3">
                 <Input 
                   type="number"
                   placeholder="Qty"
                   value={newItem.quantity || ''}
                   onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
-                  className="h-12 text-base text-right"
+                  className="h-12 text-base text-right w-full"
                 />
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-right py-3">
                 <Input 
                   type="number"
                   step="0.01"
                   placeholder="Price"
                   value={newItem.price || ''}
                   onChange={(e) => setNewItem({...newItem, price: parseFloat(e.target.value) || 0})}
-                  className="h-12 text-base text-right"
+                  className="h-12 text-base text-right w-full"
                 />
               </TableCell>
-              <TableCell className="text-right font-medium">
+              <TableCell className="text-right font-medium py-3">
                 ${((newItem.quantity || 0) * (newItem.price || 0)).toFixed(2)}
               </TableCell>
-              <TableCell>
+              <TableCell className="py-3">
                 <Button 
                   variant="ghost" 
                   size="icon"
