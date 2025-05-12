@@ -22,7 +22,7 @@ interface WorkOrdersTableProps {
 }
 
 export const WorkOrdersTable = ({ status }: WorkOrdersTableProps) => {
-  const { workOrders, isLoading, error } = useWorkOrders();
+  const { workOrders, isLoading, error, refreshWorkOrders } = useWorkOrders();
   const [sortField, setSortField] = useState<keyof WorkOrder>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
@@ -73,7 +73,12 @@ export const WorkOrdersTable = ({ status }: WorkOrdersTableProps) => {
   }
 
   if (error) {
-    return <div className="p-8 text-center text-destructive">Error loading work orders: {error.message}</div>;
+    return (
+      <div className="p-8 text-center">
+        <div className="text-destructive mb-4">Error loading work orders: {error.message}</div>
+        <Button onClick={() => refreshWorkOrders()}>Try Again</Button>
+      </div>
+    );
   }
 
   if (workOrders.length === 0) {

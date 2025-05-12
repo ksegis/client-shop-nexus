@@ -11,18 +11,19 @@ export const useWorkOrdersQuery = () => {
     queryKey: ['workOrders'],
     queryFn: async () => {
       try {
-        // Fix the query to properly specify the relationships for customer and assigned staff
         const { data, error: queryError } = await supabase
           .from('work_orders')
           .select(`
             *,
             vehicle:vehicles(*),
-            customer:profiles!work_orders_customer_id_fkey(*)
+            customer:profiles!work_orders_customer_id_fkey(*),
+            assigned_staff:profiles!work_orders_assigned_to_fkey(*)
           `)
           .order('created_at', { ascending: false });
           
         if (queryError) throw queryError;
         
+        console.log("Fetched work orders:", data);
         return (data || []) as unknown as WorkOrder[];
       } catch (error) {
         console.error("Error fetching work orders:", error);
