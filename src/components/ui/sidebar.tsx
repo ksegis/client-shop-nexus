@@ -16,6 +16,7 @@ import { Shield, Users, BarChart, Package, ListChecks, UserPlus, Settings } from
 
 interface Props {
   children?: React.ReactNode;
+  showNavigation?: boolean;
 }
 
 const navigationItems = [
@@ -67,7 +68,7 @@ const navigationItems = [
   }
 ];
 
-export const Sidebar = ({ children }: Props) => {
+export const Sidebar = ({ children, showNavigation = true }: Props) => {
   const { user } = useAuth();
   
   console.log("Sidebar - Current user:", user?.email);
@@ -82,7 +83,7 @@ export const Sidebar = ({ children }: Props) => {
     <>
       <div className="h-full border-r bg-background p-0">
         <div className="py-4">
-          {navigationItems
+          {showNavigation && navigationItems
             .filter(item => !item.adminOnly || isAdmin)
             .map((item) => (
               <SidebarItem 
