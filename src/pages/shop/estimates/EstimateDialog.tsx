@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -190,12 +189,21 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
         return;
       }
 
+      // Fixed: Ensure required fields (make, model, year) are present and not undefined
+      const vehicleData = {
+        owner_id: customerId,
+        make: data.make, // Required
+        model: data.model, // Required
+        year: data.year, // Required
+        color: data.color || null,
+        license_plate: data.license_plate || null,
+        vin: data.vin || null,
+        vehicle_type: data.vehicle_type
+      };
+
       const { data: newVehicle, error } = await supabase
         .from('vehicles')
-        .insert({
-          ...data,
-          owner_id: customerId
-        })
+        .insert(vehicleData)
         .select()
         .single();
 
