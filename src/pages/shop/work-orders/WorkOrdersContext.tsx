@@ -48,9 +48,14 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     try {
       console.log("Creating work order with data:", workOrder);
       
+      // Fix: Ensure we're passing a single object not an array and handle required fields
+      if (!workOrder.customer_id || !workOrder.vehicle_id || !workOrder.title) {
+        throw new Error("Missing required fields: customer_id, vehicle_id, or title");
+      }
+      
       const { data, error: insertError } = await supabase
         .from('work_orders')
-        .insert([workOrder])
+        .insert(workOrder)
         .select();
       
       if (insertError) {
