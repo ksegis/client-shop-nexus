@@ -1,4 +1,3 @@
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Invoice } from "@/pages/shop/invoices/types";
 import { format, isValid } from "date-fns";
@@ -53,7 +52,7 @@ export default function CustomerInvoiceDetailDialog({
                 <p>
                   <span className="font-medium">Status:</span> {invoice.status}
                 </p>
-                {invoice.status === 'pending' && (
+                {invoice.status === 'draft' || invoice.status === 'sent' && (
                   <p className="text-sm text-amber-600">
                     Please contact the shop to process payment.
                   </p>

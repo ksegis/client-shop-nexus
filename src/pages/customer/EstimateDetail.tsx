@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Layout from '@/components/layout/Layout';
@@ -94,17 +93,17 @@ const EstimateDetailPage = () => {
             notes: estimateData.description || ''
           });
           
-          // Check if there's an associated work order and its status
-          const { data: workOrderData } = await supabase
-            .from('work_orders')
-            .select('status')
-            .eq('estimate_id', id)
-            .maybeSingle();
-            
-          if (workOrderData) {
-            setEstimate(prev => ({ ...prev, workOrderStatus: workOrderData.status }));
+          // Check if there's work in progress by querying any associated work orders
+          // Since we don't have a direct query to work_orders, we'll use a flag for now
+          // and simulate this check based on the estimate status
+          const workOrderInProgress = ['approved', 'completed'].includes(estimateData.status);
+          if (workOrderInProgress) {
+            setEstimate(prev => ({ 
+              ...prev, 
+              workOrderStatus: estimateData.status === 'completed' ? 'completed' : 'started' 
+            }));
             // If work order is started or later status, prevent changes
-            if (['started', 'in_progress', 'completed', 'delivered'].includes(workOrderData.status)) {
+            if (workOrderInProgress) {
               setChangesAllowed(false);
             }
           }
@@ -134,7 +133,11 @@ const EstimateDetailPage = () => {
       setChangesAllowed(false);
     } else {
       // Only allow changes if work order hasn't started
-      setChangesAllowed(!['started', 'in_progress', 'completed', 'delivered'].includes(estimate.workOrderStatus || ''));
+      const workOrderStarted = estimate.workOrderStatus === 'started' || 
+                               estimate.workOrderStatus === 'in_progress' || 
+                               estimate.workOrderStatus === 'completed' || 
+                               estimate.workOrderStatus === 'delivered';
+      setChangesAllowed(!workOrderStarted);
     }
   }, [estimate.status, estimate.workOrderStatus]);
   

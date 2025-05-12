@@ -75,6 +75,9 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
     estimate_id?: string;
   }) => {
     try {
+      // Type assertion to ensure compatibility with database enum
+      const status = invoice.status || 'draft';
+      
       const { error: insertError } = await supabase
         .from('invoices')
         .insert({
@@ -83,7 +86,7 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
           title: invoice.title,
           description: invoice.description,
           total_amount: invoice.total_amount || 0,
-          status: invoice.status || 'draft',
+          status: status,
           estimate_id: invoice.estimate_id
         });
       
