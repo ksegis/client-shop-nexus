@@ -17,8 +17,8 @@ export const mapExtendedRoleToDbRole = (role: ExtendedUserRole): DatabaseUserRol
   return role as DatabaseUserRole;
 };
 
-// Extended database interface
-export interface ExtendedDatabase {
+// Extended database type without redefining Database
+export interface ExtendedDatabaseTypes {
   public: Database['public'] & {
     // Add any extensions to public schema here
   }
