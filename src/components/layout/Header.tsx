@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -30,7 +29,14 @@ const Header = ({ portalType }: HeaderProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  
+  // Debug logging
+  console.log("Header - User object:", user);
+  console.log("Header - User metadata:", user?.app_metadata);
+  console.log("Header - Role value:", user?.app_metadata?.role);
+  
   const isAdmin = user?.app_metadata?.role === 'admin';
+  console.log("Header - Is admin check:", isAdmin);
   
   const customerLinks = [
     { name: 'Profile', path: '/customer/profile' },

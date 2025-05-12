@@ -70,7 +70,16 @@ const navigationItems = [
 export const Sidebar = ({ children }: Props) => {
   const { user } = useAuth();
   
+  console.log("Sidebar - Current user:", user?.email);
+  console.log("Sidebar - User metadata:", user?.app_metadata);
+  console.log("Sidebar - User role in app metadata:", user?.app_metadata?.role);
+  
+  // Debug output to see if the admin check is working correctly
   const isAdmin = user?.app_metadata?.role === 'admin';
+  console.log("Sidebar - isAdmin check result:", isAdmin);
+
+  // If the admin role is stored in the Supabase profile but not in app_metadata,
+  // let's check it directly from the AuthContext
 
   return (
     <div className="md:flex">

@@ -27,10 +27,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log("Setting up auth state listener");
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         console.log("Auth state changed:", event, session?.user?.email);
+        
+        if (session?.user) {
+          // Get profile data to enhance user object with role information
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+            
+          // If we have profile data with a role, add it to the user's metadata
+          if (profile?.role) {
+            // Update the user object with role from profile
+            const updatedUser = {
+              ...session.user,
+              app_metadata: {
+                ...session.user.app_metadata,
+                role: profile.role
+              }
+            };
+            setUser(updatedUser);
+            console.log("Updated user with role from profile:", profile.role);
+          } else {
+            setUser(session.user);
+          }
+        } else {
+          setUser(null);
+        }
+        
         setSession(session);
-        setUser(session?.user ?? null);
         
         // On sign out, redirect to login page
         if (event === 'SIGNED_OUT') {
@@ -40,10 +67,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log("Initial session check:", session?.user?.email);
+      
+      if (session?.user) {
+        // Get profile data to enhance user object with role information
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+          
+        // If we have profile data with a role, add it to the user's metadata
+        if (profile?.role) {
+          // Update the user object with role from profile
+          const updatedUser = {
+            ...session.user,
+            app_metadata: {
+              ...session.user.app_metadata,
+              role: profile.role
+            }
+          };
+          setUser(updatedUser);
+          console.log("Initial: Updated user with role from profile:", profile.role);
+        } else {
+          setUser(session.user);
+        }
+      } else {
+        setUser(null);
+      }
+      
       setSession(session);
-      setUser(session?.user ?? null);
       setLoading(false);
     });
 
