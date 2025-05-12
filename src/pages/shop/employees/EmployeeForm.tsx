@@ -14,14 +14,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useEmployees, Employee, ExtendedRole, BaseRole } from './EmployeesContext';
+import { Employee, ExtendedRole } from './types';
+import { useEmployees } from './EmployeesContext';
 
 // We need to define the roles as just 'staff' | 'admin' for the form
 // since we don't want to let users directly select 'inactive_*' roles
-const BaseRoleEnum = z.enum(['staff', 'admin']);
-type FormRole = z.infer<typeof BaseRoleEnum>;
+type FormRole = 'staff' | 'admin';
 
 // Schema for creating new employees
 const createFormSchema = z.object({
@@ -29,7 +29,7 @@ const createFormSchema = z.object({
   last_name: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
   phone: z.string().optional(),
-  role: BaseRoleEnum,
+  role: z.enum(['staff', 'admin']),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
@@ -39,7 +39,7 @@ const updateFormSchema = z.object({
   last_name: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
   phone: z.string().optional(),
-  role: BaseRoleEnum,
+  role: z.enum(['staff', 'admin']),
   password: z.string().optional(),
 });
 
@@ -59,14 +59,14 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
   
   // Helper function to get base role (remove inactive_ prefix)
   const getBaseRole = (role: ExtendedRole): FormRole => {
-    return role.startsWith('inactive_') 
-      ? (role.substring('inactive_'.length) as FormRole)
-      : (role as FormRole);
+    if (role === 'inactive_staff') return 'staff';
+    if (role === 'inactive_admin') return 'admin';
+    return role === 'admin' ? 'admin' : 'staff';
   };
   
   // Helper function to check if a role is inactive
   const isRoleInactive = (role: ExtendedRole): boolean => {
-    return role.startsWith('inactive_');
+    return role === 'inactive_staff' || role === 'inactive_admin';
   };
   
   const form = useForm<EmployeeFormCreateValues | EmployeeFormUpdateValues>({
@@ -97,7 +97,7 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
         
         // Preserve inactive status if employee is currently inactive
         const updatedRole = isCurrentlyInactive ? 
-          `inactive_${values.role}` as ExtendedRole : 
+          (values.role === 'admin' ? 'inactive_admin' : 'inactive_staff') as ExtendedRole : 
           values.role as ExtendedRole;
         
         // Update existing employee
@@ -141,7 +141,7 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
               first_name: createValues.first_name,
               last_name: createValues.last_name,
               phone: createValues.phone,
-              role: createValues.role as BaseRole,
+              role: createValues.role,
             },
           },
         });

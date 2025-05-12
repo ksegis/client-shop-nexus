@@ -125,7 +125,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
       
       await refetch();
       
-      const actionText = newRole.startsWith('inactive') ? 'deactivated' : 'reactivated';
+      const actionText = newRole.startsWith('inactive_') ? 'deactivated' : 'reactivated';
       toast({
         title: "Success",
         description: `Employee ${actionText} successfully`,

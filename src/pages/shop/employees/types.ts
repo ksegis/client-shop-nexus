@@ -3,7 +3,7 @@
 export type BaseRole = 'customer' | 'staff' | 'admin';
 
 // Define the extended role type that includes inactive roles
-export type ExtendedRole = BaseRole | `inactive_${Exclude<BaseRole, 'customer'>}`;
+export type ExtendedRole = BaseRole | 'inactive_staff' | 'inactive_admin';
 
 export type Employee = {
   id: string;
