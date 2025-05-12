@@ -35,6 +35,14 @@ const ShopRoutes = () => {
         } 
       />
       <Route 
+        path="/shop/settings" 
+        element={
+          <ProtectedRoute>
+            <ShopProfile />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
         path="/shop/reports" 
         element={
           <ProtectedRoute>
