@@ -1,75 +1,145 @@
 
 import { Routes, Route } from "react-router-dom";
-import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import ShopLogin from "@/pages/shop/Login";
-import ShopDashboard from "@/pages/shop/Dashboard";
-import ReportsPage from "@/pages/shop/Reports";
-import EmployeesPage from "@/pages/shop/Employees";
-import InventoryPage from "@/pages/shop/Inventory";
-import WorkOrdersPage from "@/pages/shop/WorkOrders";
-import CustomersPage from "@/pages/shop/Customers";
+import Dashboard from "@/pages/shop/Dashboard";
+import Profile from "@/pages/shop/Profile";
+import Customers from "@/pages/shop/Customers";
 import Estimates from "@/pages/shop/Estimates";
+import WorkOrders from "@/pages/shop/WorkOrders";
 import Invoices from "@/pages/shop/invoices";
-import ShopProfile from "@/pages/shop/Profile";
-import ShopUserManagement from "@/pages/shop/UserManagement";
-import ShopAdminDashboard from "@/pages/shop/AdminDashboard";
+import NewInvoiceFromEstimate from "@/pages/shop/invoices/NewInvoiceFromEstimate";
+import Inventory from "@/pages/shop/Inventory";
+import Reports from "@/pages/shop/Reports";
+import AdminDashboard from "@/pages/shop/AdminDashboard";
+import ApiKeysManager from "@/pages/shop/admin/ApiKeysManager";
+import StaffManager from "@/pages/shop/admin/StaffManager";
 import SystemHealth from "@/pages/shop/admin/SystemHealth";
-import NotFound from "@/pages/NotFound";
-import Layout from "@/components/layout/Layout";
+import UserManagement from "@/pages/shop/UserManagement";
+import Employees from "@/pages/shop/Employees";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 const ShopRoutes = () => {
   return (
     <Routes>
-      {/* Public route */}
-      <Route path="login" element={<ShopLogin />} />
-      
-      {/* All protected routes with a shared layout */}
-      <Route 
+      <Route
+        path="/"
         element={
           <ProtectedRoute>
-            <Layout portalType="shop" />
+            <Dashboard />
           </ProtectedRoute>
         }
-      >
-        <Route index element={<ShopDashboard />} />
-        <Route path="profile" element={<ShopProfile />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="employees" element={<EmployeesPage />} />
-        <Route path="inventory" element={<InventoryPage />} />
-        <Route path="work-orders" element={<WorkOrdersPage />} />
-        <Route path="customers" element={<CustomersPage />} />
-        <Route path="estimates" element={<Estimates />} />
-        <Route path="invoices" element={<Invoices />} />
-        
-        {/* Admin-only routes */}
-        <Route 
-          path="users" 
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <ShopUserManagement />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="admin" 
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <ShopAdminDashboard />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="admin/system-health" 
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <SystemHealth />
-            </ProtectedRoute>
-          } 
-        />
-        
-        {/* Catch all not found route */}
-        <Route path="*" element={<NotFound />} />
-      </Route>
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customers"
+        element={
+          <ProtectedRoute>
+            <Customers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/estimates"
+        element={
+          <ProtectedRoute>
+            <Estimates />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/work-orders"
+        element={
+          <ProtectedRoute>
+            <WorkOrders />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/invoices"
+        element={
+          <ProtectedRoute>
+            <Invoices />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/invoices/new"
+        element={
+          <ProtectedRoute>
+            <NewInvoiceFromEstimate />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory"
+        element={
+          <ProtectedRoute>
+            <Inventory />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <Reports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute adminOnly>
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/api-keys"
+        element={
+          <ProtectedRoute adminOnly>
+            <ApiKeysManager />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/staff"
+        element={
+          <ProtectedRoute adminOnly>
+            <StaffManager />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/system"
+        element={
+          <ProtectedRoute adminOnly>
+            <SystemHealth />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/users"
+        element={
+          <ProtectedRoute>
+            <UserManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/employees"
+        element={
+          <ProtectedRoute>
+            <Employees />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 };

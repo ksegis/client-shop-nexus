@@ -1,186 +1,175 @@
 
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from "react";
 import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  TableRow
+} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { Estimate, EstimateStatus } from './types';
-import StatusBadge from './components/StatusBadge';
-import { format } from 'date-fns';
-import { MoreHorizontal, Pencil, Trash, FileText } from 'lucide-react';
-import { useEstimates } from './EstimatesContext';
-import DeleteConfirmationDialog from './components/DeleteConfirmationDialog';
-import { useToast } from '@/components/ui/use-toast';
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { Edit, MoreHorizontal, Trash, FileText, Hammer } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useEstimates } from "./EstimatesContext";
+import { Button } from "@/components/ui/button";
+import StatusBadge from "./components/StatusBadge";
+import { formatCurrency } from "@/lib/utils";
+import DeleteConfirmationDialog from "./components/DeleteConfirmationDialog";
+import { EstimateToWorkOrderDialog } from "../work-orders/EstimateToWorkOrderDialog";
 
-interface EstimatesTableProps {
-  onEdit: (estimate: Estimate) => void;
-}
+export function EstimatesTable({ onEdit }) {
+  const { estimates, loading, error, deleteEstimate } = useEstimates();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedEstimateId, setSelectedEstimateId] = useState(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showWorkOrderDialog, setShowWorkOrderDialog] = useState(false);
 
-export default function EstimatesTable({ onEdit }: EstimatesTableProps) {
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const { estimates, updateEstimateStatus, deleteEstimate } = useEstimates();
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
-
-  const handleStatusUpdate = (id: string, newStatus: EstimateStatus) => {
-    updateEstimateStatus(id, newStatus);
+  const handleDeleteClick = (estimateId) => {
+    setSelectedEstimateId(estimateId);
+    setShowDeleteDialog(true);
   };
 
-  const confirmDelete = (estimate: Estimate) => {
-    setEstimateToDelete(estimate);
-    setDeleteDialogOpen(true);
+  const handleCreateWorkOrder = (estimateId) => {
+    setSelectedEstimateId(estimateId);
+    setShowWorkOrderDialog(true);
   };
 
-  const handleDelete = async () => {
-    if (estimateToDelete) {
-      await deleteEstimate(estimateToDelete.id);
-      setDeleteDialogOpen(false);
-      setEstimateToDelete(null);
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteEstimate(selectedEstimateId);
+    } catch (error) {
+      console.error("Error deleting estimate:", error);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
     }
   };
 
-  const handleConvertToInvoice = (estimate: Estimate) => {
-    // Navigate to the invoices page with estimate data in state
-    navigate('/shop/invoices', { 
-      state: { 
-        createFromEstimate: true,
-        estimateData: estimate 
-      } 
-    });
-    
-    toast({
-      title: "Converting to Invoice",
-      description: "Creating a new invoice based on estimate #" + estimate.id.substring(0, 8),
-    });
-  };
+  if (loading) {
+    return <div className="text-center py-4">Loading estimates...</div>;
+  }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
+  if (error) {
+    return (
+      <div className="text-center py-4 text-red-500">
+        Error loading estimates: {error.message}
+      </div>
+    );
+  }
 
   return (
-    <>
+    <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>ID</TableHead>
+            <TableHead>Title</TableHead>
             <TableHead>Customer</TableHead>
             <TableHead>Vehicle</TableHead>
-            <TableHead>Title</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Amount</TableHead>
+            <TableHead className="text-right">Amount</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Date</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {estimates.map((estimate) => (
-            <TableRow key={estimate.id}>
-              <TableCell className="font-mono text-xs">
-                {estimate.id.substring(0, 8)}...
-              </TableCell>
-              <TableCell>
-                {estimate.profiles 
-                  ? `${estimate.profiles.first_name || ''} ${estimate.profiles.last_name || ''}`.trim() || estimate.profiles.email
-                  : 'Unknown'}
-              </TableCell>
-              <TableCell>
-                {estimate.vehicles
-                  ? `${estimate.vehicles.year} ${estimate.vehicles.make} ${estimate.vehicles.model}`
-                  : 'Unknown'}
-              </TableCell>
-              <TableCell>{estimate.title}</TableCell>
-              <TableCell>{format(new Date(estimate.created_at), 'MMM d, yyyy')}</TableCell>
-              <TableCell>{formatCurrency(estimate.total_amount)}</TableCell>
-              <TableCell>
-                <StatusBadge status={estimate.status} />
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end items-center space-x-2">
-                  {estimate.status === 'approved' && (
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleConvertToInvoice(estimate)}
-                      className="flex items-center"
-                    >
-                      <FileText className="mr-1 h-4 w-4" />
-                      To Invoice
-                    </Button>
-                  )}
+          {estimates.map((estimate) => {
+            // Format created date
+            const createdDate = new Date(estimate.created_at).toLocaleDateString();
+            
+            // Format customer name
+            const customerName = estimate.profiles ? 
+              `${estimate.profiles.first_name || ''} ${estimate.profiles.last_name || ''}`.trim() || 
+              estimate.profiles.email : 'Unknown';
+            
+            // Format vehicle name
+            const vehicleName = estimate.vehicles ? 
+              `${estimate.vehicles.year} ${estimate.vehicles.make} ${estimate.vehicles.model}`.trim() : 
+              'Unknown';
+            
+            return (
+              <TableRow key={estimate.id}>
+                <TableCell className="font-medium">
+                  #{estimate.id.substring(0, 8)}
+                </TableCell>
+                <TableCell>{estimate.title}</TableCell>
+                <TableCell>{customerName}</TableCell>
+                <TableCell>{vehicleName}</TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(estimate.total_amount)}
+                </TableCell>
+                <TableCell>
+                  <StatusBadge status={estimate.status} />
+                </TableCell>
+                <TableCell>{createdDate}</TableCell>
+                <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
+                      <Button variant="ghost" className="h-8 w-8 p-0">
                         <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">Actions</span>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => onEdit(estimate)}>
-                        <Pencil className="mr-2 h-4 w-4" />
+                      <DropdownMenuItem 
+                        onSelect={() => onEdit(estimate)}
+                        className="cursor-pointer"
+                      >
+                        <Edit className="mr-2 h-4 w-4" />
                         Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => confirmDelete(estimate)}>
+                      <DropdownMenuItem 
+                        asChild
+                        className="cursor-pointer"
+                      >
+                        <Link to={`/shop/invoices/new?estimateId=${estimate.id}`}>
+                          <FileText className="mr-2 h-4 w-4" />
+                          Convert to Invoice
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onSelect={() => handleCreateWorkOrder(estimate.id)}
+                        className="cursor-pointer"
+                      >
+                        <Hammer className="mr-2 h-4 w-4" />
+                        Create Work Order
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onSelect={() => handleDeleteClick(estimate.id)}
+                        className="cursor-pointer text-red-600"
+                      >
                         <Trash className="mr-2 h-4 w-4" />
                         Delete
                       </DropdownMenuItem>
-                      {/* Status change options */}
-                      <DropdownMenuItem
-                        disabled={estimate.status === 'pending'}
-                        onClick={() => handleStatusUpdate(estimate.id, 'pending')}
-                      >
-                        Mark as Pending
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={estimate.status === 'approved'}
-                        onClick={() => handleStatusUpdate(estimate.id, 'approved')}
-                      >
-                        Mark as Approved
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={estimate.status === 'declined'}
-                        onClick={() => handleStatusUpdate(estimate.id, 'declined')}
-                      >
-                        Mark as Declined
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={estimate.status === 'completed'}
-                        onClick={() => handleStatusUpdate(estimate.id, 'completed')}
-                      >
-                        Mark as Completed
-                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
 
       <DeleteConfirmationDialog
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        onConfirm={handleDelete}
-        title="Delete Estimate"
-        description={`Are you sure you want to delete this estimate? This action cannot be undone.`}
+        open={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        onConfirm={handleConfirmDelete}
+        isDeleting={isDeleting}
       />
-    </>
+
+      {showWorkOrderDialog && (
+        <EstimateToWorkOrderDialog
+          open={showWorkOrderDialog}
+          onClose={() => setShowWorkOrderDialog(false)}
+          estimateId={selectedEstimateId}
+        />
+      )}
+    </div>
   );
 }
