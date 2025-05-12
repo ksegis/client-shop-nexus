@@ -45,11 +45,12 @@ export const LineItemWithSearch = ({
 
   const handleSelectInventoryItem = (inventoryItem: any) => {
     console.log("Selected inventory item:", inventoryItem);
+    // Make sure to update all fields from inventory item
     onUpdate(index, 'part_number', inventoryItem.sku || '');
-    onUpdate(index, 'description', inventoryItem.name);
-    onUpdate(index, 'price', inventoryItem.price || 0);
+    onUpdate(index, 'description', inventoryItem.name || '');
+    onUpdate(index, 'price', parseFloat(inventoryItem.price) || 0);
     onUpdate(index, 'vendor', inventoryItem.supplier || '');
-    setDescription(inventoryItem.name);
+    setDescription(inventoryItem.name || '');
     setShowItemResults(false);
     setSearchTerm('');
   };
@@ -96,8 +97,8 @@ export const LineItemWithSearch = ({
         </InventorySearchPopover>
       </div>
 
-      {/* Quantity */}
-      <div className="col-span-1">
+      {/* Quantity - increased column span from 1 to 1.5 */}
+      <div className="col-span-1.5">
         <Input 
           type="number" 
           min="1" 
@@ -106,8 +107,8 @@ export const LineItemWithSearch = ({
         />
       </div>
 
-      {/* Price - No arrows */}
-      <div className="col-span-2">
+      {/* Price - decreased column span from 2 to 1.5 */}
+      <div className="col-span-1.5">
         <Input 
           type="text" 
           inputMode="decimal"
