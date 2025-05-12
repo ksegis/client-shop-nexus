@@ -1,7 +1,28 @@
+
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X, User } from 'lucide-react';
+import { 
+  Menu, 
+  X, 
+  User, 
+  LogOut, 
+  Settings, 
+  Facebook, 
+  Instagram, 
+  Twitter, 
+  Linkedin 
+} from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface HeaderProps {
   portalType: 'customer' | 'shop';
@@ -10,6 +31,8 @@ interface HeaderProps {
 const Header = ({ portalType }: HeaderProps) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   
   const customerLinks = [
     { name: 'Profile', path: '/customer/profile' },
@@ -30,6 +53,15 @@ const Header = ({ portalType }: HeaderProps) => {
   ];
   
   const links = portalType === 'customer' ? customerLinks : shopLinks;
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/auth');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -59,13 +91,41 @@ const Header = ({ portalType }: HeaderProps) => {
             ))}
           </nav>
           
-          {/* User profile/login button */}
+          {/* User profile dropdown */}
           <div className="flex items-center gap-4">
-            <Link to={portalType === 'customer' ? '/customer/profile' : '/shop/profile'}>
-              <Button variant="ghost" size="sm" className="rounded-full p-2">
-                <User className="h-5 w-5 text-shop-primary" />
-              </Button>
-            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="rounded-full p-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src="/placeholder.svg" alt="Profile" />
+                    <AvatarFallback>
+                      <User className="h-5 w-5 text-shop-primary" />
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to={portalType === 'customer' ? '/customer/profile' : '/shop/profile'}>
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={portalType === 'customer' ? '/customer/settings' : '/shop/settings'}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             
             {/* Mobile menu button */}
             <Button 

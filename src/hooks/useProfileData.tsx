@@ -12,6 +12,11 @@ type ProfileData = {
   role: string;
   created_at: string;
   updated_at: string;
+  avatar_url?: string | null;
+  facebook_url?: string | null;
+  twitter_url?: string | null;
+  instagram_url?: string | null;
+  linkedin_url?: string | null;
 };
 
 type ProfileUpdateData = Partial<Omit<ProfileData, 'id' | 'email' | 'created_at' | 'updated_at' | 'role'>>;

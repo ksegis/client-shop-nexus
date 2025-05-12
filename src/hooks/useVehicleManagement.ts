@@ -1,201 +1,245 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/components/ui/use-toast';
-import { Vehicle, NewVehicleData } from '@/types/vehicle';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/components/ui/use-toast';
+import { Vehicle } from '@/types/vehicle';
 
 export const useVehicleManagement = () => {
-  const { user } = useAuth();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
+  const { user } = useAuth();
   const { toast } = useToast();
-  
-  useEffect(() => {
-    async function fetchVehicles() {
-      if (!user) return;
-      
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('vehicles')
-          .select('*')
-          .eq('owner_id', user.id);
-          
-        if (error) throw error;
-        
-        // Convert year to string to match the Vehicle interface
-        const formattedData = data?.map(vehicle => ({
-          ...vehicle,
-          year: vehicle.year.toString() // Convert number to string
-        })) || [];
-        
-        setVehicles(formattedData);
-      } catch (error: any) {
-        console.error('Error fetching vehicles:', error);
-        toast({
-          variant: "destructive",
-          title: "Failed to load vehicles",
-          description: error.message
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    fetchVehicles();
-  }, [user, toast]);
 
-  const addVehicle = async (newVehicle: NewVehicleData) => {
-    if (!user) {
-      toast({
-        variant: "destructive",
-        title: "Authentication required",
-        description: "You must be logged in to add a vehicle"
-      });
-      return false;
+  const fetchVehicles = async () => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
     }
-    
+
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('*')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setVehicles(data || []);
+    } catch (error: any) {
+      toast({
+        title: 'Error fetching vehicles',
+        description: error.message,
+        variant: 'destructive',
+      });
+      console.error('Error fetching vehicles:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>) => {
+    if (!user?.id) {
+      throw new Error('User not authenticated');
+    }
+
     try {
       const { data, error } = await supabase
         .from('vehicles')
         .insert({
+          ...vehicleData,
           owner_id: user.id,
-          make: newVehicle.make,
-          model: newVehicle.model,
-          year: parseInt(newVehicle.year) || new Date().getFullYear(),
-          vin: newVehicle.vin,
-          vehicle_type: newVehicle.vehicle_type,
-          color: newVehicle.color || null,
-          license_plate: newVehicle.license_plate || null
         })
-        .select();
+        .select()
+        .single();
       
       if (error) throw error;
       
-      if (data && data.length > 0) {
-        // Convert the returned data to match our Vehicle interface
-        const addedVehicle: Vehicle = {
-          ...data[0],
-          year: data[0].year.toString() // Convert year to string
-        };
-        setVehicles(prev => [...prev, addedVehicle]);
-      }
+      setVehicles(prev => [data, ...prev]);
       
       toast({
-        title: "Vehicle Added",
-        description: "Your vehicle has been added to your profile."
+        title: 'Vehicle added',
+        description: `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} added successfully`,
       });
       
-      return true;
+      return data;
     } catch (error: any) {
-      console.error('Error adding vehicle:', error);
       toast({
-        variant: "destructive",
-        title: "Failed to add vehicle",
-        description: error.message
+        title: 'Error adding vehicle',
+        description: error.message,
+        variant: 'destructive',
       });
-      return false;
+      throw error;
     }
   };
-  
-  const updateVehicle = async (id: string, vehicleData: Partial<Vehicle>) => {
-    if (!user) {
-      toast({
-        variant: "destructive",
-        title: "Authentication required",
-        description: "You must be logged in to update a vehicle"
-      });
-      return false;
-    }
 
+  const updateVehicle = async (id: string, vehicleData: Partial<Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>>) => {
     try {
-      // Convert year string to number for database storage
-      const dataForUpdate = {
-        ...vehicleData,
-        year: vehicleData.year ? parseInt(vehicleData.year) : undefined
-      };
-
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('vehicles')
-        .update(dataForUpdate)
+        .update(vehicleData)
         .eq('id', id)
-        .eq('owner_id', user.id);
-        
+        .select()
+        .single();
+      
       if (error) throw error;
       
-      // Update local state with the updated vehicle
-      setVehicles(prevVehicles => prevVehicles.map(vehicle => {
-        if (vehicle.id === id) {
-          return {
-            ...vehicle,
-            ...vehicleData
-          };
-        }
-        return vehicle;
-      }));
+      setVehicles(prev => prev.map(vehicle => vehicle.id === id ? data : vehicle));
       
       toast({
-        title: "Vehicle Updated",
-        description: "Your vehicle information has been updated."
+        title: 'Vehicle updated',
+        description: `Vehicle information updated successfully`,
       });
       
-      return true;
+      return data;
     } catch (error: any) {
-      console.error('Error updating vehicle:', error);
       toast({
-        variant: "destructive",
-        title: "Failed to update vehicle",
-        description: error.message
+        title: 'Error updating vehicle',
+        description: error.message,
+        variant: 'destructive',
       });
-      return false;
+      throw error;
     }
   };
-  
-  const removeVehicle = async (id: string) => {
-    if (!user) {
-      toast({
-        variant: "destructive",
-        title: "Authentication required",
-        description: "You must be logged in to remove a vehicle"
-      });
-      return false;
-    }
 
+  const removeVehicle = async (id: string) => {
     try {
       const { error } = await supabase
         .from('vehicles')
         .delete()
-        .eq('id', id)
-        .eq('owner_id', user.id);
-        
+        .eq('id', id);
+      
       if (error) throw error;
       
-      // Update local state
-      setVehicles(vehicles.filter(vehicle => vehicle.id !== id));
+      setVehicles(prev => prev.filter(vehicle => vehicle.id !== id));
       
       toast({
-        title: "Vehicle Removed",
-        description: "The vehicle has been removed from your profile."
+        title: 'Vehicle removed',
+        description: 'Vehicle has been removed from your account',
       });
-      
-      return true;
     } catch (error: any) {
-      console.error('Error removing vehicle:', error);
       toast({
-        variant: "destructive",
-        title: "Failed to remove vehicle",
-        description: error.message
+        title: 'Error removing vehicle',
+        description: error.message,
+        variant: 'destructive',
       });
-      return false;
     }
   };
 
-  return {
-    vehicles,
-    loading,
-    addVehicle,
-    updateVehicle,
-    removeVehicle
+  const uploadVehicleImage = async (vehicleId: string, file: File) => {
+    if (!user?.id) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${vehicleId}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      const filePath = `vehicle-images/${fileName}`;
+      
+      // Check if vehicle_images bucket exists, if not handle gracefully
+      const { data: bucketData, error: bucketError } = await supabase.storage.getBucket('vehicle_images');
+      if (bucketError) {
+        console.log('Bucket does not exist or other error:', bucketError);
+        toast({
+          title: 'Storage not configured',
+          description: 'Vehicle image storage is not configured yet.',
+          variant: 'destructive',
+        });
+        return null;
+      }
+      
+      // Upload file to storage
+      const { error: uploadError } = await supabase.storage
+        .from('vehicle_images')
+        .upload(filePath, file);
+        
+      if (uploadError) throw uploadError;
+      
+      // Get public URL for the uploaded file
+      const { data: urlData } = supabase.storage
+        .from('vehicle_images')
+        .getPublicUrl(filePath);
+      
+      // Get current vehicle images
+      const { data: vehicleData, error: vehicleError } = await supabase
+        .from('vehicles')
+        .select('images')
+        .eq('id', vehicleId)
+        .single();
+      
+      if (vehicleError) throw vehicleError;
+      
+      // Update vehicle with new image URL
+      const images = vehicleData.images || [];
+      images.push(urlData.publicUrl);
+      
+      const { error: updateError } = await supabase
+        .from('vehicles')
+        .update({ images })
+        .eq('id', vehicleId);
+      
+      if (updateError) throw updateError;
+      
+      // Refresh vehicles list
+      await fetchVehicles();
+      
+      return urlData.publicUrl;
+    } catch (error: any) {
+      toast({
+        title: 'Upload failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  };
+
+  const removeVehicleImage = async (vehicleId: string, imageUrl: string) => {
+    try {
+      // Get current vehicle images
+      const { data: vehicleData, error: vehicleError } = await supabase
+        .from('vehicles')
+        .select('images')
+        .eq('id', vehicleId)
+        .single();
+      
+      if (vehicleError) throw vehicleError;
+      
+      // Update vehicle with new image URLs (remove the selected one)
+      const images = (vehicleData.images || []).filter(url => url !== imageUrl);
+      
+      const { error: updateError } = await supabase
+        .from('vehicles')
+        .update({ images })
+        .eq('id', vehicleId);
+      
+      if (updateError) throw updateError;
+      
+      // Refresh vehicles list
+      await fetchVehicles();
+    } catch (error: any) {
+      toast({
+        title: 'Remove image failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  };
+
+  useEffect(() => {
+    fetchVehicles();
+  }, [user?.id]);
+
+  return { 
+    vehicles, 
+    loading, 
+    addVehicle, 
+    updateVehicle, 
+    removeVehicle,
+    uploadVehicleImage,
+    removeVehicleImage,
+    refreshVehicles: fetchVehicles 
   };
 };
