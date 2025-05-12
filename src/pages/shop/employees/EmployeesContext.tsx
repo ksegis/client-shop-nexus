@@ -44,10 +44,13 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
     queryKey: ['employees'],
     queryFn: async () => {
       try {
+        // Define our allowed roles explicitly
+        const allowedRoles: ExtendedRole[] = ['staff', 'admin', 'inactive_staff', 'inactive_admin'];
+        
         const { data, error: queryError } = await supabase
           .from('profiles')
           .select('*')
-          .in('role', ['staff', 'admin', 'inactive_staff', 'inactive_admin'] as ExtendedRole[])
+          .in('role', allowedRoles)
           .order('created_at', { ascending: false });
           
         if (queryError) throw queryError;
@@ -80,10 +83,13 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
 
       // Directly update the profile since signUp already creates it
       if (authData?.user) {
+        // Ensure the role is correctly typed
+        const role: ExtendedRole = (employee.role || 'staff') as ExtendedRole;
+        
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
-            role: employee.role || 'staff' as ExtendedRole,
+            role: role,
             first_name: employee.first_name || '',
             last_name: employee.last_name || '',
             phone: employee.phone || '',
@@ -110,6 +116,9 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
 
   const updateEmployee = async (id: string, employee: Partial<Employee>, password?: string) => {
     try {
+      // Ensure role is correctly typed
+      const roleValue = employee.role as ExtendedRole | undefined;
+      
       // Update profile data
       const { error: updateError } = await supabase
         .from('profiles')
@@ -118,7 +127,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
           last_name: employee.last_name,
           email: employee.email,
           phone: employee.phone,
-          role: employee.role as ExtendedRole,
+          role: roleValue,
         })
         .eq('id', id);
       

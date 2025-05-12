@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -19,13 +18,18 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmployees, Employee, ExtendedRole, BaseRole } from './EmployeesContext';
 
+// We need to define the roles as just 'staff' | 'admin' for the form
+// since we don't want to let users directly select 'inactive_*' roles
+const BaseRoleEnum = z.enum(['staff', 'admin']);
+type FormRole = z.infer<typeof BaseRoleEnum>;
+
 // Schema for creating new employees
 const createFormSchema = z.object({
   first_name: z.string().min(1, 'First name is required'),
   last_name: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
   phone: z.string().optional(),
-  role: z.enum(['staff', 'admin'] as const),
+  role: BaseRoleEnum,
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
@@ -35,7 +39,7 @@ const updateFormSchema = z.object({
   last_name: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
   phone: z.string().optional(),
-  role: z.enum(['staff', 'admin'] as const),
+  role: BaseRoleEnum,
   password: z.string().optional(),
 });
 
@@ -54,10 +58,10 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
   const isEditing = !!employeeData;
   
   // Helper function to get base role (remove inactive_ prefix)
-  const getBaseRole = (role: ExtendedRole): BaseRole => {
+  const getBaseRole = (role: ExtendedRole): FormRole => {
     return role.startsWith('inactive_') 
-      ? role.substring('inactive_'.length) as BaseRole
-      : role as BaseRole;
+      ? role.substring('inactive_'.length) as FormRole
+      : role as FormRole;
   };
   
   // Helper function to check if a role is inactive
@@ -80,7 +84,7 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
           last_name: '',
           email: '',
           phone: '',
-          role: 'staff',
+          role: 'staff' as FormRole,
           password: '',
         },
   });
@@ -137,7 +141,7 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
               first_name: createValues.first_name,
               last_name: createValues.last_name,
               phone: createValues.phone,
-              role: createValues.role,
+              role: createValues.role as BaseRole,
             },
           },
         });
