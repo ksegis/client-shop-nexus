@@ -3,16 +3,20 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { WorkOrder, WorkOrderStatus } from './types';
+import { WorkOrder, WorkOrderStatus, WorkOrderLineItem } from './types';
 
 interface WorkOrdersContextType {
   workOrders: WorkOrder[];
   isLoading: boolean;
   error: Error | null;
-  createWorkOrder: (workOrder: Partial<WorkOrder>) => Promise<void>;
-  updateWorkOrder: (id: string, workOrder: Partial<WorkOrder>) => Promise<void>;
+  createWorkOrder: (workOrder: Partial<WorkOrder>, lineItems?: WorkOrderLineItem[]) => Promise<void>;
+  updateWorkOrder: (id: string, workOrder: Partial<WorkOrder>, lineItems?: WorkOrderLineItem[]) => Promise<void>;
   deleteWorkOrder: (id: string) => Promise<void>;
   refreshWorkOrders: () => Promise<void>;
+  getWorkOrderLineItems: (workOrderId: string) => Promise<WorkOrderLineItem[]>;
+  addLineItem: (workOrderId: string, lineItem: Partial<WorkOrderLineItem>) => Promise<void>;
+  updateLineItem: (lineItemId: string, lineItem: Partial<WorkOrderLineItem>) => Promise<void>;
+  deleteLineItem: (lineItemId: string) => Promise<void>;
 }
 
 const WorkOrdersContext = createContext<WorkOrdersContextType | undefined>(undefined);
@@ -44,7 +48,108 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const createWorkOrder = async (workOrder: Partial<WorkOrder>) => {
+  const getWorkOrderLineItems = async (workOrderId: string): Promise<WorkOrderLineItem[]> => {
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('work_order_line_items')
+        .select('*')
+        .eq('work_order_id', workOrderId);
+        
+      if (fetchError) throw fetchError;
+      return data || [];
+    } catch (error) {
+      console.error("Error fetching work order line items:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to fetch line items: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+      return [];
+    }
+  };
+
+  const addLineItem = async (workOrderId: string, lineItem: Partial<WorkOrderLineItem>) => {
+    try {
+      const newLineItem = {
+        work_order_id: workOrderId,
+        description: lineItem.description || '',
+        quantity: lineItem.quantity || 1,
+        price: lineItem.price || 0,
+        part_number: lineItem.part_number,
+        vendor: lineItem.vendor
+      };
+
+      const { error: insertError } = await supabase
+        .from('work_order_line_items')
+        .insert(newLineItem);
+      
+      if (insertError) throw insertError;
+      
+      await refetch();
+      toast({
+        title: "Success",
+        description: "Line item added successfully",
+      });
+    } catch (error) {
+      console.error("Error adding line item:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to add line item: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+      throw error;
+    }
+  };
+
+  const updateLineItem = async (lineItemId: string, lineItem: Partial<WorkOrderLineItem>) => {
+    try {
+      const { error: updateError } = await supabase
+        .from('work_order_line_items')
+        .update(lineItem)
+        .eq('id', lineItemId);
+      
+      if (updateError) throw updateError;
+      
+      await refetch();
+      toast({
+        title: "Success",
+        description: "Line item updated successfully",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to update line item: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+      throw error;
+    }
+  };
+
+  const deleteLineItem = async (lineItemId: string) => {
+    try {
+      const { error: deleteError } = await supabase
+        .from('work_order_line_items')
+        .delete()
+        .eq('id', lineItemId);
+      
+      if (deleteError) throw deleteError;
+      
+      await refetch();
+      toast({
+        title: "Success",
+        description: "Line item deleted successfully",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to delete line item: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+      throw error;
+    }
+  };
+
+  const createWorkOrder = async (workOrder: Partial<WorkOrder>, lineItems?: WorkOrderLineItem[]) => {
     try {
       console.log("Creating work order with data:", workOrder);
       
@@ -83,6 +188,30 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
         throw insertError;
       }
       
+      // Insert line items if provided
+      if (lineItems && lineItems.length > 0 && data && data[0]) {
+        const workOrderId = data[0].id;
+        
+        const lineItemsWithWorkOrderId = lineItems.map(item => ({
+          ...item,
+          work_order_id: workOrderId
+        }));
+        
+        const { error: lineItemError } = await supabase
+          .from('work_order_line_items')
+          .insert(lineItemsWithWorkOrderId);
+        
+        if (lineItemError) {
+          console.error("Error adding line items:", lineItemError);
+          // We don't throw here to prevent rolling back the work order creation
+          toast({
+            variant: "destructive",
+            title: "Warning",
+            description: `Work order created but some line items failed to add: ${lineItemError.message}`,
+          });
+        }
+      }
+      
       console.log("Work order created successfully:", data);
       await refetch();
       toast({
@@ -100,7 +229,7 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateWorkOrder = async (id: string, updatedWorkOrder: Partial<WorkOrder>) => {
+  const updateWorkOrder = async (id: string, updatedWorkOrder: Partial<WorkOrder>, lineItems?: WorkOrderLineItem[]) => {
     try {
       console.log("Updating work order:", id, updatedWorkOrder);
       
@@ -117,6 +246,44 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
           description: `Failed to update work order: ${updateError.message || 'Unknown error'}`,
         });
         throw updateError;
+      }
+      
+      // Update line items if provided
+      if (lineItems && lineItems.length > 0) {
+        // First delete existing line items
+        const { error: deleteError } = await supabase
+          .from('work_order_line_items')
+          .delete()
+          .eq('work_order_id', id);
+        
+        if (deleteError) {
+          console.error("Error deleting existing line items:", deleteError);
+          toast({
+            variant: "destructive",
+            title: "Warning",
+            description: `Failed to update line items: ${deleteError.message}`,
+          });
+        } else {
+          // Then insert new line items
+          const lineItemsWithWorkOrderId = lineItems.map(item => ({
+            ...item,
+            work_order_id: id,
+            id: undefined // Remove any existing IDs for re-insertion
+          }));
+          
+          const { error: insertError } = await supabase
+            .from('work_order_line_items')
+            .insert(lineItemsWithWorkOrderId);
+          
+          if (insertError) {
+            console.error("Error updating line items:", insertError);
+            toast({
+              variant: "destructive",
+              title: "Warning",
+              description: `Work order updated but line items failed to update: ${insertError.message}`,
+            });
+          }
+        }
       }
       
       await refetch();
@@ -137,6 +304,13 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
 
   const deleteWorkOrder = async (id: string) => {
     try {
+      // First delete any associated line items
+      await supabase
+        .from('work_order_line_items')
+        .delete()
+        .eq('work_order_id', id);
+        
+      // Then delete the work order itself
       const { error: deleteError } = await supabase
         .from('work_orders')
         .delete()
@@ -179,7 +353,11 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
         createWorkOrder,
         updateWorkOrder,
         deleteWorkOrder,
-        refreshWorkOrders
+        refreshWorkOrders,
+        getWorkOrderLineItems,
+        addLineItem,
+        updateLineItem,
+        deleteLineItem
       }}
     >
       {children}

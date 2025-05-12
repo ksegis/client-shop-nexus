@@ -1,0 +1,217 @@
+
+import { useState } from 'react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { WorkOrderLineItem } from '../types';
+import { Trash2, Plus } from 'lucide-react';
+
+interface LineItemsProps {
+  items: WorkOrderLineItem[];
+  onChange: (items: WorkOrderLineItem[]) => void;
+  readOnly?: boolean;
+}
+
+export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps) => {
+  const [newItem, setNewItem] = useState<Partial<WorkOrderLineItem>>({
+    description: '',
+    quantity: 1,
+    price: 0,
+    part_number: '',
+  });
+
+  const handleAddItem = () => {
+    if (!newItem.description) return;
+    
+    const tempId = `temp-${Date.now()}`;
+    const itemToAdd = {
+      ...newItem,
+      id: tempId,
+      work_order_id: '',
+      description: newItem.description || '',
+      quantity: newItem.quantity || 1,
+      price: newItem.price || 0,
+    } as WorkOrderLineItem;
+    
+    onChange([...items, itemToAdd]);
+    
+    setNewItem({
+      description: '',
+      quantity: 1,
+      price: 0,
+      part_number: '',
+    });
+  };
+
+  const handleRemoveItem = (index: number) => {
+    const newItems = [...items];
+    newItems.splice(index, 1);
+    onChange(newItems);
+  };
+
+  const handleItemChange = (index: number, field: keyof WorkOrderLineItem, value: any) => {
+    const newItems = [...items];
+    
+    if (field === 'quantity' || field === 'price') {
+      newItems[index][field] = parseFloat(value) || 0;
+    } else {
+      (newItems[index] as any)[field] = value;
+    }
+    
+    onChange(newItems);
+  };
+
+  const calculateSubtotal = () => {
+    return items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  };
+
+  return (
+    <div className="space-y-4">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Part #</TableHead>
+            <TableHead className="w-full">Description</TableHead>
+            <TableHead className="text-right">Quantity</TableHead>
+            <TableHead className="text-right">Price</TableHead>
+            <TableHead className="text-right">Total</TableHead>
+            {!readOnly && <TableHead className="w-10"></TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={readOnly ? 5 : 6} className="text-center text-muted-foreground">
+                No items added yet
+              </TableCell>
+            </TableRow>
+          ) : (
+            items.map((item, index) => (
+              <TableRow key={item.id || index}>
+                <TableCell>
+                  {readOnly ? (
+                    item.part_number || '-'
+                  ) : (
+                    <Input 
+                      value={item.part_number || ''}
+                      onChange={(e) => handleItemChange(index, 'part_number', e.target.value)}
+                      className="max-w-[100px]"
+                    />
+                  )}
+                </TableCell>
+                <TableCell>
+                  {readOnly ? (
+                    item.description
+                  ) : (
+                    <Input 
+                      value={item.description}
+                      onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                    />
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  {readOnly ? (
+                    item.quantity
+                  ) : (
+                    <Input 
+                      type="number"
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                      className="max-w-[80px] text-right"
+                    />
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  {readOnly ? (
+                    `$${item.price.toFixed(2)}`
+                  ) : (
+                    <Input 
+                      type="number"
+                      step="0.01"
+                      value={item.price}
+                      onChange={(e) => handleItemChange(index, 'price', e.target.value)}
+                      className="max-w-[100px] text-right"
+                    />
+                  )}
+                </TableCell>
+                <TableCell className="text-right font-medium">${(item.quantity * item.price).toFixed(2)}</TableCell>
+                {!readOnly && (
+                  <TableCell>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleRemoveItem(index)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))
+          )}
+          
+          {!readOnly && (
+            <TableRow>
+              <TableCell>
+                <Input 
+                  placeholder="Part #"
+                  value={newItem.part_number || ''}
+                  onChange={(e) => setNewItem({...newItem, part_number: e.target.value})}
+                  className="max-w-[100px]"
+                />
+              </TableCell>
+              <TableCell>
+                <Input 
+                  placeholder="Description"
+                  value={newItem.description || ''}
+                  onChange={(e) => setNewItem({...newItem, description: e.target.value})}
+                />
+              </TableCell>
+              <TableCell className="text-right">
+                <Input 
+                  type="number"
+                  placeholder="Qty"
+                  value={newItem.quantity || ''}
+                  onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
+                  className="max-w-[80px] text-right"
+                />
+              </TableCell>
+              <TableCell className="text-right">
+                <Input 
+                  type="number"
+                  step="0.01"
+                  placeholder="Price"
+                  value={newItem.price || ''}
+                  onChange={(e) => setNewItem({...newItem, price: parseFloat(e.target.value) || 0})}
+                  className="max-w-[100px] text-right"
+                />
+              </TableCell>
+              <TableCell className="text-right">
+                ${((newItem.quantity || 0) * (newItem.price || 0)).toFixed(2)}
+              </TableCell>
+              <TableCell>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={handleAddItem}
+                  disabled={!newItem.description}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+      
+      <div className="flex justify-end">
+        <div className="w-64">
+          <div className="flex justify-between items-center border-t pt-2">
+            <span className="font-medium">Subtotal:</span>
+            <span className="font-medium">${calculateSubtotal().toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

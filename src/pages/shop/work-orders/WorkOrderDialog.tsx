@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { WorkOrderForm } from './WorkOrderForm';
 import { useWorkOrders } from './WorkOrdersContext';
-import { WorkOrder } from './types';
+import { WorkOrder, WorkOrderLineItem } from './types';
 import { Plus, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -30,6 +30,7 @@ export const workOrderSchema = z.object({
   actual_cost: z.number().nullable().optional(),
   priority: z.number().default(1),
   assigned_to: z.string().nullable().optional(),
+  lineItems: z.array(z.any()).optional(),
 });
 
 export type WorkOrderFormValues = z.infer<typeof workOrderSchema>;
@@ -41,7 +42,8 @@ interface WorkOrderDialogProps {
 export const WorkOrderDialog = ({ workOrder }: WorkOrderDialogProps) => {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { createWorkOrder, updateWorkOrder } = useWorkOrders();
+  const [lineItems, setLineItems] = useState<WorkOrderLineItem[]>([]);
+  const { createWorkOrder, updateWorkOrder, getWorkOrderLineItems } = useWorkOrders();
   const { toast } = useToast();
   const isEditing = !!workOrder;
 
@@ -59,22 +61,46 @@ export const WorkOrderDialog = ({ workOrder }: WorkOrderDialogProps) => {
       actual_cost: workOrder?.actual_cost || null,
       priority: workOrder?.priority || 1,
       assigned_to: workOrder?.assigned_to || null,
+      lineItems: [],
     },
   });
+
+  // Load line items if editing
+  useEffect(() => {
+    const fetchLineItems = async () => {
+      if (isEditing && workOrder) {
+        try {
+          const items = await getWorkOrderLineItems(workOrder.id);
+          setLineItems(items);
+        } catch (error) {
+          console.error("Error fetching line items:", error);
+        }
+      }
+    };
+
+    if (open && isEditing) {
+      fetchLineItems();
+    }
+  }, [open, isEditing, workOrder, getWorkOrderLineItems]);
+
+  const handleLineItemsChange = (items: WorkOrderLineItem[]) => {
+    setLineItems(items);
+  };
 
   const onSubmit = async (data: WorkOrderFormValues) => {
     try {
       setIsSubmitting(true);
       console.log("Form submitted with data:", data);
+      console.log("Line items:", lineItems);
       
       if (isEditing && workOrder) {
-        await updateWorkOrder(workOrder.id, data);
+        await updateWorkOrder(workOrder.id, data, lineItems);
         toast({
           title: "Success",
           description: "Work order updated successfully",
         });
       } else {
-        await createWorkOrder(data);
+        await createWorkOrder(data, lineItems);
         toast({
           title: "Success",
           description: "Work order created successfully",
@@ -83,6 +109,7 @@ export const WorkOrderDialog = ({ workOrder }: WorkOrderDialogProps) => {
       
       setOpen(false);
       form.reset();
+      setLineItems([]);
     } catch (error) {
       console.error('Error saving work order:', error);
       toast({
@@ -109,7 +136,7 @@ export const WorkOrderDialog = ({ workOrder }: WorkOrderDialogProps) => {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Work Order' : 'Create New Work Order'}</DialogTitle>
         </DialogHeader>
@@ -119,6 +146,8 @@ export const WorkOrderDialog = ({ workOrder }: WorkOrderDialogProps) => {
           isEditing={isEditing} 
           onCancel={() => setOpen(false)}
           isSubmitting={isSubmitting}
+          lineItems={lineItems}
+          onLineItemsChange={handleLineItemsChange}
         />
       </DialogContent>
     </Dialog>

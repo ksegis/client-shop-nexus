@@ -10,6 +10,9 @@ import { TitleField } from './components/TitleField';
 import { NumericField } from './components/NumericField';
 import { DescriptionField } from './components/DescriptionField';
 import { FormActions } from './components/FormActions';
+import { LineItems } from './components/LineItems';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { WorkOrderLineItem } from './types';
 
 interface WorkOrderFormProps {
   form: UseFormReturn<WorkOrderFormValues>;
@@ -17,6 +20,8 @@ interface WorkOrderFormProps {
   isEditing: boolean;
   onCancel: () => void;
   isSubmitting?: boolean;
+  lineItems: WorkOrderLineItem[];
+  onLineItemsChange: (items: WorkOrderLineItem[]) => void;
 }
 
 export const WorkOrderForm = ({ 
@@ -24,10 +29,13 @@ export const WorkOrderForm = ({
   onSubmit, 
   isEditing, 
   onCancel, 
-  isSubmitting = false 
+  isSubmitting = false,
+  lineItems,
+  onLineItemsChange
 }: WorkOrderFormProps) => {
   const [loading, setLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<string>(form.getValues('customer_id') || '');
+  const [activeTab, setActiveTab] = useState('details');
 
   const handleCustomerChange = (value: string) => {
     setSelectedCustomer(value);
@@ -35,48 +43,86 @@ export const WorkOrderForm = ({
     form.setValue('vehicle_id', ''); // Reset vehicle when customer changes
   };
 
+  const handleFormSubmit = (data: WorkOrderFormValues) => {
+    // Include line items with the form submission
+    const fullData = {
+      ...data,
+      lineItems
+    };
+    return onSubmit(fullData);
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TitleField form={form} />
-          <StatusSelect form={form} />
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 pt-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="line-items">Line Items</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="details" className="space-y-4">
+            <TitleField form={form} />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <StatusSelect form={form} />
+              
+              <NumericField 
+                form={form} 
+                name="priority" 
+                label="Priority (1-5)" 
+                min="1"
+                max="5"
+              />
 
-          <CustomerSelect 
-            form={form} 
-            loading={loading} 
-            onCustomerChange={handleCustomerChange}
-            selectedCustomer={selectedCustomer}
-          />
+              <CustomerSelect 
+                form={form} 
+                loading={loading} 
+                onCustomerChange={handleCustomerChange}
+                selectedCustomer={selectedCustomer}
+              />
 
-          <VehicleSelect 
-            form={form} 
-            loading={loading}
-            selectedCustomerId={selectedCustomer} 
-          />
+              <VehicleSelect 
+                form={form} 
+                loading={loading}
+                selectedCustomerId={selectedCustomer} 
+              />
 
-          <NumericField 
-            form={form} 
-            name="estimated_hours" 
-            label="Estimated Hours" 
-          />
+              <NumericField 
+                form={form} 
+                name="estimated_hours" 
+                label="Estimated Hours" 
+              />
 
-          <NumericField 
-            form={form} 
-            name="estimated_cost" 
-            label="Estimated Cost" 
-          />
+              <NumericField 
+                form={form} 
+                name="estimated_cost" 
+                label="Estimated Cost" 
+              />
 
-          <NumericField 
-            form={form} 
-            name="priority" 
-            label="Priority (1-5)" 
-            min="1"
-            max="5"
-          />
-        </div>
+              <NumericField 
+                form={form} 
+                name="actual_hours" 
+                label="Actual Hours" 
+              />
 
-        <DescriptionField form={form} />
+              <NumericField 
+                form={form} 
+                name="actual_cost" 
+                label="Actual Cost" 
+              />
+            </div>
+
+            <DescriptionField form={form} />
+          </TabsContent>
+          
+          <TabsContent value="line-items">
+            <LineItems 
+              items={lineItems}
+              onChange={onLineItemsChange}
+            />
+          </TabsContent>
+        </Tabs>
 
         <FormActions 
           onCancel={onCancel} 

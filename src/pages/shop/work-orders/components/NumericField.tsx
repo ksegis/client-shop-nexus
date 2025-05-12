@@ -21,20 +21,28 @@ export const NumericField = ({
   min,
   max
 }: NumericFieldProps) => {
-  const field = form.register(name);
+  const { register, setValue } = form;
   const value = form.getValues(name);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value ? Number(e.target.value) : null;
-    form.setValue(name, newValue as any);
+    // Convert empty string to null for optional numeric fields
+    const newValue = e.target.value === '' ? null : 
+                    !isNaN(Number(e.target.value)) ? Number(e.target.value) : null;
+    setValue(name, newValue as any);
   };
 
   return (
     <FormFieldWrapper form={form} name={name} label={label}>
       <Input
         type="number"
+        step="0.01"
         placeholder={placeholder}
-        {...field}
+        {...register(name, {
+          setValueAs: (value) => {
+            return value === '' ? null : 
+                   !isNaN(Number(value)) ? Number(value) : null;
+          }
+        })}
         value={value === null ? '' : value}
         onChange={handleChange}
         min={min}
