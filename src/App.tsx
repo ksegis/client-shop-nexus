@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,8 +7,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
-// Auth Page
+// Auth Pages
 import Auth from "./pages/Auth";
+import ShopLogin from "./pages/shop/Login";
 
 // Customer Portal Pages
 import CustomerLogin from "./pages/customer/Login";
@@ -50,8 +52,9 @@ const App = () => (
             {/* Redirect root to shop dashboard */}
             <Route path="/" element={<Navigate to="/shop" replace />} />
 
-            {/* Auth Route */}
+            {/* Auth Routes */}
             <Route path="/auth" element={<Auth />} />
+            <Route path="/shop/login" element={<ShopLogin />} />
 
             {/* Customer Portal Routes */}
             <Route path="/customer/login" element={<CustomerLogin />} />

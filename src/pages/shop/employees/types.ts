@@ -10,6 +10,7 @@ export interface Employee {
   updated_at: string;
 }
 
+// Updated ExtendedRole to exclude 'customer' since it's invalid for employees
 export type ExtendedRole = 'staff' | 'admin' | 'inactive_staff' | 'inactive_admin';
 
 // Define the base role types needed by EmployeesContext
