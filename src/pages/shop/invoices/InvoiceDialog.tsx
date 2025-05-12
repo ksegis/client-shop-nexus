@@ -31,6 +31,12 @@ import { useVehicles } from "@/hooks/useVehicles";
 import { Invoice, InvoiceStatus } from "./types";
 import { useInvoices } from "./InvoicesContext";
 import { formatCurrency } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { Estimate } from "../estimates/types";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const invoiceFormSchema = z.object({
   title: z.string().min(2, {
@@ -63,6 +69,8 @@ export default function InvoiceDialog({
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
   const [customerDetails, setCustomerDetails] = useState<{ first_name?: string; last_name?: string; email: string; } | null>(null);
   const [sourceEstimateId, setSourceEstimateId] = useState<string | null>(null);
+  const [openEstimates, setOpenEstimates] = useState<Estimate[]>([]);
+  const [estimateSelectOpen, setEstimateSelectOpen] = useState(false);
 
   const { customers } = useCustomers();
   const { vehicles } = useVehicles();
@@ -77,6 +85,30 @@ export default function InvoiceDialog({
     },
   });
 
+  // Fetch open estimates
+  useEffect(() => {
+    const fetchOpenEstimates = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('estimates')
+          .select(`
+            *,
+            profiles:customer_id (first_name, last_name, email),
+            vehicles:vehicle_id (make, model, year)
+          `)
+          .in('status', ['pending', 'approved']) // Only get pending or approved estimates
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        setOpenEstimates(data || []);
+      } catch (error) {
+        console.error('Error fetching estimates:', error);
+      }
+    };
+
+    fetchOpenEstimates();
+  }, []);
+
   useEffect(() => {
     if (invoice) {
       form.reset({
@@ -88,6 +120,7 @@ export default function InvoiceDialog({
       setCustomerId(invoice.customer_id);
       setSelectedVehicleId(invoice.vehicle_id);
       setCustomerDetails(invoice.profiles || null);
+      setSourceEstimateId(invoice.estimate_id || null);
     } else if (estimateData) {
       form.reset({
         title: `Invoice for ${estimateData.title}`,
@@ -118,6 +151,7 @@ export default function InvoiceDialog({
       setCustomerId('');
       setSelectedVehicleId('');
       setCustomerDetails(null);
+      setSourceEstimateId(null);
     }
   }, [invoice, estimateData, form]);
 
@@ -161,6 +195,35 @@ export default function InvoiceDialog({
 
   const setVehicleId = (vehicleId: string) => {
     setSelectedVehicleId(vehicleId);
+  };
+
+  // Handle estimate selection
+  const handleEstimateSelection = (estimateId: string) => {
+    const selectedEstimate = openEstimates.find(est => est.id === estimateId);
+    if (selectedEstimate) {
+      setSourceEstimateId(selectedEstimate.id);
+      
+      // Populate form with estimate data
+      form.setValue('title', `Invoice for ${selectedEstimate.title}`);
+      form.setValue('description', selectedEstimate.description || '');
+      form.setValue('total_amount', selectedEstimate.total_amount);
+      
+      // Set customer and vehicle
+      if (selectedEstimate.customer_id) {
+        setCustomerId(selectedEstimate.customer_id);
+        fetchCustomerDetails(selectedEstimate.customer_id);
+      }
+      
+      if (selectedEstimate.vehicle_id) {
+        setSelectedVehicleId(selectedEstimate.vehicle_id);
+        fetchVehicleOptions(selectedEstimate.customer_id);
+      }
+      
+      toast({
+        title: "Estimate Selected",
+        description: "Invoice details populated from estimate",
+      });
+    }
   };
 
   const onSubmit = async (data: InvoiceFormValues) => {
@@ -236,6 +299,63 @@ export default function InvoiceDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            {!invoice && !estimateData && (
+              <div className="space-y-2">
+                <FormLabel>Reference Estimate (Optional)</FormLabel>
+                <Popover open={estimateSelectOpen} onOpenChange={setEstimateSelectOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={estimateSelectOpen}
+                      className="w-full justify-between"
+                    >
+                      {sourceEstimateId
+                        ? `${openEstimates.find(est => est.id === sourceEstimateId)?.title} (#${sourceEstimateId.substring(0, 8)})`
+                        : "Select an estimate..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[500px] p-0">
+                    <Command>
+                      <CommandInput placeholder="Search estimates..." />
+                      <CommandEmpty>No estimates found.</CommandEmpty>
+                      <CommandGroup>
+                        {openEstimates.map((estimate) => (
+                          <CommandItem
+                            key={estimate.id}
+                            onSelect={() => {
+                              handleEstimateSelection(estimate.id);
+                              setEstimateSelectOpen(false);
+                            }}
+                            className="flex flex-col items-start py-3"
+                          >
+                            <div className="flex w-full justify-between">
+                              <div className="font-medium">{estimate.title}</div>
+                              <div className="text-muted-foreground text-sm">
+                                {formatCurrency(estimate.total_amount)}
+                              </div>
+                            </div>
+                            <div className="flex justify-between w-full text-xs text-muted-foreground mt-1">
+                              <div>
+                                {estimate.profiles?.first_name} {estimate.profiles?.last_name}
+                              </div>
+                              <div>
+                                {estimate.vehicles?.year} {estimate.vehicles?.make} {estimate.vehicles?.model}
+                              </div>
+                            </div>
+                            {sourceEstimateId === estimate.id && (
+                              <Check className="ml-auto h-4 w-4" />
+                            )}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
