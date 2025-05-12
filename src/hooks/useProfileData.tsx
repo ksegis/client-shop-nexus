@@ -36,15 +36,44 @@ export const useProfileData = () => {
     try {
       setIsLoading(true);
       
+      // Use maybeSingle() instead of single() to handle case where profile might not exist
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
       
       if (fetchError) throw fetchError;
       
-      setProfileData(data as ProfileData);
+      if (data) {
+        setProfileData(data as ProfileData);
+      } else {
+        // If no profile exists, create default profile data from user info
+        const defaultProfile: ProfileData = {
+          id: user.id,
+          email: user.email || '',
+          first_name: user.user_metadata?.first_name || '',
+          last_name: user.user_metadata?.last_name || '',
+          phone: null,
+          role: 'staff', // Default to staff for shop portal users
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        setProfileData(defaultProfile);
+        
+        // Optionally create the missing profile in the database
+        try {
+          await supabase.from('profiles').insert({
+            id: user.id,
+            email: user.email || '',
+            first_name: user.user_metadata?.first_name || '',
+            last_name: user.user_metadata?.last_name || '',
+            role: 'staff'
+          });
+        } catch (insertError) {
+          console.error('Error creating profile:', insertError);
+        }
+      }
     } catch (err) {
       console.error('Error fetching profile data:', err);
       setError(err as Error);

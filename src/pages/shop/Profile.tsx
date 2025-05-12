@@ -25,7 +25,7 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 const ProfilePage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { profileData, isLoading, updateProfileData } = useProfileData();
+  const { profileData, isLoading, updateProfileData, error } = useProfileData();
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -75,6 +75,42 @@ const ProfilePage: React.FC = () => {
     );
   }
 
+  if (error) {
+    return (
+      <Layout portalType="shop">
+        <div className="max-w-3xl mx-auto p-4 bg-red-50 rounded-md border border-red-200">
+          <h1 className="text-2xl font-bold mb-2 text-red-600">Error Loading Profile</h1>
+          <p className="text-gray-700">{error.message}</p>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={() => window.location.reload()}
+          >
+            Try Again
+          </Button>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!profileData) {
+    return (
+      <Layout portalType="shop">
+        <div className="max-w-3xl mx-auto p-4 bg-amber-50 rounded-md border border-amber-200">
+          <h1 className="text-2xl font-bold mb-2">Profile Not Found</h1>
+          <p className="text-gray-700">We couldn't find your profile information. Please try refreshing the page.</p>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={() => window.location.reload()}
+          >
+            Refresh Page
+          </Button>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout portalType="shop">
       <div className="max-w-3xl mx-auto">
@@ -87,7 +123,12 @@ const ProfilePage: React.FC = () => {
                 <User className="h-8 w-8 text-shop-primary" />
               </div>
               <div>
-                <CardTitle>{profileData?.first_name} {profileData?.last_name}</CardTitle>
+                <CardTitle>
+                  {profileData?.first_name || ''} {profileData?.last_name || ''}
+                  <span className="ml-2 text-sm font-normal bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                    {profileData?.role || 'staff'}
+                  </span>
+                </CardTitle>
                 <CardDescription>{profileData?.email}</CardDescription>
               </div>
             </div>

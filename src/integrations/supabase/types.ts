@@ -392,7 +392,7 @@ export type Database = {
     Enums: {
       estimate_status: "pending" | "approved" | "declined" | "completed"
       invoice_status: "draft" | "pending" | "paid" | "overdue"
-      user_role: "customer" | "staff" | "admin" | "inactive_staff" | "inactive_admin"
+      user_role: "customer" | "staff" | "admin"
       vehicle_type: "car" | "truck" | "motorcycle" | "other"
     }
     CompositeTypes: {
