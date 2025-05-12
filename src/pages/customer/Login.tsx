@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const CustomerLogin = () => {
   const [email, setEmail] = useState('');
@@ -17,18 +18,14 @@ const CustomerLogin = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { signIn } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
+      await signIn(email, password, rememberMe);
       
       toast({
         title: "Login Successful",
@@ -38,11 +35,7 @@ const CustomerLogin = () => {
       navigate('/customer/profile');
     } catch (error: any) {
       console.error('Login error:', error);
-      toast({
-        variant: "destructive",
-        title: "Login Failed",
-        description: error.message || "Failed to log in. Please try again.",
-      });
+      // Toast is already shown in the signIn method
     } finally {
       setLoading(false);
     }

@@ -17,8 +17,14 @@ interface Vehicle {
   id: string;
   make: string;
   model: string;
-  year: string;
+  year: string; // Keep this as string to match the interface used elsewhere
   vin: string;
+  color?: string;
+  license_plate?: string;
+  owner_id: string;
+  vehicle_type: 'car' | 'truck' | 'motorcycle' | 'other';
+  created_at: string;
+  updated_at: string;
 }
 
 const ProfilePage = () => {
@@ -27,11 +33,14 @@ const ProfilePage = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehiclesLoading, setVehiclesLoading] = useState(true);
   
-  const [newVehicle, setNewVehicle] = useState<Omit<Vehicle, 'id'>>({
+  const [newVehicle, setNewVehicle] = useState<Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>>({
     make: '',
     model: '',
     year: '',
-    vin: ''
+    vin: '',
+    vehicle_type: 'car',
+    color: '',
+    license_plate: '',
   });
   
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -51,7 +60,13 @@ const ProfilePage = () => {
           
         if (error) throw error;
         
-        setVehicles(data || []);
+        // Convert year to string to match the Vehicle interface
+        const formattedData = data?.map(vehicle => ({
+          ...vehicle,
+          year: vehicle.year.toString() // Convert number to string
+        })) || [];
+        
+        setVehicles(formattedData);
       } catch (error: any) {
         console.error('Error fetching vehicles:', error);
         toast({
@@ -78,17 +93,33 @@ const ProfilePage = () => {
           make: newVehicle.make,
           model: newVehicle.model,
           year: parseInt(newVehicle.year) || new Date().getFullYear(),
-          vin: newVehicle.vin
+          vin: newVehicle.vin,
+          vehicle_type: newVehicle.vehicle_type,
+          color: newVehicle.color || null,
+          license_plate: newVehicle.license_plate || null
         })
         .select();
       
       if (error) throw error;
       
       if (data && data.length > 0) {
-        setVehicles([...vehicles, data[0] as Vehicle]);
+        // Convert the returned data to match our Vehicle interface
+        const addedVehicle: Vehicle = {
+          ...data[0],
+          year: data[0].year.toString() // Convert year to string
+        };
+        setVehicles([...vehicles, addedVehicle]);
       }
       
-      setNewVehicle({ make: '', model: '', year: '', vin: '' });
+      setNewVehicle({ 
+        make: '', 
+        model: '', 
+        year: '', 
+        vin: '', 
+        vehicle_type: 'car',
+        color: '',
+        license_plate: ''
+      });
       setDialogOpen(false);
       
       toast({

@@ -93,8 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         options: {
-          // Session will persist if rememberMe is true, otherwise it will only last for the current browser session
-          persistSession: rememberMe
+          // The persistSession option needs to be in the correct location
+          // It should be in the overall options, not in the "options.options"
         }
       });
 
