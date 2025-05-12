@@ -5,8 +5,6 @@ import { Link } from "react-router-dom";
 import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { CustomerVehicleSection } from "./CustomerVehicleSection";
-import { EstimateSelector } from "./EstimateSelector";
-import { Estimate } from "../../estimates/types";
 import { BasicInfoSection } from "./form-sections/BasicInfoSection";
 import { DescriptionSection } from "./form-sections/DescriptionSection";
 import { StatusSection } from "./form-sections/StatusSection";
@@ -16,16 +14,12 @@ import { invoiceFormSchema, InvoiceFormValues } from "./InvoiceFormSchema";
 interface InvoiceFormProps {
   invoice?: any;
   estimateData?: any;
-  openEstimates: Estimate[];
-  sourceEstimateId: string | null;
-  setSourceEstimateId: (id: string | null) => void;
   customerId: string;
   setCustomerId: (id: string) => void;
   selectedVehicleId: string;
   setVehicleId: (id: string) => void;
   customerDetails: { first_name?: string; last_name?: string; email: string; } | null;
   vehicleOptions: { value: string; label: string; }[];
-  handleEstimateSelection: (estimateId: string) => void;
   onSubmit: (data: InvoiceFormValues) => void;
   customers?: any[];
 }
@@ -33,16 +27,12 @@ interface InvoiceFormProps {
 export function InvoiceForm({
   invoice,
   estimateData,
-  openEstimates = [],
-  sourceEstimateId,
-  setSourceEstimateId,
   customerId,
   setCustomerId,
   selectedVehicleId,
   setVehicleId,
   customerDetails,
   vehicleOptions = [],
-  handleEstimateSelection,
   onSubmit,
   customers = []
 }: InvoiceFormProps) {
@@ -56,12 +46,9 @@ export function InvoiceForm({
     },
   });
 
-  // Ensure we have a valid array for openEstimates
-  const estimates = Array.isArray(openEstimates) ? openEstimates : [];
-
   return (
     <>
-      {sourceEstimateId && (
+      {estimateData && estimateData.id && (
         <div className="bg-gray-50 p-2 rounded-md mb-4">
           <p className="text-sm text-muted-foreground flex items-center">
             <span>Based on Estimate: </span>
@@ -69,7 +56,7 @@ export function InvoiceForm({
               to={`/shop/estimates`} 
               className="ml-1 text-blue-600 hover:underline flex items-center"
             >
-              #{sourceEstimateId.substring(0, 8)}
+              #{estimateData.id.substring(0, 8)}
             </Link>
           </p>
         </div>
@@ -77,14 +64,6 @@ export function InvoiceForm({
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          {!invoice && !estimateData && estimates.length > 0 && (
-            <EstimateSelector
-              openEstimates={estimates}
-              sourceEstimateId={sourceEstimateId}
-              onEstimateSelected={handleEstimateSelection}
-            />
-          )}
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <BasicInfoSection control={form.control} />
 

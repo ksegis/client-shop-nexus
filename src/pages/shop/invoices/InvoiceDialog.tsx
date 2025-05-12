@@ -44,11 +44,7 @@ export default function InvoiceDialog({
     selectedVehicleId,
     setVehicleId,
     customerDetails,
-    sourceEstimateId,
-    setSourceEstimateId,
-    openEstimates,
     loading,
-    handleEstimateSelection,
   } = useInvoiceData();
 
   // Initialize form data from props
@@ -56,11 +52,9 @@ export default function InvoiceDialog({
     if (invoice) {
       setCustomerId(invoice.customer_id || '');
       setVehicleId(invoice.vehicle_id || '');
-      setSourceEstimateId(invoice.estimate_id || null);
     } else if (estimateData) {
       setCustomerId(estimateData.customer_id || '');
       setVehicleId(estimateData.vehicle_id || '');
-      setSourceEstimateId(estimateData.id || null);
     }
   }, [invoice, estimateData]);
 
@@ -84,8 +78,8 @@ export default function InvoiceDialog({
         status: data.status || "draft",
       };
 
-      if (sourceEstimateId) {
-        newInvoiceData.estimate_id = sourceEstimateId;
+      if (estimateData && estimateData.id) {
+        newInvoiceData.estimate_id = estimateData.id;
       }
 
       if (invoice) {
@@ -133,22 +127,18 @@ export default function InvoiceDialog({
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-muted-foreground">Loading estimates data...</span>
+            <span className="ml-2 text-muted-foreground">Loading data...</span>
           </div>
         ) : (
           <InvoiceForm
             invoice={invoice}
             estimateData={estimateData}
-            openEstimates={openEstimates || []}
-            sourceEstimateId={sourceEstimateId}
-            setSourceEstimateId={setSourceEstimateId}
             customerId={customerId}
             setCustomerId={setCustomerId}
             selectedVehicleId={selectedVehicleId}
             setVehicleId={setVehicleId}
             customerDetails={customerDetails}
             vehicleOptions={vehicleOptions}
-            handleEstimateSelection={handleEstimateSelection}
             onSubmit={onSubmit}
             customers={customers}
           />

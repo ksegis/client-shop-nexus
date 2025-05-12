@@ -29,7 +29,8 @@ const NewInvoiceFromEstimate = () => {
     if (data.estimate) {
       setEstimateData({
         ...data.estimate,
-        lineItems: data.lineItems
+        lineItems: data.lineItems,
+        id: estimateId // Make sure we have the ID
       });
     } else {
       navigate('/shop/invoices');
