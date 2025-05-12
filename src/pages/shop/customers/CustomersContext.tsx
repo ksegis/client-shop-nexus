@@ -70,10 +70,12 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
         throw new Error('Failed to create user');
       }
       
-      // Update the profile with additional information
+      // Update the profile with additional information including first_name and last_name
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
+          first_name: customer.first_name || '',
+          last_name: customer.last_name || '',
           phone: customer.phone || '',
           role: 'customer'
         })
