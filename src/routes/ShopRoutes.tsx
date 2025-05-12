@@ -20,43 +20,56 @@ import Layout from "@/components/layout/Layout";
 const ShopRoutes = () => {
   return (
     <Routes>
-      {/* Login route should be accessible without authentication */}
+      {/* Public route */}
       <Route path="login" element={<ShopLogin />} />
       
-      {/* All protected routes - wrapped in a single Layout */}
-      <Route element={
-        <ProtectedRoute>
-          <Layout portalType="shop">
-            <Routes>
-              <Route path="/" element={<ShopDashboard />} />
-              <Route path="profile" element={<ShopProfile />} />
-              <Route path="reports" element={<ShopReports />} />
-              <Route path="employees" element={<ShopEmployees />} />
-              <Route path="inventory" element={<ShopInventory />} />
-              <Route path="work-orders" element={<ShopWorkOrders />} />
-              <Route path="customers" element={<ShopCustomers />} />
-              <Route path="estimates" element={<ShopEstimates />} />
-              <Route path="invoices" element={<ShopInvoices />} />
-              <Route path="users" element={
-                <ProtectedRoute requiredRole="admin">
-                  <ShopUserManagement />
-                </ProtectedRoute>
-              } />
-              <Route path="admin" element={
-                <ProtectedRoute requiredRole="admin">
-                  <ShopAdminDashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="admin/system-health" element={
-                <ProtectedRoute requiredRole="admin">
-                  <SystemHealth />
-                </ProtectedRoute>
-              } />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Layout>
-        </ProtectedRoute>
-      } />
+      {/* All protected routes with a shared layout */}
+      <Route 
+        element={
+          <ProtectedRoute>
+            <Layout portalType="shop" />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<ShopDashboard />} />
+        <Route path="profile" element={<ShopProfile />} />
+        <Route path="reports" element={<ShopReports />} />
+        <Route path="employees" element={<ShopEmployees />} />
+        <Route path="inventory" element={<ShopInventory />} />
+        <Route path="work-orders" element={<ShopWorkOrders />} />
+        <Route path="customers" element={<ShopCustomers />} />
+        <Route path="estimates" element={<ShopEstimates />} />
+        <Route path="invoices" element={<ShopInvoices />} />
+        
+        {/* Admin-only routes */}
+        <Route 
+          path="users" 
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <ShopUserManagement />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="admin" 
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <ShopAdminDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="admin/system-health" 
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <SystemHealth />
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* Catch all not found route */}
+        <Route path="*" element={<NotFound />} />
+      </Route>
     </Routes>
   );
 };
