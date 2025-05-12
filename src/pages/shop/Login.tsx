@@ -52,6 +52,7 @@ const ShopLogin = () => {
           data: {
             first_name: firstName,
             last_name: lastName,
+            role: 'staff', // Explicitly set role to 'staff' for shop portal signups
           },
         }
       });
