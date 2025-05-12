@@ -1,0 +1,171 @@
+
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { Estimate } from '../../estimates/types';
+
+export function useInvoiceData() {
+  const { toast } = useToast();
+  const [customerId, setCustomerId] = useState<string>('');
+  const [vehicleOptions, setVehicleOptions] = useState<{ value: string; label: string; }[]>([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
+  const [customerDetails, setCustomerDetails] = useState<{ first_name?: string; last_name?: string; email: string; } | null>(null);
+  const [sourceEstimateId, setSourceEstimateId] = useState<string | null>(null);
+  const [openEstimates, setOpenEstimates] = useState<Estimate[]>([]);
+
+  // Fetch open estimates
+  useEffect(() => {
+    const fetchOpenEstimates = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('estimates')
+          .select(`
+            *,
+            profiles!estimates_customer_id_fkey (
+              first_name,
+              last_name,
+              email
+            ),
+            vehicles (
+              make, 
+              model, 
+              year
+            )
+          `)
+          .in('status', ['pending', 'approved']) // Only get pending or approved estimates
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Error fetching estimates:', error);
+          setOpenEstimates([]);
+          return;
+        }
+        
+        // Initialize with empty array if data is undefined
+        const transformedData = data ? data.map(item => {
+          const profileData = item.profiles ? {
+            first_name: item.profiles.first_name || '',
+            last_name: item.profiles.last_name || '',
+            email: item.profiles.email || ''
+          } : null;
+          
+          const vehicleData = item.vehicles ? {
+            make: item.vehicles.make || '',
+            model: item.vehicles.model || '',
+            year: item.vehicles.year || 0
+          } : null;
+          
+          return {
+            ...item,
+            profiles: profileData,
+            vehicles: vehicleData
+          };
+        }) : [];
+
+        setOpenEstimates(transformedData);
+      } catch (error) {
+        console.error('Error fetching estimates:', error);
+        setOpenEstimates([]);
+      }
+    };
+
+    fetchOpenEstimates();
+  }, []);
+
+  const fetchCustomerDetails = async (customerId: string) => {
+    if (!customerId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', customerId)
+        .single();
+      
+      if (error) throw error;
+      
+      setCustomerDetails({
+        first_name: data.first_name || undefined,
+        last_name: data.last_name || undefined,
+        email: data.email,
+      });
+    } catch (error) {
+      console.error('Error fetching customer details:', error);
+      setCustomerDetails(null);
+    }
+  };
+
+  const fetchVehicleOptions = async (customerId: string) => {
+    if (!customerId) {
+      setVehicleOptions([]);
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('*')
+        .eq('owner_id', customerId);
+      
+      if (error) throw error;
+      
+      const options = (data || []).map(vehicle => ({
+        value: vehicle.id,
+        label: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+      }));
+      
+      setVehicleOptions(options);
+    } catch (error) {
+      console.error('Error fetching vehicle options:', error);
+      setVehicleOptions([]);
+    }
+  };
+
+  useEffect(() => {
+    if (customerId) {
+      fetchCustomerDetails(customerId);
+      fetchVehicleOptions(customerId);
+    } else {
+      setVehicleOptions([]);
+      setSelectedVehicleId('');
+      setCustomerDetails(null);
+    }
+  }, [customerId]);
+
+  const handleEstimateSelection = (estimateId: string) => {
+    const selectedEstimate = openEstimates.find(est => est.id === estimateId);
+    if (!selectedEstimate) return;
+    
+    setSourceEstimateId(selectedEstimate.id);
+    
+    // Set customer and vehicle if available
+    if (selectedEstimate.customer_id) {
+      setCustomerId(selectedEstimate.customer_id);
+    }
+    
+    if (selectedEstimate.vehicle_id) {
+      setSelectedVehicleId(selectedEstimate.vehicle_id);
+    }
+    
+    return selectedEstimate;
+  };
+
+  const setVehicleId = (vehicleId: string) => {
+    setSelectedVehicleId(vehicleId);
+  };
+
+  return {
+    customerId,
+    setCustomerId,
+    vehicleOptions,
+    selectedVehicleId,
+    setVehicleId,
+    customerDetails,
+    sourceEstimateId,
+    setSourceEstimateId,
+    openEstimates,
+    handleEstimateSelection,
+    fetchCustomerDetails,
+    fetchVehicleOptions,
+  };
+}
