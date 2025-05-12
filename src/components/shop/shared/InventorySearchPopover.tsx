@@ -34,6 +34,12 @@ export const InventorySearchPopover = ({
     }
   }, [isOpen]);
 
+  // Handle item selection
+  const handleSelectItem = (value: string, item: InventoryItem) => {
+    console.log("InventorySearchPopover: Item selected:", item);
+    onSelect(item);
+  };
+
   return (
     <Popover open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <PopoverTrigger asChild>
@@ -54,7 +60,7 @@ export const InventorySearchPopover = ({
                 <CommandItem
                   key={item.id}
                   value={`${item.sku || ''}-${item.name}`}
-                  onSelect={() => onSelect(item)}
+                  onSelect={() => handleSelectItem(`${item.sku || ''}-${item.name}`, item)}
                 >
                   <div className="w-full flex flex-col">
                     <div className="flex justify-between items-center w-full">

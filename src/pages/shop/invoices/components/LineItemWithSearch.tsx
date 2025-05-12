@@ -43,11 +43,13 @@ export const LineItemWithSearch = ({
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, searchInventory]);
 
-  const handleSelectInventoryItem = (item: any) => {
-    onUpdate(index, 'part_number', item.sku || '');
-    onUpdate(index, 'description', item.name);
-    onUpdate(index, 'price', item.price || 0);
-    onUpdate(index, 'vendor', item.supplier || '');
+  const handleSelectInventoryItem = (inventoryItem: any) => {
+    console.log("Selected inventory item:", inventoryItem);
+    onUpdate(index, 'part_number', inventoryItem.sku || '');
+    onUpdate(index, 'description', inventoryItem.name);
+    onUpdate(index, 'price', inventoryItem.price || 0);
+    onUpdate(index, 'vendor', inventoryItem.supplier || '');
+    setDescription(inventoryItem.name);
     setShowItemResults(false);
     setSearchTerm('');
   };
