@@ -21,4 +21,4 @@ export interface ExtendedDatabase {
 }
 
 // Export the original database type with a different name for reference if needed
-export { OriginalDatabase };
+export type { OriginalDatabase };

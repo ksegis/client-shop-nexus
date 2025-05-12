@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, ExtendedRole } from './types';
 import { useEmployees } from './EmployeesContext';
-import { Database, ExtendedUserRole } from '@/integrations/supabase/types-extensions';
+import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 import { FormActions } from '../inventory/components/FormActions';
 import { NameFields } from './components/NameFields';
 import { ContactFields } from './components/ContactFields';
