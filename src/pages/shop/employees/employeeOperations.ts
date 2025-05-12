@@ -2,7 +2,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, ExtendedRole } from './types';
 import { useToast } from '@/hooks/use-toast';
-import { Database, ExtendedUserRole } from '@/integrations/supabase/types-extensions';
+import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 
 export const useEmployeeOperations = (refetch: () => Promise<void>) => {
   const { toast } = useToast();
@@ -33,7 +33,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
-            role: role as unknown as Database['public']['Enums']['user_role'],
+            role: role as unknown as string,
             first_name: employee.first_name || '',
             last_name: employee.last_name || '',
             phone: employee.phone || '',
@@ -71,7 +71,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
           last_name: employee.last_name,
           email: employee.email,
           phone: employee.phone,
-          role: roleValue as unknown as Database['public']['Enums']['user_role'],
+          role: roleValue as unknown as string,
         })
         .eq('id', id);
       
@@ -119,7 +119,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
       
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ role: newRole as unknown as Database['public']['Enums']['user_role'] })
+        .update({ role: newRole as unknown as string })
         .eq('id', id);
       
       if (updateError) throw updateError;

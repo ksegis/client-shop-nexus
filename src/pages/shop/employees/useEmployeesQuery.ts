@@ -2,7 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, ExtendedRole } from './types';
-import { Database, ExtendedUserRole } from '@/integrations/supabase/types-extensions';
+import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 
 export const useEmployeesQuery = () => {
   return useQuery({
@@ -15,7 +15,7 @@ export const useEmployeesQuery = () => {
         const { data, error: queryError } = await supabase
           .from('profiles')
           .select('*')
-          .in('role', allowedRoles as unknown as Array<Database['public']['Enums']['user_role']>)
+          .in('role', allowedRoles as unknown as string[])
           .order('created_at', { ascending: false });
           
         if (queryError) throw queryError;

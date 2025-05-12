@@ -7,16 +7,18 @@ export type ExtendedUserRole =
   'inactive_staff' | 
   'inactive_admin';
 
-// This helps us override the type from Supabase
-declare module './types' {
-  interface Database extends OriginalDatabase {
-    public: {
-      Enums: {
-        user_role: ExtendedUserRole;
-      } & Omit<OriginalDatabase['public']['Enums'], 'user_role'>;
-    } & Omit<OriginalDatabase['public'], 'Enums'>;
+// Export the Database type to be used throughout the application
+export type Database = {
+  public: {
+    Tables: OriginalDatabase['public']['Tables'];
+    Views: OriginalDatabase['public']['Views'];
+    Functions: OriginalDatabase['public']['Functions'];
+    Enums: {
+      user_role: ExtendedUserRole;
+    } & Omit<OriginalDatabase['public']['Enums'], 'user_role'>;
+    CompositeTypes: OriginalDatabase['public']['CompositeTypes'];
   }
-}
+};
 
 // Export the original database type with a different name for reference if needed
 export type { OriginalDatabase };

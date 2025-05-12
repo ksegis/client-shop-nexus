@@ -22,7 +22,7 @@ export const useVehicleManagement = () => {
       const { data, error } = await supabase
         .from('vehicles')
         .select('*')
-        .eq('owner_id', user.id)
+        .eq('owner_id', user?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -55,7 +55,7 @@ export const useVehicleManagement = () => {
       // Convert year to number for database insertion
       const dbVehicleData = {
         ...vehicleData,
-        year: parseInt(vehicleData.year), // This converts string to number
+        year: Number(vehicleData.year), // Convert string to number explicitly
         owner_id: user.id
       };
 
@@ -94,9 +94,9 @@ export const useVehicleManagement = () => {
   const updateVehicle = async (id: string, vehicleData: Partial<Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>>) => {
     try {
       // Convert year to number if it's included in the update data
-      const dbVehicleData = { ...vehicleData };
+      const dbVehicleData: any = { ...vehicleData };
       if (vehicleData.year) {
-        dbVehicleData.year = parseInt(vehicleData.year); // Convert string to number
+        dbVehicleData.year = Number(vehicleData.year); // Convert string to number explicitly
       }
 
       const { data, error } = await supabase
