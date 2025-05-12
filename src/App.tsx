@@ -25,7 +25,6 @@ import ShopEmployees from "./pages/shop/Employees";
 import ShopInventory from "./pages/shop/Inventory";
 import ShopWorkOrders from "./pages/shop/WorkOrders";
 import ShopCustomers from "./pages/shop/Customers";
-import ShopEstimates from "./pages/shop/Estimates";
 import ShopInvoices from "./pages/shop/invoices";
 import ShopProfile from "./pages/shop/Profile";
 
@@ -163,16 +162,6 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ShopCustomers />
-                </ProtectedRoute>
-              } 
-            />
-            
-            {/* Estimates Route */}
-            <Route 
-              path="/shop/estimates" 
-              element={
-                <ProtectedRoute>
-                  <ShopEstimates />
                 </ProtectedRoute>
               } 
             />
