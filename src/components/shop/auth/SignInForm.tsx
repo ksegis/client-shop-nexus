@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,12 +15,19 @@ const SignInForm = () => {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
+  // Clear error when inputs change
+  useEffect(() => {
+    if (error) setError(null);
+  }, [email, password]);
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     
     if (!email || !password) {
       toast({
@@ -35,11 +42,27 @@ const SignInForm = () => {
     
     try {
       console.log("SignIn: Attempting to sign in with email:", email);
-      await signIn(email, password, rememberMe);
-      console.log("SignIn: Sign-in successful, navigating to /shop");
-      navigate('/shop');
+      
+      // Convert to Promise.then pattern to avoid potential Supabase deadlock
+      await new Promise<void>((resolve, reject) => {
+        signIn(email, password, rememberMe)
+          .then(() => {
+            console.log("SignIn: Sign-in successful");
+            resolve();
+          })
+          .catch((err) => {
+            console.error("SignIn promise rejection:", err);
+            reject(err);
+          });
+      });
+      
+      // Only navigate after successful login
+      console.log("SignIn: Navigating to /shop");
+      navigate('/shop', { replace: true });
+      
     } catch (error: any) {
       console.error("SignIn error:", error);
+      setError(error.message || "An unexpected error occurred");
       toast({
         title: "Login failed",
         description: error.message || "An unexpected error occurred",
@@ -53,6 +76,12 @@ const SignInForm = () => {
   return (
     <form onSubmit={handleSignIn}>
       <CardContent className="space-y-4 pt-4">
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-md text-sm">
+            {error}
+          </div>
+        )}
+        
         <div className="space-y-2">
           <Label htmlFor="signin-email">Email</Label>
           <Input 
@@ -63,6 +92,7 @@ const SignInForm = () => {
             onChange={(e) => setEmail(e.target.value)}
             required
             disabled={loading}
+            className={error ? "border-red-300" : ""}
           />
         </div>
         <div className="space-y-2">
@@ -74,6 +104,7 @@ const SignInForm = () => {
             onChange={(e) => setPassword(e.target.value)}
             required
             disabled={loading}
+            className={error ? "border-red-300" : ""}
           />
         </div>
         
@@ -104,6 +135,17 @@ const SignInForm = () => {
             </>
           ) : "Sign In"}
         </Button>
+        
+        <div className="text-sm text-center text-gray-500">
+          <button
+            type="button"
+            className="text-primary hover:underline"
+            disabled={loading}
+            onClick={() => navigate('/shop/reset-password')}
+          >
+            Forgot password?
+          </button>
+        </div>
       </CardContent>
     </form>
   );

@@ -25,138 +25,94 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     console.log("Setting up auth state listener");
-    let authStateSubscription: { unsubscribe: () => void };
     
-    try {
-      // Set up auth state listener FIRST
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        (event, session) => {
-          console.log("Auth state changed:", event, session?.user?.email);
-          
-          if (session?.user) {
-            // Handle synchronous state updates immediately
-            setUser(session.user);
-            setSession(session);
-            setLoading(false);
-            
-            // Use setTimeout to prevent potential deadlock with Supabase client
-            if (session.user.id) {
-              setTimeout(async () => {
-                try {
-                  // Get profile data to enhance user object with role information
-                  const { data: profile, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('role')
-                    .eq('id', session.user.id)
-                    .single();
-                    
-                  if (profileError) {
-                    console.error("Error fetching profile:", profileError);
-                    return;
-                  }
-                  
-                  // If we have profile data with a role, add it to the user's metadata
-                  if (profile?.role) {
-                    // Update the user object with role from profile
-                    const updatedUser = {
-                      ...session.user,
-                      app_metadata: {
-                        ...session.user.app_metadata,
-                        role: profile.role
-                      }
-                    };
-                    setUser(updatedUser);
-                    console.log("Updated user with role from profile:", profile.role);
-                  }
-                } catch (error) {
-                  console.error("Error in profile fetch after auth change:", error);
-                }
-              }, 0);
-            }
-          } else {
-            setUser(null);
-            setSession(null);
-            setLoading(false);
-          }
-          
-          // On sign out, redirect to login page
-          if (event === 'SIGNED_OUT') {
-            navigate('/shop/login', { replace: true });
-          }
-        }
-      );
-      
-      authStateSubscription = subscription;
-    } catch (error) {
-      console.error("Error setting up auth listener:", error);
-      setLoading(false);
-    }
-
-    // THEN check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log("Initial session check:", session?.user?.email);
-      
-      if (session?.user) {
-        // Set user and session state immediately
-        setUser(session.user);
-        setSession(session);
+    // Set up auth state listener FIRST (important to prevent deadlocks)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, currentSession) => {
+        console.log("Auth state changed:", event, currentSession?.user?.email);
         
-        // Fetch profile data separately to avoid deadlocks
-        setTimeout(async () => {
-          try {
-            // Get profile data to enhance user object with role information
-            const { data: profile, error: profileError } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', session.user.id)
-              .single();
-              
-            if (profileError) {
-              console.error("Error fetching profile:", profileError);
-              setLoading(false);
-              return;
-            }
-              
-            // If we have profile data with a role, add it to the user's metadata
-            if (profile?.role) {
-              // Update the user object with role from profile
-              const updatedUser = {
-                ...session.user,
-                app_metadata: {
-                  ...session.user.app_metadata,
-                  role: profile.role
-                }
-              };
-              setUser(updatedUser);
-              console.log("Initial: Updated user with role from profile:", profile.role);
-            }
-          } catch (error) {
-            console.error("Error in initial profile fetch:", error);
-          } finally {
-            setLoading(false);
-          }
-        }, 0);
-      } else {
-        // No session found
-        setUser(null);
-        setSession(null);
+        // Handle synchronous state updates immediately
+        setUser(currentSession?.user ?? null);
+        setSession(currentSession);
+        
+        if (event === 'SIGNED_OUT') {
+          console.log("User signed out, redirecting to login");
+          navigate('/shop/login', { replace: true });
+        }
+        
+        // Mark loading as false after any auth change
         setLoading(false);
       }
-    }).catch(error => {
-      console.error("Failed to get session:", error);
-      setLoading(false);
-    });
+    );
+    
+    // THEN check for existing session (with a slight delay to avoid race conditions)
+    setTimeout(() => {
+      supabase.auth.getSession()
+        .then(({ data: { session: initialSession } }) => {
+          console.log("Initial session check:", initialSession?.user?.email);
+          
+          if (initialSession?.user) {
+            setUser(initialSession.user);
+            setSession(initialSession);
+            
+            // Fetch profile data in a separate non-blocking operation
+            if (initialSession.user.id) {
+              fetchUserProfile(initialSession.user.id);
+            }
+          }
+          
+          // Make sure loading is set to false after initial session check
+          setLoading(false);
+        })
+        .catch(error => {
+          console.error("Failed to get session:", error);
+          setLoading(false);
+        });
+    }, 100);
 
     return () => {
-      if (authStateSubscription) {
-        authStateSubscription.unsubscribe();
-      }
+      subscription.unsubscribe();
     };
   }, [navigate]);
+
+  // Separate function to fetch user profile data
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      console.log("Fetching profile for user:", userId);
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+        
+      if (error) {
+        console.error("Error fetching profile:", error);
+        return;
+      }
+      
+      if (profile?.role) {
+        console.log("Got user role from profile:", profile.role);
+        setUser(currentUser => {
+          if (!currentUser) return null;
+          return {
+            ...currentUser,
+            app_metadata: {
+              ...currentUser.app_metadata,
+              role: profile.role
+            }
+          };
+        });
+      }
+    } catch (error) {
+      console.error("Error in fetchUserProfile:", error);
+    }
+  };
 
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
     try {
       setLoading(true);
+      console.log("Attempting signup for:", email);
+      
       const { error, data } = await supabase.auth.signUp({
         email,
         password,
@@ -177,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       return Promise.resolve();
     } catch (error: any) {
+      console.error("Signup error:", error.message);
       toast({
         title: "Error creating account",
         description: error.message,
@@ -207,17 +164,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Configure session persistence after successful sign-in
       if (!rememberMe && data.session) {
-        // If "Remember me" is not checked, set session to expire when browser is closed
-        await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        });
+        try {
+          await supabase.auth.setSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          });
+        } catch (sessionError) {
+          console.error("Error setting session persistence:", sessionError);
+        }
       }
       
       // We don't navigate here - let the component handle navigation
       return Promise.resolve();
     } catch (error: any) {
       console.error("AuthContext: Sign in failed:", error);
+      // Make sure to reject with the original error to allow proper handling in the component
       return Promise.reject(error);
     } finally {
       setLoading(false);
@@ -227,9 +188,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       setLoading(true);
+      console.log("Signing out...");
       const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      
+      if (error) {
+        console.error("Sign out error:", error);
+        throw error;
+      }
+      
+      // Clear local state immediately for better UX
+      setUser(null);
+      setSession(null);
+      
     } catch (error: any) {
+      console.error("Sign out failed:", error);
       toast({
         title: "Sign out failed",
         description: error.message,
