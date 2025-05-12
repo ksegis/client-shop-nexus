@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, ExtendedRole } from './types';
 import { useEmployees } from './EmployeesContext';
+import { Database } from '@/integrations/supabase/types-extensions';
 
 // We need to define the roles as just 'staff' | 'admin' for the form
 // since we don't want to let users directly select 'inactive_*' roles
@@ -108,7 +109,7 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
             last_name: values.last_name,
             email: values.email,
             phone: values.phone,
-            role: updatedRole,
+            role: updatedRole as unknown as Database['public']['Enums']['user_role'],
           })
           .eq('id', employeeData.id);
 

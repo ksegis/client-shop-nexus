@@ -2,6 +2,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, ExtendedRole } from './types';
 import { useToast } from '@/hooks/use-toast';
+import { Database } from '@/integrations/supabase/types-extensions';
 
 export const useEmployeeOperations = (refetch: () => Promise<void>) => {
   const { toast } = useToast();
@@ -27,12 +28,12 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
       // Directly update the profile since signUp already creates it
       if (authData?.user) {
         // Ensure the role is correctly typed
-        const role: ExtendedRole = (employee.role || 'staff') as ExtendedRole;
+        const role = (employee.role || 'staff') as ExtendedRole;
         
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
-            role,
+            role: role as unknown as Database['public']['Enums']['user_role'],
             first_name: employee.first_name || '',
             last_name: employee.last_name || '',
             phone: employee.phone || '',
@@ -70,7 +71,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
           last_name: employee.last_name,
           email: employee.email,
           phone: employee.phone,
-          role: roleValue,
+          role: roleValue as unknown as Database['public']['Enums']['user_role'],
         })
         .eq('id', id);
       
@@ -118,7 +119,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
       
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ role: newRole })
+        .update({ role: newRole as unknown as Database['public']['Enums']['user_role'] })
         .eq('id', id);
       
       if (updateError) throw updateError;
