@@ -15,6 +15,7 @@ import { WorkOrderForm } from './WorkOrderForm';
 import { useWorkOrders } from './WorkOrdersContext';
 import { WorkOrder } from './types';
 import { Plus, Edit } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 // Schema for form validation
 export const workOrderSchema = z.object({
@@ -39,7 +40,9 @@ interface WorkOrderDialogProps {
 
 export const WorkOrderDialog = ({ workOrder }: WorkOrderDialogProps) => {
   const [open, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { createWorkOrder, updateWorkOrder } = useWorkOrders();
+  const { toast } = useToast();
   const isEditing = !!workOrder;
 
   const form = useForm<WorkOrderFormValues>({
@@ -61,15 +64,26 @@ export const WorkOrderDialog = ({ workOrder }: WorkOrderDialogProps) => {
 
   const onSubmit = async (data: WorkOrderFormValues) => {
     try {
-      if (isEditing) {
+      setIsSubmitting(true);
+      console.log("Form submitted with data:", data);
+      
+      if (isEditing && workOrder) {
         await updateWorkOrder(workOrder.id, data);
       } else {
         await createWorkOrder(data);
       }
+      
       setOpen(false);
       form.reset();
     } catch (error) {
       console.error('Error saving work order:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to ${isEditing ? 'update' : 'create'} work order. Please try again.`,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -95,7 +109,8 @@ export const WorkOrderDialog = ({ workOrder }: WorkOrderDialogProps) => {
           form={form} 
           onSubmit={onSubmit} 
           isEditing={isEditing} 
-          onCancel={() => setOpen(false)} 
+          onCancel={() => setOpen(false)}
+          isSubmitting={isSubmitting}
         />
       </DialogContent>
     </Dialog>

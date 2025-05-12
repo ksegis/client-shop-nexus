@@ -47,23 +47,31 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
 
   const createWorkOrder = async (workOrder: Partial<WorkOrder>) => {
     try {
+      console.log("Creating work order with data:", workOrder);
+      
       // Using the generic query method
-      const { error: insertError } = await supabase
+      const { data, error: insertError } = await supabase
         .from('work_orders' as any)
-        .insert([workOrder as any]);
+        .insert([workOrder as any])
+        .select();
       
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error("Error creating work order:", insertError);
+        throw insertError;
+      }
       
+      console.log("Work order created successfully:", data);
       await refetch();
       toast({
         title: "Success",
         description: "Work order created successfully",
       });
     } catch (error) {
+      console.error("Error in createWorkOrder function:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: `Failed to create work order: ${(error as Error).message}`,
+        description: `Failed to create work order: ${(error as Error).message || 'Unknown error'}`,
       });
       throw error;
     }
@@ -71,13 +79,18 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
 
   const updateWorkOrder = async (id: string, updatedWorkOrder: Partial<WorkOrder>) => {
     try {
+      console.log("Updating work order:", id, updatedWorkOrder);
+      
       // Using the generic query method
       const { error: updateError } = await supabase
         .from('work_orders' as any)
         .update(updatedWorkOrder as any)
         .eq('id', id);
       
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error("Error updating work order:", updateError);
+        throw updateError;
+      }
       
       await refetch();
       toast({
@@ -85,10 +98,11 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
         description: "Work order updated successfully",
       });
     } catch (error) {
+      console.error("Error in updateWorkOrder function:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: `Failed to update work order: ${(error as Error).message}`,
+        description: `Failed to update work order: ${(error as Error).message || 'Unknown error'}`,
       });
       throw error;
     }

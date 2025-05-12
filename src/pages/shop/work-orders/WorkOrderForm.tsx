@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useForm, UseFormReturn } from 'react-hook-form';
 import {
@@ -22,12 +21,14 @@ import { Button } from '@/components/ui/button';
 import { WorkOrderFormValues } from './WorkOrderDialog';
 import { DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
+import { Loader2 } from 'lucide-react';
 
 interface WorkOrderFormProps {
   form: UseFormReturn<WorkOrderFormValues>;
   onSubmit: (data: WorkOrderFormValues) => Promise<void>;
   isEditing: boolean;
   onCancel: () => void;
+  isSubmitting?: boolean;
 }
 
 interface Customer {
@@ -44,7 +45,7 @@ interface Vehicle {
   owner_id: string;
 }
 
-export const WorkOrderForm = ({ form, onSubmit, isEditing, onCancel }: WorkOrderFormProps) => {
+export const WorkOrderForm = ({ form, onSubmit, isEditing, onCancel, isSubmitting = false }: WorkOrderFormProps) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,6 +55,7 @@ export const WorkOrderForm = ({ form, onSubmit, isEditing, onCancel }: WorkOrder
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
+        setLoading(true);
         const { data, error } = await supabase
           .from('profiles')
           .select('id, first_name, last_name')
@@ -68,6 +70,8 @@ export const WorkOrderForm = ({ form, onSubmit, isEditing, onCancel }: WorkOrder
         }
       } catch (error) {
         console.error('Error fetching customers:', error);
+      } finally {
+        setLoading(false);
       }
     };
     
@@ -83,6 +87,7 @@ export const WorkOrderForm = ({ form, onSubmit, isEditing, onCancel }: WorkOrder
       }
       
       try {
+        setLoading(true);
         const { data, error } = await supabase
           .from('vehicles')
           .select('id, make, model, year, owner_id')
@@ -93,6 +98,8 @@ export const WorkOrderForm = ({ form, onSubmit, isEditing, onCancel }: WorkOrder
         setVehicles(data || []);
       } catch (error) {
         console.error('Error fetching vehicles:', error);
+      } finally {
+        setLoading(false);
       }
     };
     
@@ -159,6 +166,7 @@ export const WorkOrderForm = ({ form, onSubmit, isEditing, onCancel }: WorkOrder
                 <Select
                   onValueChange={handleCustomerChange}
                   defaultValue={field.value}
+                  disabled={loading}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -187,7 +195,7 @@ export const WorkOrderForm = ({ form, onSubmit, isEditing, onCancel }: WorkOrder
                 <Select
                   onValueChange={field.onChange}
                   defaultValue={field.value}
-                  disabled={!selectedCustomer}
+                  disabled={!selectedCustomer || loading}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -288,11 +296,18 @@ export const WorkOrderForm = ({ form, onSubmit, isEditing, onCancel }: WorkOrder
         />
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" disabled={loading}>
-            {isEditing ? 'Update Work Order' : 'Create Work Order'}
+          <Button type="submit" disabled={isSubmitting || loading}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {isEditing ? 'Updating...' : 'Creating...'}
+              </>
+            ) : (
+              isEditing ? 'Update Work Order' : 'Create Work Order'
+            )}
           </Button>
         </DialogFooter>
       </form>
