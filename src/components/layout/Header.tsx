@@ -8,10 +8,7 @@ import {
   User, 
   LogOut, 
   Settings, 
-  Facebook, 
-  Instagram, 
-  Twitter, 
-  Linkedin 
+  Shield
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
@@ -33,6 +30,7 @@ const Header = ({ portalType }: HeaderProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const isAdmin = user?.app_metadata?.role === 'admin';
   
   const customerLinks = [
     { name: 'Profile', path: '/customer/profile' },
@@ -51,6 +49,11 @@ const Header = ({ portalType }: HeaderProps) => {
     { name: 'Estimates', path: '/shop/estimates' },
     { name: 'Invoices', path: '/shop/invoices' }
   ];
+  
+  // Add Users link for admin users
+  if (isAdmin && portalType === 'shop') {
+    shopLinks.push({ name: 'Users', path: '/shop/users' });
+  }
   
   const links = portalType === 'customer' ? customerLinks : shopLinks;
 
@@ -119,6 +122,17 @@ const Header = ({ portalType }: HeaderProps) => {
                     <span>Settings</span>
                   </Link>
                 </DropdownMenuItem>
+                {isAdmin && portalType === 'shop' && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to="/shop/users">
+                        <Shield className="mr-2 h-4 w-4" />
+                        <span>User Management</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />

@@ -1,3 +1,4 @@
+
 import React from "react";
 import {
   Sheet,
@@ -59,7 +60,7 @@ const navigationItems = [
     icon: Settings,
   },
   {
-    title: "User Management",
+    title: "Users",
     href: "/shop/users",
     icon: Shield,
     adminOnly: true
@@ -68,6 +69,8 @@ const navigationItems = [
 
 export const Sidebar = ({ children }: Props) => {
   const { user } = useAuth();
+  
+  const isAdmin = user?.app_metadata?.role === 'admin';
 
   return (
     <div className="md:flex">
@@ -86,7 +89,7 @@ export const Sidebar = ({ children }: Props) => {
           </SheetHeader>
           <div className="py-4">
             {navigationItems
-              .filter(item => !item.adminOnly || user?.role === 'admin')
+              .filter(item => !item.adminOnly || isAdmin)
               .map((item) => (
                 <SidebarItem 
                   key={item.href}
