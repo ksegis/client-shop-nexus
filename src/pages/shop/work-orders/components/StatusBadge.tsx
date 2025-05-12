@@ -7,37 +7,28 @@ interface StatusBadgeProps {
 }
 
 export const StatusBadge = ({ status }: StatusBadgeProps) => {
-  const getVariant = () => {
-    switch (status) {
-      case 'pending':
-        return 'secondary';
-      case 'in_progress':
-        return 'default';
-      case 'completed':
-        return 'outline';
-      case 'cancelled':
-        return 'destructive';
-      default:
-        return 'outline';
-    }
-  };
-
-  const getLabel = () => {
-    switch (status) {
-      case 'pending':
-        return 'Pending';
-      case 'in_progress':
-        return 'In Progress';
-      case 'completed':
-        return 'Completed';
-      case 'cancelled':
-        return 'Cancelled';
-      default:
-        return status;
-    }
-  };
-
+  let variant: 'default' | 'outline' | 'secondary' | 'destructive' = 'default';
+  
+  switch (status) {
+    case 'pending':
+      variant = 'secondary';
+      break;
+    case 'in_progress':
+      variant = 'default';
+      break;
+    case 'completed':
+      variant = 'outline';
+      break;
+    case 'cancelled':
+      variant = 'destructive';
+      break;
+    default:
+      variant = 'default';
+  }
+  
   return (
-    <Badge variant={getVariant() as any}>{getLabel()}</Badge>
+    <Badge variant={variant}>
+      {status === 'in_progress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1)}
+    </Badge>
   );
 };

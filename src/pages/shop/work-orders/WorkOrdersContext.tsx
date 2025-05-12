@@ -25,9 +25,8 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     queryKey: ['workOrders'],
     queryFn: async () => {
       try {
-        // Using the generic query method instead of the typed methods
         const { data, error: queryError } = await supabase
-          .from('work_orders' as any)
+          .from('work_orders')
           .select(`
             *,
             vehicle:vehicles(*),
@@ -49,10 +48,9 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     try {
       console.log("Creating work order with data:", workOrder);
       
-      // Using the generic query method
       const { data, error: insertError } = await supabase
-        .from('work_orders' as any)
-        .insert([workOrder as any])
+        .from('work_orders')
+        .insert([workOrder])
         .select();
       
       if (insertError) {
@@ -86,10 +84,9 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
     try {
       console.log("Updating work order:", id, updatedWorkOrder);
       
-      // Using the generic query method
       const { error: updateError } = await supabase
-        .from('work_orders' as any)
-        .update(updatedWorkOrder as any)
+        .from('work_orders')
+        .update(updatedWorkOrder)
         .eq('id', id);
       
       if (updateError) {
@@ -120,9 +117,8 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
 
   const deleteWorkOrder = async (id: string) => {
     try {
-      // Using the generic query method
       const { error: deleteError } = await supabase
-        .from('work_orders' as any)
+        .from('work_orders')
         .delete()
         .eq('id', id);
       

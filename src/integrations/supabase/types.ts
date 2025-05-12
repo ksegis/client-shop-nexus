@@ -426,6 +426,79 @@ export type Database = {
           },
         ]
       }
+      work_orders: {
+        Row: {
+          actual_cost: number | null
+          actual_hours: number | null
+          assigned_to: string | null
+          created_at: string
+          customer_id: string
+          description: string | null
+          estimated_cost: number | null
+          estimated_hours: number | null
+          id: string
+          priority: number | null
+          status: string
+          title: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          actual_cost?: number | null
+          actual_hours?: number | null
+          assigned_to?: string | null
+          created_at?: string
+          customer_id: string
+          description?: string | null
+          estimated_cost?: number | null
+          estimated_hours?: number | null
+          id?: string
+          priority?: number | null
+          status?: string
+          title: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          actual_cost?: number | null
+          actual_hours?: number | null
+          assigned_to?: string | null
+          created_at?: string
+          customer_id?: string
+          description?: string | null
+          estimated_cost?: number | null
+          estimated_hours?: number | null
+          id?: string
+          priority?: number | null
+          status?: string
+          title?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_orders_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
