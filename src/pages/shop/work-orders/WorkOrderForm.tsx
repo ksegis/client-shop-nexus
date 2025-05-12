@@ -11,7 +11,6 @@ import { NumericField } from './components/NumericField';
 import { DescriptionField } from './components/DescriptionField';
 import { FormActions } from './components/FormActions';
 import { LineItems } from './components/LineItems';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface WorkOrderFormProps {
   form: UseFormReturn<WorkOrderFormValues>;
@@ -34,7 +33,6 @@ export const WorkOrderForm = ({
 }: WorkOrderFormProps) => {
   const [loading, setLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<string>(form.getValues('customer_id') || '');
-  const [activeTab, setActiveTab] = useState('details');
 
   const handleCustomerChange = (value: string) => {
     setSelectedCustomer(value);
@@ -53,81 +51,79 @@ export const WorkOrderForm = ({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 pt-4">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="line-items">Line Items</TabsTrigger>
-          </TabsList>
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6 pt-4">
+        <div className="space-y-6">
+          <TitleField form={form} />
           
-          <TabsContent value="details" className="space-y-4">
-            <TitleField form={form} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <StatusSelect form={form} />
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <StatusSelect form={form} />
-              
-              <NumericField 
-                form={form} 
-                name="priority" 
-                label="Priority (1-5)" 
-                min="1"
-                max="5"
-              />
-
-              <CustomerSelect 
-                form={form} 
-                loading={loading} 
-                onCustomerChange={handleCustomerChange}
-                selectedCustomer={selectedCustomer}
-              />
-
-              <VehicleSelect 
-                form={form} 
-                loading={loading}
-                selectedCustomerId={selectedCustomer} 
-              />
-
-              <NumericField 
-                form={form} 
-                name="estimated_hours" 
-                label="Estimated Hours" 
-              />
-
-              <NumericField 
-                form={form} 
-                name="estimated_cost" 
-                label="Estimated Cost" 
-              />
-
-              <NumericField 
-                form={form} 
-                name="actual_hours" 
-                label="Actual Hours" 
-              />
-
-              <NumericField 
-                form={form} 
-                name="actual_cost" 
-                label="Actual Cost" 
-              />
-            </div>
-
-            <DescriptionField form={form} />
-          </TabsContent>
-          
-          <TabsContent value="line-items">
-            <LineItems 
-              items={lineItems}
-              onChange={onLineItemsChange}
+            <NumericField 
+              form={form} 
+              name="priority" 
+              label="Priority (1-5)" 
+              min="1"
+              max="5"
             />
-          </TabsContent>
-        </Tabs>
 
-        <FormActions 
-          onCancel={onCancel} 
-          isSubmitting={isSubmitting} 
-          isEditing={isEditing}
-        />
+            <CustomerSelect 
+              form={form} 
+              loading={loading} 
+              onCustomerChange={handleCustomerChange}
+              selectedCustomer={selectedCustomer}
+            />
+
+            <VehicleSelect 
+              form={form} 
+              loading={loading}
+              selectedCustomerId={selectedCustomer} 
+            />
+          </div>
+
+          <DescriptionField form={form} />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <NumericField 
+              form={form} 
+              name="estimated_hours" 
+              label="Estimated Hours" 
+            />
+
+            <NumericField 
+              form={form} 
+              name="estimated_cost" 
+              label="Estimated Cost" 
+            />
+
+            <NumericField 
+              form={form} 
+              name="actual_hours" 
+              label="Actual Hours" 
+            />
+
+            <NumericField 
+              form={form} 
+              name="actual_cost" 
+              label="Actual Cost" 
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 pt-6">
+          <h3 className="text-lg font-medium mb-4">Line Items</h3>
+          <LineItems 
+            items={lineItems}
+            onChange={onLineItemsChange}
+          />
+        </div>
+        
+        <div className="border-t border-gray-200 pt-6">
+          <FormActions 
+            onCancel={onCancel} 
+            isSubmitting={isSubmitting} 
+            isEditing={isEditing}
+          />
+        </div>
       </form>
     </Form>
   );

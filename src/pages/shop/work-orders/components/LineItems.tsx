@@ -61,8 +61,12 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
     onChange(newItems);
   };
 
+  const calculateItemTotal = (quantity: number, price: number) => {
+    return quantity * price;
+  };
+
   const calculateSubtotal = () => {
-    return items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+    return items.reduce((sum, item) => sum + calculateItemTotal(item.quantity, item.price), 0);
   };
 
   return (
@@ -70,11 +74,11 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Part #</TableHead>
+            <TableHead className="w-[120px]">Part #</TableHead>
             <TableHead className="w-full">Description</TableHead>
-            <TableHead className="text-right">Quantity</TableHead>
-            <TableHead className="text-right">Price</TableHead>
-            <TableHead className="text-right">Total</TableHead>
+            <TableHead className="w-[100px] text-right">Quantity</TableHead>
+            <TableHead className="w-[120px] text-right">Price</TableHead>
+            <TableHead className="w-[120px] text-right">Total</TableHead>
             {!readOnly && <TableHead className="w-10"></TableHead>}
           </TableRow>
         </TableHeader>
@@ -95,7 +99,7 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
                     <Input 
                       value={item.part_number || ''}
                       onChange={(e) => handleItemChange(index, 'part_number', e.target.value)}
-                      className="max-w-[100px]"
+                      className="h-12 text-base"
                     />
                   )}
                 </TableCell>
@@ -106,6 +110,7 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
                     <Input 
                       value={item.description}
                       onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                      className="h-12 text-base"
                     />
                   )}
                 </TableCell>
@@ -117,7 +122,7 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
                       type="number"
                       value={item.quantity}
                       onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                      className="max-w-[80px] text-right"
+                      className="h-12 text-base text-right"
                     />
                   )}
                 </TableCell>
@@ -130,19 +135,21 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
                       step="0.01"
                       value={item.price}
                       onChange={(e) => handleItemChange(index, 'price', e.target.value)}
-                      className="max-w-[100px] text-right"
+                      className="h-12 text-base text-right"
                     />
                   )}
                 </TableCell>
-                <TableCell className="text-right font-medium">${(item.quantity * item.price).toFixed(2)}</TableCell>
+                <TableCell className="text-right font-medium">
+                  ${calculateItemTotal(item.quantity, item.price).toFixed(2)}
+                </TableCell>
                 {!readOnly && (
                   <TableCell>
                     <Button 
                       variant="ghost" 
-                      size="sm"
+                      size="icon"
                       onClick={() => handleRemoveItem(index)}
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-5 w-5 text-destructive" />
                     </Button>
                   </TableCell>
                 )}
@@ -157,7 +164,7 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
                   placeholder="Part #"
                   value={newItem.part_number || ''}
                   onChange={(e) => setNewItem({...newItem, part_number: e.target.value})}
-                  className="max-w-[100px]"
+                  className="h-12 text-base"
                 />
               </TableCell>
               <TableCell>
@@ -165,6 +172,7 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
                   placeholder="Description"
                   value={newItem.description || ''}
                   onChange={(e) => setNewItem({...newItem, description: e.target.value})}
+                  className="h-12 text-base"
                 />
               </TableCell>
               <TableCell className="text-right">
@@ -173,7 +181,7 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
                   placeholder="Qty"
                   value={newItem.quantity || ''}
                   onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
-                  className="max-w-[80px] text-right"
+                  className="h-12 text-base text-right"
                 />
               </TableCell>
               <TableCell className="text-right">
@@ -183,20 +191,20 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
                   placeholder="Price"
                   value={newItem.price || ''}
                   onChange={(e) => setNewItem({...newItem, price: parseFloat(e.target.value) || 0})}
-                  className="max-w-[100px] text-right"
+                  className="h-12 text-base text-right"
                 />
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-right font-medium">
                 ${((newItem.quantity || 0) * (newItem.price || 0)).toFixed(2)}
               </TableCell>
               <TableCell>
                 <Button 
                   variant="ghost" 
-                  size="sm"
+                  size="icon"
                   onClick={handleAddItem}
                   disabled={!newItem.description}
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-5 w-5" />
                 </Button>
               </TableCell>
             </TableRow>
@@ -205,10 +213,10 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
       </Table>
       
       <div className="flex justify-end">
-        <div className="w-64">
-          <div className="flex justify-between items-center border-t pt-2">
-            <span className="font-medium">Subtotal:</span>
-            <span className="font-medium">${calculateSubtotal().toFixed(2)}</span>
+        <div className="w-64 bg-muted/20 p-4 rounded-md">
+          <div className="flex justify-between items-center">
+            <span className="font-medium text-lg">Subtotal:</span>
+            <span className="font-bold text-lg">${calculateSubtotal().toFixed(2)}</span>
           </div>
         </div>
       </div>
