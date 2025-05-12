@@ -1,6 +1,5 @@
 
 import React, { createContext, useContext, ReactNode } from 'react';
-import { useToast } from '@/hooks/use-toast';
 import { WorkOrder, WorkOrderLineItem } from './types';
 import { useWorkOrdersQuery } from './hooks/useWorkOrdersQuery';
 import { useWorkOrderCrud } from './hooks/useWorkOrderCrud';
@@ -25,7 +24,20 @@ const WorkOrdersContext = createContext<WorkOrdersContextType | undefined>(undef
 export function WorkOrdersProvider({ children }: { children: ReactNode }) {
   const { workOrders, isLoading, error, refreshWorkOrders } = useWorkOrdersQuery();
   const { createWorkOrder, updateWorkOrder, deleteWorkOrder } = useWorkOrderCrud(refreshWorkOrders);
-  const { getWorkOrderLineItems, addLineItem, updateLineItem, deleteLineItem } = useWorkOrderLineItems();
+  const { getWorkOrderLineItems, addLineItem: addItem, updateLineItem: updateItem, deleteLineItem: deleteItem } = useWorkOrderLineItems();
+
+  // Wrap the functions to match the expected void return type
+  const addLineItem = async (workOrderId: string, lineItem: Partial<WorkOrderLineItem>): Promise<void> => {
+    await addItem(workOrderId, lineItem);
+  };
+
+  const updateLineItem = async (lineItemId: string, lineItem: Partial<WorkOrderLineItem>): Promise<void> => {
+    await updateItem(lineItemId, lineItem);
+  };
+
+  const deleteLineItem = async (lineItemId: string): Promise<void> => {
+    await deleteItem(lineItemId);
+  };
 
   return (
     <WorkOrdersContext.Provider
