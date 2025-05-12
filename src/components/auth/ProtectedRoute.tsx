@@ -2,6 +2,7 @@
 import { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -27,9 +28,17 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     return <Navigate to="/auth" replace />;
   }
 
-  // Role check would be implemented here if we had role data available
-  // For now, we just allow access if authenticated
+  // If specific role is required, check user role
+  // This is a simplified implementation - in a real app you'd get the role from the profile
+  if (requiredRole === 'admin') {
+    // In a real app, check if user has admin role
+    const userRole = user.app_metadata?.role || 'customer';
+    if (userRole !== 'admin') {
+      return <Navigate to="/shop" replace />;
+    }
+  }
   
+  // Allow access
   return <>{children}</>;
 };
 

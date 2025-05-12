@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,7 +15,7 @@ import CustomerProfile from "./pages/customer/Profile";
 import CustomerEstimates from "./pages/customer/Estimates";
 import CustomerEstimateDetail from "./pages/customer/EstimateDetail";
 import CustomerInvoices from "./pages/customer/Invoices"; 
-import CustomerTransactions from "./pages/customer/Transactions"; // New import
+import CustomerTransactions from "./pages/customer/Transactions";
 
 // Shop Portal Pages
 import ShopDashboard from "./pages/shop/Dashboard";
@@ -25,9 +24,10 @@ import ShopEmployees from "./pages/shop/Employees";
 import ShopInventory from "./pages/shop/Inventory";
 import ShopWorkOrders from "./pages/shop/WorkOrders";
 import ShopCustomers from "./pages/shop/Customers";
-import ShopEstimates from "./pages/shop/Estimates"; // Added Estimates import
+import ShopEstimates from "./pages/shop/Estimates";
 import ShopInvoices from "./pages/shop/invoices";
 import ShopProfile from "./pages/shop/Profile";
+import ShopUserManagement from "./pages/shop/UserManagement";
 
 // Not Found Page
 import NotFound from "./pages/NotFound";
@@ -183,6 +183,16 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ShopInvoices />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* User Management Route */}
+            <Route 
+              path="/shop/users" 
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <ShopUserManagement />
                 </ProtectedRoute>
               } 
             />
