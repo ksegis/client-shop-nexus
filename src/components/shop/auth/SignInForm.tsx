@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from "@/components/ui/checkbox";
 import { CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/auth'; // Updated import
 import { Loader2 } from 'lucide-react';
 
 const SignInForm = () => {
