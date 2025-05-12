@@ -29,12 +29,15 @@ interface EmployeesContextType {
   updateEmployee: (id: string, employee: Partial<Employee>, password?: string) => Promise<void>;
   toggleEmployeeActive: (id: string, currentRole: ExtendedRole) => Promise<void>;
   refetchEmployees: () => Promise<void>;
+  selectedEmployeeId: string | null;
+  setSelectedEmployeeId: (id: string | null) => void;
 }
 
 const EmployeesContext = createContext<EmployeesContextType | undefined>(undefined);
 
 export function EmployeesProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<Error | null>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const { toast } = useToast();
   
   const { data: employees = [], isLoading, refetch } = useQuery({
@@ -44,7 +47,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
         const { data, error: queryError } = await supabase
           .from('profiles')
           .select('*')
-          .in('role', ['staff', 'admin', 'inactive_staff', 'inactive_admin'])
+          .in('role', ['staff', 'admin', 'inactive_staff', 'inactive_admin'] as ExtendedRole[])
           .order('created_at', { ascending: false });
           
         if (queryError) throw queryError;
@@ -80,7 +83,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
-            role: employee.role || 'staff',
+            role: employee.role || 'staff' as ExtendedRole,
             first_name: employee.first_name || '',
             last_name: employee.last_name || '',
             phone: employee.phone || '',
@@ -115,7 +118,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
           last_name: employee.last_name,
           email: employee.email,
           phone: employee.phone,
-          role: employee.role,
+          role: employee.role as ExtendedRole,
         })
         .eq('id', id);
       
@@ -198,7 +201,9 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
         createEmployee,
         updateEmployee,
         toggleEmployeeActive,
-        refetchEmployees
+        refetchEmployees,
+        selectedEmployeeId,
+        setSelectedEmployeeId
       }}
     >
       {children}

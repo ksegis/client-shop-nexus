@@ -73,7 +73,7 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
           last_name: employeeData.last_name || '',
           email: employeeData.email || '',
           phone: employeeData.phone || '',
-          role: getBaseRole(employeeData.role) as 'staff' | 'admin',
+          role: getBaseRole(employeeData.role),
         }
       : {
           first_name: '',

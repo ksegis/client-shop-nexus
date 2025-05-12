@@ -5,12 +5,11 @@ import { Button } from '@/components/ui/button';
 import { UserCheck, UserX } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useEmployees } from './EmployeesContext';
-import { supabase } from '@/integrations/supabase/client';
 import { EmployeeDialog } from './EmployeeDialog';
 
 export const EmployeesList = () => {
   const { toast } = useToast();
-  const { employees, isLoading, error, selectedEmployeeId, setSelectedEmployeeId, refetchEmployees } = useEmployees();
+  const { employees, isLoading, error, selectedEmployeeId, setSelectedEmployeeId, refetchEmployees, toggleEmployeeActive } = useEmployees();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
 
@@ -25,34 +24,7 @@ export const EmployeesList = () => {
 
   const handleDeactivateEmployee = async (employee) => {
     try {
-      // Instead of updating a non-existent status field, we'll change the role to 'inactive_staff'
-      // Let's toggle between 'staff' and 'inactive_staff' or 'admin' and 'inactive_admin'
-      let newRole = employee.role;
-      
-      if (employee.role === 'staff') {
-        newRole = 'inactive_staff';
-      } else if (employee.role === 'admin') {
-        newRole = 'inactive_admin';
-      } else if (employee.role === 'inactive_staff') {
-        newRole = 'staff';
-      } else if (employee.role === 'inactive_admin') {
-        newRole = 'admin';
-      }
-      
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', employee.id);
-        
-      if (error) throw error;
-      
-      await refetchEmployees();
-      
-      const action = newRole.startsWith('inactive') ? 'deactivated' : 'reactivated';
-      toast({
-        title: `Employee ${action}`,
-        description: `${employee.first_name} ${employee.last_name} has been ${action}`,
-      });
+      await toggleEmployeeActive(employee.id, employee.role);
     } catch (error) {
       toast({
         title: "Error updating employee",
