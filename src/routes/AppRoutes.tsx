@@ -15,11 +15,15 @@ const AppRoutes = () => {
       {/* Auth Routes */}
       <Route path="/auth/*" element={<AuthRoutes />} />
       
-      {/* Shop Routes - make sure no parent paths are missing */}
+      {/* Shop Routes */}
       <Route path="/shop/*" element={<ShopRoutes />} />
       
-      {/* Customer Routes - make sure no parent paths are missing */}
+      {/* Customer Routes */}
       <Route path="/customer/*" element={<CustomerRoutes />} />
+      
+      {/* Add a redirect for /customers to /customer for backward compatibility */}
+      <Route path="/customers" element={<Navigate to="/customer" replace />} />
+      <Route path="/customers/*" element={<Navigate to="/customer" replace />} />
       
       {/* Not Found Route */}
       <Route path="*" element={<NotFound />} />

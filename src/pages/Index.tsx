@@ -11,8 +11,10 @@ const Index = () => {
     if (loading) return;
     
     if (user) {
+      // If user exists, redirect to the shop dashboard
       navigate("/shop");
     } else {
+      // If no user, redirect to login
       navigate("/shop/login");
     }
   }, [navigate, user, loading]);
