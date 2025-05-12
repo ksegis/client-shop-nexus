@@ -35,14 +35,14 @@ const SignUpForm = () => {
       
       if (signUpError) throw signUpError;
       
-      // If signup successful, set the user role to 'staff' and ensure first/last name are saved
+      // If signup successful, explicitly update the profiles table
       if (data?.user) {
         const { error: updateError } = await supabase
           .from('profiles')
           .update({ 
             role: 'staff',
-            first_name: firstName, // Explicitly set first_name in the profiles table
-            last_name: lastName,   // Explicitly set last_name in the profiles table
+            first_name: firstName, 
+            last_name: lastName,   
           })
           .eq('id', data.user.id);
         

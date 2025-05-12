@@ -61,6 +61,7 @@ const Auth = () => {
     e.preventDefault();
     setLoading(true);
     try {
+      // Pass both firstName and lastName to the signUp function
       await signUp(email, password, firstName, lastName);
     } catch (error) {
       console.error('Sign up error:', error);

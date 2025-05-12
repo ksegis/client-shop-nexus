@@ -78,6 +78,7 @@ export const useProfileData = () => {
             if (last_name) updateData.last_name = last_name;
             
             try {
+              // Update the profile with metadata from the user object
               await supabase
                 .from('profiles')
                 .update(updateData)
@@ -86,6 +87,8 @@ export const useProfileData = () => {
               // Update the local data with the metadata
               data.first_name = first_name || data.first_name;
               data.last_name = last_name || data.last_name;
+              
+              console.log('Updated profile with metadata from user:', first_name, last_name);
             } catch (updateError) {
               console.error('Error updating profile with user metadata:', updateError);
             }
@@ -101,6 +104,8 @@ export const useProfileData = () => {
         const lastName = user.user_metadata?.last_name || '';
         const role = user.user_metadata?.role || 'staff'; // Default to staff for shop portal users
         const extendedRole = role as ExtendedUserRole;
+        
+        console.log('Creating profile from user metadata:', { firstName, lastName, role });
         
         const defaultProfile: ProfileData = {
           id: user.id,
