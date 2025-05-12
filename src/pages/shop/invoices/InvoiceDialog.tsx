@@ -101,16 +101,20 @@ export default function InvoiceDialog({
         if (error) throw error;
         
         // Transform the data to ensure it matches the Estimate type
-        const typedData = data?.map(item => ({
-          ...item,
-          // Add proper null check for profiles
-          profiles: item.profiles && typeof item.profiles === 'object' ? {
-            first_name: (item.profiles.first_name !== null) ? item.profiles.first_name : '',
-            last_name: (item.profiles.last_name !== null) ? item.profiles.last_name : '',
-            email: (item.profiles.email !== null) ? item.profiles.email : '',
-          } : null,
-          vehicles: item.vehicles
-        })) as Estimate[];
+        const typedData = data?.map(item => {
+          // Create a properly typed profiles object with null checks
+          const profilesData = item.profiles ? {
+            first_name: item.profiles.first_name !== null ? item.profiles.first_name : '',
+            last_name: item.profiles.last_name !== null ? item.profiles.last_name : '',
+            email: item.profiles.email !== null ? item.profiles.email : ''
+          } : null;
+          
+          return {
+            ...item,
+            profiles: profilesData,
+            vehicles: item.vehicles
+          };
+        }) as Estimate[];
 
         setOpenEstimates(typedData || []);
       } catch (error) {
