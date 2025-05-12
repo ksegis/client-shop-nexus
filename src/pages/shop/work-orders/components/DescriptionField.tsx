@@ -9,15 +9,16 @@ interface DescriptionFieldProps {
 }
 
 export const DescriptionField = ({ form }: DescriptionFieldProps) => {
-  const field = form.register('description');
+  const { register } = form;
+  const description = form.watch('description') || '';
   
   return (
     <FormFieldWrapper form={form} name="description" label="Description">
       <Textarea 
         placeholder="Details about the work order..."
         className="min-h-[100px]"
-        {...field}
-        value={field.value || ''}
+        {...register('description')}
+        value={description}
       />
     </FormFieldWrapper>
   );
