@@ -1,5 +1,4 @@
 
-
 import { Input } from '@/components/ui/input';
 import { UseFormReturn } from 'react-hook-form';
 import { WorkOrderFormValues } from '../types';
@@ -52,4 +51,3 @@ export const NumericField = ({
     </FormFieldWrapper>
   );
 };
-

@@ -13,11 +13,11 @@ import {
 } from '@/components/ui/dialog';
 import { WorkOrderForm } from './WorkOrderForm';
 import { useWorkOrders } from './WorkOrdersContext';
-import { WorkOrder, WorkOrderLineItem } from './types';
+import { WorkOrder, WorkOrderLineItem, WorkOrderFormValues } from './types';
 import { Plus, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-// Schema for form validation
+// Schema for form validation aligned with WorkOrderFormValues type
 export const workOrderSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional().nullable(),
@@ -32,8 +32,6 @@ export const workOrderSchema = z.object({
   assigned_to: z.string().nullable().optional(),
   lineItems: z.array(z.any()).optional(),
 });
-
-export type WorkOrderFormValues = z.infer<typeof workOrderSchema>;
 
 interface WorkOrderDialogProps {
   workOrder?: WorkOrder;

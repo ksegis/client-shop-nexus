@@ -1,6 +1,6 @@
 
 import { UseFormReturn } from 'react-hook-form';
-import { WorkOrderFormValues } from '../WorkOrderDialog';
+import { WorkOrderFormValues } from '../types';
 import {
   Select,
   SelectContent,

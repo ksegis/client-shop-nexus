@@ -1,6 +1,6 @@
 
 import { UseFormReturn } from 'react-hook-form';
-import { WorkOrderFormValues } from '../WorkOrderDialog';
+import { WorkOrderFormValues } from '../types';
 import { Textarea } from '@/components/ui/textarea';
 import { FormFieldWrapper } from './FormField';
 

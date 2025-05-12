@@ -8,7 +8,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { UseFormReturn } from 'react-hook-form';
-import { WorkOrderFormValues } from '../WorkOrderDialog';
+import { WorkOrderFormValues } from '../types';
 
 interface FormFieldWrapperProps {
   form: UseFormReturn<WorkOrderFormValues>;
