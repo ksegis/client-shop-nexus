@@ -13,6 +13,7 @@ import ShopInvoices from "@/pages/shop/invoices";
 import ShopProfile from "@/pages/shop/Profile";
 import ShopUserManagement from "@/pages/shop/UserManagement";
 import ShopAdminDashboard from "@/pages/shop/AdminDashboard";
+import SystemHealth from "@/pages/shop/admin/SystemHealth";
 import NotFound from "@/pages/NotFound";
 
 const ShopRoutes = () => {
@@ -115,6 +116,14 @@ const ShopRoutes = () => {
         element={
           <ProtectedRoute requiredRole="admin">
             <ShopAdminDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="admin/system-health" 
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <SystemHealth />
           </ProtectedRoute>
         } 
       />
