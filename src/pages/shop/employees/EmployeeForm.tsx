@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,7 +12,7 @@ import { useEmployees } from './EmployeesContext';
 import { Employee } from './types';
 import { employeeFormSchema, EmployeeFormUpdateValues } from './employeeFormSchema';
 import { getEmployeeFormValues } from './employeeFormUtils';
-import { DatabaseUserRole } from '@/integrations/supabase/types-extensions';
+import { mapExtendedRoleToDbRole } from '@/integrations/supabase/types-extensions';
 
 interface EmployeeFormProps {
   employeeData: Employee | null;
@@ -35,8 +36,8 @@ export function EmployeeForm({ employeeData, onCancel, onSuccess }: EmployeeForm
           employeeData.id,
           {
             ...values,
-            // Only use 'staff' or 'admin' as valid values for employees
-            role: (values.role === 'staff' || values.role === 'admin') ? values.role as DatabaseUserRole : 'staff',
+            // Map the form role (which is an ExtendedRole) to a database role
+            role: values.role,
           },
           values.password || undefined
         );
@@ -44,8 +45,8 @@ export function EmployeeForm({ employeeData, onCancel, onSuccess }: EmployeeForm
         await createEmployee(
           {
             ...values,
-            // Only use 'staff' or 'admin' as valid values for employees 
-            role: (values.role === 'staff' || values.role === 'admin') ? values.role as DatabaseUserRole : 'staff',
+            // Map the form role (which is an ExtendedRole) to a database role
+            role: values.role,
           }, 
           values.password || ''
         );

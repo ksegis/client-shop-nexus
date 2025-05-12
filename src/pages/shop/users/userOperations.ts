@@ -1,13 +1,16 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { DatabaseUserRole } from '@/integrations/supabase/types-extensions';
+import { ExtendedUserRole, DatabaseUserRole, mapExtendedRoleToDbRole } from '@/integrations/supabase/types-extensions';
 
 export const useUserOperations = (refetch: () => Promise<void>) => {
   const { toast } = useToast();
 
   const createUser = async (user, password: string) => {
     try {
+      // Map user role to a valid database role
+      const dbRole = mapExtendedRoleToDbRole(user.role as ExtendedUserRole);
+      
       // Sign up the user with email and password
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: user.email || '',
@@ -17,7 +20,7 @@ export const useUserOperations = (refetch: () => Promise<void>) => {
             first_name: user.first_name || '',
             last_name: user.last_name || '',
             phone: user.phone || '',
-            role: (user.role || 'customer') as DatabaseUserRole,
+            role: dbRole,
           },
         },
       });
@@ -26,12 +29,10 @@ export const useUserOperations = (refetch: () => Promise<void>) => {
 
       // Directly update the profile since signUp already creates it
       if (authData?.user) {
-        const role = (user.role || 'customer') as DatabaseUserRole;
-        
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
-            role: role,
+            role: dbRole,
             first_name: user.first_name || '',
             last_name: user.last_name || '',
             phone: user.phone || '',
@@ -58,9 +59,10 @@ export const useUserOperations = (refetch: () => Promise<void>) => {
 
   const updateUser = async (id: string, user, password?: string) => {
     try {
-      // Update profile data
-      const roleToUpdate = user.role as DatabaseUserRole;
+      // Map to a valid database role
+      const dbRole = mapExtendedRoleToDbRole(user.role as ExtendedUserRole);
       
+      // Update profile data
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
@@ -68,7 +70,7 @@ export const useUserOperations = (refetch: () => Promise<void>) => {
           last_name: user.last_name,
           email: user.email,
           phone: user.phone,
-          role: roleToUpdate,
+          role: dbRole,
         })
         .eq('id', id);
       
@@ -98,26 +100,33 @@ export const useUserOperations = (refetch: () => Promise<void>) => {
 
   const toggleUserActive = async (id: string, currentRole: string) => {
     try {
-      let newRole: DatabaseUserRole;
+      // Map to a valid database role based on toggles
+      let dbRole: DatabaseUserRole = 'customer';
       
       // Toggle between active and inactive states
       switch (currentRole) {
         case 'customer':
-          newRole = 'customer' as DatabaseUserRole;
+          dbRole = 'customer';
           break;
         case 'staff':
-          newRole = 'staff' as DatabaseUserRole;
+          dbRole = 'staff';
           break;
         case 'admin':
-          newRole = 'admin' as DatabaseUserRole;
+          dbRole = 'admin';
+          break;
+        case 'inactive_staff':
+          dbRole = 'staff';
+          break;
+        case 'inactive_admin':
+          dbRole = 'admin';
           break;
         default:
-          newRole = currentRole as unknown as DatabaseUserRole;
+          dbRole = 'customer';
       }
       
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ role: newRole })
+        .update({ role: dbRole })
         .eq('id', id);
       
       if (updateError) throw updateError;

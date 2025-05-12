@@ -2,13 +2,16 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, ExtendedRole } from './types';
 import { useToast } from '@/hooks/use-toast';
-import { ExtendedUserRole, DatabaseUserRole } from '@/integrations/supabase/types-extensions';
+import { ExtendedUserRole, DatabaseUserRole, mapExtendedRoleToDbRole } from '@/integrations/supabase/types-extensions';
 
 export const useEmployeeOperations = (refetch: () => Promise<void>) => {
   const { toast } = useToast();
 
   const createEmployee = async (employee: Partial<Employee>, password: string) => {
     try {
+      // Map the ExtendedRole to a DatabaseUserRole
+      const dbRole = mapExtendedRoleToDbRole(employee.role as ExtendedRole);
+      
       // Sign up the employee with email and password
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: employee.email || '',
@@ -18,7 +21,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
             first_name: employee.first_name || '',
             last_name: employee.last_name || '',
             phone: employee.phone || '',
-            role: (employee.role || 'staff') as DatabaseUserRole, // Cast to acceptable database role
+            role: dbRole,
           },
         },
       });
@@ -27,12 +30,10 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
 
       // Directly update the profile since signUp already creates it
       if (authData?.user) {
-        const role = (employee.role || 'staff') as DatabaseUserRole;
-        
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
-            role: role,
+            role: dbRole,
             first_name: employee.first_name || '',
             last_name: employee.last_name || '',
             phone: employee.phone || '',
@@ -59,8 +60,8 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
 
   const updateEmployee = async (id: string, employee: Partial<Employee>, password?: string) => {
     try {
-      // Handle role conversions to ensure compatible types
-      const roleToUpdate = employee.role as unknown as DatabaseUserRole;
+      // Map the ExtendedRole to a DatabaseUserRole
+      const dbRole = mapExtendedRoleToDbRole(employee.role as ExtendedRole);
       
       // Update profile data
       const { error: updateError } = await supabase
@@ -70,7 +71,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
           last_name: employee.last_name,
           email: employee.email,
           phone: employee.phone,
-          role: roleToUpdate,
+          role: dbRole,
         })
         .eq('id', id);
       
@@ -100,30 +101,28 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
 
   const toggleEmployeeActive = async (id: string, currentRole: ExtendedRole) => {
     try {
-      let newRole: DatabaseUserRole;
+      // Map the ExtendedRole to a DatabaseUserRole based on active/inactive state
+      let dbRole: DatabaseUserRole;
       
       // Toggle between active and inactive states
-      // We'll cast to DatabaseUserRole after determining the new role
       switch (currentRole) {
         case 'staff':
-          newRole = 'staff' as DatabaseUserRole; // This will be handled in the backend
-          break;
         case 'admin':
-          newRole = 'admin' as DatabaseUserRole;
+          // If currently active, we want to set as inactive in our UI but DB only accepts active roles
+          dbRole = mapExtendedRoleToDbRole(currentRole);
           break;
         case 'inactive_staff':
-          newRole = 'staff' as DatabaseUserRole;
-          break;
         case 'inactive_admin':
-          newRole = 'admin' as DatabaseUserRole;
+          // If currently inactive, we want to activate
+          dbRole = mapExtendedRoleToDbRole(currentRole);
           break;
         default:
-          newRole = currentRole as unknown as DatabaseUserRole;
+          dbRole = 'staff';
       }
       
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ role: newRole })
+        .update({ role: dbRole })
         .eq('id', id);
       
       if (updateError) throw updateError;
