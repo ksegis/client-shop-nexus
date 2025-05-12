@@ -12,12 +12,15 @@ import ShopEstimates from "@/pages/shop/Estimates";
 import ShopInvoices from "@/pages/shop/invoices";
 import ShopProfile from "@/pages/shop/Profile";
 import ShopUserManagement from "@/pages/shop/UserManagement";
+import NotFound from "@/pages/NotFound";
 
 const ShopRoutes = () => {
   return (
     <Routes>
+      {/* Login route should be accessible without authentication */}
       <Route path="login" element={<ShopLogin />} />
       
+      {/* All protected routes */}
       <Route 
         path="/" 
         element={
@@ -106,6 +109,9 @@ const ShopRoutes = () => {
           </ProtectedRoute>
         } 
       />
+      
+      {/* Catch any unknown routes within /shop/ */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };

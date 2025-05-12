@@ -4,21 +4,21 @@ import NotFound from "@/pages/NotFound";
 import AuthRoutes from "./AuthRoutes";
 import CustomerRoutes from "./CustomerRoutes";
 import ShopRoutes from "./ShopRoutes";
+import Index from "@/pages/Index";
 
 const AppRoutes = () => {
   return (
     <Routes>
-      {/* Redirect root to shop dashboard */}
-      <Route path="/" element={<Navigate to="/shop" replace />} />
+      {/* Root route - render Index component that will redirect based on auth status */}
+      <Route path="/" element={<Index />} />
       
       {/* Auth Routes */}
-      {/* Import each route from AuthRoutes instead of using the component */}
       <Route path="/auth/*" element={<AuthRoutes />} />
       
-      {/* Shop Routes */}
+      {/* Shop Routes - make sure no parent paths are missing */}
       <Route path="/shop/*" element={<ShopRoutes />} />
       
-      {/* Customer Routes */}
+      {/* Customer Routes - make sure no parent paths are missing */}
       <Route path="/customer/*" element={<CustomerRoutes />} />
       
       {/* Not Found Route */}

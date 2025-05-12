@@ -7,6 +7,7 @@ import CustomerEstimates from "@/pages/customer/Estimates";
 import CustomerEstimateDetail from "@/pages/customer/EstimateDetail";
 import CustomerInvoices from "@/pages/customer/Invoices";
 import CustomerTransactions from "@/pages/customer/Transactions";
+import NotFound from "@/pages/NotFound";
 
 const CustomerRoutes = () => {
   return (
@@ -37,6 +38,9 @@ const CustomerRoutes = () => {
           <CustomerTransactions />
         </ProtectedRoute>
       } />
+      
+      {/* Catch any unknown routes within /customer/ */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };
