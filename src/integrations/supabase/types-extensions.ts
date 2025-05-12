@@ -19,7 +19,7 @@ declare module './types' {
 }
 
 // Re-export the Database type from ./types to be used in the application
-export type { Database } from './types';
+export { Database } from './types';
 
 // Export the original database type with a different name for reference if needed
-export type { OriginalDatabase };
+export { OriginalDatabase };
