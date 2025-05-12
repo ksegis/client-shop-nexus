@@ -1,53 +1,33 @@
 
-import React from 'react';
-import { AlertCircle, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
+import { formatDistanceToNow } from 'date-fns';
 
-/**
- * Returns the appropriate icon component for a given system status
- */
-export const getStatusIcon = (status: string) => {
-  switch (status.toLowerCase()) {
-    case 'online':
-      return <CheckCircle2 className="text-green-500" />;
-    case 'degraded':
-      return <AlertTriangle className="text-amber-500" />;
-    case 'offline':
-      return <AlertCircle className="text-red-500" />;
-    default:
-      return <Clock className="text-slate-400" />;
-  }
+export interface SystemStatus {
+  cpu: number;
+  memory: number;
+  disk: number;
+  lastUpdated: Date;
+  isHealthy: boolean;
+}
+
+export interface StatusThresholds {
+  warning: { cpu: number; memory: number; disk: number };
+  critical: { cpu: number; memory: number; disk: number };
+}
+
+export const DEFAULT_THRESHOLDS: StatusThresholds = {
+  warning: { cpu: 70, memory: 70, disk: 80 },
+  critical: { cpu: 90, memory: 90, disk: 90 }
 };
 
-/**
- * Formats a timestamp for display in the UI
- */
-export const formatTimestamp = (timestamp: string | number) => {
-  const date = new Date(timestamp);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
+export const getStatusSeverity = (
+  value: number,
+  thresholds: StatusThresholds = DEFAULT_THRESHOLDS
+): 'normal' | 'warning' | 'critical' => {
+  if (value >= thresholds.critical.cpu) return 'critical';
+  if (value >= thresholds.warning.cpu) return 'warning';
+  return 'normal';
 };
 
-/**
- * Calculates the performance grade based on system metrics
- */
-export const calculatePerformanceGrade = (responseTime: number, availability: number): { grade: string; color: string } => {
-  // Lower response time is better, higher availability is better
-  if (responseTime < 200 && availability >= 99.9) {
-    return { grade: 'A+', color: 'text-green-600' };
-  } else if (responseTime < 300 && availability >= 99.5) {
-    return { grade: 'A', color: 'text-green-500' };
-  } else if (responseTime < 500 && availability >= 99.0) {
-    return { grade: 'B', color: 'text-green-400' };
-  } else if (responseTime < 800 && availability >= 98.0) {
-    return { grade: 'C', color: 'text-amber-500' };
-  } else if (responseTime < 1200 && availability >= 95.0) {
-    return { grade: 'D', color: 'text-orange-500' };
-  } else {
-    return { grade: 'F', color: 'text-red-500' };
-  }
+export const getFormattedLastUpdated = (date: Date): string => {
+  return `${formatDistanceToNow(date)} ago`;
 };

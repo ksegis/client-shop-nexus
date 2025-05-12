@@ -27,7 +27,18 @@ serve(async (req: Request) => {
     )
 
     // Get request body
-    const { admin_id } = await req.json()
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      console.error('JSON parse error:', e);
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    
+    const { admin_id } = body;
     if (!admin_id) {
       return new Response(JSON.stringify({ error: 'Admin ID is required' }), {
         status: 400,
@@ -42,7 +53,16 @@ serve(async (req: Request) => {
       .eq('id', admin_id)
       .single()
       
-    if (profileError || profile?.role !== 'admin') {
+    if (profileError) {
+      console.error('Profile fetch error:', profileError);
+      return new Response(JSON.stringify({ error: 'Failed to verify admin account' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+      
+    if (profile?.role !== 'admin') {
+      console.error('Not an admin account:', profile);
       return new Response(JSON.stringify({ error: 'Admin account required' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -50,8 +70,9 @@ serve(async (req: Request) => {
     }
 
     // Generate a link for the admin user to restore their session
-    const { data: adminUser } = await supabaseAdmin.auth.admin.getUserById(admin_id)
-    if (!adminUser?.user?.email) {
+    const { data: adminUser, error: userError } = await supabaseAdmin.auth.admin.getUserById(admin_id);
+    if (userError || !adminUser?.user?.email) {
+      console.error('Admin user fetch error:', userError);
       return new Response(JSON.stringify({ error: 'Admin email not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -64,7 +85,7 @@ serve(async (req: Request) => {
     })
 
     if (linkError || !linkData) {
-      console.error('Failed to generate admin token:', linkError)
+      console.error('Failed to generate admin token:', linkError);
       return new Response(JSON.stringify({ error: 'Failed to restore admin session' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -80,7 +101,7 @@ serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   } catch (error) {
-    console.error('Error:', error)
+    console.error('Error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

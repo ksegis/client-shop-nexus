@@ -1,25 +1,31 @@
 
 import React from 'react';
 import Header from './Header';
-import { cn } from '@/lib/utils';
-import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
+import { Sidebar } from '../ui/sidebar';
+import ImpersonationBanner from '../admin/ImpersonationBanner';
+import { isImpersonating } from '@/utils/admin/impersonationUtils';
 
 interface LayoutProps {
+  portalType: 'customer' | 'shop';
   children: React.ReactNode;
-  portalType?: 'shop' | 'customer';
-  className?: string;
 }
 
-const Layout = ({ children, portalType = 'shop', className }: LayoutProps) => {
+const Layout: React.FC<LayoutProps> = ({ portalType, children }) => {
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      <ImpersonationBanner />
+    <div className="h-screen flex flex-col">
+      {isImpersonating() && <ImpersonationBanner />}
       <Header portalType={portalType} />
-      <div className="flex-1">
-        <div className={cn("container max-w-screen-xl mx-auto py-8 px-4", className)}>
+      {portalType === 'shop' ? (
+        <Sidebar>
+          <main className="container max-w-screen-xl mx-auto p-4 md:p-6">
+            {children}
+          </main>
+        </Sidebar>
+      ) : (
+        <main className="container max-w-screen-xl mx-auto p-4 md:p-6">
           {children}
-        </div>
-      </div>
+        </main>
+      )}
     </div>
   );
 };

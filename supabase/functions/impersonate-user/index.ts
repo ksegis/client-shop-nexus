@@ -39,6 +39,7 @@ serve(async (req: Request) => {
     // Verify the caller is an admin
     const { data: { user: adminUser }, error: authError } = await supabaseAdmin.auth.getUser()
     if (authError || !adminUser) {
+      console.error('Authentication error:', authError);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -52,7 +53,16 @@ serve(async (req: Request) => {
       .eq('id', adminUser.id)
       .single()
       
-    if (profileError || profile?.role !== 'admin') {
+    if (profileError) {
+      console.error('Profile fetch error:', profileError);
+      return new Response(JSON.stringify({ error: 'Failed to verify admin privileges' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    
+    if (profile?.role !== 'admin') {
+      console.error('Not an admin:', profile);
       return new Response(JSON.stringify({ error: 'Admin privileges required' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -60,7 +70,18 @@ serve(async (req: Request) => {
     }
 
     // Get request body
-    const { user_id } = await req.json()
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      console.error('JSON parse error:', e);
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    
+    const { user_id } = body;
     if (!user_id) {
       return new Response(JSON.stringify({ error: 'User ID is required' }), {
         status: 400,
@@ -68,14 +89,24 @@ serve(async (req: Request) => {
       })
     }
 
+    // Fetch the user info first to get their email
+    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(user_id);
+    if (userError || !userData?.user?.email) {
+      console.error('User fetch error:', userError);
+      return new Response(JSON.stringify({ error: 'Failed to fetch user information' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     // Generate an impersonation token for the specified user
     const { data: impersonateData, error: impersonateError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
-      email: (await supabaseAdmin.auth.admin.getUserById(user_id)).data.user?.email || '',
+      email: userData.user.email,
     })
 
     if (impersonateError || !impersonateData) {
-      console.error('Impersonation error:', impersonateError)
+      console.error('Impersonation error:', impersonateError);
       return new Response(JSON.stringify({ error: 'Failed to generate impersonation token' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -91,7 +122,7 @@ serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   } catch (error) {
-    console.error('Error:', error)
+    console.error('Error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
