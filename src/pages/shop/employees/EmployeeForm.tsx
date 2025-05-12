@@ -60,8 +60,8 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
   // Helper function to get base role (remove inactive_ prefix)
   const getBaseRole = (role: ExtendedRole): FormRole => {
     return role.startsWith('inactive_') 
-      ? role.substring('inactive_'.length) as FormRole
-      : role as FormRole;
+      ? (role.substring('inactive_'.length) as FormRole)
+      : (role as FormRole);
   };
   
   // Helper function to check if a role is inactive

@@ -14,7 +14,7 @@ export const useEmployeesQuery = () => {
         const { data, error: queryError } = await supabase
           .from('profiles')
           .select('*')
-          .in('role', allowedRoles as unknown as string[]) // Type assertion to handle compatibility
+          .in('role', allowedRoles)
           .order('created_at', { ascending: false });
           
         if (queryError) throw queryError;
