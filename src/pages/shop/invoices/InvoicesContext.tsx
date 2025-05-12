@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Invoice, InvoiceStatus } from './types';
+import { Invoice, InvoiceStatus, InvoiceLineItem } from './types';
 import { useInvoiceOperations } from './hooks/useInvoiceOperations';
 
 interface InvoicesContextType {
@@ -16,12 +16,14 @@ interface InvoicesContextType {
     total_amount?: number;
     status?: InvoiceStatus;
     estimate_id?: string;
+    lineItems?: InvoiceLineItem[];
   }) => Promise<void>;
   updateInvoice: (id: string, invoice: {
     title?: string;
     description?: string;
     total_amount?: number;
     status?: InvoiceStatus;
+    lineItems?: InvoiceLineItem[];
   }) => Promise<void>;
   updateInvoiceStatus: (id: string, status: InvoiceStatus) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
@@ -53,6 +55,7 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
     total_amount?: number;
     status?: InvoiceStatus;
     estimate_id?: string;
+    lineItems?: InvoiceLineItem[];
   }) => {
     await createInvoiceOperation(invoice);
     await refetch();
@@ -63,6 +66,7 @@ export function InvoicesProvider({ children }: { children: ReactNode }) {
     description?: string;
     total_amount?: number;
     status?: InvoiceStatus;
+    lineItems?: InvoiceLineItem[];
   }) => {
     await updateInvoiceOperation(id, invoice);
     await refetch();

@@ -107,13 +107,10 @@ export default function InvoiceDialog({
         });
       } else {
         // Create new invoice
-        const result = await createInvoice(newInvoiceData);
-        
-        // If we have line items and the invoice was created successfully
-        if (data.lineItems && data.lineItems.length > 0 && result) {
-          // In a real app, you would have API calls to create line items here
-          console.log("Creating line items for new invoice:", data.lineItems);
-        }
+        await createInvoice({ 
+          ...newInvoiceData,
+          lineItems: data.lineItems // Pass the line items directly
+        });
         
         toast({
           title: "Success",
