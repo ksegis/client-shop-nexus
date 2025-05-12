@@ -57,6 +57,11 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
       
       if (insertError) {
         console.error("Error creating work order:", insertError);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: `Failed to create work order: ${insertError.message || 'Unknown error'}`,
+        });
         throw insertError;
       }
       
@@ -71,7 +76,7 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: `Failed to create work order: ${(error as Error).message || 'Unknown error'}`,
+        description: `Failed to create work order: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
       throw error;
     }
@@ -89,6 +94,11 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
       
       if (updateError) {
         console.error("Error updating work order:", updateError);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: `Failed to update work order: ${updateError.message || 'Unknown error'}`,
+        });
         throw updateError;
       }
       
@@ -102,7 +112,7 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: `Failed to update work order: ${(error as Error).message || 'Unknown error'}`,
+        description: `Failed to update work order: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
       throw error;
     }
@@ -116,7 +126,14 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
         .delete()
         .eq('id', id);
       
-      if (deleteError) throw deleteError;
+      if (deleteError) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: `Failed to delete work order: ${deleteError.message || 'Unknown error'}`,
+        });
+        throw deleteError;
+      }
       
       await refetch();
       toast({
@@ -127,7 +144,7 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: `Failed to delete work order: ${(error as Error).message}`,
+        description: `Failed to delete work order: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
       throw error;
     }

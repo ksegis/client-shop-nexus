@@ -69,8 +69,16 @@ export const WorkOrderDialog = ({ workOrder }: WorkOrderDialogProps) => {
       
       if (isEditing && workOrder) {
         await updateWorkOrder(workOrder.id, data);
+        toast({
+          title: "Success",
+          description: "Work order updated successfully",
+        });
       } else {
         await createWorkOrder(data);
+        toast({
+          title: "Success",
+          description: "Work order created successfully",
+        });
       }
       
       setOpen(false);
