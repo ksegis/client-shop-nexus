@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -36,7 +35,8 @@ export function EmployeeForm({ employeeData, onCancel, onSuccess }: EmployeeForm
           employeeData.id,
           {
             ...values,
-            role: values.role as unknown as DatabaseUserRole,
+            // Only use 'staff' or 'admin' as valid values for employees
+            role: (values.role === 'staff' || values.role === 'admin') ? values.role as DatabaseUserRole : 'staff',
           },
           values.password || undefined
         );
@@ -44,7 +44,8 @@ export function EmployeeForm({ employeeData, onCancel, onSuccess }: EmployeeForm
         await createEmployee(
           {
             ...values,
-            role: values.role as unknown as DatabaseUserRole,
+            // Only use 'staff' or 'admin' as valid values for employees 
+            role: (values.role === 'staff' || values.role === 'admin') ? values.role as DatabaseUserRole : 'staff',
           }, 
           values.password || ''
         );
