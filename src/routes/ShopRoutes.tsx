@@ -30,7 +30,6 @@ const ShopRoutes = () => {
             <Routes>
               <Route path="/" element={<ShopDashboard />} />
               <Route path="profile" element={<ShopProfile />} />
-              <Route path="settings" element={<ShopProfile />} />
               <Route path="reports" element={<ShopReports />} />
               <Route path="employees" element={<ShopEmployees />} />
               <Route path="inventory" element={<ShopInventory />} />
