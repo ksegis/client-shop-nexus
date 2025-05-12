@@ -82,7 +82,7 @@ export const WorkOrderForm = ({
 
           <DescriptionField form={form} />
 
-          {/* Line Items Section - Moved before estimated hours/cost */}
+          {/* Line Items Section - Placed before estimated hours/cost */}
           <div className="border-t border-gray-200 pt-6">
             <h3 className="text-lg font-medium mb-4">Line Items</h3>
             <LineItems 
@@ -91,7 +91,7 @@ export const WorkOrderForm = ({
             />
           </div>
           
-          {/* Estimated Hours/Cost Section - Moved after line items */}
+          {/* Estimated Hours/Cost Section - After line items */}
           <div className="border-t border-gray-200 pt-6">
             <h3 className="text-lg font-medium mb-4">Labor & Cost Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
