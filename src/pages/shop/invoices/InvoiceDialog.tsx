@@ -100,7 +100,19 @@ export default function InvoiceDialog({
           .order('created_at', { ascending: false });
         
         if (error) throw error;
-        setOpenEstimates(data || []);
+        
+        // Transform the data to ensure it matches the Estimate type
+        const typedData = data?.map(item => ({
+          ...item,
+          profiles: item.profiles && typeof item.profiles === 'object' ? {
+            first_name: item.profiles.first_name || '',
+            last_name: item.profiles.last_name || '',
+            email: item.profiles.email || '',
+          } : null,
+          vehicles: item.vehicles
+        })) as Estimate[];
+
+        setOpenEstimates(typedData || []);
       } catch (error) {
         console.error('Error fetching estimates:', error);
       }
