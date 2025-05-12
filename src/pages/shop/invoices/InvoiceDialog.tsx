@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -92,8 +93,16 @@ export default function InvoiceDialog({
           .from('estimates')
           .select(`
             *,
-            profiles:customer_id (first_name, last_name, email),
-            vehicles:vehicle_id (make, model, year)
+            profiles:customer_id (
+              first_name,
+              last_name,
+              email
+            ),
+            vehicles:vehicle_id (
+              make, 
+              model, 
+              year
+            )
           `)
           .in('status', ['pending', 'approved']) // Only get pending or approved estimates
           .order('created_at', { ascending: false });
@@ -104,9 +113,9 @@ export default function InvoiceDialog({
         const typedData = data?.map(item => {
           // Create a properly typed profiles object with null checks
           const profilesData = item.profiles ? {
-            first_name: item.profiles.first_name !== null ? item.profiles.first_name : '',
-            last_name: item.profiles.last_name !== null ? item.profiles.last_name : '',
-            email: item.profiles.email !== null ? item.profiles.email : ''
+            first_name: item.profiles.first_name || '',
+            last_name: item.profiles.last_name || '',
+            email: item.profiles.email || ''
           } : null;
           
           return {
