@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -68,7 +69,7 @@ export const LineItemWithSearch = ({
       const { data, error } = await supabase
         .from('inventory')
         .select('*')
-        .or(`sku.ilike.%${term}%,part_number.ilike.%${term}%`)
+        .or(`sku.ilike.%${term}%`)
         .limit(10);
 
       if (error) throw error;
