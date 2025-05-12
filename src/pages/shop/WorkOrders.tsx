@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WorkOrdersProvider } from './work-orders/WorkOrdersContext';
 import { WorkOrdersTable } from './work-orders/WorkOrdersTable';
 import { WorkOrderDialog } from './work-orders/WorkOrderDialog';
+import Layout from '@/components/layout/Layout';
 
 const WorkOrders = () => {
   const [activeTab, setActiveTab] = useState('active');
@@ -55,4 +56,10 @@ const WorkOrders = () => {
   );
 };
 
-export default WorkOrders;
+export default function WorkOrdersPage() {
+  return (
+    <Layout portalType="shop">
+      <WorkOrders />
+    </Layout>
+  );
+}

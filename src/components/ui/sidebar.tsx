@@ -79,41 +79,40 @@ export const Sidebar = ({ children, showNavigation = true }: Props) => {
   const isAdmin = user?.app_metadata?.role === 'admin';
   console.log("Sidebar - isAdmin check result:", isAdmin);
 
+  const filteredNavigationItems = navigationItems.filter(item => !item.adminOnly || isAdmin);
+
   return (
     <>
       <div className="h-full border-r bg-background p-0">
         <div className="py-4">
-          {showNavigation && navigationItems
-            .filter(item => !item.adminOnly || isAdmin)
-            .map((item) => (
-              <SidebarItem 
-                key={item.href}
-                href={item.href}
-                title={item.title}
-                icon={item.icon}
-              />
-            ))}
+          {showNavigation && filteredNavigationItems.map((item) => (
+            <SidebarItem 
+              key={item.href}
+              href={item.href}
+              title={item.title}
+              icon={item.icon}
+            />
+          ))}
         </div>
       </div>
       
       {/* Mobile Sheet/Drawer - Only shown on mobile */}
-      <Sheet>
-        <SheetTrigger asChild className="absolute left-4 top-4 md:hidden">
-          <Button variant="ghost" size="icon">
-            <Menu />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-80 p-0">
-          <SheetHeader className="pl-6 pb-4">
-            <SheetTitle>Acme Co.</SheetTitle>
-            <SheetDescription>
-              Manage your shop, view reports, and more.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="py-4">
-            {navigationItems
-              .filter(item => !item.adminOnly || isAdmin)
-              .map((item) => (
+      {showNavigation && (
+        <Sheet>
+          <SheetTrigger asChild className="absolute left-4 top-4 md:hidden">
+            <Button variant="ghost" size="icon">
+              <Menu />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-80 p-0">
+            <SheetHeader className="pl-6 pb-4">
+              <SheetTitle>Acme Co.</SheetTitle>
+              <SheetDescription>
+                Manage your shop, view reports, and more.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="py-4">
+              {filteredNavigationItems.map((item) => (
                 <SidebarItem 
                   key={item.href}
                   href={item.href}
@@ -121,9 +120,10 @@ export const Sidebar = ({ children, showNavigation = true }: Props) => {
                   icon={item.icon}
                 />
               ))}
-          </div>
-        </SheetContent>
-      </Sheet>
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
     </>
   );
 };

@@ -13,41 +13,45 @@ const Employees = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   
   return (
-    <Layout portalType="shop">
-      <EmployeesProvider>
-        <div className="space-y-6">
-          <EmployeeHeader onAddEmployee={() => setAddDialogOpen(true)} />
+    <EmployeesProvider>
+      <div className="space-y-6">
+        <EmployeeHeader onAddEmployee={() => setAddDialogOpen(true)} />
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" /> 
-                Employee Directory
-              </CardTitle>
-              <CardDescription>
-                View and manage all employees working at your shop.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <EmployeesList />
-            </CardContent>
-          </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" /> 
+              Employee Directory
+            </CardTitle>
+            <CardDescription>
+              View and manage all employees working at your shop.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EmployeesList />
+          </CardContent>
+        </Card>
 
-          <EmployeePerformance />
-          
-          {/* Add Employee Dialog */}
-          <EmployeeDialog 
-            open={addDialogOpen} 
-            onOpenChange={setAddDialogOpen} 
-            onSuccess={() => {
-              setAddDialogOpen(false);
-            }}
-            employee={null}
-          />
-        </div>
-      </EmployeesProvider>
-    </Layout>
+        <EmployeePerformance />
+        
+        {/* Add Employee Dialog */}
+        <EmployeeDialog 
+          open={addDialogOpen} 
+          onOpenChange={setAddDialogOpen} 
+          onSuccess={() => {
+            setAddDialogOpen(false);
+          }}
+          employee={null}
+        />
+      </div>
+    </EmployeesProvider>
   );
 };
 
-export default Employees;
+export default function EmployeesPage() {
+  return (
+    <Layout portalType="shop">
+      <Employees />
+    </Layout>
+  );
+}

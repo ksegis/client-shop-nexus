@@ -3,13 +3,13 @@ import { Routes, Route } from "react-router-dom";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import ShopLogin from "@/pages/shop/Login";
 import ShopDashboard from "@/pages/shop/Dashboard";
-import ShopReports from "@/pages/shop/Reports";
-import ShopEmployees from "@/pages/shop/Employees";
-import ShopInventory from "@/pages/shop/Inventory";
-import ShopWorkOrders from "@/pages/shop/WorkOrders";
-import ShopCustomers from "@/pages/shop/Customers";
-import ShopEstimates from "@/pages/shop/Estimates";
-import ShopInvoices from "@/pages/shop/invoices";
+import ReportsPage from "@/pages/shop/Reports";
+import EmployeesPage from "@/pages/shop/Employees";
+import InventoryPage from "@/pages/shop/Inventory";
+import WorkOrdersPage from "@/pages/shop/WorkOrders";
+import CustomersPage from "@/pages/shop/Customers";
+import Estimates from "@/pages/shop/Estimates";
+import Invoices from "@/pages/shop/invoices";
 import ShopProfile from "@/pages/shop/Profile";
 import ShopUserManagement from "@/pages/shop/UserManagement";
 import ShopAdminDashboard from "@/pages/shop/AdminDashboard";
@@ -33,13 +33,13 @@ const ShopRoutes = () => {
       >
         <Route index element={<ShopDashboard />} />
         <Route path="profile" element={<ShopProfile />} />
-        <Route path="reports" element={<ShopReports />} />
-        <Route path="employees" element={<ShopEmployees />} />
-        <Route path="inventory" element={<ShopInventory />} />
-        <Route path="work-orders" element={<ShopWorkOrders />} />
-        <Route path="customers" element={<ShopCustomers />} />
-        <Route path="estimates" element={<ShopEstimates />} />
-        <Route path="invoices" element={<ShopInvoices />} />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="employees" element={<EmployeesPage />} />
+        <Route path="inventory" element={<InventoryPage />} />
+        <Route path="work-orders" element={<WorkOrdersPage />} />
+        <Route path="customers" element={<CustomersPage />} />
+        <Route path="estimates" element={<Estimates />} />
+        <Route path="invoices" element={<Invoices />} />
         
         {/* Admin-only routes */}
         <Route 

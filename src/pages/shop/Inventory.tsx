@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertCircle } from 'lucide-react';
+import Layout from '@/components/layout/Layout';
 
 import { InventoryItem, InventoryFormValues } from './inventory/types';
 import { InventoryTable } from './inventory/InventoryTable';
@@ -118,4 +119,10 @@ const Inventory = () => {
   );
 };
 
-export default Inventory;
+export default function InventoryPage() {
+  return (
+    <Layout portalType="shop">
+      <Inventory />
+    </Layout>
+  );
+}

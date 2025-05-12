@@ -12,50 +12,54 @@ const Customers = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
-    <Layout portalType="shop">
-      <div className="space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
-            <p className="text-muted-foreground">
-              Manage your shop's customer database
-            </p>
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Customers</h1>
+          <p className="text-muted-foreground">
+            Manage your shop's customer database
+          </p>
         </div>
-
-        <CustomersProvider>
-          <div className="rounded-md border">
-            <Tabs 
-              defaultValue="all" 
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className="w-full"
-            >
-              <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <TabsList>
-                  <TabsTrigger value="all">All Customers</TabsTrigger>
-                  <TabsTrigger value="recent">Recent</TabsTrigger>
-                </TabsList>
-                
-                <div className="flex gap-2 items-center">
-                  <SearchBar value={searchQuery} onChange={setSearchQuery} />
-                  <CustomerDialog />
-                </div>
-              </div>
-
-              <TabsContent value="all">
-                <CustomersTable filter="all" searchQuery={searchQuery} />
-              </TabsContent>
-              
-              <TabsContent value="recent">
-                <CustomersTable filter="recent" searchQuery={searchQuery} />
-              </TabsContent>
-            </Tabs>
-          </div>
-        </CustomersProvider>
       </div>
-    </Layout>
+
+      <CustomersProvider>
+        <div className="rounded-md border">
+          <Tabs 
+            defaultValue="all" 
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
+            <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <TabsList>
+                <TabsTrigger value="all">All Customers</TabsTrigger>
+                <TabsTrigger value="recent">Recent</TabsTrigger>
+              </TabsList>
+              
+              <div className="flex gap-2 items-center">
+                <SearchBar value={searchQuery} onChange={setSearchQuery} />
+                <CustomerDialog />
+              </div>
+            </div>
+
+            <TabsContent value="all">
+              <CustomersTable filter="all" searchQuery={searchQuery} />
+            </TabsContent>
+            
+            <TabsContent value="recent">
+              <CustomersTable filter="recent" searchQuery={searchQuery} />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </CustomersProvider>
+    </div>
   );
 };
 
-export default Customers;
+export default function CustomersPage() {
+  return (
+    <Layout portalType="shop">
+      <Customers />
+    </Layout>
+  );
+}
