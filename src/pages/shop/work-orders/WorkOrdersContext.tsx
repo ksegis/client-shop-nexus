@@ -53,9 +53,24 @@ export function WorkOrdersProvider({ children }: { children: ReactNode }) {
         throw new Error("Missing required fields: customer_id, vehicle_id, or title");
       }
       
+      // Create a properly typed object that satisfies Supabase's requirements
+      const newWorkOrder = {
+        customer_id: workOrder.customer_id,
+        vehicle_id: workOrder.vehicle_id,
+        title: workOrder.title,
+        description: workOrder.description,
+        status: workOrder.status || 'pending',
+        estimated_hours: workOrder.estimated_hours,
+        estimated_cost: workOrder.estimated_cost,
+        actual_hours: workOrder.actual_hours,
+        actual_cost: workOrder.actual_cost,
+        priority: workOrder.priority || 1,
+        assigned_to: workOrder.assigned_to
+      };
+      
       const { data, error: insertError } = await supabase
         .from('work_orders')
-        .insert(workOrder)
+        .insert(newWorkOrder)
         .select();
       
       if (insertError) {
