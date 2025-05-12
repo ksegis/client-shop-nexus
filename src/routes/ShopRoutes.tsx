@@ -12,6 +12,7 @@ import ShopEstimates from "@/pages/shop/Estimates";
 import ShopInvoices from "@/pages/shop/invoices";
 import ShopProfile from "@/pages/shop/Profile";
 import ShopUserManagement from "@/pages/shop/UserManagement";
+import ShopAdminDashboard from "@/pages/shop/AdminDashboard";
 import NotFound from "@/pages/NotFound";
 
 const ShopRoutes = () => {
@@ -106,6 +107,14 @@ const ShopRoutes = () => {
         element={
           <ProtectedRoute requiredRole="admin">
             <ShopUserManagement />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="admin" 
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <ShopAdminDashboard />
           </ProtectedRoute>
         } 
       />
