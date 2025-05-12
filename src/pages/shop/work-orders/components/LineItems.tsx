@@ -203,11 +203,11 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
                     `$${item.price.toFixed(2)}`
                   ) : (
                     <Input 
-                      type="number"
-                      step="0.01"
+                      inputMode="decimal"
                       value={item.price}
                       onChange={(e) => handleItemChange(index, 'price', e.target.value)}
                       className="h-12 text-base text-right w-full"
+                      // Remove type="number" to get rid of up/down arrows
                     />
                   )}
                 </TableCell>
@@ -294,12 +294,12 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
               </TableCell>
               <TableCell className="text-right py-4">
                 <Input 
-                  type="number"
-                  step="0.01"
+                  inputMode="decimal"
                   placeholder="Price"
                   value={newItem.price || ''}
                   onChange={(e) => setNewItem({...newItem, price: parseFloat(e.target.value) || 0})}
                   className="h-12 text-base text-right w-full"
+                  // Remove type="number" to get rid of up/down arrows
                 />
               </TableCell>
               <TableCell className="text-right font-medium py-4">
@@ -331,3 +331,4 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
     </div>
   );
 };
+
