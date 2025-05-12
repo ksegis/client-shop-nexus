@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/components/ui/use-toast';
 import { Vehicle, NewVehicleData } from '@/types/vehicle';
 import VehiclesList from './VehiclesList';
 import AddVehicleDialog from './AddVehicleDialog';
@@ -12,9 +11,16 @@ interface VehiclesCardProps {
   loading: boolean;
   onAddVehicle: (vehicle: NewVehicleData) => Promise<boolean>;
   onRemoveVehicle: (id: string) => Promise<boolean>;
+  onUpdateVehicle: (id: string, vehicleData: Partial<Vehicle>) => Promise<boolean>;
 }
 
-const VehiclesCard = ({ vehicles, loading, onAddVehicle, onRemoveVehicle }: VehiclesCardProps) => {
+const VehiclesCard = ({ 
+  vehicles, 
+  loading, 
+  onAddVehicle, 
+  onRemoveVehicle, 
+  onUpdateVehicle 
+}: VehiclesCardProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   
   return (
@@ -35,7 +41,8 @@ const VehiclesCard = ({ vehicles, loading, onAddVehicle, onRemoveVehicle }: Vehi
       ) : (
         <VehiclesList 
           vehicles={vehicles} 
-          onRemoveVehicle={onRemoveVehicle} 
+          onRemoveVehicle={onRemoveVehicle}
+          onUpdateVehicle={onUpdateVehicle}
         />
       )}
       

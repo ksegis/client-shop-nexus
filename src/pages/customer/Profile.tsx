@@ -9,7 +9,7 @@ import VehiclesCard from '@/components/customer/VehiclesCard';
 
 const ProfilePage = () => {
   const { profileData, isLoading } = useProfileData();
-  const { vehicles, loading: vehiclesLoading, addVehicle, removeVehicle } = useVehicleManagement();
+  const { vehicles, loading: vehiclesLoading, addVehicle, updateVehicle, removeVehicle } = useVehicleManagement();
   const navigate = useNavigate();
   
   if (isLoading || vehiclesLoading) {
@@ -53,6 +53,7 @@ const ProfilePage = () => {
             vehicles={vehicles}
             loading={vehiclesLoading}
             onAddVehicle={addVehicle}
+            onUpdateVehicle={updateVehicle}
             onRemoveVehicle={removeVehicle}
           />
         </div>

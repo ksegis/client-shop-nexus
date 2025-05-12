@@ -47,7 +47,14 @@ export const useVehicleManagement = () => {
   }, [user, toast]);
 
   const addVehicle = async (newVehicle: NewVehicleData) => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Authentication required",
+        description: "You must be logged in to add a vehicle"
+      });
+      return false;
+    }
     
     try {
       const { data, error } = await supabase
@@ -92,15 +99,79 @@ export const useVehicleManagement = () => {
     }
   };
   
+  const updateVehicle = async (id: string, vehicleData: Partial<Vehicle>) => {
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Authentication required",
+        description: "You must be logged in to update a vehicle"
+      });
+      return false;
+    }
+
+    try {
+      // Convert year string to number for database storage
+      const dataForUpdate = {
+        ...vehicleData,
+        year: vehicleData.year ? parseInt(vehicleData.year) : undefined
+      };
+
+      const { error } = await supabase
+        .from('vehicles')
+        .update(dataForUpdate)
+        .eq('id', id)
+        .eq('owner_id', user.id);
+        
+      if (error) throw error;
+      
+      // Update local state with the updated vehicle
+      setVehicles(prevVehicles => prevVehicles.map(vehicle => {
+        if (vehicle.id === id) {
+          return {
+            ...vehicle,
+            ...vehicleData
+          };
+        }
+        return vehicle;
+      }));
+      
+      toast({
+        title: "Vehicle Updated",
+        description: "Your vehicle information has been updated."
+      });
+      
+      return true;
+    } catch (error: any) {
+      console.error('Error updating vehicle:', error);
+      toast({
+        variant: "destructive",
+        title: "Failed to update vehicle",
+        description: error.message
+      });
+      return false;
+    }
+  };
+  
   const removeVehicle = async (id: string) => {
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Authentication required",
+        description: "You must be logged in to remove a vehicle"
+      });
+      return false;
+    }
+
     try {
       const { error } = await supabase
         .from('vehicles')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('owner_id', user.id);
         
       if (error) throw error;
       
+      // Update local state
       setVehicles(vehicles.filter(vehicle => vehicle.id !== id));
       
       toast({
@@ -124,6 +195,7 @@ export const useVehicleManagement = () => {
     vehicles,
     loading,
     addVehicle,
+    updateVehicle,
     removeVehicle
   };
 };
