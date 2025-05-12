@@ -9,8 +9,7 @@ import Index from "@/pages/Index";
 const AppRoutes = () => {
   return (
     <Routes>
-      {/* Root route - render Index component that will redirect based on auth status */}
-      <Route index element={<Index />} />
+      {/* Root routes - render Index component that will redirect based on auth status */}
       <Route path="/" element={<Index />} />
       
       {/* Auth Routes */}
