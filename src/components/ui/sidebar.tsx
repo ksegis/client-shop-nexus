@@ -15,7 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Shield, Users, BarChart, Package, ListChecks, UserPlus, Settings } from "lucide-react";
 
 interface Props {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 const navigationItems = [
@@ -78,11 +78,24 @@ export const Sidebar = ({ children }: Props) => {
   const isAdmin = user?.app_metadata?.role === 'admin';
   console.log("Sidebar - isAdmin check result:", isAdmin);
 
-  // If the admin role is stored in the Supabase profile but not in app_metadata,
-  // let's check it directly from the AuthContext
-
   return (
-    <div className="md:flex">
+    <>
+      <div className="h-full border-r bg-background p-0">
+        <div className="py-4">
+          {navigationItems
+            .filter(item => !item.adminOnly || isAdmin)
+            .map((item) => (
+              <SidebarItem 
+                key={item.href}
+                href={item.href}
+                title={item.title}
+                icon={item.icon}
+              />
+            ))}
+        </div>
+      </div>
+      
+      {/* Mobile Sheet/Drawer - Only shown on mobile */}
       <Sheet>
         <SheetTrigger asChild className="absolute left-4 top-4 md:hidden">
           <Button variant="ghost" size="icon">
@@ -110,7 +123,6 @@ export const Sidebar = ({ children }: Props) => {
           </div>
         </SheetContent>
       </Sheet>
-      <main className="flex-1 p-4">{children}</main>
-    </div>
+    </>
   );
 };

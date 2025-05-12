@@ -19,11 +19,14 @@ const Layout: React.FC<LayoutProps> = ({ portalType, children }) => {
       
       {portalType === 'shop' ? (
         <div className="flex flex-1 overflow-hidden">
-          <Sidebar>
-            <main className="flex-1 overflow-auto p-4 md:p-6">
-              {children || <Outlet />}
-            </main>
-          </Sidebar>
+          <div className="hidden md:block">
+            <Sidebar>
+              {/* Sidebar content is managed by the Sidebar component */}
+            </Sidebar>
+          </div>
+          <main className="flex-1 overflow-auto p-4 md:p-6">
+            {children || <Outlet />}
+          </main>
         </div>
       ) : (
         <main className="flex-1 overflow-auto p-4 md:p-6">

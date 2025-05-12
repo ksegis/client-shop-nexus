@@ -1,7 +1,6 @@
 
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import Layout from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertCircle } from 'lucide-react';
@@ -113,11 +112,9 @@ const InventoryContent = () => {
 // The main Inventory component that wraps everything with the provider
 const Inventory = () => {
   return (
-    <Layout portalType="shop">
-      <InventoryProvider>
-        <InventoryContent />
-      </InventoryProvider>
-    </Layout>
+    <InventoryProvider>
+      <InventoryContent />
+    </InventoryProvider>
   );
 };
 
