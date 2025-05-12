@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -106,10 +107,15 @@ export default function InvoiceDialog({
           .in('status', ['pending', 'approved']) // Only get pending or approved estimates
           .order('created_at', { ascending: false });
         
-        if (error) throw error;
+        if (error) {
+          console.error('Error fetching estimates:', error);
+          setOpenEstimates([]);
+          return;
+        }
         
         // Transform the data to ensure it matches the Estimate type
-        const typedData = data?.map(item => {
+        // Initialize with empty array if data is undefined
+        const typedData = (data || []).map(item => {
           // Create a properly typed profiles object with null checks
           const profilesData = item.profiles ? {
             first_name: item.profiles.first_name || '',
@@ -124,9 +130,11 @@ export default function InvoiceDialog({
           };
         }) as Estimate[];
 
-        setOpenEstimates(typedData || []);
+        setOpenEstimates(typedData);
       } catch (error) {
         console.error('Error fetching estimates:', error);
+        // Initialize with empty array on error
+        setOpenEstimates([]);
       }
     };
 
@@ -335,7 +343,7 @@ export default function InvoiceDialog({
                       className="w-full justify-between"
                     >
                       {sourceEstimateId
-                        ? `${openEstimates.find(est => est.id === sourceEstimateId)?.title} (#${sourceEstimateId.substring(0, 8)})`
+                        ? `${openEstimates.find(est => est.id === sourceEstimateId)?.title || 'Selected estimate'} (#${sourceEstimateId.substring(0, 8)})`
                         : "Select an estimate..."}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -345,7 +353,7 @@ export default function InvoiceDialog({
                       <CommandInput placeholder="Search estimates..." />
                       <CommandEmpty>No estimates found.</CommandEmpty>
                       <CommandGroup>
-                        {openEstimates.map((estimate) => (
+                        {(openEstimates || []).map((estimate) => (
                           <CommandItem
                             key={estimate.id}
                             onSelect={() => {
@@ -362,10 +370,10 @@ export default function InvoiceDialog({
                             </div>
                             <div className="flex justify-between w-full text-xs text-muted-foreground mt-1">
                               <div>
-                                {estimate.profiles?.first_name} {estimate.profiles?.last_name}
+                                {estimate.profiles ? `${estimate.profiles.first_name || ''} ${estimate.profiles.last_name || ''}`.trim() || estimate.profiles.email : 'Unknown customer'}
                               </div>
                               <div>
-                                {estimate.vehicles?.year} {estimate.vehicles?.make} {estimate.vehicles?.model}
+                                {estimate.vehicles ? `${estimate.vehicles.year} ${estimate.vehicles.make} ${estimate.vehicles.model}` : 'Unknown vehicle'}
                               </div>
                             </div>
                             {sourceEstimateId === estimate.id && (
