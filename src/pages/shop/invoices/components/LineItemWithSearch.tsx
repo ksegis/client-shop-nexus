@@ -47,7 +47,7 @@ export const LineItemWithSearch = ({
   const handleSelectInventoryItem = (inventoryItem: InventoryItem) => {
     console.log("Selected inventory item:", inventoryItem);
     
-    // Extract values with proper type safety and logging for debugging
+    // Extract values with proper type safety and detailed logging
     const partNumber = inventoryItem.sku || '';
     const itemDescription = inventoryItem.name || '';
     const price = typeof inventoryItem.price === 'number' ? inventoryItem.price : 0;
@@ -60,7 +60,7 @@ export const LineItemWithSearch = ({
       vendor
     });
     
-    // Update all fields
+    // Update all fields with explicit field names
     onUpdate(index, 'part_number', partNumber);
     onUpdate(index, 'description', itemDescription);
     onUpdate(index, 'price', price);
@@ -107,7 +107,7 @@ export const LineItemWithSearch = ({
       </div>
       
       {/* Description with search */}
-      <div className="col-span-4">
+      <div className="col-span-3">
         <InventorySearchPopover
           isOpen={showItemResults}
           onClose={handleCloseSearch}
@@ -136,8 +136,8 @@ export const LineItemWithSearch = ({
         />
       </div>
 
-      {/* Price - maintained width */}
-      <div className="col-span-1">
+      {/* Price - increased width */}
+      <div className="col-span-2">
         <Input 
           type="text" 
           inputMode="decimal"
@@ -151,7 +151,7 @@ export const LineItemWithSearch = ({
         />
       </div>
 
-      {/* Vendor - decreased width */}
+      {/* Vendor - maintained width */}
       <div className="col-span-2">
         <Select
           value={item.vendor || ''}

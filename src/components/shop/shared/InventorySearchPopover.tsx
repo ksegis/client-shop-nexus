@@ -34,7 +34,7 @@ export const InventorySearchPopover = ({
     }
   }, [isOpen]);
 
-  // Handle item selection
+  // Handle item selection with detailed logging
   const handleSelectItem = (item: InventoryItem) => {
     console.log("InventorySearchPopover: Item selected:", item);
     
@@ -69,9 +69,9 @@ export const InventorySearchPopover = ({
                       <span className="font-medium">{item.name}</span>
                       <span className="text-muted-foreground">${item.price?.toFixed(2) || '0.00'}</span>
                     </div>
-                    <div className="flex justify-between w-full text-xs text-muted-foreground">
-                      {item.sku && <span>SKU: {item.sku}</span>}
-                      {item.supplier && <span>Vendor: {item.supplier}</span>}
+                    <div className="flex justify-between w-full text-sm text-muted-foreground">
+                      <span>{item.sku ? `SKU: ${item.sku}` : 'No SKU'}</span>
+                      <span>{item.supplier ? `Vendor: ${item.supplier}` : ''}</span>
                     </div>
                   </div>
                 </CommandItem>
