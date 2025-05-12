@@ -55,10 +55,11 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
       // Set role to customer and ensure required fields
       const customerData = { 
         ...customer, 
-        role: 'customer' as const,  // Explicitly type as a literal
-        // Ensure we have all the required fields for the insert
-        id: customer.id || undefined, // Only include if provided
-        email: customer.email || ''    // Ensure email is not undefined
+        role: 'customer' as const,
+        // Generate a UUID for the customer if not provided
+        id: crypto.randomUUID(),
+        // Ensure email is not undefined
+        email: customer.email || ''    
       };
       
       const { error: insertError } = await supabase

@@ -2,7 +2,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -42,6 +42,7 @@ interface CustomerDialogProps {
 
 export function CustomerDialog({ customerId, open, onOpenChange }: CustomerDialogProps) {
   const { customers, createCustomer, updateCustomer } = useCustomers();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditing = !!customerId;
 
   const form = useForm<FormValues>({
@@ -78,13 +79,17 @@ export function CustomerDialog({ customerId, open, onOpenChange }: CustomerDialo
 
   const onSubmit = async (values: FormValues) => {
     try {
+      setIsSubmitting(true);
       if (isEditing && customerId) {
         await updateCustomer(customerId, values);
       } else {
         await createCustomer(values);
       }
+      setIsSubmitting(false);
+      form.reset();
       if (onOpenChange) onOpenChange(false);
     } catch (error) {
+      setIsSubmitting(false);
       console.error(error);
     }
   };
@@ -152,8 +157,8 @@ export function CustomerDialog({ customerId, open, onOpenChange }: CustomerDialo
             )}
           />
           <DialogFooter>
-            <Button type="submit" className="w-full">
-              {isEditing ? 'Save Changes' : 'Add Customer'}
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? 'Processing...' : isEditing ? 'Save Changes' : 'Add Customer'}
             </Button>
           </DialogFooter>
         </form>
