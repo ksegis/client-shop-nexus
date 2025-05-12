@@ -11,7 +11,6 @@ export interface Employee {
   email: string;
   phone: string | null;
   role: string;
-  status: 'active' | 'inactive';
 }
 
 interface EmployeesContextType {
@@ -37,11 +36,11 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
   } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
-      // Fetch employees from profiles table where role is staff or admin
+      // Fetch employees from profiles table where role is staff, admin or inactive variants
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .in('role', ['staff', 'admin']);
+        .in('role', ['staff', 'admin', 'inactive_staff', 'inactive_admin']);
       
       if (error) throw new Error(error.message);
       
@@ -52,8 +51,7 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
         last_name: profile.last_name || '',
         email: profile.email,
         phone: profile.phone,
-        role: profile.role,
-        status: profile.status || 'active' // Default to active if status is not set
+        role: profile.role
       }));
     }
   });
@@ -66,8 +64,7 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
       last_name: 'Doe',
       email: 'john.doe@example.com',
       phone: '555-123-4567',
-      role: 'admin',
-      status: 'active'
+      role: 'admin'
     },
     {
       id: '2',
@@ -75,8 +72,7 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
       last_name: 'Smith',
       email: 'jane.smith@example.com',
       phone: '555-987-6543',
-      role: 'staff',
-      status: 'active'
+      role: 'staff'
     },
     {
       id: '3',
@@ -84,8 +80,7 @@ export function EmployeesProvider({ children }: { children: React.ReactNode }) {
       last_name: 'Johnson',
       email: 'robert.johnson@example.com',
       phone: '555-456-7890',
-      role: 'staff',
-      status: 'inactive'
+      role: 'inactive_staff'
     }
   ];
 

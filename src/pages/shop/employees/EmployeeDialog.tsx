@@ -24,6 +24,7 @@ export function EmployeeDialog({ open, onOpenChange, onSuccess, employee }: Empl
   };
 
   const isEditing = !!employee;
+  const isActive = employee?.role && !employee.role.startsWith('inactive_');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
