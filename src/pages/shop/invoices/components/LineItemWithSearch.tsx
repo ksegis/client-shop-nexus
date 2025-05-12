@@ -78,7 +78,6 @@ export const LineItemWithSearch = ({
               onUpdate(index, 'description', e.target.value);
               setSearchTerm(e.target.value);
             }}
-            onClick={() => setShowItemResults(true)}
             placeholder="Description"
             className="w-full cursor-text"
           />

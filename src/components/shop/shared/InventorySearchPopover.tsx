@@ -31,7 +31,6 @@ export const InventorySearchPopover = ({
           <CommandInput 
             placeholder="Search inventory..." 
             value={searchTerm}
-            readOnly
           />
           <CommandList>
             <CommandEmpty>No results found</CommandEmpty>
