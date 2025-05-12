@@ -2,7 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, ExtendedRole } from './types';
-import { Database } from '@/integrations/supabase/types-extensions';
+import { Database, ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 
 export const useEmployeesQuery = () => {
   return useQuery({

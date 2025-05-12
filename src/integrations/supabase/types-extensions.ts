@@ -18,5 +18,8 @@ declare module './types' {
   }
 }
 
-// Export the database type but with a different name to avoid conflict
+// Re-export the Database type from ./types to be used in the application
+export { Database } from './types';
+
+// Export the original database type with a different name for reference if needed
 export type { OriginalDatabase };

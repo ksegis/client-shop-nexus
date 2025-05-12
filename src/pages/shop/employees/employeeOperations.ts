@@ -2,7 +2,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, ExtendedRole } from './types';
 import { useToast } from '@/hooks/use-toast';
-import { Database } from '@/integrations/supabase/types-extensions';
+import { Database, ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 
 export const useEmployeeOperations = (refetch: () => Promise<void>) => {
   const { toast } = useToast();
