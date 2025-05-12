@@ -1,5 +1,5 @@
 
-import { Route } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import ShopLogin from "@/pages/shop/Login";
 import ShopDashboard from "@/pages/shop/Dashboard";
@@ -15,11 +15,11 @@ import ShopUserManagement from "@/pages/shop/UserManagement";
 
 const ShopRoutes = () => {
   return (
-    <>
-      <Route path="/shop/login" element={<ShopLogin />} />
+    <Routes>
+      <Route path="login" element={<ShopLogin />} />
       
       <Route 
-        path="/shop" 
+        path="/" 
         element={
           <ProtectedRoute>
             <ShopDashboard />
@@ -27,7 +27,7 @@ const ShopRoutes = () => {
         } 
       />
       <Route 
-        path="/shop/profile" 
+        path="profile" 
         element={
           <ProtectedRoute>
             <ShopProfile />
@@ -35,7 +35,7 @@ const ShopRoutes = () => {
         } 
       />
       <Route 
-        path="/shop/settings" 
+        path="settings" 
         element={
           <ProtectedRoute>
             <ShopProfile />
@@ -43,7 +43,7 @@ const ShopRoutes = () => {
         } 
       />
       <Route 
-        path="/shop/reports" 
+        path="reports" 
         element={
           <ProtectedRoute>
             <ShopReports />
@@ -51,7 +51,7 @@ const ShopRoutes = () => {
         } 
       />
       <Route 
-        path="/shop/employees" 
+        path="employees" 
         element={
           <ProtectedRoute>
             <ShopEmployees />
@@ -59,7 +59,7 @@ const ShopRoutes = () => {
         } 
       />
       <Route 
-        path="/shop/inventory" 
+        path="inventory" 
         element={
           <ProtectedRoute>
             <ShopInventory />
@@ -67,7 +67,7 @@ const ShopRoutes = () => {
         } 
       />
       <Route 
-        path="/shop/work-orders" 
+        path="work-orders" 
         element={
           <ProtectedRoute>
             <ShopWorkOrders />
@@ -75,7 +75,7 @@ const ShopRoutes = () => {
         } 
       />
       <Route 
-        path="/shop/customers" 
+        path="customers" 
         element={
           <ProtectedRoute>
             <ShopCustomers />
@@ -83,7 +83,7 @@ const ShopRoutes = () => {
         } 
       />
       <Route 
-        path="/shop/estimates" 
+        path="estimates" 
         element={
           <ProtectedRoute>
             <ShopEstimates />
@@ -91,7 +91,7 @@ const ShopRoutes = () => {
         } 
       />
       <Route 
-        path="/shop/invoices" 
+        path="invoices" 
         element={
           <ProtectedRoute>
             <ShopInvoices />
@@ -99,14 +99,14 @@ const ShopRoutes = () => {
         } 
       />
       <Route 
-        path="/shop/users" 
+        path="users" 
         element={
           <ProtectedRoute requiredRole="admin">
             <ShopUserManagement />
           </ProtectedRoute>
         } 
       />
-    </>
+    </Routes>
   );
 };
 

@@ -12,13 +12,14 @@ const AppRoutes = () => {
       <Route path="/" element={<Navigate to="/shop" replace />} />
       
       {/* Auth Routes */}
-      <AuthRoutes />
+      {/* Import each route from AuthRoutes instead of using the component */}
+      <Route path="/auth/*" element={<AuthRoutes />} />
       
       {/* Shop Routes */}
-      <ShopRoutes />
+      <Route path="/shop/*" element={<ShopRoutes />} />
       
       {/* Customer Routes */}
-      <CustomerRoutes />
+      <Route path="/customer/*" element={<CustomerRoutes />} />
       
       {/* Not Found Route */}
       <Route path="*" element={<NotFound />} />
