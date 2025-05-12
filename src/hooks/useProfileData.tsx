@@ -3,6 +3,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { ExtendedUserRole, mapExtendedRoleToDbRole } from '@/integrations/supabase/types-extensions';
+import { Database } from '@/integrations/supabase/types';
+
+// Use the database user role type for type safety with Supabase operations
+type DatabaseUserRole = Database['public']['Enums']['user_role'];
 
 type ProfileData = {
   id: string;
@@ -22,6 +26,20 @@ type ProfileData = {
 
 type ProfileUpdateData = Partial<Omit<ProfileData, 'id' | 'email' | 'created_at' | 'updated_at' | 'role'>> & {
   role?: ExtendedUserRole;  // Add role as an optional property with the correct type
+};
+
+// Helper function to convert from database profile to our extended profile type
+const mapDbProfileToExtendedProfile = (dbProfile: any): ProfileData => {
+  // By default, consider all DB roles as active
+  let extendedRole = dbProfile.role as ExtendedUserRole;
+  
+  // Here we'd apply additional business logic to determine if a role should be marked as inactive
+  // This would typically involve checking other fields or conditions
+  
+  return {
+    ...dbProfile,
+    role: extendedRole
+  };
 };
 
 export const useProfileData = () => {
@@ -55,7 +73,7 @@ export const useProfileData = () => {
           const { first_name, last_name } = user.user_metadata || {};
           
           if (first_name || last_name) {
-            const updateData: ProfileUpdateData = {};
+            const updateData: Record<string, any> = {};
             if (first_name) updateData.first_name = first_name;
             if (last_name) updateData.last_name = last_name;
             
@@ -74,7 +92,8 @@ export const useProfileData = () => {
           }
         }
         
-        setProfileData(data as ProfileData);
+        // Convert the database profile to our extended profile type
+        setProfileData(mapDbProfileToExtendedProfile(data));
       } else {
         // If no profile exists, create default profile data from user info
         const userEmail = user.email || '';
@@ -97,13 +116,15 @@ export const useProfileData = () => {
         
         // Create the missing profile in the database
         try {
+          // When saving to the database, we need to map the extended role to a database role
+          const dbRole: DatabaseUserRole = mapExtendedRoleToDbRole(extendedRole);
+          
           await supabase.from('profiles').insert({
             id: user.id,
             email: userEmail,
             first_name: firstName,
             last_name: lastName,
-            // Convert the extended role to a database role for storage
-            role: mapExtendedRoleToDbRole(extendedRole)
+            role: dbRole // Use the database role type
           });
           
           console.log('Created new profile for user:', user.id);
@@ -125,25 +146,28 @@ export const useProfileData = () => {
     }
 
     try {
-      const dataToUpdate = { ...updateData };
+      // Create a new object for database update that doesn't include extended role
+      const dbUpdateData: Record<string, any> = {};
+      
+      // Copy all properties except role from updateData
+      Object.keys(updateData).forEach(key => {
+        if (key !== 'role') {
+          dbUpdateData[key] = (updateData as any)[key];
+        }
+      });
       
       // If role is included in the update data, map it to database role
-      if (dataToUpdate.role) {
-        const dbRole = mapExtendedRoleToDbRole(dataToUpdate.role);
-        // We need to create a new object without the extended role field
-        // and add the mapped role to avoid TypeScript errors
-        const { role, ...rest } = dataToUpdate;
-        await supabase
-          .from('profiles')
-          .update({ ...rest, role: dbRole })
-          .eq('id', user.id);
-      } else {
-        // If no role is included, just update the other fields
-        await supabase
-          .from('profiles')
-          .update(dataToUpdate)
-          .eq('id', user.id);
+      if (updateData.role) {
+        dbUpdateData.role = mapExtendedRoleToDbRole(updateData.role);
       }
+      
+      // Update the profile with the database-compatible data
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update(dbUpdateData)
+        .eq('id', user.id);
+      
+      if (updateError) throw updateError;
       
       // Refresh profile data after update
       await fetchProfileData();
