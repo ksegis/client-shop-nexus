@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -52,39 +51,27 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
 
   const createCustomer = async (customer: Partial<Customer>) => {
     try {
-      // First, create an auth user with the customer's email
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: customer.email || '',
-        email_confirm: true,
-        user_metadata: {
-          first_name: customer.first_name,
-          last_name: customer.last_name,
-        },
-      });
+      // Instead of using auth.admin.createUser, we'll just insert the customer profile
+      // Set role to customer and ensure required fields
+      const customerData = { 
+        ...customer, 
+        role: 'customer' as const,
+        // Generate a UUID for the customer - this will be their future auth ID
+        id: crypto.randomUUID(),
+        // Ensure email is not undefined
+        email: customer.email || ''    
+      };
       
-      if (authError) throw authError;
-      
-      if (!authData.user) {
-        throw new Error('Failed to create auth user');
-      }
-      
-      // Now create the profile with the same ID as the auth user
-      const { error: profileError } = await supabase
+      const { error: insertError } = await supabase
         .from('profiles')
-        .update({
-          first_name: customer.first_name,
-          last_name: customer.last_name,
-          phone: customer.phone,
-          role: 'customer',
-        })
-        .eq('id', authData.user.id);
+        .insert(customerData);
       
-      if (profileError) throw profileError;
+      if (insertError) throw insertError;
       
       await refetch();
       toast({
         title: "Success",
-        description: "Customer created successfully",
+        description: "Customer profile created successfully",
       });
     } catch (error) {
       toast({
