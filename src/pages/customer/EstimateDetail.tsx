@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Layout from '@/components/layout/Layout';
@@ -6,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/components/ui/use-toast';
-import { CheckCircle, XCircle, ArrowLeft, FileText } from 'lucide-react';
+import { CheckCircle, XCircle, ArrowLeft, FileText, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface LineItem {
@@ -31,7 +32,8 @@ const EstimateDetailPage = () => {
     subtotal: 320.00,
     tax: 29.99,
     total: 349.99,
-    notes: 'Customer reported strange noise when braking. Recommend full inspection and brake service.'
+    notes: 'Customer reported strange noise when braking. Recommend full inspection and brake service.',
+    workOrderStatus: null // Track work order status for disabling approvals
   });
   
   // State for related invoice if one exists
@@ -63,10 +65,52 @@ const EstimateDetailPage = () => {
       approved: false 
     },
   ]);
+
+  // Flag to control if changes are allowed
+  const [changesAllowed, setChangesAllowed] = useState(true);
   
-  // Check if this estimate has a related invoice
+  // Fetch the estimate and related data when the page loads
   useEffect(() => {
     if (id) {
+      const fetchEstimateData = async () => {
+        // Fetch estimate data
+        const { data: estimateData, error: estimateError } = await supabase
+          .from('estimates')
+          .select('*, vehicles(make, model, year)')
+          .eq('id', id)
+          .maybeSingle();
+          
+        if (estimateData && !estimateError) {
+          setEstimate({
+            ...estimate,
+            id: estimateData.id,
+            status: estimateData.status,
+            date: new Date(estimateData.created_at).toISOString().split('T')[0],
+            vehicle: estimateData.vehicles 
+              ? `${estimateData.vehicles.year} ${estimateData.vehicles.make} ${estimateData.vehicles.model}`
+              : 'Unknown',
+            subtotal: estimateData.total_amount,
+            total: estimateData.total_amount,
+            notes: estimateData.description || ''
+          });
+          
+          // Check if there's an associated work order and its status
+          const { data: workOrderData } = await supabase
+            .from('work_orders')
+            .select('status')
+            .eq('estimate_id', id)
+            .maybeSingle();
+            
+          if (workOrderData) {
+            setEstimate(prev => ({ ...prev, workOrderStatus: workOrderData.status }));
+            // If work order is started or later status, prevent changes
+            if (['started', 'in_progress', 'completed', 'delivered'].includes(workOrderData.status)) {
+              setChangesAllowed(false);
+            }
+          }
+        }
+      };
+      
       const fetchRelatedInvoice = async () => {
         const { data, error } = await supabase
           .from('invoices')
@@ -79,11 +123,32 @@ const EstimateDetailPage = () => {
         }
       };
       
+      fetchEstimateData();
       fetchRelatedInvoice();
     }
   }, [id]);
   
+  // Update changes allowed state based on estimate status
+  useEffect(() => {
+    if (['approved', 'declined', 'completed'].includes(estimate.status)) {
+      setChangesAllowed(false);
+    } else {
+      // Only allow changes if work order hasn't started
+      setChangesAllowed(!['started', 'in_progress', 'completed', 'delivered'].includes(estimate.workOrderStatus || ''));
+    }
+  }, [estimate.status, estimate.workOrderStatus]);
+  
   const toggleItemApproval = (itemId: string) => {
+    // Only allow changes if the estimate status is pending or the work order hasn't started
+    if (!changesAllowed) {
+      toast({
+        title: "Changes not allowed",
+        description: "This estimate cannot be modified in its current state",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setLineItems(
       lineItems.map((item) =>
         item.id === itemId ? { ...item, approved: !item.approved } : item
@@ -95,33 +160,108 @@ const EstimateDetailPage = () => {
     return lineItems.every((item) => item.approved);
   };
   
-  const handleApproveEstimate = () => {
+  const handleApproveEstimate = async () => {
+    // Check if changes are allowed
+    if (!changesAllowed) {
+      toast({
+        title: "Operation not allowed",
+        description: "This estimate cannot be modified in its current state",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // Update all line items to approved
     setLineItems(lineItems.map((item) => ({ ...item, approved: true })));
     
     // Update estimate status
     setEstimate({ ...estimate, status: 'approved' });
     
+    // Update the estimate status in the database
+    if (id) {
+      const { error } = await supabase
+        .from('estimates')
+        .update({ status: 'approved' })
+        .eq('id', id);
+        
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Failed to update estimate status: " + error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     toast({
       title: "Estimate Approved",
       description: "Your estimate has been approved and sent to the shop.",
     });
     
-    // Integration placeholder
-    console.log('<!-- TODO: POST approval status via GHL webhook → Zapier → Supabase -->');
+    // After approval, disallow further changes
+    setChangesAllowed(false);
   };
   
-  const handleRejectEstimate = () => {
+  const handleRejectEstimate = async () => {
+    // Check if changes are allowed
+    if (!changesAllowed) {
+      toast({
+        title: "Operation not allowed",
+        description: "This estimate cannot be modified in its current state",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     // Update estimate status
-    setEstimate({ ...estimate, status: 'rejected' });
+    setEstimate({ ...estimate, status: 'declined' });
+    
+    // Update the estimate status in the database
+    if (id) {
+      const { error } = await supabase
+        .from('estimates')
+        .update({ status: 'declined' })
+        .eq('id', id);
+        
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Failed to update estimate status: " + error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     
     toast({
       title: "Estimate Rejected",
       description: "Your estimate has been rejected.",
     });
     
-    // Integration placeholder
-    console.log('<!-- TODO: POST rejection status via GHL webhook → Zapier → Supabase -->');
+    // After rejection, disallow further changes
+    setChangesAllowed(false);
+  };
+
+  // Show warning message if changes are not allowed
+  const renderStatusWarning = () => {
+    if (!changesAllowed) {
+      return (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-md mb-6 flex items-center">
+          <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0" />
+          <div>
+            <p className="font-medium">You cannot modify this estimate</p>
+            <p className="text-sm">
+              {['approved', 'completed'].includes(estimate.status) 
+                ? "This estimate has already been approved or completed." 
+                : "Work has already begun on this estimate."}
+              {" "}Contact the shop to make changes.
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -153,7 +293,7 @@ const EstimateDetailPage = () => {
               variant="outline"
               className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
               onClick={handleRejectEstimate}
-              disabled={estimate.status !== 'pending'}
+              disabled={!changesAllowed || estimate.status !== 'pending'}
             >
               <XCircle className="mr-2 h-4 w-4" />
               Reject
@@ -162,13 +302,15 @@ const EstimateDetailPage = () => {
             <Button
               className="bg-shop-primary hover:bg-shop-primary/90"
               onClick={handleApproveEstimate}
-              disabled={estimate.status !== 'pending'}
+              disabled={!changesAllowed || estimate.status !== 'pending'}
             >
               <CheckCircle className="mr-2 h-4 w-4" />
               Approve All
             </Button>
           </div>
         </div>
+        
+        {renderStatusWarning()}
         
         <div className="grid gap-6 md:grid-cols-3">
           <Card className="col-span-2">
@@ -194,7 +336,7 @@ const EstimateDetailPage = () => {
                         <Checkbox 
                           checked={item.approved}
                           onCheckedChange={() => toggleItemApproval(item.id)}
-                          disabled={estimate.status !== 'pending'}
+                          disabled={!changesAllowed}
                         />
                       </TableCell>
                       <TableCell className="font-medium">{item.partNumber}</TableCell>
@@ -261,10 +403,6 @@ const EstimateDetailPage = () => {
             </Card>
           </div>
         </div>
-        
-        {/* Integration placeholder comments */}
-        {/* <!-- TODO: fetch estimate detail via GHL webhook → Zapier → Supabase --> */}
-        {/* <!-- TODO: POST line item approvals via GHL webhook --> */}
       </div>
     </Layout>
   );
