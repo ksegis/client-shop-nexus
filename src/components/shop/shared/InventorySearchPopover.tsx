@@ -35,7 +35,7 @@ export const InventorySearchPopover = ({
   }, [isOpen]);
 
   // Handle item selection
-  const handleSelectItem = (value: string, item: InventoryItem) => {
+  const handleSelectItem = (item: InventoryItem) => {
     console.log("InventorySearchPopover: Item selected:", item);
     
     // Pass the complete item object to the parent component
@@ -62,7 +62,7 @@ export const InventorySearchPopover = ({
                 <CommandItem
                   key={item.id}
                   value={`${item.sku || ''}-${item.name}`}
-                  onSelect={() => handleSelectItem(`${item.sku || ''}-${item.name}`, item)}
+                  onSelect={() => handleSelectItem(item)}
                 >
                   <div className="w-full flex flex-col">
                     <div className="flex justify-between items-center w-full">

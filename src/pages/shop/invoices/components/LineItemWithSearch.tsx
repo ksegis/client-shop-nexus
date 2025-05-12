@@ -47,7 +47,7 @@ export const LineItemWithSearch = ({
   const handleSelectInventoryItem = (inventoryItem: InventoryItem) => {
     console.log("Selected inventory item:", inventoryItem);
     
-    // Extract values with proper type safety
+    // Extract values with proper type safety and logging for debugging
     const partNumber = inventoryItem.sku || '';
     const itemDescription = inventoryItem.name || '';
     const price = typeof inventoryItem.price === 'number' ? inventoryItem.price : 0;
@@ -64,7 +64,9 @@ export const LineItemWithSearch = ({
     onUpdate(index, 'part_number', partNumber);
     onUpdate(index, 'description', itemDescription);
     onUpdate(index, 'price', price);
-    onUpdate(index, 'vendor', vendor);
+    if (vendor) {
+      onUpdate(index, 'vendor', vendor);
+    }
     
     // Update local state
     setDescription(itemDescription);
@@ -105,7 +107,7 @@ export const LineItemWithSearch = ({
       </div>
       
       {/* Description with search */}
-      <div className="col-span-3">
+      <div className="col-span-4">
         <InventorySearchPopover
           isOpen={showItemResults}
           onClose={handleCloseSearch}
@@ -125,7 +127,7 @@ export const LineItemWithSearch = ({
       </div>
 
       {/* Quantity - increased width */}
-      <div className="col-span-1">
+      <div className="col-span-2">
         <Input 
           type="number" 
           min="1" 
@@ -134,7 +136,7 @@ export const LineItemWithSearch = ({
         />
       </div>
 
-      {/* Price - decreased width */}
+      {/* Price - maintained width */}
       <div className="col-span-1">
         <Input 
           type="text" 
@@ -149,8 +151,8 @@ export const LineItemWithSearch = ({
         />
       </div>
 
-      {/* Vendor - increased width significantly */}
-      <div className="col-span-4">
+      {/* Vendor - decreased width */}
+      <div className="col-span-2">
         <Select
           value={item.vendor || ''}
           onValueChange={(value) => onUpdate(index, 'vendor', value)}
@@ -168,7 +170,7 @@ export const LineItemWithSearch = ({
         </Select>
       </div>
 
-      {/* Remove button - decreased width */}
+      {/* Remove button - maintained small width */}
       <div className="col-span-1 flex items-center justify-end">
         <Button 
           variant="ghost" 

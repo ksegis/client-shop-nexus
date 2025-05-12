@@ -51,10 +51,10 @@ export const LineItemsSection = ({
         <div className="border rounded-md">
           <div className="grid grid-cols-12 gap-2 p-3 bg-muted/50 font-medium text-sm">
             <div className="col-span-2">Part #</div>
-            <div className="col-span-3">Description</div>
-            <div className="col-span-1">Qty</div>
+            <div className="col-span-4">Description</div>
+            <div className="col-span-2">Qty</div>
             <div className="col-span-1">Price</div>
-            <div className="col-span-4">Vendor</div>
+            <div className="col-span-2">Vendor</div>
             <div className="col-span-1"></div>
           </div>
           
