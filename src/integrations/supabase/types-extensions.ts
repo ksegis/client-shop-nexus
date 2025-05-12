@@ -9,7 +9,7 @@ export type ExtendedUserRole =
 
 // This helps us override the type from Supabase
 declare module './types' {
-  interface Database {
+  interface Database extends OriginalDatabase {
     public: {
       Enums: {
         user_role: ExtendedUserRole;
@@ -17,9 +17,6 @@ declare module './types' {
     } & Omit<OriginalDatabase['public'], 'Enums'>;
   }
 }
-
-// Re-export the Database type from ./types to be used in the application
-export type { Database } from './types';
 
 // Export the original database type with a different name for reference if needed
 export type { OriginalDatabase };

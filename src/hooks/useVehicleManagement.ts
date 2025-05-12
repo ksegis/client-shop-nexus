@@ -55,7 +55,7 @@ export const useVehicleManagement = () => {
       // Convert year to number for database insertion
       const dbVehicleData = {
         ...vehicleData,
-        year: parseInt(vehicleData.year),
+        year: parseInt(vehicleData.year), // This converts string to number
         owner_id: user.id
       };
 
@@ -70,7 +70,7 @@ export const useVehicleManagement = () => {
       // Convert back to our interface format
       const newVehicle: Vehicle = {
         ...data,
-        year: data.year.toString()
+        year: data.year.toString() // Convert number back to string
       };
       
       setVehicles(prev => [newVehicle, ...prev]);
@@ -96,7 +96,7 @@ export const useVehicleManagement = () => {
       // Convert year to number if it's included in the update data
       const dbVehicleData = { ...vehicleData };
       if (vehicleData.year) {
-        dbVehicleData.year = parseInt(vehicleData.year);
+        dbVehicleData.year = parseInt(vehicleData.year); // Convert string to number
       }
 
       const { data, error } = await supabase
@@ -111,7 +111,7 @@ export const useVehicleManagement = () => {
       // Convert back to our interface format
       const updatedVehicle: Vehicle = {
         ...data,
-        year: data.year.toString()
+        year: data.year.toString() // Convert number back to string
       };
       
       setVehicles(prev => prev.map(vehicle => vehicle.id === id ? updatedVehicle : vehicle));
