@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useInventorySearch } from '@/hooks/useInventorySearch';
 import { InvoiceLineItem } from '../types';
 import { Trash } from 'lucide-react';
+import { InventoryItem } from '@/pages/shop/inventory/types';
 
 interface LineItemWithSearchProps {
   item: InvoiceLineItem;
@@ -43,14 +44,21 @@ export const LineItemWithSearch = ({
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, searchInventory]);
 
-  const handleSelectInventoryItem = (inventoryItem: any) => {
+  const handleSelectInventoryItem = (inventoryItem: InventoryItem) => {
     console.log("Selected inventory item:", inventoryItem);
     
-    // Ensure all fields are properly updated with inventory item data
+    // Extract values with proper type safety
     const partNumber = inventoryItem.sku || '';
     const itemDescription = inventoryItem.name || '';
-    const price = parseFloat(inventoryItem.price) || 0;
+    const price = typeof inventoryItem.price === 'number' ? inventoryItem.price : 0;
     const vendor = inventoryItem.supplier || '';
+    
+    console.log("Updating line item with values:", {
+      partNumber,
+      itemDescription,
+      price,
+      vendor
+    });
     
     // Update all fields
     onUpdate(index, 'part_number', partNumber);
@@ -77,6 +85,14 @@ export const LineItemWithSearch = ({
     setSearchTerm(value);
   };
 
+  const handleFocusDescription = () => {
+    setShowItemResults(true);
+    if (description) {
+      setSearchTerm(description);
+      searchInventory(description);
+    }
+  };
+
   return (
     <div className="grid grid-cols-12 gap-2 p-3 border-t">
       {/* Part Number */}
@@ -89,7 +105,7 @@ export const LineItemWithSearch = ({
       </div>
       
       {/* Description with search */}
-      <div className="col-span-4">
+      <div className="col-span-3">
         <InventorySearchPopover
           isOpen={showItemResults}
           onClose={handleCloseSearch}
@@ -101,15 +117,15 @@ export const LineItemWithSearch = ({
           <Input 
             value={description} 
             onChange={handleDescriptionChange}
-            onClick={() => setShowItemResults(true)}
+            onClick={handleFocusDescription}
             placeholder="Description"
             className="w-full cursor-text"
           />
         </InventorySearchPopover>
       </div>
 
-      {/* Quantity - with proper width */}
-      <div className="col-span-1.5">
+      {/* Quantity - increased width */}
+      <div className="col-span-1">
         <Input 
           type="number" 
           min="1" 
@@ -118,8 +134,8 @@ export const LineItemWithSearch = ({
         />
       </div>
 
-      {/* Price - with proper width */}
-      <div className="col-span-1.5">
+      {/* Price - decreased width */}
+      <div className="col-span-1">
         <Input 
           type="text" 
           inputMode="decimal"
@@ -133,8 +149,8 @@ export const LineItemWithSearch = ({
         />
       </div>
 
-      {/* Vendor - increased column width */}
-      <div className="col-span-2.5">
+      {/* Vendor - increased width significantly */}
+      <div className="col-span-4">
         <Select
           value={item.vendor || ''}
           onValueChange={(value) => onUpdate(index, 'vendor', value)}
@@ -153,7 +169,7 @@ export const LineItemWithSearch = ({
       </div>
 
       {/* Remove button - decreased width */}
-      <div className="col-span-0.5 flex items-center justify-end">
+      <div className="col-span-1 flex items-center justify-end">
         <Button 
           variant="ghost" 
           size="icon" 

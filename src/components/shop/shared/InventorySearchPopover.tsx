@@ -37,6 +37,7 @@ export const InventorySearchPopover = ({
   // Handle item selection
   const handleSelectItem = (value: string, item: InventoryItem) => {
     console.log("InventorySearchPopover: Item selected:", item);
+    
     // Pass the complete item object to the parent component
     onSelect(item);
   };
@@ -68,11 +69,10 @@ export const InventorySearchPopover = ({
                       <span className="font-medium">{item.name}</span>
                       <span className="text-muted-foreground">${item.price?.toFixed(2) || '0.00'}</span>
                     </div>
-                    {item.sku && (
-                      <span className="text-xs text-muted-foreground">
-                        SKU: {item.sku}
-                      </span>
-                    )}
+                    <div className="flex justify-between w-full text-xs text-muted-foreground">
+                      {item.sku && <span>SKU: {item.sku}</span>}
+                      {item.supplier && <span>Vendor: {item.supplier}</span>}
+                    </div>
                   </div>
                 </CommandItem>
               ))}
