@@ -1,19 +1,25 @@
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'void' | 'overdue';
 
-import { Database } from "@/integrations/supabase/types";
-
-export type Invoice = Database['public']['Tables']['invoices']['Row'] & {
+export interface Invoice {
+  id: string;
+  title: string;
+  description?: string;
+  total_amount: number;
+  status: InvoiceStatus;
+  customer_id: string;
+  vehicle_id: string;
+  staff_id?: string;
+  created_at: string;
+  updated_at: string;
+  estimate_id?: string; // Added to reference the original estimate
   vehicles?: {
     make: string;
     model: string;
     year: number;
   };
-  customer?: {
-    first_name: string | null;
-    last_name: string | null;
+  profiles?: {
+    first_name?: string;
+    last_name?: string;
     email: string;
   };
-};
-
-export type InvoiceStatus = Database['public']['Enums']['invoice_status'];
-
-export type InvoiceItem = Database['public']['Tables']['invoice_items']['Row'];
+}

@@ -1,5 +1,6 @@
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Table,
   TableBody,
@@ -18,15 +19,18 @@ import { Button } from '@/components/ui/button';
 import { Estimate, EstimateStatus } from './types';
 import StatusBadge from './components/StatusBadge';
 import { format } from 'date-fns';
-import { MoreHorizontal, Pencil, Trash } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash, FileText } from 'lucide-react';
 import { useEstimates } from './EstimatesContext';
 import DeleteConfirmationDialog from './components/DeleteConfirmationDialog';
+import { useToast } from '@/components/ui/use-toast';
 
 interface EstimatesTableProps {
   onEdit: (estimate: Estimate) => void;
 }
 
 export default function EstimatesTable({ onEdit }: EstimatesTableProps) {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const { estimates, updateEstimateStatus, deleteEstimate } = useEstimates();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
@@ -46,6 +50,21 @@ export default function EstimatesTable({ onEdit }: EstimatesTableProps) {
       setDeleteDialogOpen(false);
       setEstimateToDelete(null);
     }
+  };
+
+  const handleConvertToInvoice = (estimate: Estimate) => {
+    // Navigate to the invoices page with estimate data in state
+    navigate('/shop/invoices', { 
+      state: { 
+        createFromEstimate: true,
+        estimateData: estimate 
+      } 
+    });
+    
+    toast({
+      title: "Converting to Invoice",
+      description: "Creating a new invoice based on estimate #" + estimate.id.substring(0, 8),
+    });
   };
 
   const formatCurrency = (amount: number) => {
@@ -93,49 +112,62 @@ export default function EstimatesTable({ onEdit }: EstimatesTableProps) {
                 <StatusBadge status={estimate.status} />
               </TableCell>
               <TableCell className="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <MoreHorizontal className="h-4 w-4" />
-                      <span className="sr-only">Actions</span>
+                <div className="flex justify-end items-center space-x-2">
+                  {estimate.status === 'approved' && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleConvertToInvoice(estimate)}
+                      className="flex items-center"
+                    >
+                      <FileText className="mr-1 h-4 w-4" />
+                      To Invoice
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEdit(estimate)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => confirmDelete(estimate)}>
-                      <Trash className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                    {/* Status change options */}
-                    <DropdownMenuItem
-                      disabled={estimate.status === 'pending'}
-                      onClick={() => handleStatusUpdate(estimate.id, 'pending')}
-                    >
-                      Mark as Pending
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={estimate.status === 'approved'}
-                      onClick={() => handleStatusUpdate(estimate.id, 'approved')}
-                    >
-                      Mark as Approved
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={estimate.status === 'declined'}
-                      onClick={() => handleStatusUpdate(estimate.id, 'declined')}
-                    >
-                      Mark as Declined
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={estimate.status === 'completed'}
-                      onClick={() => handleStatusUpdate(estimate.id, 'completed')}
-                    >
-                      Mark as Completed
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onEdit(estimate)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => confirmDelete(estimate)}>
+                        <Trash className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                      {/* Status change options */}
+                      <DropdownMenuItem
+                        disabled={estimate.status === 'pending'}
+                        onClick={() => handleStatusUpdate(estimate.id, 'pending')}
+                      >
+                        Mark as Pending
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={estimate.status === 'approved'}
+                        onClick={() => handleStatusUpdate(estimate.id, 'approved')}
+                      >
+                        Mark as Approved
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={estimate.status === 'declined'}
+                        onClick={() => handleStatusUpdate(estimate.id, 'declined')}
+                      >
+                        Mark as Declined
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={estimate.status === 'completed'}
+                        onClick={() => handleStatusUpdate(estimate.id, 'completed')}
+                      >
+                        Mark as Completed
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </TableCell>
             </TableRow>
           ))}

@@ -1,14 +1,13 @@
-
-import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import Layout from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/components/ui/use-toast';
-import { CheckCircle, XCircle, ArrowLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { CheckCircle, XCircle, ArrowLeft, FileText } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface LineItem {
   id: string;
@@ -23,7 +22,7 @@ const EstimateDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   
-  // Mock data for demonstration
+  // State for the estimate data
   const [estimate, setEstimate] = useState({
     id: id || 'EST-1001',
     date: '2025-05-08',
@@ -34,6 +33,9 @@ const EstimateDetailPage = () => {
     total: 349.99,
     notes: 'Customer reported strange noise when braking. Recommend full inspection and brake service.'
   });
+  
+  // State for related invoice if one exists
+  const [relatedInvoice, setRelatedInvoice] = useState<any>(null);
   
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { 
@@ -61,6 +63,25 @@ const EstimateDetailPage = () => {
       approved: false 
     },
   ]);
+  
+  // Check if this estimate has a related invoice
+  useEffect(() => {
+    if (id) {
+      const fetchRelatedInvoice = async () => {
+        const { data, error } = await supabase
+          .from('invoices')
+          .select('id, title, status')
+          .eq('estimate_id', id)
+          .maybeSingle();
+          
+        if (data && !error) {
+          setRelatedInvoice(data);
+        }
+      };
+      
+      fetchRelatedInvoice();
+    }
+  }, [id]);
   
   const toggleItemApproval = (itemId: string) => {
     setLineItems(
@@ -118,6 +139,16 @@ const EstimateDetailPage = () => {
           </div>
           
           <div className="flex space-x-2">
+            {/* Show invoice link if available */}
+            {relatedInvoice && (
+              <Link to={`/customer/invoices/${relatedInvoice.id}`}>
+                <Button variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50">
+                  <FileText className="mr-2 h-4 w-4" />
+                  View Invoice
+                </Button>
+              </Link>
+            )}
+          
             <Button
               variant="outline"
               className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
