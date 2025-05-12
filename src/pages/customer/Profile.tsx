@@ -2,7 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/layout/Layout';
 import { useProfileData } from '@/hooks/useProfileData';
-import { useVehicleManagement } from '@/hooks/useVehicleManagement';
+import { useVehicleManagement } from '@/hooks/vehicles/useVehicleManagement';
 import { Loader2 } from 'lucide-react';
 import PersonalInfoCard from '@/components/customer/PersonalInfoCard';
 import VehiclesCard from '@/components/customer/VehiclesCard';

@@ -33,7 +33,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
-            role: role as unknown as string,
+            role: role,
             first_name: employee.first_name || '',
             last_name: employee.last_name || '',
             phone: employee.phone || '',
@@ -71,7 +71,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
           last_name: employee.last_name,
           email: employee.email,
           phone: employee.phone,
-          role: roleValue as unknown as string,
+          role: roleValue,
         })
         .eq('id', id);
       
@@ -119,7 +119,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
       
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ role: newRole as unknown as string })
+        .update({ role: newRole })
         .eq('id', id);
       
       if (updateError) throw updateError;
