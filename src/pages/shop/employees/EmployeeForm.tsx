@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useEmployees, Employee, ExtendedRole } from './EmployeesContext';
+import { useEmployees, Employee, ExtendedRole, BaseRole } from './EmployeesContext';
 
 // Schema for creating new employees
 const createFormSchema = z.object({
@@ -25,7 +25,7 @@ const createFormSchema = z.object({
   last_name: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
   phone: z.string().optional(),
-  role: z.enum(['staff', 'admin']),
+  role: z.enum(['staff', 'admin'] as const),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
@@ -35,13 +35,12 @@ const updateFormSchema = z.object({
   last_name: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
   phone: z.string().optional(),
-  role: z.enum(['staff', 'admin']),
+  role: z.enum(['staff', 'admin'] as const),
   password: z.string().optional(),
 });
 
 export type EmployeeFormCreateValues = z.infer<typeof createFormSchema>;
 export type EmployeeFormUpdateValues = z.infer<typeof updateFormSchema>;
-type StaffRole = 'staff' | 'admin';
 
 interface EmployeeFormProps {
   onCancel: () => void;
@@ -55,10 +54,10 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
   const isEditing = !!employeeData;
   
   // Helper function to get base role (remove inactive_ prefix)
-  const getBaseRole = (role: ExtendedRole): StaffRole => {
+  const getBaseRole = (role: ExtendedRole): BaseRole => {
     return role.startsWith('inactive_') 
-      ? role.substring('inactive_'.length) as StaffRole
-      : role as StaffRole;
+      ? role.substring('inactive_'.length) as BaseRole
+      : role as BaseRole;
   };
   
   // Helper function to check if a role is inactive
@@ -68,13 +67,13 @@ export function EmployeeForm({ onCancel, onSuccess, employeeData }: EmployeeForm
   
   const form = useForm<EmployeeFormCreateValues | EmployeeFormUpdateValues>({
     resolver: zodResolver(isEditing ? updateFormSchema : createFormSchema),
-    defaultValues: isEditing 
+    defaultValues: isEditing && employeeData
       ? {
           first_name: employeeData.first_name || '',
           last_name: employeeData.last_name || '',
           email: employeeData.email || '',
           phone: employeeData.phone || '',
-          role: getBaseRole(employeeData.role),
+          role: getBaseRole(employeeData.role) as 'staff' | 'admin',
         }
       : {
           first_name: '',
