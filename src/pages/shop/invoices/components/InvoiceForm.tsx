@@ -10,6 +10,9 @@ import { DescriptionSection } from "./form-sections/DescriptionSection";
 import { StatusSection } from "./form-sections/StatusSection";
 import { AmountSection } from "./form-sections/AmountSection";
 import { invoiceFormSchema, InvoiceFormValues } from "./InvoiceFormSchema";
+import { LineItemsSection } from "./LineItemsSection";
+import { InvoiceLineItem } from "../types";
+import { useEffect, useState } from "react";
 
 interface InvoiceFormProps {
   invoice?: any;
@@ -36,6 +39,35 @@ export function InvoiceForm({
   onSubmit,
   customers = []
 }: InvoiceFormProps) {
+  const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
+  const [vendors, setVendors] = useState<{name: string}[]>([]);
+
+  // Extract unique vendors from inventory for dropdown
+  useEffect(() => {
+    // In a real app, you'd fetch this from an API
+    setVendors([
+      { name: 'OEM Parts' },
+      { name: 'Aftermarket' },
+      { name: 'Local Supplier' },
+      { name: 'Online Retailer' }
+    ]);
+  }, []);
+
+  // Initialize line items from invoice or estimate
+  useEffect(() => {
+    if (invoice && invoice.lineItems) {
+      setLineItems(invoice.lineItems);
+    } else if (estimateData && estimateData.lineItems) {
+      setLineItems(estimateData.lineItems.map((item: any) => ({
+        description: item.description,
+        quantity: item.quantity,
+        price: item.price,
+        part_number: item.part_number || '',
+        vendor: item.vendor || '',
+      })));
+    }
+  }, [invoice, estimateData]);
+
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: {
@@ -45,6 +77,23 @@ export function InvoiceForm({
       status: invoice?.status || 'draft',
     },
   });
+
+  // Calculate total amount whenever line items change
+  useEffect(() => {
+    if (lineItems.length > 0) {
+      const totalAmount = lineItems.reduce((sum, item) => 
+        sum + (item.quantity * item.price), 0);
+      form.setValue('total_amount', totalAmount);
+    }
+  }, [lineItems, form]);
+
+  const handleSubmitWithItems = (data: InvoiceFormValues) => {
+    // Add line items to the form data
+    onSubmit({
+      ...data,
+      lineItems: lineItems,
+    });
+  };
 
   return (
     <>
@@ -63,7 +112,7 @@ export function InvoiceForm({
       )}
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={form.handleSubmit(handleSubmitWithItems)} className="space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <BasicInfoSection control={form.control} />
 
@@ -79,6 +128,12 @@ export function InvoiceForm({
 
             <AmountSection control={form.control} />
           </div>
+
+          <LineItemsSection 
+            lineItems={lineItems}
+            setLineItems={setLineItems}
+            vendors={vendors}
+          />
 
           <DescriptionSection control={form.control} />
           <StatusSection control={form.control} />

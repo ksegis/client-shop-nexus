@@ -3,18 +3,11 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { LineItemWithSearch } from './LineItemWithSearch';
-
-interface LineItem {
-  part_number?: string;
-  description: string;
-  quantity: number;
-  price: number;
-  vendor?: string;
-}
+import { InvoiceLineItem } from '../types';
 
 interface LineItemsSectionProps {
-  lineItems: LineItem[];
-  setLineItems: (items: LineItem[]) => void;
+  lineItems: InvoiceLineItem[];
+  setLineItems: (items: InvoiceLineItem[]) => void;
   vendors: { name: string }[];
 }
 
@@ -34,7 +27,7 @@ export const LineItemsSection = ({
     setLineItems(lineItems.filter((_, i) => i !== index));
   };
 
-  const updateLineItem = (index: number, field: keyof LineItem, value: any) => {
+  const updateLineItem = (index: number, field: keyof InvoiceLineItem, value: any) => {
     const updatedItems = [...lineItems];
     updatedItems[index] = { ...updatedItems[index], [field]: value };
     setLineItems(updatedItems);

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { Invoice, InvoiceStatus } from '../types';
+import { Invoice, InvoiceStatus, InvoiceLineItem } from '../types';
 
 export function useInvoiceOperations() {
   const [error, setError] = useState<Error | null>(null);
@@ -43,6 +43,23 @@ export function useInvoiceOperations() {
         
       if (queryError) throw queryError;
       
+      // Fetch line items for each invoice
+      if (data && data.length > 0) {
+        const invoicesWithLineItems = await Promise.all(data.map(async (invoice) => {
+          const { data: lineItems } = await supabase
+            .from('invoice_items')
+            .select('*')
+            .eq('invoice_id', invoice.id);
+            
+          return {
+            ...invoice,
+            lineItems: lineItems || []
+          };
+        }));
+        
+        return invoicesWithLineItems as Invoice[];
+      }
+      
       return (data as Invoice[]) || [];
     } catch (error) {
       setError(error as Error);
@@ -58,11 +75,13 @@ export function useInvoiceOperations() {
     total_amount?: number;
     status?: InvoiceStatus;
     estimate_id?: string;
+    lineItems?: InvoiceLineItem[];
   }) => {
     try {
       const dbStatus = mapStatusToDbStatus(invoice.status);
       
-      const { error: insertError } = await supabase
+      // First create the invoice
+      const { data: invoiceData, error: insertError } = await supabase
         .from('invoices')
         .insert({
           customer_id: invoice.customer_id,
@@ -72,16 +91,36 @@ export function useInvoiceOperations() {
           total_amount: invoice.total_amount || 0,
           status: dbStatus,
           estimate_id: invoice.estimate_id
-        });
+        })
+        .select('id')
+        .single();
       
       if (insertError) throw insertError;
+      
+      // Then add any line items
+      if (invoice.lineItems && invoice.lineItems.length > 0 && invoiceData) {
+        const lineItemsToInsert = invoice.lineItems.map(item => ({
+          invoice_id: invoiceData.id,
+          description: item.description,
+          quantity: item.quantity,
+          price: item.price,
+          part_number: item.part_number,
+          vendor: item.vendor
+        }));
+        
+        const { error: lineItemsError } = await supabase
+          .from('invoice_items')
+          .insert(lineItemsToInsert);
+          
+        if (lineItemsError) throw lineItemsError;
+      }
       
       toast({
         title: "Success",
         description: "Invoice created successfully",
       });
       
-      return true;
+      return invoiceData?.id;
     } catch (error) {
       toast({
         variant: "destructive",
@@ -97,6 +136,7 @@ export function useInvoiceOperations() {
     description?: string;
     total_amount?: number;
     status?: InvoiceStatus;
+    lineItems?: InvoiceLineItem[];
   }) => {
     try {
       const dbStatus = invoice.status ? mapStatusToDbStatus(invoice.status) : undefined;
@@ -108,12 +148,42 @@ export function useInvoiceOperations() {
         status: dbStatus
       };
 
+      // Update the invoice
       const { error: updateError } = await supabase
         .from('invoices')
         .update(updatePayload)
         .eq('id', id);
       
       if (updateError) throw updateError;
+      
+      // Handle line items update if provided
+      if (invoice.lineItems) {
+        // First, delete existing line items for this invoice
+        const { error: deleteError } = await supabase
+          .from('invoice_items')
+          .delete()
+          .eq('invoice_id', id);
+          
+        if (deleteError) throw deleteError;
+        
+        // Then, insert the new line items
+        if (invoice.lineItems.length > 0) {
+          const lineItemsToInsert = invoice.lineItems.map(item => ({
+            invoice_id: id,
+            description: item.description,
+            quantity: item.quantity,
+            price: item.price,
+            part_number: item.part_number,
+            vendor: item.vendor
+          }));
+          
+          const { error: insertError } = await supabase
+            .from('invoice_items')
+            .insert(lineItemsToInsert);
+            
+          if (insertError) throw insertError;
+        }
+      }
       
       toast({
         title: "Success",
@@ -160,6 +230,15 @@ export function useInvoiceOperations() {
 
   const deleteInvoice = async (id: string) => {
     try {
+      // First delete line items
+      const { error: deleteLineItemsError } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('invoice_id', id);
+      
+      if (deleteLineItemsError) throw deleteLineItemsError;
+      
+      // Then delete the invoice
       const { error: deleteError } = await supabase
         .from('invoices')
         .delete()

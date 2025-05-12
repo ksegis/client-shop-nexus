@@ -5,21 +5,14 @@ import { Button } from '@/components/ui/button';
 import { InventorySearchPopover } from '@/components/shop/shared/InventorySearchPopover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useInventorySearch } from '@/hooks/useInventorySearch';
+import { InvoiceLineItem } from '../types';
 import { Trash } from 'lucide-react';
 
-interface LineItem {
-  part_number?: string;
-  description: string;
-  quantity: number;
-  price: number;
-  vendor?: string;
-}
-
 interface LineItemWithSearchProps {
-  item: LineItem;
+  item: InvoiceLineItem;
   index: number;
   vendors: { name: string }[];
-  onUpdate: (index: number, field: keyof LineItem, value: any) => void;
+  onUpdate: (index: number, field: keyof InvoiceLineItem, value: any) => void;
   onRemove: (index: number) => void;
 }
 
