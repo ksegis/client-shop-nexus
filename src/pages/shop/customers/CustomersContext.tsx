@@ -3,7 +3,6 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { v4 as uuidv4 } from 'uuid';
 
 export type Customer = {
   id: string;
@@ -53,27 +52,34 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
 
   const createCustomer = async (customer: Partial<Customer>) => {
     try {
-      // For customers without authentication, we'll create a profile entry without
-      // creating an auth user. This means they won't be able to log in, but shop
-      // staff can still manage their records.
+      // First create an auth user with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: customer.email || '',
+        password: Math.random().toString(36).slice(-10), // generate random password
+        options: {
+          data: {
+            first_name: customer.first_name || '',
+            last_name: customer.last_name || '',
+          },
+        }
+      });
       
-      // Generate UUID for the customer profile
-      const customerId = uuidv4();
+      if (authError) throw authError;
       
-      // Create a customer profile directly in the profiles table
-      // Note: The profiles table should have RLS policies that allow staff to create records
-      const { error: insertError } = await supabase
+      if (!authData.user) {
+        throw new Error('Failed to create user');
+      }
+      
+      // Update the profile with additional information
+      const { error: updateError } = await supabase
         .from('profiles')
-        .insert({
-          id: customerId,
-          first_name: customer.first_name || '',
-          last_name: customer.last_name || '',
-          email: customer.email || '',
+        .update({
           phone: customer.phone || '',
           role: 'customer'
-        });
+        })
+        .eq('id', authData.user.id);
       
-      if (insertError) throw insertError;
+      if (updateError) throw updateError;
       
       await refetch();
       toast({
@@ -116,12 +122,19 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
 
   const deleteCustomer = async (id: string) => {
     try {
-      const { error: deleteError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', id);
+      // We only need to delete the auth user, 
+      // the profile will be automatically deleted via cascade
+      const { error: adminDeleteError } = await supabase.auth.admin.deleteUser(id);
       
-      if (deleteError) throw deleteError;
+      if (adminDeleteError) {
+        // If admin delete fails, just delete the profile
+        const { error: deleteError } = await supabase
+          .from('profiles')
+          .delete()
+          .eq('id', id);
+        
+        if (deleteError) throw deleteError;
+      }
       
       await refetch();
       toast({
