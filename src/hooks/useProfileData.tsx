@@ -35,6 +35,7 @@ export const useProfileData = () => {
 
     try {
       setIsLoading(true);
+      setError(null); // Reset any previous errors
       
       // Use maybeSingle() instead of single() to handle case where profile might not exist
       const { data, error: fetchError } = await supabase
@@ -46,14 +47,42 @@ export const useProfileData = () => {
       if (fetchError) throw fetchError;
       
       if (data) {
+        // If profile exists but first_name/last_name are null, try to update from user metadata
+        if (!data.first_name || !data.last_name) {
+          const { first_name, last_name } = user.user_metadata || {};
+          
+          if (first_name || last_name) {
+            const updateData: Partial<ProfileData> = {};
+            if (first_name) updateData.first_name = first_name;
+            if (last_name) updateData.last_name = last_name;
+            
+            try {
+              await supabase
+                .from('profiles')
+                .update(updateData)
+                .eq('id', user.id);
+                
+              // Update the local data with the metadata
+              data.first_name = first_name || data.first_name;
+              data.last_name = last_name || data.last_name;
+            } catch (updateError) {
+              console.error('Error updating profile with user metadata:', updateError);
+            }
+          }
+        }
+        
         setProfileData(data as ProfileData);
       } else {
         // If no profile exists, create default profile data from user info
+        const userEmail = user.email || '';
+        const firstName = user.user_metadata?.first_name || '';
+        const lastName = user.user_metadata?.last_name || '';
+        
         const defaultProfile: ProfileData = {
           id: user.id,
-          email: user.email || '',
-          first_name: user.user_metadata?.first_name || '',
-          last_name: user.user_metadata?.last_name || '',
+          email: userEmail,
+          first_name: firstName,
+          last_name: lastName,
           phone: null,
           role: 'staff', // Default to staff for shop portal users
           created_at: new Date().toISOString(),
@@ -61,15 +90,17 @@ export const useProfileData = () => {
         };
         setProfileData(defaultProfile);
         
-        // Optionally create the missing profile in the database
+        // Create the missing profile in the database
         try {
           await supabase.from('profiles').insert({
             id: user.id,
-            email: user.email || '',
-            first_name: user.user_metadata?.first_name || '',
-            last_name: user.user_metadata?.last_name || '',
+            email: userEmail,
+            first_name: firstName,
+            last_name: lastName,
             role: 'staff'
           });
+          
+          console.log('Created new profile for user:', user.id);
         } catch (insertError) {
           console.error('Error creating profile:', insertError);
         }

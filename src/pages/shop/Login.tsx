@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -44,7 +43,7 @@ const ShopLogin = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Sign up the user
+      // Sign up the user with explicitly set first and last name
       const { error: signUpError, data } = await supabase.auth.signUp({
         email,
         password,
@@ -59,11 +58,15 @@ const ShopLogin = () => {
       
       if (signUpError) throw signUpError;
       
-      // If signup successful, set the user role to 'staff'
+      // If signup successful, set the user role to 'staff' and ensure first/last name are saved
       if (data?.user) {
         const { error: updateError } = await supabase
           .from('profiles')
-          .update({ role: 'staff' })
+          .update({ 
+            role: 'staff',
+            first_name: firstName, // Explicitly set first_name in the profiles table
+            last_name: lastName,   // Explicitly set last_name in the profiles table
+          })
           .eq('id', data.user.id);
         
         if (updateError) throw updateError;

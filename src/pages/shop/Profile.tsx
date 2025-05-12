@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Layout from '@/components/layout/Layout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useProfileData } from '@/hooks/useProfileData';
-import { Loader2, User } from 'lucide-react';
+import { Loader2, User, RefreshCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const profileFormSchema = z.object({
@@ -25,7 +25,7 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 const ProfilePage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { profileData, isLoading, updateProfileData, error } = useProfileData();
+  const { profileData, isLoading, updateProfileData, error, refreshProfile } = useProfileData();
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -42,6 +42,19 @@ const ProfilePage: React.FC = () => {
       phone: profileData.phone || '',
     } : undefined,
   });
+
+  // If form values are empty but user metadata exists, update the form
+  useEffect(() => {
+    if (!form.formState.isDirty && user?.user_metadata) {
+      const { first_name, last_name } = user.user_metadata;
+      if (first_name && !form.getValues('firstName')) {
+        form.setValue('firstName', first_name);
+      }
+      if (last_name && !form.getValues('lastName')) {
+        form.setValue('lastName', last_name);
+      }
+    }
+  }, [user, form.formState.isDirty]);
 
   const onSubmit = async (data: ProfileFormValues) => {
     try {
@@ -65,6 +78,22 @@ const ProfilePage: React.FC = () => {
     }
   };
 
+  const handleRefresh = async () => {
+    try {
+      await refreshProfile();
+      toast({
+        title: "Profile refreshed",
+        description: "Your profile information has been refreshed",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Refresh failed",
+        description: "There was a problem refreshing your profile information",
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <Layout portalType="shop">
@@ -81,13 +110,21 @@ const ProfilePage: React.FC = () => {
         <div className="max-w-3xl mx-auto p-4 bg-red-50 rounded-md border border-red-200">
           <h1 className="text-2xl font-bold mb-2 text-red-600">Error Loading Profile</h1>
           <p className="text-gray-700">{error.message}</p>
-          <Button 
-            variant="outline" 
-            className="mt-4"
-            onClick={() => window.location.reload()}
-          >
-            Try Again
-          </Button>
+          <div className="flex gap-2 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => window.location.reload()}
+            >
+              Try Again
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleRefresh}
+              className="flex items-center gap-1"
+            >
+              <RefreshCcw className="h-4 w-4" /> Refresh Profile
+            </Button>
+          </div>
         </div>
       </Layout>
     );
@@ -98,14 +135,22 @@ const ProfilePage: React.FC = () => {
       <Layout portalType="shop">
         <div className="max-w-3xl mx-auto p-4 bg-amber-50 rounded-md border border-amber-200">
           <h1 className="text-2xl font-bold mb-2">Profile Not Found</h1>
-          <p className="text-gray-700">We couldn't find your profile information. Please try refreshing the page.</p>
-          <Button 
-            variant="outline" 
-            className="mt-4"
-            onClick={() => window.location.reload()}
-          >
-            Refresh Page
-          </Button>
+          <p className="text-gray-700">We couldn't find your profile information.</p>
+          <div className="flex gap-2 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => window.location.reload()}
+            >
+              Refresh Page
+            </Button>
+            <Button 
+              variant="default"
+              onClick={handleRefresh}
+              className="flex items-center gap-1"
+            >
+              <RefreshCcw className="h-4 w-4" /> Try to Create Profile
+            </Button>
+          </div>
         </div>
       </Layout>
     );
