@@ -1,9 +1,9 @@
 
-import { Database } from './types';
+import { Database as OriginalDatabase } from './types';
 
 // Extend the user_role enum from Supabase to include inactive roles
 export type ExtendedUserRole = 
-  Database['public']['Enums']['user_role'] | 
+  OriginalDatabase['public']['Enums']['user_role'] | 
   'inactive_staff' | 
   'inactive_admin';
 
@@ -13,10 +13,10 @@ declare module './types' {
     public: {
       Enums: {
         user_role: ExtendedUserRole;
-      } & Omit<Database['public']['Enums'], 'user_role'>;
-    } & Omit<Database['public'], 'Enums'>;
+      } & Omit<OriginalDatabase['public']['Enums'], 'user_role'>;
+    } & Omit<OriginalDatabase['public'], 'Enums'>;
   }
 }
 
 // Export the extended types to ensure they're used throughout the application
-export { Database };
+export type { OriginalDatabase as Database };

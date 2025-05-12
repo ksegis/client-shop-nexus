@@ -1,62 +1,82 @@
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { Estimate, EstimateStatus, EstimateStats } from '../types';
 
 export function useEstimatesData() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [error, setError] = useState<Error | null>(null);
 
-  const { data: estimates = [], isLoading, refetch } = useQuery({
-    queryKey: ['estimates'],
-    queryFn: async () => {
-      try {
-        const { data, error: queryError } = await supabase
-          .from('estimates')
-          .select(`
-            *,
-            vehicles (
-              make,
-              model,
-              year
-            ),
-            profiles!estimates_customer_id_fkey (
-              first_name,
-              last_name,
-              email
-            )
-          `)
-          .order('created_at', { ascending: false });
-          
-        if (queryError) throw queryError;
+  // Separate data fetcher function to use with useQuery
+  const fetchEstimates = async () => {
+    try {
+      console.log("Fetching estimates from Supabase");
+      
+      const { data, error: queryError } = await supabase
+        .from('estimates')
+        .select(`
+          *,
+          vehicles (
+            make,
+            model,
+            year
+          ),
+          profiles!estimates_customer_id_fkey (
+            first_name,
+            last_name,
+            email
+          )
+        `)
+        .order('created_at', { ascending: false });
         
-        return (data as Estimate[]) || [];
-      } catch (error) {
-        setError(error as Error);
-        return [];
+      if (queryError) {
+        console.error("Supabase error:", queryError);
+        throw queryError;
       }
-    },
+      
+      console.log("Fetched estimates:", data?.length || 0);
+      return (data as Estimate[]) || [];
+    } catch (error) {
+      console.error("Error in fetchEstimates:", error);
+      setError(error as Error);
+      return [];
+    }
+  };
+
+  // Use React Query to fetch and cache the data
+  const { data: estimates = [], isLoading } = useQuery({
+    queryKey: ['estimates'],
+    queryFn: fetchEstimates
   });
 
   // Calculate stats from the estimates
-  const stats: EstimateStats = {
-    pending: { count: 0, value: 0 },
-    approved: { count: 0, value: 0 },
-    declined: { count: 0, value: 0 },
-    completed: { count: 0, value: 0 }
-  };
+  const calculateStats = useCallback(() => {
+    const stats: EstimateStats = {
+      pending: { count: 0, value: 0 },
+      approved: { count: 0, value: 0 },
+      declined: { count: 0, value: 0 },
+      completed: { count: 0, value: 0 }
+    };
 
-  if (estimates) {
-    estimates.forEach(estimate => {
-      if (stats[estimate.status]) {
-        stats[estimate.status].count += 1;
-        stats[estimate.status].value += estimate.total_amount || 0;
-      }
-    });
-  }
+    if (estimates && estimates.length > 0) {
+      estimates.forEach(estimate => {
+        if (stats[estimate.status]) {
+          stats[estimate.status].count += 1;
+          stats[estimate.status].value += estimate.total_amount || 0;
+        }
+      });
+    }
+    
+    return stats;
+  }, [estimates]);
 
-  const createEstimate = async (estimate: { 
+  const stats = calculateStats();
+
+  // Database operations
+  const createEstimate = useCallback(async (estimate: { 
     customer_id: string;
     vehicle_id: string;
     title: string;
@@ -65,18 +85,26 @@ export function useEstimatesData() {
     status?: EstimateStatus;
   }) => {
     try {
+      console.log("Creating estimate:", estimate);
+      
       const { error: insertError } = await supabase
         .from('estimates')
         .insert(estimate);
       
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error("Insert error:", insertError);
+        throw insertError;
+      }
       
-      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['estimates'] });
+      
       toast({
         title: "Success",
         description: "Estimate created successfully",
       });
     } catch (error) {
+      console.error("Error creating estimate:", error);
+      
       toast({
         variant: "destructive",
         title: "Error",
@@ -84,9 +112,9 @@ export function useEstimatesData() {
       });
       throw error;
     }
-  };
+  }, [toast, queryClient]);
 
-  const updateEstimate = async (id: string, estimate: {
+  const updateEstimate = useCallback(async (id: string, estimate: {
     title?: string;
     description?: string;
     total_amount?: number;
@@ -100,7 +128,8 @@ export function useEstimatesData() {
       
       if (updateError) throw updateError;
       
-      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['estimates'] });
+      
       toast({
         title: "Success",
         description: "Estimate updated successfully",
@@ -113,9 +142,9 @@ export function useEstimatesData() {
       });
       throw error;
     }
-  };
+  }, [toast, queryClient]);
 
-  const updateEstimateStatus = async (id: string, status: EstimateStatus) => {
+  const updateEstimateStatus = useCallback(async (id: string, status: EstimateStatus) => {
     try {
       const { error: updateError } = await supabase
         .from('estimates')
@@ -124,7 +153,8 @@ export function useEstimatesData() {
       
       if (updateError) throw updateError;
       
-      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['estimates'] });
+      
       toast({
         title: "Success",
         description: `Estimate status updated to ${status}`,
@@ -137,9 +167,9 @@ export function useEstimatesData() {
       });
       throw error;
     }
-  };
+  }, [toast, queryClient]);
 
-  const deleteEstimate = async (id: string) => {
+  const deleteEstimate = useCallback(async (id: string) => {
     try {
       const { error: deleteError } = await supabase
         .from('estimates')
@@ -148,7 +178,8 @@ export function useEstimatesData() {
       
       if (deleteError) throw deleteError;
       
-      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['estimates'] });
+      
       toast({
         title: "Success",
         description: "Estimate deleted successfully",
@@ -161,11 +192,11 @@ export function useEstimatesData() {
       });
       throw error;
     }
-  };
+  }, [toast, queryClient]);
 
-  const refreshEstimates = async () => {
-    await refetch();
-  };
+  const refreshEstimates = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['estimates'] });
+  }, [queryClient]);
 
   return {
     estimates,

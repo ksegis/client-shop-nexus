@@ -1,8 +1,8 @@
 
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { Estimate, EstimateStatus, EstimateStats } from './types';
 import { useEstimatesData } from './hooks/useEstimatesData';
 
@@ -33,40 +33,78 @@ interface EstimatesContextType {
 const EstimatesContext = createContext<EstimatesContextType | undefined>(undefined);
 
 export function EstimatesProvider({ children }: { children: ReactNode }) {
-  const { 
-    estimates,
-    isLoading, 
-    error, 
-    stats,
-    createEstimate, 
-    updateEstimate, 
-    updateEstimateStatus, 
-    deleteEstimate, 
-    refreshEstimates 
-  } = useEstimatesData();
+  console.log("Initializing EstimatesProvider");
   
-  return (
-    <EstimatesContext.Provider
-      value={{
-        estimates,
-        isLoading,
-        error,
-        stats,
-        createEstimate,
-        updateEstimate,
-        updateEstimateStatus,
-        deleteEstimate,
-        refreshEstimates
-      }}
-    >
-      {children}
-    </EstimatesContext.Provider>
-  );
+  try {
+    // Use useEstimatesData hook to get access to all the data and functions
+    const { 
+      estimates,
+      isLoading, 
+      error, 
+      stats,
+      createEstimate, 
+      updateEstimate, 
+      updateEstimateStatus, 
+      deleteEstimate, 
+      refreshEstimates 
+    } = useEstimatesData();
+    
+    console.log("EstimatesProvider loaded data:", { 
+      estimatesCount: estimates?.length, 
+      isLoading, 
+      hasError: !!error 
+    });
+    
+    // Create context value object outside of the jsx
+    const contextValue = {
+      estimates: estimates || [],
+      isLoading,
+      error,
+      stats,
+      createEstimate,
+      updateEstimate,
+      updateEstimateStatus,
+      deleteEstimate,
+      refreshEstimates
+    };
+
+    return (
+      <EstimatesContext.Provider value={contextValue}>
+        {children}
+      </EstimatesContext.Provider>
+    );
+  } catch (error) {
+    console.error("Error in EstimatesProvider:", error);
+    // Provide a fallback value in case of error
+    const fallbackValue: EstimatesContextType = {
+      estimates: [],
+      isLoading: false,
+      error: error instanceof Error ? error : new Error(String(error)),
+      stats: {
+        pending: { count: 0, value: 0 },
+        approved: { count: 0, value: 0 },
+        declined: { count: 0, value: 0 },
+        completed: { count: 0, value: 0 }
+      },
+      createEstimate: async () => { console.error("createEstimate not available"); },
+      updateEstimate: async () => { console.error("updateEstimate not available"); },
+      updateEstimateStatus: async () => { console.error("updateEstimateStatus not available"); },
+      deleteEstimate: async () => { console.error("deleteEstimate not available"); },
+      refreshEstimates: async () => { console.error("refreshEstimates not available"); }
+    };
+    
+    return (
+      <EstimatesContext.Provider value={fallbackValue}>
+        {children}
+      </EstimatesContext.Provider>
+    );
+  }
 }
 
-export function useEstimates() {
+export function useEstimates(): EstimatesContextType {
   const context = useContext(EstimatesContext);
   if (context === undefined) {
+    console.error("useEstimates must be used within an EstimatesProvider");
     throw new Error('useEstimates must be used within an EstimatesProvider');
   }
   return context;
