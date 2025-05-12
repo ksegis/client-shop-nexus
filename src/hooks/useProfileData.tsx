@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 
 type ProfileData = {
   id: string;
@@ -9,7 +10,7 @@ type ProfileData = {
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
-  role: string;
+  role: ExtendedUserRole;  // Use the ExtendedUserRole type from types-extensions.ts
   created_at: string;
   updated_at: string;
   avatar_url?: string | null;
@@ -19,7 +20,9 @@ type ProfileData = {
   linkedin_url?: string | null;
 };
 
-type ProfileUpdateData = Partial<Omit<ProfileData, 'id' | 'email' | 'created_at' | 'updated_at' | 'role'>>;
+type ProfileUpdateData = Partial<Omit<ProfileData, 'id' | 'email' | 'created_at' | 'updated_at' | 'role'>> & {
+  role?: ExtendedUserRole;  // Add role as an optional property with the correct type
+};
 
 export const useProfileData = () => {
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
@@ -52,7 +55,7 @@ export const useProfileData = () => {
           const { first_name, last_name } = user.user_metadata || {};
           
           if (first_name || last_name) {
-            const updateData: Partial<ProfileData> = {};
+            const updateData: ProfileUpdateData = {};
             if (first_name) updateData.first_name = first_name;
             if (last_name) updateData.last_name = last_name;
             
@@ -77,6 +80,7 @@ export const useProfileData = () => {
         const userEmail = user.email || '';
         const firstName = user.user_metadata?.first_name || '';
         const lastName = user.user_metadata?.last_name || '';
+        const role = user.user_metadata?.role || 'staff'; // Default to staff for shop portal users
         
         const defaultProfile: ProfileData = {
           id: user.id,
@@ -84,7 +88,7 @@ export const useProfileData = () => {
           first_name: firstName,
           last_name: lastName,
           phone: null,
-          role: 'staff', // Default to staff for shop portal users
+          role: role as ExtendedUserRole, // Cast to the correct type
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -97,7 +101,7 @@ export const useProfileData = () => {
             email: userEmail,
             first_name: firstName,
             last_name: lastName,
-            role: 'staff'
+            role: role as ExtendedUserRole // Cast to the correct type
           });
           
           console.log('Created new profile for user:', user.id);
