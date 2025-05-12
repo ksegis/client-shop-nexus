@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { v4 as uuidv4 } from 'uuid';
 
 export type Customer = {
   id: string;
@@ -56,14 +57,15 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
       // creating an auth user. This means they won't be able to log in, but shop
       // staff can still manage their records.
       
-      // We need to use the staff's auth token to create this record, which means
-      // the staff member must be authenticated and have appropriate permissions.
+      // Generate UUID for the customer profile
+      const customerId = uuidv4();
       
       // Create a customer profile directly in the profiles table
       // Note: The profiles table should have RLS policies that allow staff to create records
       const { error: insertError } = await supabase
         .from('profiles')
         .insert({
+          id: customerId,
           first_name: customer.first_name || '',
           last_name: customer.last_name || '',
           email: customer.email || '',
