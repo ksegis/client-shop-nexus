@@ -25,13 +25,18 @@ export const LineItemWithSearch = ({
 }: LineItemWithSearchProps) => {
   const { searchTerm, setSearchTerm, searchResults, searchInventory } = useInventorySearch();
   const [showItemResults, setShowItemResults] = useState(false);
+  const [description, setDescription] = useState(item.description);
+
+  // Sync description with parent component
+  useEffect(() => {
+    setDescription(item.description);
+  }, [item.description]);
 
   // Handle inventory search as user types
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchTerm) {
         searchInventory(searchTerm);
-        setShowItemResults(true);
       }
     }, 300);
 
@@ -49,7 +54,13 @@ export const LineItemWithSearch = ({
 
   const handleCloseSearch = () => {
     setShowItemResults(false);
-    setSearchTerm('');
+  };
+
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setDescription(value);
+    onUpdate(index, 'description', value);
+    setSearchTerm(value);
   };
 
   return (
@@ -71,13 +82,12 @@ export const LineItemWithSearch = ({
           results={searchResults}
           onSelect={handleSelectInventoryItem}
           searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
         >
           <Input 
-            value={item.description} 
-            onChange={(e) => {
-              onUpdate(index, 'description', e.target.value);
-              setSearchTerm(e.target.value);
-            }}
+            value={description} 
+            onChange={handleDescriptionChange}
+            onClick={() => setShowItemResults(true)}
             placeholder="Description"
             className="w-full cursor-text"
           />

@@ -1,5 +1,5 @@
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { InventoryItem } from '@/pages/shop/inventory/types';
@@ -11,6 +11,7 @@ interface InventorySearchPopoverProps {
   results: InventoryItem[];
   onSelect: (item: InventoryItem) => void;
   searchTerm: string;
+  onSearchChange?: (value: string) => void;
 }
 
 export const InventorySearchPopover = ({
@@ -19,8 +20,20 @@ export const InventorySearchPopover = ({
   onClose,
   results,
   onSelect,
-  searchTerm
+  searchTerm,
+  onSearchChange
 }: InventorySearchPopoverProps) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // When popover opens, focus the input
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    }
+  }, [isOpen]);
+
   return (
     <Popover open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <PopoverTrigger asChild>
@@ -29,8 +42,10 @@ export const InventorySearchPopover = ({
       <PopoverContent className="p-0 w-[400px]" align="start">
         <Command>
           <CommandInput 
+            ref={inputRef}
             placeholder="Search inventory..." 
             value={searchTerm}
+            onValueChange={onSearchChange}
           />
           <CommandList>
             <CommandEmpty>No results found</CommandEmpty>
