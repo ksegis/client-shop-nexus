@@ -1,32 +1,25 @@
 
-import { ReactNode } from 'react';
+import React from 'react';
 import Header from './Header';
+import { cn } from '@/lib/utils';
+import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
 
 interface LayoutProps {
-  children: ReactNode;
-  portalType: 'customer' | 'shop';
+  children: React.ReactNode;
+  portalType?: 'shop' | 'customer';
+  className?: string;
 }
 
-const Layout = ({ children, portalType }: LayoutProps) => {
+const Layout = ({ children, portalType = 'shop', className }: LayoutProps) => {
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen bg-gray-50">
+      <ImpersonationBanner />
       <Header portalType={portalType} />
-      <main className="flex-1 bg-white">
-        <div className="shop-container py-6">
+      <div className="flex-1">
+        <div className={cn("container max-w-screen-xl mx-auto py-8 px-4", className)}>
           {children}
         </div>
-      </main>
-      <footer className="bg-gray-100 py-4 border-t border-gray-200">
-        <div className="shop-container">
-          <div className="text-center text-sm text-gray-500">
-            <p>© {new Date().getFullYear()} Shop Management System</p>
-            <p className="text-xs mt-1">
-              {/* Comment for integration */}
-              {/* TODO: Dynamic data fetching happens via GHL → Zapier → Supabase */}
-            </p>
-          </div>
-        </div>
-      </footer>
+      </div>
     </div>
   );
 };

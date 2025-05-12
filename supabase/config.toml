@@ -1,1 +1,9 @@
+
+# This file defines config for your edge functions.
 project_id = "vqkxrbflwhunvbotjdds"
+
+[functions.impersonate-user]
+verify_jwt = true
+
+[functions.restore-admin]
+verify_jwt = true
