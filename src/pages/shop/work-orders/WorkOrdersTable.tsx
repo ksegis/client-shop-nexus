@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -22,9 +22,13 @@ interface WorkOrdersTableProps {
 }
 
 export const WorkOrdersTable = ({ status }: WorkOrdersTableProps) => {
-  const { workOrders, isLoading } = useWorkOrders();
+  const { workOrders, isLoading, error } = useWorkOrders();
   const [sortField, setSortField] = useState<keyof WorkOrder>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  
+  useEffect(() => {
+    console.log("Current work orders:", workOrders);
+  }, [workOrders]);
   
   // Filter work orders based on the selected tab
   const filteredWorkOrders = workOrders.filter(order => {
@@ -68,7 +72,20 @@ export const WorkOrdersTable = ({ status }: WorkOrdersTableProps) => {
     return <div className="p-8 text-center">Loading work orders...</div>;
   }
 
+  if (error) {
+    return <div className="p-8 text-center text-destructive">Error loading work orders: {error.message}</div>;
+  }
+
+  if (workOrders.length === 0) {
+    return <EmptyState />;
+  }
+
   if (filteredWorkOrders.length === 0) {
+    if (status === 'active') {
+      return <div className="p-8 text-center">No active work orders found.</div>;
+    } else if (status === 'completed') {
+      return <div className="p-8 text-center">No completed work orders found.</div>;
+    }
     return <EmptyState />;
   }
 
