@@ -21,14 +21,28 @@ const SignInForm = () => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!email || !password) {
+      toast({
+        title: "Missing fields",
+        description: "Please enter both email and password",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setLoading(true);
+    
     try {
+      console.log("SignIn: Attempting to sign in with email:", email);
       await signIn(email, password, rememberMe);
+      console.log("SignIn: Sign-in successful, navigating to /shop");
       navigate('/shop');
     } catch (error: any) {
+      console.error("SignIn error:", error);
       toast({
         title: "Login failed",
-        description: error.message,
+        description: error.message || "An unexpected error occurred",
         variant: "destructive",
       });
     } finally {
@@ -48,6 +62,7 @@ const SignInForm = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            disabled={loading}
           />
         </div>
         <div className="space-y-2">
@@ -58,6 +73,7 @@ const SignInForm = () => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            disabled={loading}
           />
         </div>
         
@@ -66,6 +82,7 @@ const SignInForm = () => {
             id="remember-me" 
             checked={rememberMe} 
             onCheckedChange={(checked) => setRememberMe(!!checked)} 
+            disabled={loading}
           />
           <label 
             htmlFor="remember-me"

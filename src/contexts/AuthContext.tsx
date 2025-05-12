@@ -27,51 +27,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log("Setting up auth state listener");
     let authStateSubscription: { unsubscribe: () => void };
     
-    // Wrap in try/catch to prevent any errors from breaking the app
     try {
       // Set up auth state listener FIRST
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
+        (event, session) => {
           console.log("Auth state changed:", event, session?.user?.email);
           
           if (session?.user) {
-            try {
-              // Get profile data to enhance user object with role information
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', session.user.id)
-                .single();
-                
-              // If we have profile data with a role, add it to the user's metadata
-              if (profile?.role) {
-                // Update the user object with role from profile
-                const updatedUser = {
-                  ...session.user,
-                  app_metadata: {
-                    ...session.user.app_metadata,
-                    role: profile.role
+            // Handle synchronous state updates immediately
+            setUser(session.user);
+            setSession(session);
+            setLoading(false);
+            
+            // Use setTimeout to prevent potential deadlock with Supabase client
+            if (session.user.id) {
+              setTimeout(async () => {
+                try {
+                  // Get profile data to enhance user object with role information
+                  const { data: profile, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', session.user.id)
+                    .single();
+                    
+                  if (profileError) {
+                    console.error("Error fetching profile:", profileError);
+                    return;
                   }
-                };
-                setUser(updatedUser);
-                console.log("Updated user with role from profile:", profile.role);
-              } else {
-                setUser(session.user);
-              }
-            } catch (error) {
-              console.error("Error fetching profile:", error);
-              setUser(session.user);
+                  
+                  // If we have profile data with a role, add it to the user's metadata
+                  if (profile?.role) {
+                    // Update the user object with role from profile
+                    const updatedUser = {
+                      ...session.user,
+                      app_metadata: {
+                        ...session.user.app_metadata,
+                        role: profile.role
+                      }
+                    };
+                    setUser(updatedUser);
+                    console.log("Updated user with role from profile:", profile.role);
+                  }
+                } catch (error) {
+                  console.error("Error in profile fetch after auth change:", error);
+                }
+              }, 0);
             }
           } else {
             setUser(null);
+            setSession(null);
+            setLoading(false);
           }
-          
-          setSession(session);
-          setLoading(false);
           
           // On sign out, redirect to login page
           if (event === 'SIGNED_OUT') {
-            navigate('/auth');
+            navigate('/shop/login', { replace: true });
           }
         }
       );
@@ -86,39 +96,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log("Initial session check:", session?.user?.email);
       
-      try {
-        if (session?.user) {
-          // Get profile data to enhance user object with role information
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single();
-            
-          // If we have profile data with a role, add it to the user's metadata
-          if (profile?.role) {
-            // Update the user object with role from profile
-            const updatedUser = {
-              ...session.user,
-              app_metadata: {
-                ...session.user.app_metadata,
-                role: profile.role
-              }
-            };
-            setUser(updatedUser);
-            console.log("Initial: Updated user with role from profile:", profile.role);
-          } else {
-            setUser(session.user);
-          }
-        } else {
-          setUser(null);
-        }
-        
+      if (session?.user) {
+        // Set user and session state immediately
+        setUser(session.user);
         setSession(session);
-      } catch (error) {
-        console.error("Error in initial session check:", error);
-      } finally {
-        // Ensure loading is set to false even if there's an error
+        
+        // Fetch profile data separately to avoid deadlocks
+        setTimeout(async () => {
+          try {
+            // Get profile data to enhance user object with role information
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', session.user.id)
+              .single();
+              
+            if (profileError) {
+              console.error("Error fetching profile:", profileError);
+              setLoading(false);
+              return;
+            }
+              
+            // If we have profile data with a role, add it to the user's metadata
+            if (profile?.role) {
+              // Update the user object with role from profile
+              const updatedUser = {
+                ...session.user,
+                app_metadata: {
+                  ...session.user.app_metadata,
+                  role: profile.role
+                }
+              };
+              setUser(updatedUser);
+              console.log("Initial: Updated user with role from profile:", profile.role);
+            }
+          } catch (error) {
+            console.error("Error in initial profile fetch:", error);
+          } finally {
+            setLoading(false);
+          }
+        }, 0);
+      } else {
+        // No session found
+        setUser(null);
+        setSession(null);
         setLoading(false);
       }
     }).catch(error => {
@@ -153,13 +174,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Account created",
         description: "Please check your email to confirm your account.",
       });
+      
+      return Promise.resolve();
     } catch (error: any) {
       toast({
         title: "Error creating account",
         description: error.message,
         variant: "destructive",
       });
-      throw error;
+      return Promise.reject(error);
     } finally {
       setLoading(false);
     }
@@ -167,33 +190,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string, rememberMe: boolean = true) => {
     try {
+      console.log("AuthContext: Signing in with email:", email);
       setLoading(true);
       
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Sign in error:", error);
+        throw error;
+      }
+      
+      console.log("AuthContext: Sign in successful:", data.user?.email);
       
       // Configure session persistence after successful sign-in
-      if (!rememberMe) {
+      if (!rememberMe && data.session) {
         // If "Remember me" is not checked, set session to expire when browser is closed
-        // This is done by setting auto refresh token to false
         await supabase.auth.setSession({
-          access_token: session?.access_token || '',
-          refresh_token: session?.refresh_token || '',
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
         });
       }
       
-      navigate('/shop');
+      // We don't navigate here - let the component handle navigation
+      return Promise.resolve();
     } catch (error: any) {
-      toast({
-        title: "Login failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      throw error;
+      console.error("AuthContext: Sign in failed:", error);
+      return Promise.reject(error);
     } finally {
       setLoading(false);
     }
@@ -201,6 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
+      setLoading(true);
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     } catch (error: any) {
@@ -209,6 +235,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: error.message,
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
