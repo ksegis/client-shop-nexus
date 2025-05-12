@@ -9,9 +9,10 @@ import AddVehicleDialog from './AddVehicleDialog';
 interface VehiclesCardProps {
   vehicles: Vehicle[];
   loading: boolean;
-  onAddVehicle: (vehicle: NewVehicleData) => Promise<boolean>;
+  onAddVehicle: (vehicle: NewVehicleData, customerId?: string) => Promise<boolean>;
   onRemoveVehicle: (id: string) => Promise<boolean>;
   onUpdateVehicle: (id: string, vehicleData: Partial<Vehicle>) => Promise<boolean>;
+  customerId?: string; // New prop for customer ID
 }
 
 const VehiclesCard = ({ 
@@ -19,7 +20,8 @@ const VehiclesCard = ({
   loading, 
   onAddVehicle, 
   onRemoveVehicle, 
-  onUpdateVehicle 
+  onUpdateVehicle,
+  customerId 
 }: VehiclesCardProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   
@@ -50,6 +52,7 @@ const VehiclesCard = ({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onAddVehicle={onAddVehicle}
+        customerId={customerId}
       />
     </Card>
   );

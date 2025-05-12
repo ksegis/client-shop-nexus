@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Vehicle } from '@/types/vehicle';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,24 +21,35 @@ export const useVehicleManagement = () => {
     removeVehicleImage
   } = useVehicleImages();
 
-  const fetchAndSetVehicles = async () => {
-    if (!user?.id) {
+  const fetchAndSetVehicles = async (ownerId?: string) => {
+    const userIdToFetch = ownerId || user?.id;
+    
+    if (!userIdToFetch) {
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
-      const fetchedVehicles = await fetchVehicles(user.id);
+      const fetchedVehicles = await fetchVehicles(userIdToFetch);
       setVehicles(fetchedVehicles);
     } finally {
       setLoading(false);
     }
   };
 
-  const addVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>) => {
-    const newVehicle = await addVehicleBase(vehicleData);
-    setVehicles(prev => [newVehicle, ...prev]);
+  const addVehicle = async (
+    vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>,
+    customerId?: string
+  ) => {
+    const newVehicle = await addVehicleBase(vehicleData, customerId);
+    
+    // If we're adding a vehicle for the current user or for the customer we're viewing,
+    // add it to the state
+    if (!customerId || (user?.id && customerId === user.id)) {
+      setVehicles(prev => [newVehicle, ...prev]);
+    }
+    
     return true;
   };
 

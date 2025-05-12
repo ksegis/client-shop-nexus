@@ -12,10 +12,16 @@ import { Loader2 } from 'lucide-react';
 interface AddVehicleDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAddVehicle: (vehicle: NewVehicleData) => Promise<boolean>;
+  onAddVehicle: (vehicle: NewVehicleData, customerId?: string) => Promise<boolean>;
+  customerId?: string; // Add this prop to specify the customer when adding as shop staff
 }
 
-const AddVehicleDialog = ({ open, onOpenChange, onAddVehicle }: AddVehicleDialogProps) => {
+const AddVehicleDialog = ({ 
+  open, 
+  onOpenChange, 
+  onAddVehicle, 
+  customerId 
+}: AddVehicleDialogProps) => {
   const [newVehicle, setNewVehicle] = useState<NewVehicleData>({
     make: '',
     model: '',
@@ -40,8 +46,8 @@ const AddVehicleDialog = ({ open, onOpenChange, onAddVehicle }: AddVehicleDialog
 
     try {
       setIsSubmitting(true);
-      console.log('Adding vehicle:', newVehicle);
-      const success = await onAddVehicle(newVehicle);
+      console.log('Adding vehicle:', newVehicle, customerId ? `for customer: ${customerId}` : '');
+      const success = await onAddVehicle(newVehicle, customerId);
       
       if (success) {
         setNewVehicle({

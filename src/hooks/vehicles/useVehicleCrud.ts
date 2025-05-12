@@ -43,24 +43,30 @@ export const useVehicleCrud = () => {
     }
   };
 
-  const addVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>) => {
-    if (!user?.id) {
+  const addVehicle = async (
+    vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>, 
+    ownerId?: string
+  ) => {
+    // Use provided ownerId or fall back to current user (for customer-facing scenario)
+    const effectiveOwnerId = ownerId || user?.id;
+    
+    if (!effectiveOwnerId) {
       toast({
-        title: 'Authentication required',
-        description: 'You must be logged in to add a vehicle',
+        title: 'Owner ID required',
+        description: 'A vehicle must be associated with a customer',
         variant: 'destructive',
       });
-      throw new Error('User not authenticated');
+      throw new Error('Owner ID is required');
     }
 
     try {
-      console.log('Adding vehicle with user ID:', user.id);
+      console.log('Adding vehicle with owner ID:', effectiveOwnerId);
       
       // Convert year to number for database insertion
       const dbVehicleData = {
         ...vehicleData,
         year: parseInt(vehicleData.year, 10), // Convert string to number explicitly
-        owner_id: user.id // This is crucial for RLS - make sure owner_id is set to the current user's ID
+        owner_id: effectiveOwnerId // This is crucial for RLS - set owner_id to the customer's ID
       };
 
       console.log('Vehicle data to insert:', dbVehicleData);
