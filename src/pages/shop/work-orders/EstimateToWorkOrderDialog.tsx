@@ -32,7 +32,10 @@ interface EstimateToWorkOrderDialogProps {
 
 export const EstimateToWorkOrderDialog = ({ open, onClose, estimateId }: EstimateToWorkOrderDialogProps) => {
   const { toast } = useToast();
-  const { createWorkOrder } = useWorkOrderCrud(() => {});
+  const { createWorkOrder } = useWorkOrderCrud(async () => {
+    // Return a Promise to satisfy the type requirement
+    return Promise.resolve();
+  });
   const [loading, setLoading] = useState(false);
   const [lineItems, setLineItems] = useState<WorkOrderLineItem[]>([]);
   const [estimateData, setEstimateData] = useState<any>(null);

@@ -166,7 +166,6 @@ export function EstimatesTable({ onEdit }: EstimatesTableProps) {
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
         onConfirm={handleConfirmDelete}
-        isDeleting={isDeleting}
       />
 
       {showWorkOrderDialog && selectedEstimateId && (
