@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -51,20 +52,24 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
 
   const createCustomer = async (customer: Partial<Customer>) => {
     try {
-      // Instead of using auth.admin.createUser, we'll just insert the customer profile
-      // Set role to customer and ensure required fields
-      const customerData = { 
-        ...customer, 
-        role: 'customer' as const,
-        // Generate a UUID for the customer - this will be their future auth ID
-        id: crypto.randomUUID(),
-        // Ensure email is not undefined
-        email: customer.email || ''    
-      };
+      // For customers without authentication, we'll create a profile entry without
+      // creating an auth user. This means they won't be able to log in, but shop
+      // staff can still manage their records.
       
+      // We need to use the staff's auth token to create this record, which means
+      // the staff member must be authenticated and have appropriate permissions.
+      
+      // Create a customer profile directly in the profiles table
+      // Note: The profiles table should have RLS policies that allow staff to create records
       const { error: insertError } = await supabase
         .from('profiles')
-        .insert(customerData);
+        .insert({
+          first_name: customer.first_name || '',
+          last_name: customer.last_name || '',
+          email: customer.email || '',
+          phone: customer.phone || '',
+          role: 'customer'
+        });
       
       if (insertError) throw insertError;
       
