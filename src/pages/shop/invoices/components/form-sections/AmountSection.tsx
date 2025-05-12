@@ -22,9 +22,14 @@ export function AmountSection({ control }: AmountSectionProps) {
           <FormControl>
             <Input 
               placeholder="0.00" 
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               {...field} 
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9.]/g, '');
+                field.onChange(value === '' ? 0 : parseFloat(value));
+              }}
+              className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
           </FormControl>
           <FormMessage />

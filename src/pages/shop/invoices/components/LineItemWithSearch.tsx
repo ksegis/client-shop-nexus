@@ -44,6 +44,7 @@ export const LineItemWithSearch = ({
     onUpdate(index, 'price', item.price || 0);
     onUpdate(index, 'vendor', item.supplier || '');
     setShowItemResults(false);
+    setSearchTerm('');
   };
 
   const handleCloseSearch = () => {
@@ -77,8 +78,9 @@ export const LineItemWithSearch = ({
               onUpdate(index, 'description', e.target.value);
               setSearchTerm(e.target.value);
             }}
+            onClick={() => setShowItemResults(true)}
             placeholder="Description"
-            className="w-full"
+            className="w-full cursor-text"
           />
         </InventorySearchPopover>
       </div>
@@ -93,14 +95,18 @@ export const LineItemWithSearch = ({
         />
       </div>
 
-      {/* Price */}
+      {/* Price - No arrows */}
       <div className="col-span-2">
         <Input 
-          type="number" 
-          step="0.01" 
-          min="0" 
+          type="text" 
+          inputMode="decimal"
           value={item.price} 
-          onChange={(e) => onUpdate(index, 'price', Number(e.target.value))}
+          onChange={(e) => {
+            const value = e.target.value.replace(/[^0-9.]/g, '');
+            onUpdate(index, 'price', value === '' ? 0 : parseFloat(value));
+          }}
+          placeholder="0.00"
+          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
       </div>
 
