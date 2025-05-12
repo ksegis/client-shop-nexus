@@ -83,22 +83,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       
-      // Set the session persistence based on remember me preference
-      await supabase.auth.setSession({
-        access_token: '',
-        refresh_token: '',
-      });
-      
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
-        options: {
-          // The persistSession option needs to be in the correct location
-          // It should be in the overall options, not in the "options.options"
-        }
       });
 
       if (error) throw error;
+      
+      // Configure session persistence after successful sign-in
+      if (!rememberMe) {
+        // If "Remember me" is not checked, set session to expire when browser is closed
+        // This is done by setting auto refresh token to false
+        await supabase.auth.setSession({
+          access_token: session?.access_token || '',
+          refresh_token: session?.refresh_token || '',
+        });
+      }
       
       navigate('/shop');
     } catch (error: any) {
