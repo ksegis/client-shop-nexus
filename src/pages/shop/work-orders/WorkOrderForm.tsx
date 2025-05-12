@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { UseFormReturn } from 'react-hook-form';
 import { Form } from '@/components/ui/form';
@@ -10,7 +9,7 @@ import { TitleField } from './components/TitleField';
 import { NumericField } from './components/NumericField';
 import { DescriptionField } from './components/DescriptionField';
 import { FormActions } from './components/FormActions';
-import { LineItems } from './components/LineItems';
+import { LineItems } from './components/line-items';
 
 interface WorkOrderFormProps {
   form: UseFormReturn<WorkOrderFormValues>;
