@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -93,12 +92,12 @@ export default function InvoiceDialog({
           .from('estimates')
           .select(`
             *,
-            profiles:customer_id (
+            profiles!estimates_customer_id_fkey (
               first_name,
               last_name,
               email
             ),
-            vehicles:vehicle_id (
+            vehicles (
               make, 
               model, 
               year
