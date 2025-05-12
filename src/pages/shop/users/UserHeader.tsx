@@ -31,10 +31,10 @@ export const UserHeader = ({ onAddUser }: UserHeaderProps) => {
           <Button 
             variant="outline" 
             onClick={() => setImpersonationDialogOpen(true)}
-            className="flex items-center"
+            className="flex items-center bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-800"
           >
             <UserRound className="h-4 w-4 mr-2" />
-            Login As
+            Login As User
           </Button>
         )}
         
