@@ -13,6 +13,7 @@ const SignUpForm = () => {
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   
@@ -28,12 +29,32 @@ const SignUpForm = () => {
           data: {
             first_name: firstName,
             last_name: lastName,
+            phone: phone,
             role: 'staff', // Explicitly set role to 'staff' for shop portal signups
           },
         }
       });
       
       if (signUpError) throw signUpError;
+      
+      // If signup successful, explicitly update the profiles table
+      if (data?.user) {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .upsert({ 
+            id: data.user.id,
+            email: email,
+            role: 'staff',
+            first_name: firstName, 
+            last_name: lastName,
+            phone: phone,
+          });
+        
+        if (updateError) {
+          console.error('Error updating profile:', updateError);
+          // Continue with flow even if profile update fails
+        }
+      }
       
       toast({
         title: "Account created",
@@ -73,6 +94,16 @@ const SignUpForm = () => {
               required
             />
           </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="phone">Phone Number</Label>
+          <Input 
+            id="phone"
+            type="tel" 
+            placeholder="(123) 456-7890" 
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="signup-email">Email</Label>

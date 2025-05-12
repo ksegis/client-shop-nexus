@@ -69,13 +69,15 @@ export const useProfileData = () => {
       
       if (data) {
         // If profile exists but first_name/last_name are null, try to update from user metadata
-        if (!data.first_name || !data.last_name) {
-          const { first_name, last_name } = user.user_metadata || {};
+        if (!data.first_name || !data.last_name || !data.phone) {
+          const { first_name, last_name, phone, role } = user.user_metadata || {};
           
-          if (first_name || last_name) {
+          if (first_name || last_name || phone || role) {
             const updateData: Record<string, any> = {};
             if (first_name) updateData.first_name = first_name;
             if (last_name) updateData.last_name = last_name;
+            if (phone) updateData.phone = phone;
+            if (role) updateData.role = role; // Make sure role is updated if present in metadata
             
             try {
               // Update the profile with metadata from the user object
@@ -89,8 +91,10 @@ export const useProfileData = () => {
               // Update the local data with the metadata
               data.first_name = first_name || data.first_name;
               data.last_name = last_name || data.last_name;
+              data.phone = phone || data.phone;
+              if (role) data.role = role;
               
-              console.log('Updated profile with metadata from user:', first_name, last_name);
+              console.log('Updated profile with metadata from user:', first_name, last_name, phone, role);
             } catch (updateError) {
               console.error('Error updating profile with user metadata:', updateError);
             }
@@ -104,17 +108,18 @@ export const useProfileData = () => {
         const userEmail = user.email || '';
         const firstName = user.user_metadata?.first_name || '';
         const lastName = user.user_metadata?.last_name || '';
+        const phone = user.user_metadata?.phone || '';
         const role = user.user_metadata?.role || 'customer'; // Default to customer role unless specified
         const extendedRole = role as ExtendedUserRole;
         
-        console.log('Creating profile from user metadata:', { firstName, lastName, role });
+        console.log('Creating profile from user metadata:', { firstName, lastName, phone, role });
         
         const defaultProfile: ProfileData = {
           id: user.id,
           email: userEmail,
           first_name: firstName,
           last_name: lastName,
-          phone: null,
+          phone: phone,
           role: extendedRole, // Use the extended role type
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -131,6 +136,7 @@ export const useProfileData = () => {
             email: userEmail,
             first_name: firstName,
             last_name: lastName,
+            phone: phone,
             role: dbRole // Use the database role type
           });
           
