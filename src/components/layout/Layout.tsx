@@ -16,13 +16,15 @@ const Layout: React.FC<LayoutProps> = ({ portalType, children }) => {
       {isImpersonating() && <ImpersonationBanner />}
       <Header portalType={portalType} />
       {portalType === 'shop' ? (
-        <Sidebar>
-          <main className="container max-w-screen-xl mx-auto p-4 md:p-6">
-            {children}
-          </main>
-        </Sidebar>
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar>
+            <main className="flex-1 overflow-auto p-4 md:p-6">
+              {children}
+            </main>
+          </Sidebar>
+        </div>
       ) : (
-        <main className="container max-w-screen-xl mx-auto p-4 md:p-6">
+        <main className="flex-1 overflow-auto p-4 md:p-6">
           {children}
         </main>
       )}
