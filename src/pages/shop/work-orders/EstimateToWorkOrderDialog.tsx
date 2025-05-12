@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { WorkOrderForm } from './WorkOrderForm';
-import { WorkOrderFormValues, WorkOrderLineItem } from './types';
+import { WorkOrderFormValues, WorkOrderLineItem, WorkOrderStatus } from './types';
 import { useWorkOrderCrud } from './hooks/useWorkOrderCrud';
 
 const workOrderSchema = z.object({
@@ -16,7 +16,7 @@ const workOrderSchema = z.object({
   description: z.string().optional(),
   customer_id: z.string().min(1, "Customer is required"),
   vehicle_id: z.string().min(1, "Vehicle is required"),
-  status: z.string().default("pending"),
+  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled'] as const).default("pending"),
   priority: z.coerce.number().min(1).max(5).default(1),
   estimated_hours: z.coerce.number().optional(),
   estimated_cost: z.coerce.number().optional(),
@@ -32,7 +32,7 @@ interface EstimateToWorkOrderDialogProps {
 
 export const EstimateToWorkOrderDialog = ({ open, onClose, estimateId }: EstimateToWorkOrderDialogProps) => {
   const { toast } = useToast();
-  const { createWorkOrder } = useWorkOrderCrud();
+  const { createWorkOrder } = useWorkOrderCrud(() => {});
   const [loading, setLoading] = useState(false);
   const [lineItems, setLineItems] = useState<WorkOrderLineItem[]>([]);
   const [estimateData, setEstimateData] = useState<any>(null);
@@ -44,7 +44,7 @@ export const EstimateToWorkOrderDialog = ({ open, onClose, estimateId }: Estimat
       description: "",
       customer_id: "",
       vehicle_id: "",
-      status: "pending",
+      status: "pending" as WorkOrderStatus,
       priority: 1,
       estimated_hours: undefined,
       estimated_cost: undefined,
@@ -123,7 +123,7 @@ export const EstimateToWorkOrderDialog = ({ open, onClose, estimateId }: Estimat
       };
 
       // Create work order and its line items
-      await createWorkOrder(workOrderData, lineItems);
+      await createWorkOrder(workOrderData as any, lineItems);
 
       toast({
         title: "Success",

@@ -152,13 +152,13 @@ export const WorkOrdersTable = ({ status }: WorkOrdersTableProps) => {
                   </div>
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
-                  {workOrder.customer ? (
-                    <p>{workOrder.customer.first_name} {workOrder.customer.last_name}</p>
+                  {workOrder.profiles ? (
+                    <p>{workOrder.profiles.first_name} {workOrder.profiles.last_name}</p>
                   ) : 'N/A'}
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
-                  {workOrder.vehicle ? (
-                    <p>{workOrder.vehicle.year} {workOrder.vehicle.make} {workOrder.vehicle.model}</p>
+                  {workOrder.vehicles ? (
+                    <p>{workOrder.vehicles.year} {workOrder.vehicles.make} {workOrder.vehicles.model}</p>
                   ) : 'N/A'}
                 </TableCell>
                 <TableCell>

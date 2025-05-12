@@ -34,7 +34,7 @@ export interface WorkOrderLineItem {
 export interface WorkOrderFormValues {
   title: string;
   description?: string;
-  status: string;
+  status: WorkOrderStatus; // Updated to use WorkOrderStatus type
   customer_id: string;
   vehicle_id: string;
   priority?: number;

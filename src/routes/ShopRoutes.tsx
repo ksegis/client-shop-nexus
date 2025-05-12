@@ -15,7 +15,7 @@ import StaffManager from "@/pages/shop/admin/StaffManager";
 import SystemHealth from "@/pages/shop/admin/SystemHealth";
 import UserManagement from "@/pages/shop/UserManagement";
 import Employees from "@/pages/shop/Employees";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 const ShopRoutes = () => {
   return (
@@ -95,7 +95,7 @@ const ShopRoutes = () => {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute adminOnly>
+          <ProtectedRoute requiredRole="admin">
             <AdminDashboard />
           </ProtectedRoute>
         }
@@ -103,7 +103,7 @@ const ShopRoutes = () => {
       <Route
         path="/admin/api-keys"
         element={
-          <ProtectedRoute adminOnly>
+          <ProtectedRoute requiredRole="admin">
             <ApiKeysManager />
           </ProtectedRoute>
         }
@@ -111,7 +111,7 @@ const ShopRoutes = () => {
       <Route
         path="/admin/staff"
         element={
-          <ProtectedRoute adminOnly>
+          <ProtectedRoute requiredRole="admin">
             <StaffManager />
           </ProtectedRoute>
         }
@@ -119,7 +119,7 @@ const ShopRoutes = () => {
       <Route
         path="/admin/system"
         element={
-          <ProtectedRoute adminOnly>
+          <ProtectedRoute requiredRole="admin">
             <SystemHealth />
           </ProtectedRoute>
         }

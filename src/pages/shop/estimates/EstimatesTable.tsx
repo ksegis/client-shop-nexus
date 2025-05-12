@@ -23,24 +23,30 @@ import { formatCurrency } from "@/lib/utils";
 import DeleteConfirmationDialog from "./components/DeleteConfirmationDialog";
 import { EstimateToWorkOrderDialog } from "../work-orders/EstimateToWorkOrderDialog";
 
-export function EstimatesTable({ onEdit }) {
-  const { estimates, loading, error, deleteEstimate } = useEstimates();
+interface EstimatesTableProps {
+  onEdit: (estimate: any) => void;
+}
+
+export function EstimatesTable({ onEdit }: EstimatesTableProps) {
+  const { estimates, isLoading, error, deleteEstimate } = useEstimates();
   const [isDeleting, setIsDeleting] = useState(false);
-  const [selectedEstimateId, setSelectedEstimateId] = useState(null);
+  const [selectedEstimateId, setSelectedEstimateId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showWorkOrderDialog, setShowWorkOrderDialog] = useState(false);
 
-  const handleDeleteClick = (estimateId) => {
+  const handleDeleteClick = (estimateId: string) => {
     setSelectedEstimateId(estimateId);
     setShowDeleteDialog(true);
   };
 
-  const handleCreateWorkOrder = (estimateId) => {
+  const handleCreateWorkOrder = (estimateId: string) => {
     setSelectedEstimateId(estimateId);
     setShowWorkOrderDialog(true);
   };
 
   const handleConfirmDelete = async () => {
+    if (!selectedEstimateId) return;
+    
     setIsDeleting(true);
     try {
       await deleteEstimate(selectedEstimateId);
@@ -52,7 +58,7 @@ export function EstimatesTable({ onEdit }) {
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return <div className="text-center py-4">Loading estimates...</div>;
   }
 
@@ -158,12 +164,12 @@ export function EstimatesTable({ onEdit }) {
 
       <DeleteConfirmationDialog
         open={showDeleteDialog}
-        onClose={() => setShowDeleteDialog(false)}
+        onOpenChange={setShowDeleteDialog}
         onConfirm={handleConfirmDelete}
         isDeleting={isDeleting}
       />
 
-      {showWorkOrderDialog && (
+      {showWorkOrderDialog && selectedEstimateId && (
         <EstimateToWorkOrderDialog
           open={showWorkOrderDialog}
           onClose={() => setShowWorkOrderDialog(false)}

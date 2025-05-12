@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import Layout from "@/components/layout/Layout";
-import EstimatesTable from "./estimates/EstimatesTable";
+import { EstimatesTable } from "./estimates/EstimatesTable";
 import EstimateDialog from "./estimates/EstimateDialog";
 import { EstimatesProvider, useEstimates } from "./estimates/EstimatesContext";
 import { Estimate } from "./estimates/types";

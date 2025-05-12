@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { WorkOrderForm } from './WorkOrderForm';
 import { useWorkOrders } from './WorkOrdersContext';
-import { WorkOrder, WorkOrderLineItem, WorkOrderFormValues } from './types';
+import { WorkOrder, WorkOrderLineItem, WorkOrderFormValues, WorkOrderStatus } from './types';
 import { Plus, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -20,7 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 export const workOrderSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional().nullable(),
-  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']),
+  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled'] as const),
   customer_id: z.string().min(1, 'Customer is required'),
   vehicle_id: z.string().min(1, 'Vehicle is required'),
   estimated_hours: z.number().nullable().optional(),
@@ -91,13 +92,13 @@ export const WorkOrderDialog = ({ workOrder }: WorkOrderDialogProps) => {
       console.log("Line items:", lineItems);
       
       if (isEditing && workOrder) {
-        await updateWorkOrder(workOrder.id, data, lineItems);
+        await updateWorkOrder(workOrder.id, data as unknown as Partial<WorkOrder>, lineItems);
         toast({
           title: "Success",
           description: "Work order updated successfully",
         });
       } else {
-        await createWorkOrder(data, lineItems);
+        await createWorkOrder(data as unknown as Partial<WorkOrder>, lineItems);
         toast({
           title: "Success",
           description: "Work order created successfully",
