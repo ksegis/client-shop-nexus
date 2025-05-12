@@ -100,7 +100,7 @@ export const LineItemRow = ({
           <Input 
             type="number"
             value={item.quantity}
-            onChange={(e) => onItemChange(index, 'quantity', e.target.value)}
+            onChange={(e) => onItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
             className="h-12 text-base text-right w-full"
           />
         )}
@@ -110,11 +110,11 @@ export const LineItemRow = ({
           `$${item.price.toFixed(2)}`
         ) : (
           <Input 
+            type="text"
             inputMode="decimal"
             value={item.price}
-            onChange={(e) => onItemChange(index, 'price', e.target.value)}
+            onChange={(e) => onItemChange(index, 'price', parseFloat(e.target.value) || 0)}
             className="h-12 text-base text-right w-full"
-            // Remove type="number" to get rid of up/down arrows
           />
         )}
       </TableCell>

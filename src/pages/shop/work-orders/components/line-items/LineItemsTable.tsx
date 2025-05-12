@@ -35,11 +35,11 @@ export const LineItemsTable = ({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[200px]">Part #</TableHead>
-          <TableHead className="w-full">Description</TableHead>
-          <TableHead className="w-[100px] text-right">Quantity</TableHead>
-          <TableHead className="w-[150px] text-right">Price</TableHead>
-          <TableHead className="w-[120px] text-right">Total</TableHead>
+          <TableHead className="w-[180px] min-w-[180px]">Part #</TableHead>
+          <TableHead className="min-w-[150px]">Description</TableHead>
+          <TableHead className="w-[100px] min-w-[100px] text-right">Quantity</TableHead>
+          <TableHead className="w-[140px] min-w-[140px] text-right">Price</TableHead>
+          <TableHead className="w-[120px] min-w-[120px] text-right">Total</TableHead>
           {!readOnly && <TableHead className="w-10"></TableHead>}
         </TableRow>
       </TableHeader>

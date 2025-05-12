@@ -31,10 +31,15 @@ export const NumericField = ({
     setValue(name, newValue as any);
   };
 
+  // Use inputMode="decimal" instead of type="number" for cost fields
+  const inputType = name.includes('cost') ? 'text' : 'number';
+  const inputMode = name.includes('cost') ? 'decimal' : 'numeric';
+
   return (
     <FormFieldWrapper form={form} name={name} label={label}>
       <Input
-        type="number"
+        type={inputType}
+        inputMode={inputMode}
         step="0.01"
         placeholder={placeholder}
         {...register(name, {

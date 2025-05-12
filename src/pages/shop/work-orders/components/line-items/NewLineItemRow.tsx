@@ -94,12 +94,12 @@ export const NewLineItemRow = ({
       </TableCell>
       <TableCell className="text-right py-4">
         <Input 
+          type="text"
           inputMode="decimal"
           placeholder="Price"
           value={newItem.price || ''}
           onChange={(e) => onNewItemChange('price', parseFloat(e.target.value) || 0)}
           className="h-12 text-base text-right w-full"
-          // Remove type="number" to get rid of up/down arrows
         />
       </TableCell>
       <TableCell className="text-right font-medium py-4">
