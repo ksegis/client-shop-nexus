@@ -11,40 +11,14 @@ const Index = () => {
   const [showDebug, setShowDebug] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Toggle debug info after 3 seconds
+  // Show debug info immediately to help with navigation issues
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowDebug(true);
-      console.log("Index: Debug information shown");
-    }, 3000);
-    
-    return () => clearTimeout(timer);
+    setShowDebug(true);
+    console.log("Index: Debug information shown immediately");
   }, []);
 
-  // Force navigation after a timeout to prevent getting stuck
+  // Simplified navigation logic - redirect immediately when auth state is determined
   useEffect(() => {
-    const forcedNavigationTimer = setTimeout(() => {
-      console.log("Index: Forcing navigation after timeout");
-      
-      try {
-        if (user) {
-          console.log("Index: Force navigating to shop dashboard");
-          navigate("/shop", { replace: true });
-        } else {
-          console.log("Index: Force navigating to login");
-          navigate("/shop/login", { replace: true });
-        }
-      } catch (navigationError) {
-        console.error("Index: Navigation error during forced navigation", navigationError);
-        setError("Navigation error: Could not redirect automatically.");
-      }
-    }, 5000); // Force navigation after 5 seconds
-    
-    return () => clearTimeout(forcedNavigationTimer);
-  }, [navigate, user]);
-
-  useEffect(() => {
-    // Only redirect after authentication state is confirmed
     if (loading) {
       console.log("Index: Auth state still loading");
       return;
@@ -54,19 +28,28 @@ const Index = () => {
     
     try {
       if (user) {
-        // If user exists, redirect to the shop dashboard
-        console.log("Index: Redirecting to shop dashboard");
+        console.log("Index: User is authenticated, redirecting to shop dashboard");
         navigate("/shop", { replace: true });
       } else {
-        // If no user, redirect to login
-        console.log("Index: Redirecting to shop/login");
+        console.log("Index: No authenticated user, redirecting to login");
         navigate("/shop/login", { replace: true });
       }
     } catch (navigationError) {
       console.error("Index: Navigation error", navigationError);
-      setError("Navigation error: Could not redirect automatically.");
+      setError("Navigation error: Could not redirect automatically. Please use the buttons below.");
     }
   }, [navigate, user, loading]);
+
+  // Handle manual navigation
+  const goToLogin = () => {
+    console.log("Manual navigation to login triggered");
+    window.location.href = "/shop/login";
+  };
+
+  const goToDashboard = () => {
+    console.log("Manual navigation to dashboard triggered");
+    window.location.href = "/shop";
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
@@ -85,7 +68,7 @@ const Index = () => {
         ) : (
           <div className="space-y-4">
             <Button 
-              onClick={() => navigate("/shop/login")} 
+              onClick={goToLogin} 
               className="w-full py-6 text-lg"
               size="lg"
             >
@@ -94,7 +77,7 @@ const Index = () => {
             
             {user && (
               <Button 
-                onClick={() => navigate("/shop")} 
+                onClick={goToDashboard} 
                 className="w-full" 
                 variant="outline"
               >
@@ -112,30 +95,24 @@ const Index = () => {
         
         {showDebug && (
           <div className="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-md text-left">
-            <p className="font-semibold text-amber-800 mb-2">Still loading?</p>
+            <p className="font-semibold text-amber-800 mb-2">Navigation Help</p>
             <p className="text-sm text-amber-700 mb-1">Auth state: {loading ? "Loading" : "Ready"}</p>
             <p className="text-sm text-amber-700 mb-1">User: {user ? "Logged in" : "Not logged in"}</p>
             <p className="text-sm text-amber-700">Current route: /</p>
             
             <div className="mt-4 flex gap-2 justify-center">
               <button
-                onClick={() => {
-                  console.log("Manual navigation to login triggered");
-                  navigate("/shop/login", { replace: true });
-                }}
+                onClick={goToLogin}
                 className="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 transition-colors"
               >
-                Go to Login
+                Use Direct Login Link
               </button>
               
               <button
-                onClick={() => {
-                  console.log("Manual navigation to dashboard triggered");
-                  navigate("/shop", { replace: true });
-                }}
+                onClick={goToDashboard}
                 className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
               >
-                Go to Dashboard
+                Use Direct Dashboard Link
               </button>
             </div>
           </div>
