@@ -36,19 +36,7 @@ const Auth = () => {
   };
   
   const goToShopLogin = () => {
-    console.log("Shop login clicked, current user:", user?.email);
-    console.log("User metadata:", user?.app_metadata);
-    
-    if (user?.app_metadata?.role === 'customer') {
-      toast({
-        title: "Access Restricted",
-        description: "Customers can only access the Customer Portal",
-        variant: "destructive",
-      });
-      navigate("/customer/profile");
-    } else {
-      navigate("/shop/login");
-    }
+    navigate("/shop/login");
   };
 
   return (

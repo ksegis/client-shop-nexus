@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-  const { user, loading, getRedirectPathByRole } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
   
   // If still loading, show loading state
@@ -33,35 +33,18 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
     return <Navigate to={loginPath} replace />;
   }
   
-  // Get user role from metadata
+  // Get user role from metadata if it exists
   const userRole = user.app_metadata?.role;
   
-  // Check path vs. user role - strict portal access enforcement
-  if (userRole === 'customer' && location.pathname.startsWith('/shop')) {
-    // Customer trying to access shop routes - block and redirect
-    console.log("Customer blocked from accessing shop portal:", user.email);
-    
-    // Show toast message on next render
-    setTimeout(() => {
-      toast({
-        title: "Access Restricted",
-        description: "Customers can only access the Customer Portal",
-        variant: "destructive",
-      });
-    }, 0);
-    
-    // Redirect to customer portal
-    return <Navigate to="/customer/profile" replace />;
-  } else if ((userRole === 'staff' || userRole === 'admin') && location.pathname.startsWith('/customer')) {
-    // Staff/admin trying to access customer routes - redirect to shop portal
-    return <Navigate to="/shop" replace />;
-  }
-  
-  // Check if role-based restriction applies
+  // If allowedRoles is specified, check if user has an allowed role
   if (allowedRoles && allowedRoles.length > 0) {
     if (!userRole || !allowedRoles.includes(userRole)) {
-      // User doesn't have an appropriate role - redirect to their default area
-      const redirectPath = getRedirectPathByRole(userRole);
+      // Determine where to redirect based on role
+      const redirectPath = userRole === 'customer' 
+        ? '/customer/profile'
+        : (userRole === 'admin' || userRole === 'staff') 
+          ? '/shop' 
+          : '/auth';
       
       // Show toast message on next render
       setTimeout(() => {
@@ -74,6 +57,23 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
       
       return <Navigate to={redirectPath} replace />;
     }
+  }
+  
+  // Portal-specific checks
+  if (userRole === 'customer' && location.pathname.startsWith('/shop')) {
+    // Customer trying to access shop routes - block and redirect
+    setTimeout(() => {
+      toast({
+        title: "Access Restricted",
+        description: "Customers can only access the Customer Portal",
+        variant: "destructive",
+      });
+    }, 0);
+    
+    return <Navigate to="/customer/profile" replace />;
+  } else if ((userRole === 'staff' || userRole === 'admin') && location.pathname.startsWith('/customer')) {
+    // Staff/admin trying to access customer routes - redirect to shop portal
+    return <Navigate to="/shop" replace />;
   }
   
   // Allow access
