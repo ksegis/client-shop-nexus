@@ -17,9 +17,12 @@ const Auth = () => {
       window.history.replaceState(null, '', window.location.pathname);
     }
     
-    // If user is already authenticated, redirect to appropriate portal
-    if (!loading && user) {
+    // If user is already authenticated and we have role info, redirect to appropriate portal
+    // But only if we explicitly have role information to prevent loops
+    if (!loading && user && user.app_metadata?.role) {
       const role = user.app_metadata?.role;
+      console.log("Auth page: redirecting based on role:", role);
+      
       if (role === 'admin' || role === 'staff') {
         navigate("/shop", { replace: true });
       } else if (role === 'customer') {
@@ -33,7 +36,6 @@ const Auth = () => {
   };
   
   const goToShopLogin = () => {
-    // Log for debugging
     console.log("Shop login clicked, current user:", user?.email);
     console.log("User metadata:", user?.app_metadata);
     

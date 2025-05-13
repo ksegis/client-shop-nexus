@@ -14,6 +14,12 @@ export function useRedirection() {
     const isCustomerPath = currentPath.startsWith('/customer');
     const isAuthPath = currentPath === '/auth' || currentPath === '/';
     
+    // If no role, don't redirect automatically - this helps break redirect loops
+    if (!role) {
+      console.log("No role found - not redirecting automatically");
+      return;
+    }
+    
     // Only redirect if on an auth path or if trying to access wrong portal
     if (isAuthPath) {
       // Redirect from auth to appropriate portal

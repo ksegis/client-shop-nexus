@@ -12,10 +12,15 @@ export const fetchUserProfile = async (userId: string) => {
       .from('profiles')
       .select('role, first_name, last_name, email')
       .eq('id', userId)
-      .single();
+      .maybeSingle(); // Using maybeSingle instead of single to prevent errors when no profile exists
       
     if (error) {
       console.error("Error fetching profile:", error);
+      return null;
+    }
+    
+    if (!profile) {
+      console.log("No profile found for user:", userId);
       return null;
     }
     
