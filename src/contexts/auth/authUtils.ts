@@ -1,5 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
+import { ExtendedUserRole, mapExtendedRoleToDbRole } from '@/integrations/supabase/types-extensions';
 
 /**
  * Fetches user profile data from the profiles table
@@ -54,18 +55,20 @@ export const fetchUserProfile = async (userId: string) => {
  * @param userId The user ID to update
  * @param role The role to set
  */
-export const syncUserRoleToMetadata = async (userId: string, role: string) => {
+export const syncUserRoleToMetadata = async (userId: string, role: ExtendedUserRole) => {
   if (!userId || !role) {
     console.error("syncUserRoleToMetadata called with empty userId or role");
     return false;
   }
   
   try {
-    // Simply update the profile - we'll have to get the role from profile
-    // rather than from metadata in client-side code
+    // Map the extended role to a database role before saving
+    const dbRole = mapExtendedRoleToDbRole(role);
+    
+    // Update the profile with the database-compatible role
     const { error } = await supabase
       .from('profiles')
-      .update({ role: role })
+      .update({ role: dbRole })
       .eq('id', userId);
     
     if (error) {
