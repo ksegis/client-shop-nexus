@@ -1,6 +1,5 @@
 
 import { useState } from 'react';
-import Layout from '@/components/layout/Layout';
 import { InvoicesProvider } from './InvoicesContext';
 import { InvoicesTable } from './InvoicesTable';
 import InvoiceDialog from './InvoiceDialog';
@@ -81,10 +80,8 @@ const InvoicesContent = () => {
 
 export default function Invoices() {
   return (
-    <Layout portalType="shop">
-      <InvoicesProvider>
-        <InvoicesContent />
-      </InvoicesProvider>
-    </Layout>
+    <InvoicesProvider>
+      <InvoicesContent />
+    </InvoicesProvider>
   );
 }
