@@ -95,11 +95,12 @@ export function useAuthStateListener() {
     let profileCheckTimeout: NodeJS.Timeout | null = null;
     
     // Set up auth state listener FIRST (important to prevent deadlocks)
+    // IMPORTANT: DO NOT make this an async function to avoid race conditions
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
-        console.log("Auth state changed:", event, currentSession?.user?.email);
-        
+      (event, currentSession) => {
         if (!isMounted) return;
+        
+        console.log("Auth state changed:", event, currentSession?.user?.email);
         
         // Handle synchronous state updates immediately
         if (currentSession?.user) {
@@ -128,7 +129,10 @@ export function useAuthStateListener() {
         if (event === 'SIGNED_OUT') {
           console.log("User signed out, redirecting to login");
           setRoleLoaded(false);
-          navigate('/auth', { replace: true });
+          // Use setTimeout to avoid potential React state update issues
+          setTimeout(() => {
+            navigate('/auth', { replace: true });
+          }, 0);
         }
         
         // If user just signed in, fetch profile data in a non-blocking way
@@ -139,6 +143,7 @@ export function useAuthStateListener() {
           }
           
           // Use setTimeout to avoid deadlock with Supabase client
+          // IMPORTANT: Never make direct supabase calls inside onAuthStateChange callback
           profileCheckTimeout = setTimeout(async () => {
             if (!isMounted) return;
             
@@ -229,7 +234,14 @@ export function useAuthStateListener() {
       if (profileCheckTimeout) {
         clearTimeout(profileCheckTimeout);
       }
-      subscription.unsubscribe();
+      // Always unsubscribe from auth state changes when component unmounts
+      if (subscription && typeof subscription.unsubscribe === 'function') {
+        try {
+          subscription.unsubscribe();
+        } catch (error) {
+          console.error("Error unsubscribing from auth state changes:", error);
+        }
+      }
     };
   }, [navigate, toast, updateUserWithRole]);
 
