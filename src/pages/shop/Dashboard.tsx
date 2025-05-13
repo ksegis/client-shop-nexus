@@ -2,7 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart2, Users, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
 
-const ShopDashboard = () => {
+const Dashboard = () => {
   // Mock data for demonstration
   const metrics = [
     { id: 1, name: 'Total Estimates', value: 128, icon: FileText, change: '+12%', changeType: 'positive' },
@@ -59,8 +59,6 @@ const ShopDashboard = () => {
                 </div>
               ))}
             </div>
-            {/* Integration placeholder comment */}
-            {/* <!-- TODO: fetch recent estimates via GHL webhook → Zapier → Supabase --> */}
           </CardContent>
         </Card>
 
@@ -83,8 +81,6 @@ const ShopDashboard = () => {
                 </div>
               ))}
             </div>
-            {/* Integration placeholder comment */}
-            {/* <!-- TODO: fetch active work orders via GHL webhook → Zapier → Supabase --> */}
           </CardContent>
         </Card>
       </div>
@@ -107,8 +103,6 @@ const ShopDashboard = () => {
                 <p className="text-sm">3 pending orders require approval</p>
               </div>
             </div>
-            {/* Integration placeholder comment */}
-            {/* <!-- TODO: fetch inventory alerts via GHL webhook → Zapier → Supabase --> */}
           </CardContent>
         </Card>
 
@@ -126,8 +120,6 @@ const ShopDashboard = () => {
                 </div>
               </div>
             </div>
-            {/* Integration placeholder comment */}
-            {/* <!-- TODO: fetch employee performance data via GHL webhook → Zapier → Supabase --> */}
           </CardContent>
         </Card>
       </div>
@@ -135,4 +127,4 @@ const ShopDashboard = () => {
   );
 };
 
-export default ShopDashboard;
+export default Dashboard;

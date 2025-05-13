@@ -1,6 +1,5 @@
 
 import { useState } from 'react';
-import Layout from '@/components/layout/Layout';
 import { CustomersProvider } from './customers/CustomersContext';
 import { CustomersTable } from './customers/CustomersTable';
 import { CustomerDialog } from './customers/CustomerDialog';
@@ -56,10 +55,4 @@ const Customers = () => {
   );
 };
 
-export default function CustomersPage() {
-  return (
-    <Layout portalType="shop">
-      <Customers />
-    </Layout>
-  );
-}
+export default Customers;

@@ -1,5 +1,4 @@
 
-import Layout from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, LineChart, AreaChart, ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -102,10 +101,4 @@ const Reports = () => {
   );
 };
 
-export default function ReportsPage() {
-  return (
-    <Layout portalType="shop">
-      <Reports />
-    </Layout>
-  );
-}
+export default Reports;

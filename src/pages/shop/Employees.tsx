@@ -1,6 +1,5 @@
 
 import React, { useState } from 'react';
-import Layout from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Users } from 'lucide-react';
 import { EmployeesProvider } from './employees/EmployeesContext';
@@ -48,10 +47,4 @@ const Employees = () => {
   );
 };
 
-export default function EmployeesPage() {
-  return (
-    <Layout portalType="shop">
-      <Employees />
-    </Layout>
-  );
-}
+export default Employees;
