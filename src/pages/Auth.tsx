@@ -1,10 +1,18 @@
 
+import { useEffect } from "react";
 import { ShoppingBag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 const Auth = () => {
   const navigate = useNavigate();
+  
+  // Handle hash fragment if it exists
+  useEffect(() => {
+    if (window.location.hash === '#') {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
   
   const goToCustomerLogin = () => {
     navigate("/customer/login");

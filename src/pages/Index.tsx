@@ -9,12 +9,20 @@ const Index = () => {
   const navigate = useNavigate();
   const { user, loading, getRedirectPathByRole } = useAuth();
 
-  // Automatically redirect based on role
+  // Handle hash fragment routing and authentication state
   useEffect(() => {
-    if (!loading && user) {
-      const role = user.app_metadata?.role;
-      const redirectPath = getRedirectPathByRole(role);
-      navigate(redirectPath);
+    // Remove hash fragment if it exists without any meaningful content
+    if (window.location.hash === '#') {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+    
+    // Redirect based on authentication state
+    if (!loading) {
+      if (user) {
+        const role = user.app_metadata?.role;
+        const redirectPath = getRedirectPathByRole(role);
+        navigate(redirectPath);
+      }
     }
   }, [user, loading, navigate, getRedirectPathByRole]);
   
@@ -31,7 +39,7 @@ const Index = () => {
       <div className="text-center p-6 max-w-md">
         <div className="mb-6">
           <ShoppingBag className="h-16 w-16 mx-auto text-shop-primary" />
-          <h1 className="text-3xl font-bold mt-4 mb-2">Auto Repair Shop System</h1>
+          <h1 className="text-3xl font-bold mt-4 mb-2">Custom Truck Connection</h1>
           <p className="text-gray-600">Please select your portal</p>
         </div>
         
@@ -43,20 +51,20 @@ const Index = () => {
         ) : (
           <div className="space-y-4">
             <Button 
-              onClick={goToCustomerLogin} 
+              onClick={goToShopLogin} 
               className="w-full py-6 text-lg"
               size="lg"
             >
-              Customer Portal
+              Shop Portal
             </Button>
             
             <Button 
-              onClick={goToShopLogin} 
+              onClick={goToCustomerLogin} 
               className="w-full py-6 text-lg"
               variant="outline"
               size="lg"
             >
-              Shop Portal
+              Customer Portal
             </Button>
           </div>
         )}

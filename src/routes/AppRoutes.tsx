@@ -30,6 +30,9 @@ const AppRoutes = () => {
       <Route path="/customers" element={<Navigate to="/customer" replace />} />
       <Route path="/customers/*" element={<Navigate to="/customer" replace />} />
       
+      {/* Specific hash redirect - handle the base URL with hash to go to Auth */}
+      <Route path="/#" element={<Navigate to="/auth" replace />} />
+      
       {/* Not Found Route */}
       <Route path="*" element={<NotFound />} />
     </Routes>
