@@ -18,6 +18,7 @@ export function useAuthStateListener() {
   const updateUserWithRole = useCallback(async (userId: string, profileRole: string) => {
     console.log("Updating user with role:", profileRole);
     
+    // First update the local state for immediate UI feedback
     setUser(currentUser => {
       if (!currentUser) return null;
       
@@ -30,7 +31,20 @@ export function useAuthStateListener() {
       };
     });
     
+    // Indicate that we've loaded the role
     setRoleLoaded(true);
+    
+    try {
+      // Now refresh the session to ensure the role is picked up by Supabase Auth
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) {
+        console.error("Failed to refresh session after role update:", error);
+      } else if (data?.user) {
+        console.log("Session refreshed after role update");
+      }
+    } catch (refreshError) {
+      console.error("Error refreshing session:", refreshError);
+    }
   }, []);
 
   useEffect(() => {
@@ -56,8 +70,14 @@ export function useAuthStateListener() {
             }
             return currentSession.user;
           });
+          
+          // Mark role as loaded if we have it
+          if (existingRole) {
+            setRoleLoaded(true);
+          }
         } else {
           setUser(null);
+          setRoleLoaded(false);
         }
         
         setSession(currentSession);
@@ -104,7 +124,7 @@ export function useAuthStateListener() {
               const profile = await fetchUserProfile(currentSession.user.id);
               if (profile?.role && isMounted) {
                 console.log("Setting user role from profile:", profile.role);
-                updateUserWithRole(currentSession.user.id, profile.role);
+                await updateUserWithRole(currentSession.user.id, profile.role);
               }
             } catch (error) {
               console.error("Failed to fetch profile after auth event:", error);
@@ -149,17 +169,19 @@ export function useAuthStateListener() {
               const profile = await fetchUserProfile(initialSession.user.id);
               if (profile?.role && isMounted) {
                 console.log("Initial session: got user role from profile:", profile.role);
-                updateUserWithRole(initialSession.user.id, profile.role);
+                await updateUserWithRole(initialSession.user.id, profile.role);
               }
             } catch (profileError) {
               console.error("Failed to fetch initial profile:", profileError);
+            } finally {
+              if (isMounted) setLoading(false);
             }
           }
+        } else {
+          if (isMounted) setLoading(false);
         }
       } catch (sessionError) {
         console.error("Failed to get session:", sessionError);
-      } finally {
-        // Make sure loading is set to false after initial session check
         if (isMounted) setLoading(false);
       }
     }, 300);

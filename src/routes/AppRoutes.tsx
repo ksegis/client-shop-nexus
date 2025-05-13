@@ -10,7 +10,7 @@ import Auth from "@/pages/Auth";
 
 const AppRoutes = () => {
   // Handle hash fragments - redirect to auth if there's a # in the URL
-  if (window.location.hash === '#' && window.location.pathname === '/') {
+  if (window.location.hash && window.location.pathname === '/') {
     window.history.replaceState(null, '', '/auth');
     return <Navigate to="/auth" replace />;
   }
@@ -19,7 +19,6 @@ const AppRoutes = () => {
     <Routes>
       {/* Root routes - render Index component that will redirect based on auth status */}
       <Route index element={<Index />} />
-      <Route path="/" element={<Index />} />
       
       {/* Shop Login Route - explicit route to ensure it's accessible */}
       <Route path="/shop/login" element={<ShopLogin />} />

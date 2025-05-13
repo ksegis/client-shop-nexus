@@ -4,7 +4,7 @@ import { ShoppingBag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/components/ui/use-toast";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -29,7 +29,7 @@ const Auth = () => {
         } else if (role === 'customer') {
           navigate("/customer/profile", { replace: true });
         }
-      }, 100);
+      }, 200);
       
       return () => clearTimeout(timer);
     }

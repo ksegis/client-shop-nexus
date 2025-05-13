@@ -11,7 +11,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session, 
     loading: authStateLoading, 
     roleLoaded,
-    setLoading 
+    setLoading,
+    updateUserWithRole 
   } = useAuthStateListener();
   
   const { getRedirectPathByRole } = useRedirection();
@@ -68,7 +69,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const checkUserRole = async () => {
         try {
           const profile = await fetchUserProfile(user.id);
-          if (!profile || !profile.role) {
+          if (profile && profile.role) {
+            console.log("Found role in profile:", profile.role);
+            // Update the user with the role from the profile
+            await updateUserWithRole(user.id, profile.role);
+          } else {
             console.log("No role found in profile, user may need to complete registration");
           }
         } catch (error) {
@@ -78,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       checkUserRole();
     }
-  }, [user, loading, roleLoaded, location.pathname, lastRedirectAttempt, redirectAttempted]);
+  }, [user, loading, roleLoaded, location.pathname, lastRedirectAttempt, redirectAttempted, updateUserWithRole]);
 
   const value = {
     user,
@@ -87,7 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signOut,
     loading,
-    getRedirectPathByRole
+    getRedirectPathByRole,
+    updateUserWithRole
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

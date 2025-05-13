@@ -9,4 +9,5 @@ export interface AuthContextType {
   signOut: () => Promise<void>;
   loading: boolean;
   getRedirectPathByRole: (role?: string) => string;
+  updateUserWithRole?: (userId: string, role: string) => Promise<void>;
 }

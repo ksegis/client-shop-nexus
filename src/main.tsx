@@ -6,7 +6,7 @@ import './index.css'
 import { AuthProvider } from './contexts/auth'
 
 // Handle hash redirects at the entry point
-if (window.location.hash === '#' && window.location.pathname === '/') {
+if (window.location.hash && window.location.pathname === '/') {
   window.history.replaceState(null, '', '/auth');
 }
 
