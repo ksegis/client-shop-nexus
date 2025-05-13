@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SidebarItem } from "./sidebar/sidebar-item"; // Updated import path
+import { SidebarItem } from "./sidebar/sidebar-item"; 
 import { useAuth } from '@/contexts/auth'; 
 import { 
   Shield, 
@@ -21,9 +21,7 @@ import {
   UserPlus, 
   Settings, 
   FileText, 
-  FileCheck, 
-  Key,
-  Activity 
+  FileCheck
 } from "lucide-react";
 
 const navigationItems = [
@@ -75,38 +73,10 @@ const navigationItems = [
   }
 ];
 
-// Admin-specific navigation items
-const adminNavigationItems = [
-  {
-    title: "Admin Dashboard",
-    href: "/shop/admin",
-    icon: Shield,
-  },
-  {
-    title: "API Keys",
-    href: "/shop/admin/api-keys",
-    icon: Key,
-  },
-  {
-    title: "Staff Management",
-    href: "/shop/admin/staff",
-    icon: Users,
-  },
-  {
-    title: "System Health",
-    href: "/shop/admin/system",
-    icon: Activity,
-  }
-];
-
 export const Sidebar = () => {
   const { user } = useAuth();
   
-  // Debug output to see if the admin check is working correctly
   const isAdmin = user?.app_metadata?.role === 'admin';
-  console.log("Sidebar - isAdmin check result:", isAdmin);
-  console.log("Admin navigation items:", adminNavigationItems);
-
   const filteredNavigationItems = navigationItems.filter(item => !item.adminOnly || isAdmin);
 
   return (
@@ -122,24 +92,6 @@ export const Sidebar = () => {
               icon={item.icon}
             />
           ))}
-          
-          {/* Admin section if user is admin */}
-          {isAdmin && (
-            <>
-              <div className="mx-4 my-2">
-                <div className="h-px bg-border" />
-                <h3 className="text-xs font-medium text-muted-foreground pt-2 pl-2">Admin</h3>
-              </div>
-              {adminNavigationItems.map((item) => (
-                <SidebarItem
-                  key={item.href}
-                  href={item.href}
-                  title={item.title}
-                  icon={item.icon}
-                />
-              ))}
-            </>
-          )}
         </div>
       </div>
       
@@ -166,24 +118,6 @@ export const Sidebar = () => {
                 icon={item.icon}
               />
             ))}
-            
-            {/* Admin section for mobile if user is admin */}
-            {isAdmin && (
-              <>
-                <div className="mx-4 my-2">
-                  <div className="h-px bg-border" />
-                  <h3 className="text-xs font-medium text-muted-foreground pt-2 pl-2">Admin</h3>
-                </div>
-                {adminNavigationItems.map((item) => (
-                  <SidebarItem
-                    key={item.href}
-                    href={item.href}
-                    title={item.title}
-                    icon={item.icon}
-                  />
-                ))}
-              </>
-            )}
           </div>
         </SheetContent>
       </Sheet>

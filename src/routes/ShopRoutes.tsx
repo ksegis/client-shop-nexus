@@ -9,9 +9,6 @@ import Invoices from "@/pages/shop/invoices";
 import NewInvoiceFromEstimate from "@/pages/shop/invoices/NewInvoiceFromEstimate";
 import Inventory from "@/pages/shop/Inventory";
 import Reports from "@/pages/shop/Reports";
-import ApiKeysManager from "@/pages/shop/admin/ApiKeysManager";
-import StaffManager from "@/pages/shop/admin/StaffManager";
-import SystemHealth from "@/pages/shop/admin/SystemHealth";
 import UserManagement from "@/pages/shop/UserManagement";
 import Employees from "@/pages/shop/Employees";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -92,40 +89,6 @@ const ShopRoutes = () => {
           element={
             <ProtectedRoute>
               <Reports />
-            </ProtectedRoute>
-          }
-        />
-        
-        {/* Admin routes - direct routes to each component */}
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <ApiKeysManager />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/api-keys"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <ApiKeysManager />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/staff"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <StaffManager />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/system"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <SystemHealth />
             </ProtectedRoute>
           }
         />
