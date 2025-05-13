@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { ApiConnection, ApiConnectionType } from '@/pages/shop/admin/types';
+import { ApiConnection, ApiConnectionFormData, ApiConnectionType } from '@/pages/shop/admin/types';
 
 export const useApiConnections = () => {
   const [connections, setConnections] = useState<ApiConnection[]>([]);
