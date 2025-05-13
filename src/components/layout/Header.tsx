@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -74,7 +75,7 @@ const Header = ({ portalType }: HeaderProps) => {
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
-      <div className="shop-container">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-3">
           {/* Logo placeholder */}
           <div className="flex items-center">
