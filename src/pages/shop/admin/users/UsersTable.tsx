@@ -2,10 +2,11 @@
 import React from 'react';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Key, UserX, UserCheck } from 'lucide-react';
+import { Key, UserX, UserCheck, Badge } from 'lucide-react';
 import { useUserManagement } from './UserManagementContext';
 import { isRoleInactive } from '@/pages/shop/users/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge as UIBadge } from '@/components/ui/badge';
 
 interface UsersTableProps {
   onResetPassword: (userId: string, email: string) => void;
@@ -51,30 +52,30 @@ export const UsersTable = ({ onResetPassword, onEditProfile }: UsersTableProps) 
                   </TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      user.role === 'admin' || user.role === 'inactive_admin'
-                        ? 'bg-purple-100 text-purple-800' 
-                        : 'bg-blue-100 text-blue-800'
-                    }`}>
+                    <UIBadge variant={user.role === 'admin' || user.role === 'inactive_admin' ? 'default' : 'secondary'} className={`
+                      ${user.role === 'admin' || user.role === 'inactive_admin' 
+                        ? 'bg-purple-100 text-purple-800 hover:bg-purple-100' 
+                        : 'bg-blue-100 text-blue-800 hover:bg-blue-100'}
+                    `}>
                       {user.role === 'inactive_admin' ? 'admin' : 
                        user.role === 'inactive_staff' ? 'staff' : 
                        user.role}
-                    </span>
+                    </UIBadge>
                   </TableCell>
                   <TableCell>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      isRoleInactive(user.role) 
-                        ? 'bg-red-100 text-red-800' 
-                        : 'bg-green-100 text-green-800'
-                    }`}>
+                    <UIBadge variant={isRoleInactive(user.role) ? 'destructive' : 'default'} className={`
+                      ${isRoleInactive(user.role) 
+                        ? 'bg-red-100 text-red-800 hover:bg-red-100' 
+                        : 'bg-green-100 text-green-800 hover:bg-green-100'}
+                    `}>
                       {isRoleInactive(user.role) ? 'inactive' : 'active'}
-                    </span>
+                    </UIBadge>
                   </TableCell>
                   <TableCell>
                     {user.force_password_change && (
-                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                      <UIBadge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-100">
                         Required
-                      </span>
+                      </UIBadge>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
@@ -83,6 +84,7 @@ export const UsersTable = ({ onResetPassword, onEditProfile }: UsersTableProps) 
                         variant="ghost" 
                         size="icon"
                         onClick={() => onEditProfile(user.id, user.email || '')}
+                        title="Edit Profile"
                       >
                         <UserCheck className="h-4 w-4" />
                       </Button>
@@ -90,6 +92,7 @@ export const UsersTable = ({ onResetPassword, onEditProfile }: UsersTableProps) 
                         variant="ghost" 
                         size="icon"
                         onClick={() => onResetPassword(user.id, user.email || '')}
+                        title="Reset Password"
                       >
                         <Key className="h-4 w-4" />
                       </Button>
@@ -128,15 +131,15 @@ export const UsersTable = ({ onResetPassword, onEditProfile }: UsersTableProps) 
                   </TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
-                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <UIBadge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-100">
                       customer
-                    </span>
+                    </UIBadge>
                   </TableCell>
                   <TableCell>
                     {user.force_password_change && (
-                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                      <UIBadge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-100">
                         Required
-                      </span>
+                      </UIBadge>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
@@ -145,6 +148,7 @@ export const UsersTable = ({ onResetPassword, onEditProfile }: UsersTableProps) 
                         variant="ghost" 
                         size="icon"
                         onClick={() => onEditProfile(user.id, user.email || '')}
+                        title="Edit Profile"
                       >
                         <UserCheck className="h-4 w-4" />
                       </Button>
@@ -152,6 +156,7 @@ export const UsersTable = ({ onResetPassword, onEditProfile }: UsersTableProps) 
                         variant="ghost" 
                         size="icon"
                         onClick={() => onResetPassword(user.id, user.email || '')}
+                        title="Reset Password"
                       >
                         <Key className="h-4 w-4" />
                       </Button>
