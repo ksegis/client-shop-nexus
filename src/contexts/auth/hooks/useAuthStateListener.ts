@@ -13,6 +13,10 @@ export function useAuthStateListener() {
   const [roleLoaded, setRoleLoaded] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  
+  // Add rate limiting protection
+  const [lastRefreshAttempt, setLastRefreshAttempt] = useState(0);
+  const REFRESH_COOLDOWN_MS = 2000; // 2 seconds between refresh attempts
 
   // Exposed function to update user with role
   const updateUserWithRole = useCallback(async (userId: string, profileRole: string) => {
@@ -34,18 +38,37 @@ export function useAuthStateListener() {
     // Indicate that we've loaded the role
     setRoleLoaded(true);
     
+    // Check if we need to respect rate limiting
+    const now = Date.now();
+    if (now - lastRefreshAttempt < REFRESH_COOLDOWN_MS) {
+      console.log("Skipping session refresh due to rate limiting cooldown");
+      return;
+    }
+    
+    setLastRefreshAttempt(now);
+    
     try {
       // Now refresh the session to ensure the role is picked up by Supabase Auth
       const { data, error } = await supabase.auth.refreshSession();
       if (error) {
-        console.error("Failed to refresh session after role update:", error);
+        // Only show error for non-rate-limiting issues
+        if (error.status !== 429) {
+          console.error("Failed to refresh session after role update:", error);
+        } else {
+          console.log("Rate limit reached when refreshing session, will try later");
+        }
       } else if (data?.user) {
         console.log("Session refreshed after role update");
       }
-    } catch (refreshError) {
-      console.error("Error refreshing session:", refreshError);
+    } catch (refreshError: any) {
+      // Only log auth session missing errors at debug level
+      if (refreshError.message && refreshError.message.includes('Auth session missing')) {
+        console.log("No active session to refresh");
+      } else {
+        console.error("Error refreshing session:", refreshError);
+      }
     }
-  }, []);
+  }, [lastRefreshAttempt]);
 
   useEffect(() => {
     console.log("Setting up auth state listener");
@@ -124,7 +147,11 @@ export function useAuthStateListener() {
               const profile = await fetchUserProfile(currentSession.user.id);
               if (profile?.role && isMounted) {
                 console.log("Setting user role from profile:", profile.role);
-                await updateUserWithRole(currentSession.user.id, profile.role);
+                try {
+                  await updateUserWithRole(currentSession.user.id, profile.role);
+                } catch (error) {
+                  console.error("Failed to update user with role:", error);
+                }
               }
             } catch (error) {
               console.error("Failed to fetch profile after auth event:", error);
@@ -169,7 +196,11 @@ export function useAuthStateListener() {
               const profile = await fetchUserProfile(initialSession.user.id);
               if (profile?.role && isMounted) {
                 console.log("Initial session: got user role from profile:", profile.role);
-                await updateUserWithRole(initialSession.user.id, profile.role);
+                try {
+                  await updateUserWithRole(initialSession.user.id, profile.role);
+                } catch (error) {
+                  console.error("Failed to update user with role:", error);
+                }
               }
             } catch (profileError) {
               console.error("Failed to fetch initial profile:", profileError);

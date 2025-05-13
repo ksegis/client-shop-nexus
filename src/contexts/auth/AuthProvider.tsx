@@ -72,12 +72,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (profile && profile.role) {
             console.log("Found role in profile:", profile.role);
             // Update the user with the role from the profile
-            await updateUserWithRole(user.id, profile.role);
+            if (updateUserWithRole) {
+              await updateUserWithRole(user.id, profile.role);
+            }
           } else {
             console.log("No role found in profile, user may need to complete registration");
           }
         } catch (error) {
           console.error("Error fetching profile:", error);
+          // Don't set redirectAttempted to false here - we'll try again after cooldown
         }
       };
       
