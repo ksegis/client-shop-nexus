@@ -105,6 +105,7 @@ export const Sidebar = () => {
   // Debug output to see if the admin check is working correctly
   const isAdmin = user?.app_metadata?.role === 'admin';
   console.log("Sidebar - isAdmin check result:", isAdmin);
+  console.log("Admin navigation items:", adminNavigationItems);
 
   const filteredNavigationItems = navigationItems.filter(item => !item.adminOnly || isAdmin);
 

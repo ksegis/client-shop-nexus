@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,7 @@ import {
   Activity,
   Users
 } from 'lucide-react';
-import { useAuth } from '@/contexts/auth'; // Updated import
+import { useAuth } from '@/contexts/auth';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -32,7 +31,7 @@ const Header = ({ portalType }: HeaderProps) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, signOut } = useAuth(); // Using the correct auth context path
+  const { user, signOut } = useAuth();
   
   // Debug logging
   console.log("Header - User object:", user);
