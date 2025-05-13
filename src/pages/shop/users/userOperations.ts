@@ -1,5 +1,7 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { User } from './types';
+import { ExtendedUserRole, mapExtendedRoleToDbRole } from '@/integrations/supabase/types-extensions';
 
 export const useUserOperations = (refetchUsers: () => Promise<void>) => {
   const createUser = async (user: Partial<User>, password: string) => {
@@ -19,13 +21,16 @@ export const useUserOperations = (refetchUsers: () => Promise<void>) => {
       if (authError) throw authError;
       
       // Create profile record
+      // Map the extended role to database role before saving
+      const dbRole = mapExtendedRoleToDbRole(user.role as ExtendedUserRole);
+      
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
           first_name: user.first_name,
           last_name: user.last_name,
           phone: user.phone,
-          role: user.role
+          role: dbRole
         })
         .eq('id', authData.user?.id);
       
@@ -39,6 +44,9 @@ export const useUserOperations = (refetchUsers: () => Promise<void>) => {
   
   const updateUser = async (id: string, user: Partial<User>, password?: string) => {
     try {
+      // Map the extended role to database role before saving
+      const dbRole = user.role ? mapExtendedRoleToDbRole(user.role as ExtendedUserRole) : undefined;
+      
       // Update profile record
       const { error: profileError } = await supabase
         .from('profiles')
@@ -46,7 +54,7 @@ export const useUserOperations = (refetchUsers: () => Promise<void>) => {
           first_name: user.first_name,
           last_name: user.last_name,
           phone: user.phone,
-          role: user.role
+          role: dbRole
         })
         .eq('id', id);
       
