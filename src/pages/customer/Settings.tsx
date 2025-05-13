@@ -1,21 +1,35 @@
 
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useProfileData } from '@/hooks/useProfileData';
 import PersonalInfoCard from '@/components/customer/PersonalInfoCard';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings } from 'lucide-react';
+import { Settings, ChevronLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const CustomerSettings = () => {
   const { profileData, isLoading, error } = useProfileData();
+  
+  const PageHeader = () => (
+    <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center">
+        <Settings className="h-6 w-6 mr-2" />
+        <h1 className="text-2xl font-bold">Settings</h1>
+      </div>
+      <Button variant="ghost" size="sm" asChild>
+        <Link to="/customer/profile" className="flex items-center">
+          <ChevronLeft className="mr-1 h-4 w-4" />
+          Back to Profile
+        </Link>
+      </Button>
+    </div>
+  );
 
   if (isLoading) {
     return (
       <div className="max-w-5xl mx-auto p-4">
-        <div className="flex items-center mb-6">
-          <Settings className="h-6 w-6 mr-2" />
-          <h1 className="text-2xl font-bold">Settings</h1>
-        </div>
+        <PageHeader />
         <div className="h-96 flex items-center justify-center">
           <div className="animate-pulse text-gray-400">Loading settings...</div>
         </div>
@@ -26,10 +40,7 @@ const CustomerSettings = () => {
   if (error) {
     return (
       <div className="max-w-5xl mx-auto p-4">
-        <div className="flex items-center mb-6">
-          <Settings className="h-6 w-6 mr-2" />
-          <h1 className="text-2xl font-bold">Settings</h1>
-        </div>
+        <PageHeader />
         <Card>
           <CardContent className="p-6">
             <div className="text-red-500">
@@ -45,10 +56,7 @@ const CustomerSettings = () => {
   if (!profileData) {
     return (
       <div className="max-w-5xl mx-auto p-4">
-        <div className="flex items-center mb-6">
-          <Settings className="h-6 w-6 mr-2" />
-          <h1 className="text-2xl font-bold">Settings</h1>
-        </div>
+        <PageHeader />
         <Card>
           <CardContent className="p-6">
             <p>No profile data available. Please complete your profile information.</p>
@@ -60,17 +68,22 @@ const CustomerSettings = () => {
 
   return (
     <div className="max-w-5xl mx-auto p-4">
-      <div className="flex items-center mb-6">
-        <Settings className="h-6 w-6 mr-2" />
-        <h1 className="text-2xl font-bold">Settings</h1>
-      </div>
+      <PageHeader />
 
       <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="mb-6">
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-        </TabsList>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <TabsList>
+            <TabsTrigger value="profile">Profile</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
+            <TabsTrigger value="security">Security</TabsTrigger>
+          </TabsList>
+          
+          <div className="flex gap-2">
+            <Button variant="outline" asChild>
+              <Link to="/customer">Cancel</Link>
+            </Button>
+          </div>
+        </div>
 
         <TabsContent value="profile" className="space-y-6">
           <PersonalInfoCard profileData={profileData} />
