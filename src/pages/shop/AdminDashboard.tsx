@@ -37,7 +37,7 @@ const AdminDashboard = () => {
         navigate('/shop/admin/system');
         break;
       default:
-        navigate('/shop/admin');
+        navigate('/shop/admin/api-keys');
     }
   };
   

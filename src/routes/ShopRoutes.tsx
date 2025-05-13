@@ -95,11 +95,12 @@ const ShopRoutes = () => {
             </ProtectedRoute>
           }
         />
+        {/* Admin routes */}
         <Route
           path="/admin"
           element={
             <ProtectedRoute requiredRole="admin">
-              <AdminDashboard />
+              <Navigate to="/shop/admin/api-keys" replace />
             </ProtectedRoute>
           }
         />
@@ -107,7 +108,7 @@ const ShopRoutes = () => {
           path="/admin/api-keys"
           element={
             <ProtectedRoute requiredRole="admin">
-              <ApiKeysManager />
+              <AdminDashboard />
             </ProtectedRoute>
           }
         />
@@ -115,7 +116,7 @@ const ShopRoutes = () => {
           path="/admin/staff"
           element={
             <ProtectedRoute requiredRole="admin">
-              <StaffManager />
+              <AdminDashboard />
             </ProtectedRoute>
           }
         />
@@ -123,7 +124,7 @@ const ShopRoutes = () => {
           path="/admin/system"
           element={
             <ProtectedRoute requiredRole="admin">
-              <SystemHealth />
+              <AdminDashboard />
             </ProtectedRoute>
           }
         />

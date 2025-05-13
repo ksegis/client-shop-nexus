@@ -1,3 +1,4 @@
+
 import React from "react";
 import {
   Sheet,
@@ -82,7 +83,7 @@ const navigationItems = [
 const adminNavigationItems = [
   {
     title: "Admin Dashboard",
-    href: "/shop/admin",
+    href: "/shop/admin/api-keys",
     icon: Shield,
   },
   {
