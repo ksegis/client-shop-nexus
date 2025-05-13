@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -53,6 +52,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         }
         
+        // If user just signed in, redirect to the appropriate portal
+        if (event === 'SIGNED_IN' && currentSession?.user) {
+          // Fetch profile data in a separate non-blocking operation
+          fetchUserProfile(currentSession.user.id).then(profile => {
+            if (profile?.role) {
+              // Force redirection based on role
+              redirectUserBasedOnRole(profile.role, location.pathname);
+            }
+          });
+        }
+        
         // Mark loading as false after any auth change
         setLoading(false);
       }
@@ -74,13 +84,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (profile?.role) {
                   setUser(currentUser => {
                     if (!currentUser) return null;
-                    return {
+                    
+                    // Update user with role from profile
+                    const updatedUser = {
                       ...currentUser,
                       app_metadata: {
                         ...currentUser.app_metadata,
                         role: profile.role
                       }
                     };
+                    
+                    // Check if user is on the correct portal for their role
+                    redirectUserBasedOnRole(profile.role, location.pathname);
+                    
+                    return updatedUser;
                   });
                 }
               });
@@ -99,7 +116,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [navigate, toast]);
+  }, [navigate, toast, location]);
+
+  // Redirect user based on their role and current path
+  const redirectUserBasedOnRole = (role: string, currentPath: string) => {
+    const isShopPath = currentPath.startsWith('/shop');
+    const isCustomerPath = currentPath.startsWith('/customer');
+    
+    // Strict enforcement of portal access based on role
+    if (role === 'customer' && isShopPath) {
+      // Customer trying to access shop portal - redirect to customer portal
+      console.log('Customer attempting to access shop portal - redirecting to customer portal');
+      toast({
+        title: "Access Restricted",
+        description: "Customers can only access the Customer Portal.",
+        variant: "destructive",
+      });
+      navigate('/customer/profile', { replace: true });
+    } else if ((role === 'staff' || role === 'admin') && isCustomerPath) {
+      // Staff/admin trying to access customer portal - redirect to shop portal
+      console.log('Staff/admin attempting to access customer portal - redirecting to shop portal');
+      toast({
+        title: "Portal Changed",
+        description: "Staff members use the Shop Management Portal.",
+      });
+      navigate('/shop', { replace: true });
+    }
+  };
 
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
     try {

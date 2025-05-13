@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -16,8 +17,26 @@ const SignInForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const { signIn } = useAuth();
+  const { signIn, user } = useAuth();
   const navigate = useNavigate();
+  
+  // Check if user is already authenticated and has appropriate role
+  useEffect(() => {
+    if (user) {
+      const role = user.app_metadata?.role;
+      if (role === 'admin' || role === 'staff') {
+        navigate('/shop', { replace: true });
+      } else if (role === 'customer') {
+        // If customer is trying to access shop login, redirect to customer portal
+        toast({
+          title: "Access Restricted",
+          description: "Customers must use the Customer Portal",
+          variant: "destructive",
+        });
+        navigate('/customer/profile', { replace: true });
+      }
+    }
+  }, [user, navigate, toast]);
 
   // Clear error when inputs change
   useEffect(() => {
@@ -42,12 +61,11 @@ const SignInForm = () => {
     try {
       console.log("SignIn: Attempting to sign in with email:", email);
       
-      // Convert to Promise.then pattern to avoid potential Supabase deadlock
+      // Sign in using auth context
       await signIn(email, password, rememberMe);
       
-      // Only navigate after successful login
+      // Navigation will be handled by the auth state listener in AuthProvider
       console.log("SignIn: Sign-in successful");
-      navigate('/shop', { replace: true });
       
     } catch (error: any) {
       console.error("SignIn error:", error);
