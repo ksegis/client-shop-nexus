@@ -17,6 +17,7 @@ import UserManagement from "@/pages/shop/UserManagement";
 import Employees from "@/pages/shop/Employees";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import Layout from "@/components/layout/Layout";
+import NotFound from "@/pages/NotFound";
 
 const ShopRoutes = () => {
   return (
@@ -142,6 +143,9 @@ const ShopRoutes = () => {
             </ProtectedRoute>
           }
         />
+        
+        {/* Add catch-all route for shop section */}
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   );
