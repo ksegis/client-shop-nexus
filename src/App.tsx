@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AppRoutes from "./routes/AppRoutes";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { setupAudioCleanupOnNavigation } from "@/utils/audioUtils";
 
 const queryClient = new QueryClient();
 
@@ -50,15 +51,22 @@ const UserRoleDebug = () => {
   return null;
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProviderWrapper>
-      <Toaster />
-      <Sonner />
-      <UserRoleDebug />
-      <AppRoutes />
-    </TooltipProviderWrapper>
-  </QueryClientProvider>
-);
+const App = () => {
+  // Set up audio cleanup when navigating between routes
+  useEffect(() => {
+    return setupAudioCleanupOnNavigation();
+  }, []);
+  
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProviderWrapper>
+        <Toaster />
+        <Sonner />
+        <UserRoleDebug />
+        <AppRoutes />
+      </TooltipProviderWrapper>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
