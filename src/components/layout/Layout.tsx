@@ -3,8 +3,6 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import { Sidebar } from '../ui/sidebar';
-import ImpersonationBanner from '../admin/ImpersonationBanner';
-import { isImpersonating } from '@/utils/admin/impersonationUtils';
 
 interface LayoutProps {
   portalType: 'customer' | 'shop';
@@ -14,7 +12,6 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ portalType, children }) => {
   return (
     <div className="h-screen flex flex-col">
-      {isImpersonating() && <ImpersonationBanner />}
       <Header portalType={portalType} />
       
       {portalType === 'shop' ? (
