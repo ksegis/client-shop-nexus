@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SidebarItem } from "./SidebarItem";
+import { SidebarItem } from "./sidebar/sidebar-item"; // Updated import path
 import { useAuth } from '@/contexts/auth'; 
 import { 
   Shield, 
