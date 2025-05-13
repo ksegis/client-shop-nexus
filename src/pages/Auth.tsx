@@ -33,7 +33,6 @@ const Auth = () => {
     }
     
     // Check for password reset hash/token in the URL
-    // This will be present when user clicks on the reset link from email
     const hash = window.location.hash;
     if (hash && hash.includes('type=recovery')) {
       setResetPasswordMode(true);
@@ -41,7 +40,12 @@ const Auth = () => {
     
     // Redirect if already logged in
     if (user) {
-      navigate('/shop');
+      const userRole = user.app_metadata?.role;
+      if (userRole === 'customer') {
+        navigate('/customer/profile');
+      } else {
+        navigate('/shop');
+      }
     }
   }, [searchParams, user, navigate]);
   

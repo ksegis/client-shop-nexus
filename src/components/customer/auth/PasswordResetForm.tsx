@@ -24,7 +24,7 @@ const PasswordResetForm = ({ email, onCancel }: PasswordResetFormProps) => {
       setLoading(true);
       
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/auth?reset=true`,
+        redirectTo: `${window.location.origin}/customer/login?reset=true`,
       });
       
       if (error) throw error;
