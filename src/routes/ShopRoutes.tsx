@@ -1,4 +1,3 @@
-
 import { Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "@/pages/shop/Dashboard";
 import Profile from "@/pages/shop/Profile";
@@ -22,6 +21,7 @@ const ShopRoutes = () => {
   return (
     <Routes>
       <Route element={<Layout portalType="shop" />}>
+        {/* Standard shop routes */}
         <Route
           path="/"
           element={
@@ -94,7 +94,8 @@ const ShopRoutes = () => {
             </ProtectedRoute>
           }
         />
-        {/* Admin routes */}
+        
+        {/* Admin routes - direct to their respective components */}
         <Route
           path="/admin"
           element={
@@ -127,6 +128,8 @@ const ShopRoutes = () => {
             </ProtectedRoute>
           }
         />
+        
+        {/* User management routes */}
         <Route
           path="/users"
           element={

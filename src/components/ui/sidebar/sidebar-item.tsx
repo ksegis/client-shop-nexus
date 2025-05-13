@@ -11,6 +11,7 @@ interface SidebarItemProps {
 }
 
 export const SidebarItem = ({ href, title, icon: Icon }: SidebarItemProps) => {
+  // Ensure proper navigation with React Router
   return (
     <NavLink
       to={href}
@@ -23,6 +24,7 @@ export const SidebarItem = ({ href, title, icon: Icon }: SidebarItemProps) => {
             : 'text-muted-foreground hover:bg-muted'
         )
       }
+      end // This ensures exact path matching
     >
       <Icon className="h-5 w-5" />
       <span>{title}</span>
