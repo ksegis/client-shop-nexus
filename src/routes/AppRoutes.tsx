@@ -5,6 +5,7 @@ import AuthRoutes from "./AuthRoutes";
 import CustomerRoutes from "./CustomerRoutes";
 import ShopRoutes from "./ShopRoutes";
 import Index from "@/pages/Index";
+import ShopLogin from "@/pages/shop/Login";
 
 const AppRoutes = () => {
   return (
@@ -12,6 +13,9 @@ const AppRoutes = () => {
       {/* Root routes - render Index component that will redirect based on auth status */}
       <Route index element={<Index />} />
       <Route path="/" element={<Index />} />
+      
+      {/* Shop Login Route - explicit route to ensure it's accessible */}
+      <Route path="/shop/login" element={<ShopLogin />} />
       
       {/* Auth Routes */}
       <Route path="/auth/*" element={<AuthRoutes />} />

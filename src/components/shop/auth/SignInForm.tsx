@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from "@/components/ui/checkbox";
 import { CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { useAuth } from '@/contexts/auth'; // Updated import
+import { useAuth } from '@/contexts/auth'; // Using the correct auth context path
 import { Loader2 } from 'lucide-react';
 
 const SignInForm = () => {
@@ -44,20 +43,10 @@ const SignInForm = () => {
       console.log("SignIn: Attempting to sign in with email:", email);
       
       // Convert to Promise.then pattern to avoid potential Supabase deadlock
-      await new Promise<void>((resolve, reject) => {
-        signIn(email, password, rememberMe)
-          .then(() => {
-            console.log("SignIn: Sign-in successful");
-            resolve();
-          })
-          .catch((err) => {
-            console.error("SignIn promise rejection:", err);
-            reject(err);
-          });
-      });
+      await signIn(email, password, rememberMe);
       
       // Only navigate after successful login
-      console.log("SignIn: Navigating to /shop");
+      console.log("SignIn: Sign-in successful");
       navigate('/shop', { replace: true });
       
     } catch (error: any) {

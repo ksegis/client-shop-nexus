@@ -14,12 +14,13 @@ const Index = () => {
   // Simplified direct navigation function that uses window.location for reliability
   const goToLogin = () => {
     console.log("Manual navigation to login triggered");
-    window.location.href = "/shop/login";
+    // Use navigate instead of window.location for proper React Router navigation
+    navigate("/shop/login");
   };
   
   const goToDashboard = () => {
     console.log("Manual navigation to dashboard triggered");
-    window.location.href = "/shop";
+    navigate("/shop");
   };
 
   // For debugging purposes only

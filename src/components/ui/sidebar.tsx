@@ -1,4 +1,3 @@
-
 import React from "react";
 import {
   Sheet,
@@ -11,7 +10,7 @@ import {
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarItem } from "./SidebarItem";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from '@/contexts/auth'; // Updated import
 import { Shield, Users, BarChart, Package, ListChecks, UserPlus, Settings, FileText, FileCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
