@@ -26,7 +26,8 @@ import {
   FileText, 
   FileCheck, 
   Key,
-  Activity 
+  Activity,
+  Webhook
 } from "lucide-react";
 
 // Navigation items for the shop portal
@@ -82,26 +83,15 @@ const navigationItems = [
 // Admin-specific navigation items
 const adminNavigationItems = [
   {
-    title: "API Keys",
-    href: "/shop/admin/api-keys",
-    icon: Key,
-  },
-  {
-    title: "Staff Management",
-    href: "/shop/admin/staff",
-    icon: Users,
-  },
-  {
-    title: "System Health",
-    href: "/shop/admin/system",
-    icon: Activity,
+    title: "API Connections",
+    href: "/shop/admin/api-connections",
+    icon: Webhook,
   }
 ];
 
 export const Sidebar = () => {
   const { user } = useAuth();
   
-  // Debug output to see if the admin check is working correctly
   const isAdmin = user?.app_metadata?.role === 'admin';
   console.log("Sidebar - isAdmin check result:", isAdmin);
   console.log("Admin navigation items:", adminNavigationItems);
