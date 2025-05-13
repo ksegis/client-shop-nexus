@@ -17,17 +17,21 @@ const Auth = () => {
       window.history.replaceState(null, '', window.location.pathname);
     }
     
-    // If user is already authenticated and we have role info, redirect to appropriate portal
-    // But only if we explicitly have role information to prevent loops
+    // Only redirect if we have both user and role information and we're not loading
     if (!loading && user && user.app_metadata?.role) {
-      const role = user.app_metadata?.role;
+      const role = user.app_metadata.role;
       console.log("Auth page: redirecting based on role:", role);
       
-      if (role === 'admin' || role === 'staff') {
-        navigate("/shop", { replace: true });
-      } else if (role === 'customer') {
-        navigate("/customer/profile", { replace: true });
-      }
+      // Add a small delay to prevent redirect loops
+      const timer = setTimeout(() => {
+        if (role === 'admin' || role === 'staff') {
+          navigate("/shop", { replace: true });
+        } else if (role === 'customer') {
+          navigate("/customer/profile", { replace: true });
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
     }
   }, [loading, user, navigate]);
   

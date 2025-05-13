@@ -10,6 +10,13 @@ export function useRedirection() {
   // Redirect user based on their role and current path
   const redirectUserBasedOnRole = useCallback((role: string, currentPath: string) => {
     console.log("Redirecting based on role:", role, "Current path:", currentPath);
+    
+    // Don't redirect if already on auth page
+    if (currentPath === '/auth') {
+      console.log("Already on auth page, not redirecting");
+      return;
+    }
+    
     const isShopPath = currentPath.startsWith('/shop');
     const isCustomerPath = currentPath.startsWith('/customer');
     const isAuthPath = currentPath === '/auth' || currentPath === '/';

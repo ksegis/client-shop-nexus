@@ -6,6 +6,11 @@ import { supabase } from '@/integrations/supabase/client';
  * @param userId The user ID to fetch profile data for
  */
 export const fetchUserProfile = async (userId: string) => {
+  if (!userId) {
+    console.error("fetchUserProfile called with empty userId");
+    return null;
+  }
+  
   try {
     console.log("Fetching profile for user:", userId);
     const { data: profile, error } = await supabase
@@ -38,10 +43,21 @@ export const fetchUserProfile = async (userId: string) => {
  * @param role The role to set
  */
 export const syncUserRoleToMetadata = async (userId: string, role: string) => {
+  if (!userId || !role) {
+    console.error("syncUserRoleToMetadata called with empty userId or role");
+    return false;
+  }
+  
   try {
-    await supabase.auth.admin.updateUserById(userId, {
+    const { error } = await supabase.auth.admin.updateUserById(userId, {
       app_metadata: { role }
     });
+    
+    if (error) {
+      console.error("Error syncing user role to metadata:", error);
+      return false;
+    }
+    
     console.log("Successfully synced role to auth metadata:", role);
     return true;
   } catch (error) {

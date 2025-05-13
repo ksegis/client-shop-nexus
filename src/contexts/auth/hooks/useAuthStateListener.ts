@@ -14,7 +14,9 @@ export function useAuthStateListener() {
   const navigate = useNavigate();
 
   // Exposed function to update user with role
-  const updateUserWithRole = useCallback((userId: string, profileRole: string) => {
+  const updateUserWithRole = useCallback(async (userId: string, profileRole: string) => {
+    console.log("Updating user with role:", profileRole);
+    
     setUser(currentUser => {
       if (!currentUser) return null;
       
@@ -30,11 +32,14 @@ export function useAuthStateListener() {
 
   useEffect(() => {
     console.log("Setting up auth state listener");
+    let isMounted = true;
     
     // Set up auth state listener FIRST (important to prevent deadlocks)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         console.log("Auth state changed:", event, currentSession?.user?.email);
+        
+        if (!isMounted) return;
         
         // Handle synchronous state updates immediately
         setUser(currentSession?.user ?? null);
@@ -62,30 +67,37 @@ export function useAuthStateListener() {
         if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && currentSession?.user) {
           // Use setTimeout to avoid deadlock with Supabase client
           setTimeout(async () => {
+            if (!isMounted) return;
+            
             try {
               const profile = await fetchUserProfile(currentSession.user.id);
-              if (profile?.role) {
+              if (profile?.role && isMounted) {
                 console.log("Setting user role from profile:", profile.role);
                 updateUserWithRole(currentSession.user.id, profile.role);
               }
             } catch (error) {
               console.error("Failed to fetch profile after auth event:", error);
+            } finally {
+              // Mark loading as false after any auth change
+              if (isMounted) setLoading(false);
             }
           }, 0);
+        } else {
+          // Mark loading as false after any auth change
+          if (isMounted) setLoading(false);
         }
-        
-        // Mark loading as false after any auth change
-        setLoading(false);
       }
     );
     
     // THEN check for existing session (with a slight delay to avoid race conditions)
     setTimeout(async () => {
+      if (!isMounted) return;
+      
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
         console.log("Initial session check:", initialSession?.user?.email);
         
-        if (initialSession?.user) {
+        if (initialSession?.user && isMounted) {
           setUser(initialSession.user);
           setSession(initialSession);
           
@@ -93,7 +105,7 @@ export function useAuthStateListener() {
           if (initialSession.user.id) {
             try {
               const profile = await fetchUserProfile(initialSession.user.id);
-              if (profile?.role) {
+              if (profile?.role && isMounted) {
                 console.log("Initial session: got user role from profile:", profile.role);
                 updateUserWithRole(initialSession.user.id, profile.role);
               }
@@ -106,14 +118,15 @@ export function useAuthStateListener() {
         console.error("Failed to get session:", sessionError);
       } finally {
         // Make sure loading is set to false after initial session check
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }, 100);
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, [navigate, toast, updateUserWithRole]);
 
-  return { user, session, loading, setUser, setSession, setLoading };
+  return { user, session, loading, setUser, setSession, setLoading, updateUserWithRole };
 }
