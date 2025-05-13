@@ -13,12 +13,6 @@ import { Button } from "@/components/ui/button";
 import { SidebarItem } from "./SidebarItem";
 import { useAuth } from '@/contexts/auth'; 
 import { Shield, Users, BarChart, Package, ListChecks, UserPlus, Settings, FileText, FileCheck } from "lucide-react";
-import { Link } from "react-router-dom";
-
-interface Props {
-  children?: React.ReactNode;
-  showNavigation?: boolean;
-}
 
 const navigationItems = [
   {
@@ -69,12 +63,8 @@ const navigationItems = [
   }
 ];
 
-export const Sidebar = ({ children, showNavigation = true }: Props) => {
+export const Sidebar = () => {
   const { user } = useAuth();
-  
-  console.log("Sidebar - Current user:", user?.email);
-  console.log("Sidebar - User metadata:", user?.app_metadata);
-  console.log("Sidebar - User role in app metadata:", user?.app_metadata?.role);
   
   // Debug output to see if the admin check is working correctly
   const isAdmin = user?.app_metadata?.role === 'admin';
@@ -87,7 +77,7 @@ export const Sidebar = ({ children, showNavigation = true }: Props) => {
       {/* Desktop Sidebar */}
       <div className="h-full border-r bg-background w-full">
         <div className="py-4">
-          {showNavigation && filteredNavigationItems.map((item) => (
+          {filteredNavigationItems.map((item) => (
             <SidebarItem 
               key={item.href}
               href={item.href}
@@ -99,33 +89,31 @@ export const Sidebar = ({ children, showNavigation = true }: Props) => {
       </div>
       
       {/* Mobile Sheet/Drawer - Only shown on mobile */}
-      {showNavigation && (
-        <Sheet>
-          <SheetTrigger asChild className="absolute left-4 top-4 md:hidden">
-            <Button variant="ghost" size="icon">
-              <Menu />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-80 p-0">
-            <SheetHeader className="pl-6 pb-4">
-              <SheetTitle>Acme Co.</SheetTitle>
-              <SheetDescription>
-                Manage your shop, view reports, and more.
-              </SheetDescription>
-            </SheetHeader>
-            <div className="py-4">
-              {filteredNavigationItems.map((item) => (
-                <SidebarItem 
-                  key={item.href}
-                  href={item.href}
-                  title={item.title}
-                  icon={item.icon}
-                />
-              ))}
-            </div>
-          </SheetContent>
-        </Sheet>
-      )}
+      <Sheet>
+        <SheetTrigger asChild className="absolute left-4 top-4 md:hidden">
+          <Button variant="ghost" size="icon">
+            <Menu />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" className="w-80 p-0">
+          <SheetHeader className="pl-6 pb-4">
+            <SheetTitle>Acme Co.</SheetTitle>
+            <SheetDescription>
+              Manage your shop, view reports, and more.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="py-4">
+            {filteredNavigationItems.map((item) => (
+              <SidebarItem 
+                key={item.href}
+                href={item.href}
+                title={item.title}
+                icon={item.icon}
+              />
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 };
