@@ -13,6 +13,34 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
   const location = useLocation();
   const [hasShownToast, setHasShownToast] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  
+  // Set mounted state after initial render
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
+  // Add a small delay for role checking to prevent flashing content
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    
+    if (!loading && !hasShownToast && mounted) {
+      if (user && allowedRoles && !allowedRoles.includes(user.app_metadata?.role)) {
+        timer = setTimeout(() => {
+          toast({
+            title: "Access Restricted",
+            description: "You don't have permission to access this area",
+            variant: "destructive",
+          });
+          setHasShownToast(true);
+        }, 100);
+      }
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [loading, user, mounted, hasShownToast, allowedRoles]);
   
   // If still loading, show loading state
   if (loading) {
@@ -25,13 +53,13 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
     );
   }
   
-  // If not authenticated, redirect to appropriate login
+  // If not authenticated, redirect to appropriate login with the return URL
   if (!user) {
     const loginPath = location.pathname.startsWith('/shop') 
       ? '/shop/login'
       : '/customer/login';
       
-    return <Navigate to={loginPath} replace />;
+    return <Navigate to={loginPath} state={{ from: location.pathname }} replace />;
   }
   
   // Get user role from metadata if it exists
@@ -53,39 +81,14 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
           ? '/shop' 
           : '/auth';
       
-      // Show toast message on next render, but only once
-      if (!hasShownToast) {
-        setTimeout(() => {
-          toast({
-            title: "Access Restricted",
-            description: "You don't have permission to access this area",
-            variant: "destructive",
-          });
-          setHasShownToast(true);
-        }, 0);
-      }
-      
       return <Navigate to={redirectPath} replace />;
     }
   }
   
-  // Portal-specific checks
+  // Portal-specific checks for additional security
   if (userRole === 'customer' && location.pathname.startsWith('/shop')) {
-    // Customer trying to access shop routes - block and redirect
-    if (!hasShownToast) {
-      setTimeout(() => {
-        toast({
-          title: "Access Restricted",
-          description: "Customers can only access the Customer Portal",
-          variant: "destructive",
-        });
-        setHasShownToast(true);
-      }, 0);
-    }
-    
     return <Navigate to="/customer/profile" replace />;
   } else if ((userRole === 'staff' || userRole === 'admin') && location.pathname.startsWith('/customer')) {
-    // Staff/admin trying to access customer routes - redirect to shop portal
     return <Navigate to="/shop" replace />;
   }
   

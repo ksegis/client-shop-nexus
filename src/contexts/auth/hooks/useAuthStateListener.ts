@@ -10,6 +10,7 @@ export function useAuthStateListener() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [roleLoaded, setRoleLoaded] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -28,11 +29,15 @@ export function useAuthStateListener() {
         }
       };
     });
+    
+    setRoleLoaded(true);
   }, []);
 
   useEffect(() => {
     console.log("Setting up auth state listener");
     let isMounted = true;
+    let initialProfileCheck = false;
+    let profileCheckTimeout: NodeJS.Timeout | null = null;
     
     // Set up auth state listener FIRST (important to prevent deadlocks)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -42,11 +47,24 @@ export function useAuthStateListener() {
         if (!isMounted) return;
         
         // Handle synchronous state updates immediately
-        setUser(currentSession?.user ?? null);
+        if (currentSession?.user) {
+          const existingRole = currentSession.user.app_metadata?.role;
+          // Only update user if we don't have role info yet or if it changed
+          setUser(prev => {
+            if (prev?.app_metadata?.role === existingRole && existingRole) {
+              return prev;
+            }
+            return currentSession.user;
+          });
+        } else {
+          setUser(null);
+        }
+        
         setSession(currentSession);
         
         if (event === 'SIGNED_OUT') {
           console.log("User signed out, redirecting to login");
+          setRoleLoaded(false);
           navigate('/auth', { replace: true });
         }
         
@@ -65,11 +83,24 @@ export function useAuthStateListener() {
         
         // If user just signed in, fetch profile data in a non-blocking way
         if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && currentSession?.user) {
+          // Clear any existing timeout to prevent race conditions
+          if (profileCheckTimeout) {
+            clearTimeout(profileCheckTimeout);
+          }
+          
           // Use setTimeout to avoid deadlock with Supabase client
-          setTimeout(async () => {
+          profileCheckTimeout = setTimeout(async () => {
             if (!isMounted) return;
             
             try {
+              // Skip profile check if we already have role info
+              if (currentSession.user.app_metadata?.role) {
+                console.log("User already has role metadata:", currentSession.user.app_metadata.role);
+                setRoleLoaded(true);
+                setLoading(false);
+                return;
+              }
+              
               const profile = await fetchUserProfile(currentSession.user.id);
               if (profile?.role && isMounted) {
                 console.log("Setting user role from profile:", profile.role);
@@ -81,7 +112,7 @@ export function useAuthStateListener() {
               // Mark loading as false after any auth change
               if (isMounted) setLoading(false);
             }
-          }, 0);
+          }, 500); // Small delay to ensure auth state is settled
         } else {
           // Mark loading as false after any auth change
           if (isMounted) setLoading(false);
@@ -98,11 +129,22 @@ export function useAuthStateListener() {
         console.log("Initial session check:", initialSession?.user?.email);
         
         if (initialSession?.user && isMounted) {
+          const existingRole = initialSession.user.app_metadata?.role;
+          
           setUser(initialSession.user);
           setSession(initialSession);
           
+          // If we already have role metadata, we're good to go
+          if (existingRole) {
+            console.log("Initial session: user already has role:", existingRole);
+            setRoleLoaded(true);
+            setLoading(false);
+            return;
+          }
+          
           // Fetch profile data in a separate non-blocking operation
-          if (initialSession.user.id) {
+          if (initialSession.user.id && !initialProfileCheck) {
+            initialProfileCheck = true;
             try {
               const profile = await fetchUserProfile(initialSession.user.id);
               if (profile?.role && isMounted) {
@@ -120,13 +162,25 @@ export function useAuthStateListener() {
         // Make sure loading is set to false after initial session check
         if (isMounted) setLoading(false);
       }
-    }, 100);
+    }, 300);
 
     return () => {
       isMounted = false;
+      if (profileCheckTimeout) {
+        clearTimeout(profileCheckTimeout);
+      }
       subscription.unsubscribe();
     };
   }, [navigate, toast, updateUserWithRole]);
 
-  return { user, session, loading, setUser, setSession, setLoading, updateUserWithRole };
+  return { 
+    user, 
+    session, 
+    loading, 
+    roleLoaded,
+    setUser, 
+    setSession, 
+    setLoading, 
+    updateUserWithRole 
+  };
 }

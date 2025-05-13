@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from "@/components/ui/checkbox";
 import { CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { useAuth } from '@/contexts/auth'; // Using the correct auth context path
+import { useAuth } from '@/contexts/auth'; 
 import { Loader2 } from 'lucide-react';
 
 const SignInForm = () => {
@@ -24,8 +24,14 @@ const SignInForm = () => {
   useEffect(() => {
     if (user) {
       const role = user.app_metadata?.role;
+      
       if (role === 'admin' || role === 'staff') {
-        navigate('/shop', { replace: true });
+        // Allow a small delay to ensure all state is synchronized
+        const timer = setTimeout(() => {
+          navigate('/shop', { replace: true });
+        }, 100);
+        
+        return () => clearTimeout(timer);
       } else if (role === 'customer') {
         // If customer is trying to access shop login, redirect to customer portal
         toast({
@@ -64,8 +70,10 @@ const SignInForm = () => {
       // Sign in using auth context
       await signIn(email, password, rememberMe);
       
-      // Navigation will be handled by the auth state listener in AuthProvider
-      console.log("SignIn: Sign-in successful");
+      // Small delay to ensure role is fetched
+      setTimeout(() => {
+        console.log("SignIn: Sign-in successful, redirecting...");
+      }, 100);
       
     } catch (error: any) {
       console.error("SignIn error:", error);

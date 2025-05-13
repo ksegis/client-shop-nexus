@@ -10,6 +10,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user, 
     session, 
     loading: authStateLoading, 
+    roleLoaded,
     setLoading 
   } = useAuthStateListener();
   
@@ -39,52 +40,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Setup profile-based redirections
   useEffect(() => {
-    // If we're on the auth page specifically, let that page handle redirections
-    if (location.pathname === '/auth') {
+    // No need to continue if we're still loading or no user
+    if (loading || !user) {
       return;
     }
     
-    // Skip if no user, still loading, or if we already attempted a redirect recently
-    if (!user?.id || loading || redirectAttempted) return;
+    // If we have role information, we're good to go
+    if (roleLoaded && user?.app_metadata?.role) {
+      console.log("Role loaded successfully:", user.app_metadata.role);
+      setRedirectAttempted(false); // Reset this so we can redirect if needed later
+      return;
+    }
     
-    // Check if we should attempt another redirect
+    // Skip redirects during cooldown period
     const now = Date.now();
     if (now - lastRedirectAttempt < REDIRECT_COOLDOWN_MS) {
-      // Still in cooldown period, don't attempt another redirect
       return;
     }
     
-    // Fetch user profile to get role information
-    const checkUserRole = async () => {
-      try {
-        console.log("Fetching profile for role check with user ID:", user.id);
-        
-        // Skip redirect if we already have role metadata
-        if (user.app_metadata?.role) {
-          console.log("User already has role metadata:", user.app_metadata.role);
-          setRedirectAttempted(true);
-          return;
+    // Only fetch profile if we don't already have role information
+    if (!redirectAttempted && !user.app_metadata?.role) {
+      console.log("Attempting to fetch profile for role determination");
+      setLastRedirectAttempt(now);
+      setRedirectAttempted(true);
+      
+      // Fetch user profile to get role information
+      const checkUserRole = async () => {
+        try {
+          const profile = await fetchUserProfile(user.id);
+          if (!profile || !profile.role) {
+            console.log("No role found in profile, user may need to complete registration");
+          }
+        } catch (error) {
+          console.error("Error fetching profile:", error);
         }
-        
-        const profile = await fetchUserProfile(user.id);
-        
-        if (profile?.role) {
-          console.log("Profile fetch successful, got role:", profile.role);
-          // Update timestamp to prevent redirect loops
-          setLastRedirectAttempt(Date.now());
-          setRedirectAttempted(true);
-        } else {
-          console.log("Profile found but no role");
-          setRedirectAttempted(true);
-        }
-      } catch (error) {
-        console.error("Failed to fetch profile for role check:", error);
-        setRedirectAttempted(true);
-      }
-    };
-    
-    checkUserRole();
-  }, [user?.id, loading, location.pathname, lastRedirectAttempt, redirectAttempted]);
+      };
+      
+      checkUserRole();
+    }
+  }, [user, loading, roleLoaded, location.pathname, lastRedirectAttempt, redirectAttempted]);
 
   const value = {
     user,

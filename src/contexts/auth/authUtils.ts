@@ -30,6 +30,18 @@ export const fetchUserProfile = async (userId: string) => {
     }
     
     console.log("Got user role from profile:", profile?.role);
+    
+    // Sync the role to user metadata
+    if (profile.role) {
+      try {
+        // Update the session data to include role information
+        await supabase.auth.refreshSession();
+        console.log("Auth session refreshed after profile fetch");
+      } catch (refreshError) {
+        console.error("Error refreshing auth session:", refreshError);
+      }
+    }
+    
     return profile;
   } catch (error) {
     console.error("Error in fetchUserProfile:", error);
@@ -49,8 +61,9 @@ export const syncUserRoleToMetadata = async (userId: string, role: string) => {
   }
   
   try {
-    const { error } = await supabase.auth.admin.updateUserById(userId, {
-      app_metadata: { role }
+    const { data, error } = await supabase.rpc('sync_user_role', {
+      user_id: userId, 
+      user_role: role
     });
     
     if (error) {
@@ -59,6 +72,10 @@ export const syncUserRoleToMetadata = async (userId: string, role: string) => {
     }
     
     console.log("Successfully synced role to auth metadata:", role);
+    
+    // Force refresh the session to update the local user object
+    await supabase.auth.refreshSession();
+    
     return true;
   } catch (error) {
     console.error("Error syncing user role to metadata:", error);
