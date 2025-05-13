@@ -17,15 +17,19 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import Layout from "@/components/layout/Layout";
 import NotFound from "@/pages/NotFound";
 
+// Define which roles are allowed to access shop routes
+const shopStaffRoles = ['staff', 'admin'];
+const adminOnlyRoles = ['admin'];
+
 const ShopRoutes = () => {
   return (
     <Routes>
       <Route element={<Layout portalType="shop" />}>
-        {/* Standard shop routes */}
+        {/* Standard shop routes - staff and admin only */}
         <Route
           path="/"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={shopStaffRoles}>
               <Dashboard />
             </ProtectedRoute>
           }
@@ -33,7 +37,7 @@ const ShopRoutes = () => {
         <Route
           path="/profile"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={shopStaffRoles}>
               <Profile />
             </ProtectedRoute>
           }
@@ -41,7 +45,7 @@ const ShopRoutes = () => {
         <Route
           path="/customers"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={shopStaffRoles}>
               <Customers />
             </ProtectedRoute>
           }
@@ -49,7 +53,7 @@ const ShopRoutes = () => {
         <Route
           path="/estimates"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={shopStaffRoles}>
               <Estimates />
             </ProtectedRoute>
           }
@@ -57,7 +61,7 @@ const ShopRoutes = () => {
         <Route
           path="/work-orders"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={shopStaffRoles}>
               <WorkOrders />
             </ProtectedRoute>
           }
@@ -65,7 +69,7 @@ const ShopRoutes = () => {
         <Route
           path="/invoices"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={shopStaffRoles}>
               <Invoices />
             </ProtectedRoute>
           }
@@ -73,7 +77,7 @@ const ShopRoutes = () => {
         <Route
           path="/invoices/new"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={shopStaffRoles}>
               <NewInvoiceFromEstimate />
             </ProtectedRoute>
           }
@@ -81,7 +85,7 @@ const ShopRoutes = () => {
         <Route
           path="/inventory"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={shopStaffRoles}>
               <Inventory />
             </ProtectedRoute>
           }
@@ -89,7 +93,7 @@ const ShopRoutes = () => {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={shopStaffRoles}>
               <Reports />
             </ProtectedRoute>
           }
@@ -99,7 +103,7 @@ const ShopRoutes = () => {
         <Route
           path="/users"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={shopStaffRoles}>
               <UserManagement />
             </ProtectedRoute>
           }
@@ -107,17 +111,17 @@ const ShopRoutes = () => {
         <Route
           path="/employees"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={shopStaffRoles}>
               <Employees />
             </ProtectedRoute>
           }
         />
         
-        {/* Admin routes */}
+        {/* Admin routes - admin only */}
         <Route
           path="/admin/api-connections"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={adminOnlyRoles}>
               <ApiConnectionsManager />
             </ProtectedRoute>
           }
@@ -125,7 +129,7 @@ const ShopRoutes = () => {
         <Route
           path="/admin/users"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={adminOnlyRoles}>
               <AdminUserManagement />
             </ProtectedRoute>
           }

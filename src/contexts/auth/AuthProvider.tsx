@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (event === 'SIGNED_OUT') {
           console.log("User signed out, redirecting to login");
-          navigate('/shop/login', { replace: true });
+          navigate('/auth', { replace: true });
         }
         
         // Mark loading as false after any auth change
@@ -183,13 +183,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Function to get the appropriate redirect path based on user role
+  const getRedirectPathByRole = (role?: string): string => {
+    if (!role) return '/auth';
+    
+    switch (role) {
+      case 'admin':
+      case 'staff':
+        return '/shop';
+      case 'customer':
+        return '/customer/profile';
+      default:
+        return '/auth';
+    }
+  };
+
   const value = {
     user,
     session,
     signUp,
     signIn,
     signOut,
-    loading
+    loading,
+    getRedirectPathByRole
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

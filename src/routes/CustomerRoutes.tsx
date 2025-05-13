@@ -10,42 +10,45 @@ import CustomerTransactions from "@/pages/customer/Transactions";
 import CustomerSettings from "@/pages/customer/Settings";
 import NotFound from "@/pages/NotFound";
 
+// Define which roles are allowed to access customer routes
+const customerRoles = ['customer'];
+
 const CustomerRoutes = () => {
   return (
     <Routes>
       <Route path="login" element={<CustomerLogin />} />
       <Route index element={
-        <ProtectedRoute>
+        <ProtectedRoute allowedRoles={customerRoles}>
           <CustomerProfile />
         </ProtectedRoute>
       } />
       <Route path="profile" element={
-        <ProtectedRoute>
+        <ProtectedRoute allowedRoles={customerRoles}>
           <CustomerProfile />
         </ProtectedRoute>
       } />
       <Route path="estimates" element={
-        <ProtectedRoute>
+        <ProtectedRoute allowedRoles={customerRoles}>
           <CustomerEstimates />
         </ProtectedRoute>
       } />
       <Route path="estimates/:estimateId" element={
-        <ProtectedRoute>
+        <ProtectedRoute allowedRoles={customerRoles}>
           <CustomerEstimateDetail />
         </ProtectedRoute>
       } />
       <Route path="invoices" element={
-        <ProtectedRoute>
+        <ProtectedRoute allowedRoles={customerRoles}>
           <CustomerInvoices />
         </ProtectedRoute>
       } />
       <Route path="transactions" element={
-        <ProtectedRoute>
+        <ProtectedRoute allowedRoles={customerRoles}>
           <CustomerTransactions />
         </ProtectedRoute>
       } />
       <Route path="settings" element={
-        <ProtectedRoute>
+        <ProtectedRoute allowedRoles={customerRoles}>
           <CustomerSettings />
         </ProtectedRoute>
       } />

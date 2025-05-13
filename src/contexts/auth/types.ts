@@ -8,4 +8,5 @@ export interface AuthContextType {
   signIn: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
+  getRedirectPathByRole: (role?: string) => string;
 }
