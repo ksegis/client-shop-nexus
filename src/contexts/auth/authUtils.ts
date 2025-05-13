@@ -61,24 +61,26 @@ export const syncUserRoleToMetadata = async (userId: string, role: string) => {
   }
   
   try {
-    const { data, error } = await supabase.rpc('sync_user_role', {
-      user_id: userId, 
-      user_role: role
-    });
+    // Simply update the profile - we'll have to get the role from profile
+    // rather than from metadata in client-side code
+    const { error } = await supabase
+      .from('profiles')
+      .update({ role: role })
+      .eq('id', userId);
     
     if (error) {
-      console.error("Error syncing user role to metadata:", error);
+      console.error("Error syncing user role to profile:", error);
       return false;
     }
     
-    console.log("Successfully synced role to auth metadata:", role);
+    console.log("Successfully updated role in profile table:", role);
     
     // Force refresh the session to update the local user object
     await supabase.auth.refreshSession();
     
     return true;
   } catch (error) {
-    console.error("Error syncing user role to metadata:", error);
+    console.error("Error syncing user role to profile:", error);
     return false;
   }
 };
