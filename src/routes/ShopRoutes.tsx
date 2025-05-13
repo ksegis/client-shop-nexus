@@ -1,3 +1,4 @@
+
 import { Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "@/pages/shop/Dashboard";
 import Profile from "@/pages/shop/Profile";
@@ -95,12 +96,12 @@ const ShopRoutes = () => {
           }
         />
         
-        {/* Admin routes - direct to their respective components */}
+        {/* Admin routes - direct routes to each component */}
         <Route
           path="/admin"
           element={
             <ProtectedRoute requiredRole="admin">
-              <Navigate to="/shop/admin/api-keys" replace />
+              <ApiKeysManager />
             </ProtectedRoute>
           }
         />
