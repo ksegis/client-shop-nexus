@@ -1,17 +1,17 @@
 
 import { useEffect, useState } from "react";
-import { ShoppingBag } from "lucide-react";
+import { ShoppingBag, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth";
 import { toast } from "@/components/ui/use-toast";
-import { Loader2 } from "lucide-react";
 
 const Auth = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [loadingState, setLoadingState] = useState<'idle' | 'redirecting'>('idle');
   const [redirectAttempts, setRedirectAttempts] = useState(0);
+  const [showTimeoutMessage, setShowTimeoutMessage] = useState(false);
   
   // Handle hash fragment if it exists and clean up URL
   useEffect(() => {
@@ -41,20 +41,33 @@ const Auth = () => {
             description: "Unknown user role. Please contact support.",
           });
         }
-      }, 200);
+      }, 400);
       
       return () => clearTimeout(timer);
     }
     
-    // If we're still loading but have a user, we might be waiting for role info
-    if (!loading && user && !user.app_metadata?.role && redirectAttempts < 3) {
+    // If we're not loading but have a user without a role, we need to wait or retry
+    if (!loading && user && !user.app_metadata?.role && redirectAttempts < 5) {
+      // Show a timeout message after a few seconds
+      const timeoutMessage = setTimeout(() => {
+        setShowTimeoutMessage(true);
+      }, 5000);
+      
+      // Try again after a delay
       const timer = setTimeout(() => {
         setRedirectAttempts(prev => prev + 1);
-        // Try one more reload to see if role info appears
-        window.location.reload();
+        
+        // After 3 attempts without success, try a reload as a last resort
+        if (redirectAttempts >= 3) {
+          // Try one more reload to see if role info appears
+          window.location.reload();
+        }
       }, 2000);
       
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(timeoutMessage);
+      };
     }
   }, [loading, user, navigate, redirectAttempts]);
   
@@ -74,6 +87,28 @@ const Auth = () => {
           <Loader2 className="h-16 w-16 mx-auto text-shop-primary animate-spin" />
           <h1 className="text-2xl font-bold mt-6 mb-2">Loading Authentication...</h1>
           <p className="text-gray-600 mb-2">Please wait while we verify your credentials</p>
+          
+          {showTimeoutMessage && (
+            <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-md">
+              <p className="text-amber-800">
+                Taking a bit longer than usual... We're still working on it.
+              </p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => window.location.reload()}
+                className="mt-3"
+              >
+                Refresh Page
+              </Button>
+            </div>
+          )}
+          
+          {redirectAttempts > 2 && (
+            <p className="text-sm text-gray-500 mt-6">
+              Experiencing issues? Try signing out and signing back in.
+            </p>
+          )}
         </div>
       </div>
     );

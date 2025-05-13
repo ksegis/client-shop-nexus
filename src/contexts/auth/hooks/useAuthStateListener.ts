@@ -14,9 +14,11 @@ export function useAuthStateListener() {
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // Add rate limiting protection
+  // Rate limiting protection
   const [lastRefreshAttempt, setLastRefreshAttempt] = useState(0);
-  const REFRESH_COOLDOWN_MS = 2000; // 2 seconds between refresh attempts
+  const [refreshFailCount, setRefreshFailCount] = useState(0);
+  const REFRESH_COOLDOWN_MS = 3000; // 3 seconds between refresh attempts
+  const MAX_REFRESH_ATTEMPTS = 3; // Maximum refresh attempts before backing off
 
   // Exposed function to update user with role
   const updateUserWithRole = useCallback(async (userId: string, profileRole: string) => {
@@ -38,10 +40,10 @@ export function useAuthStateListener() {
     // Indicate that we've loaded the role
     setRoleLoaded(true);
     
-    // Check if we need to respect rate limiting
+    // Check if we need to respect rate limiting or if we've had too many failures
     const now = Date.now();
-    if (now - lastRefreshAttempt < REFRESH_COOLDOWN_MS) {
-      console.log("Skipping session refresh due to rate limiting cooldown");
+    if (now - lastRefreshAttempt < REFRESH_COOLDOWN_MS || refreshFailCount >= MAX_REFRESH_ATTEMPTS) {
+      console.log("Skipping session refresh due to rate limiting cooldown or too many failures");
       return;
     }
     
@@ -51,24 +53,36 @@ export function useAuthStateListener() {
       // Now refresh the session to ensure the role is picked up by Supabase Auth
       const { data, error } = await supabase.auth.refreshSession();
       if (error) {
-        // Only show error for non-rate-limiting issues
-        if (error.status !== 429) {
-          console.error("Failed to refresh session after role update:", error);
-        } else {
+        // Handle rate limiting separately
+        if (error.status === 429) {
           console.log("Rate limit reached when refreshing session, will try later");
+          setRefreshFailCount(prev => prev + 1);
+          
+          // If we've hit rate limits too many times, show a toast
+          if (refreshFailCount >= MAX_REFRESH_ATTEMPTS - 1) {
+            toast({
+              title: "Login Processing",
+              description: "Please wait while we finish setting up your session...",
+            });
+          }
+        } else {
+          console.error("Failed to refresh session after role update:", error);
+          setRefreshFailCount(prev => prev + 1);
         }
       } else if (data?.user) {
         console.log("Session refreshed after role update");
+        setRefreshFailCount(0); // Reset fail count on success
       }
     } catch (refreshError: any) {
-      // Only log auth session missing errors at debug level
+      // Handle "Auth session missing" errors gracefully
       if (refreshError.message && refreshError.message.includes('Auth session missing')) {
         console.log("No active session to refresh");
       } else {
         console.error("Error refreshing session:", refreshError);
       }
+      setRefreshFailCount(prev => prev + 1);
     }
-  }, [lastRefreshAttempt]);
+  }, [lastRefreshAttempt, refreshFailCount, toast]);
 
   useEffect(() => {
     console.log("Setting up auth state listener");
@@ -101,6 +115,8 @@ export function useAuthStateListener() {
         } else {
           setUser(null);
           setRoleLoaded(false);
+          // Reset rate limiting counters on logout
+          setRefreshFailCount(0);
         }
         
         setSession(currentSession);
@@ -109,19 +125,6 @@ export function useAuthStateListener() {
           console.log("User signed out, redirecting to login");
           setRoleLoaded(false);
           navigate('/auth', { replace: true });
-        }
-        
-        if (event === 'PASSWORD_RECOVERY') {
-          console.log("Password recovery event detected");
-          navigate('/customer/login?reset=true', { replace: true });
-        }
-        
-        if (event === 'USER_UPDATED') {
-          console.log("User updated event detected");
-          toast({
-            title: "Account updated",
-            description: "Your account has been updated successfully."
-          });
         }
         
         // If user just signed in, fetch profile data in a non-blocking way
@@ -159,7 +162,7 @@ export function useAuthStateListener() {
               // Mark loading as false after any auth change
               if (isMounted) setLoading(false);
             }
-          }, 500); // Small delay to ensure auth state is settled
+          }, 800); // Slightly longer delay to ensure auth state is settled
         } else {
           // Mark loading as false after any auth change
           if (isMounted) setLoading(false);
@@ -215,7 +218,7 @@ export function useAuthStateListener() {
         console.error("Failed to get session:", sessionError);
         if (isMounted) setLoading(false);
       }
-    }, 300);
+    }, 500);
 
     return () => {
       isMounted = false;

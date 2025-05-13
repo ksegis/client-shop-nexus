@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Track redirect attempts with a cooldown mechanism
   const [lastRedirectAttempt, setLastRedirectAttempt] = useState<number>(0);
   const [redirectAttempted, setRedirectAttempted] = useState<boolean>(false);
-  const REDIRECT_COOLDOWN_MS = 5000; // 5 second cooldown between redirects
+  const REDIRECT_COOLDOWN_MS = 8000; // 8 second cooldown between redirects
   
   // Sync loading state from the auth listener
   useEffect(() => {
@@ -68,6 +68,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Fetch user profile to get role information
       const checkUserRole = async () => {
         try {
+          // Add a small delay to avoid potential race conditions
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
           const profile = await fetchUserProfile(user.id);
           if (profile && profile.role) {
             console.log("Found role in profile:", profile.role);
