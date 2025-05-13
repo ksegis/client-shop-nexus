@@ -3,9 +3,9 @@ import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, KeySquare, Users } from 'lucide-react';
-import ApiKeysManager from './admin/ApiKeysManager';
-import StaffManager from './admin/StaffManager';
-import SystemHealth from './admin/SystemHealth';
+import ApiKeysManager from './ApiKeysManager';
+import StaffManager from './StaffManager';
+import SystemHealth from './SystemHealth';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('api-keys');
