@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,10 @@ import {
   User, 
   LogOut, 
   Settings, 
-  Shield
+  Shield,
+  Key,
+  Activity,
+  Users
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth'; // Updated import
 import { 
@@ -128,17 +132,38 @@ const Header = ({ portalType }: HeaderProps) => {
                     <span>Settings</span>
                   </Link>
                 </DropdownMenuItem>
+                
                 {isAdmin && portalType === 'shop' && (
                   <>
                     <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Administration</DropdownMenuLabel>
                     <DropdownMenuItem asChild>
-                      <Link to="/shop/users">
+                      <Link to="/shop/admin">
                         <Shield className="mr-2 h-4 w-4" />
-                        <span>User Management</span>
+                        <span>Admin Dashboard</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/shop/admin/api-keys">
+                        <Key className="mr-2 h-4 w-4" />
+                        <span>API Keys</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/shop/admin/staff">
+                        <Users className="mr-2 h-4 w-4" />
+                        <span>Staff Management</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/shop/admin/system">
+                        <Activity className="mr-2 h-4 w-4" />
+                        <span>System Health</span>
                       </Link>
                     </DropdownMenuItem>
                   </>
                 )}
+                
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />
@@ -179,6 +204,44 @@ const Header = ({ portalType }: HeaderProps) => {
                   {link.name}
                 </Link>
               ))}
+              
+              {/* Add admin links in mobile menu */}
+              {isAdmin && portalType === 'shop' && (
+                <>
+                  <div className="h-px bg-gray-200 my-2" />
+                  <div className="px-3 py-1 text-xs font-semibold text-gray-500">
+                    Admin
+                  </div>
+                  <Link
+                    to="/shop/admin"
+                    className="text-gray-600 hover:text-shop-primary px-3 py-2 rounded-md font-medium"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Admin Dashboard
+                  </Link>
+                  <Link
+                    to="/shop/admin/api-keys"
+                    className="text-gray-600 hover:text-shop-primary px-3 py-2 rounded-md font-medium"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    API Keys
+                  </Link>
+                  <Link
+                    to="/shop/admin/staff"
+                    className="text-gray-600 hover:text-shop-primary px-3 py-2 rounded-md font-medium"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Staff Management
+                  </Link>
+                  <Link
+                    to="/shop/admin/system"
+                    className="text-gray-600 hover:text-shop-primary px-3 py-2 rounded-md font-medium"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    System Health
+                  </Link>
+                </>
+              )}
             </div>
           </nav>
         )}
