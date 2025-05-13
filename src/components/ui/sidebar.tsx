@@ -12,7 +12,8 @@ import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarItem } from "./SidebarItem";
 import { useAuth } from "@/contexts/AuthContext";
-import { Shield, Users, BarChart, Package, ListChecks, UserPlus, Settings } from "lucide-react";
+import { Shield, Users, BarChart, Package, ListChecks, UserPlus, Settings, FileText, FileCheck } from "lucide-react";
+import { Link } from "react-router-dom";
 
 interface Props {
   children?: React.ReactNode;
@@ -53,12 +54,12 @@ const navigationItems = [
   {
     title: "Estimates",
     href: "/shop/estimates",
-    icon: ListChecks,
+    icon: FileText,
   },
   {
     title: "Invoices",
     href: "/shop/invoices",
-    icon: Settings,
+    icon: FileCheck,
   },
   {
     title: "Users",
@@ -83,6 +84,7 @@ export const Sidebar = ({ children, showNavigation = true }: Props) => {
 
   return (
     <>
+      {/* Desktop Sidebar */}
       <div className="h-full border-r bg-background p-0">
         <div className="py-4">
           {showNavigation && filteredNavigationItems.map((item) => (
