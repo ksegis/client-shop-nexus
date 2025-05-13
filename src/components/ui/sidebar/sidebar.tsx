@@ -15,6 +15,7 @@ import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarItem } from "./sidebar-item";
 import { useAuth } from '@/contexts/auth'; 
+import { useNavigationLinks } from '@/components/layout/header/NavigationLinks';
 import { 
   Shield, 
   Users, 
@@ -30,105 +31,40 @@ import {
   Webhook
 } from "lucide-react";
 
-// Navigation items for the shop portal
-const navigationItems = [
-  {
-    title: "Dashboard",
-    href: "/shop",
-    icon: BarChart,
-  },
-  {
-    title: "Reports",
-    href: "/shop/reports",
-    icon: BarChart,
-  },
-  {
-    title: "Employees",
-    href: "/shop/employees",
-    icon: Users,
-  },
-  {
-    title: "Inventory",
-    href: "/shop/inventory",
-    icon: Package,
-  },
-  {
-    title: "Work Orders",
-    href: "/shop/work-orders",
-    icon: ListChecks,
-  },
-  {
-    title: "Customers",
-    href: "/shop/customers",
-    icon: UserPlus,
-  },
-  {
-    title: "Estimates",
-    href: "/shop/estimates",
-    icon: FileText,
-  },
-  {
-    title: "Invoices",
-    href: "/shop/invoices",
-    icon: FileCheck,
-  },
-  {
-    title: "Users",
-    href: "/shop/users",
-    icon: Shield,
-    adminOnly: true
-  }
-];
-
-// Admin-specific navigation items
-const adminNavigationItems = [
-  {
-    title: "API Connections",
-    href: "/shop/admin/api-connections",
-    icon: Webhook,
-  }
-];
+// Map paths to icons
+const pathIconMap = {
+  "/shop": BarChart,
+  "/shop/reports": BarChart,
+  "/shop/employees": Users,
+  "/shop/inventory": Package,
+  "/shop/work-orders": ListChecks,
+  "/shop/customers": UserPlus,
+  "/shop/estimates": FileText,
+  "/shop/invoices": FileCheck,
+  "/shop/users": Shield,
+  "/shop/admin/api-connections": Webhook
+};
 
 export const Sidebar = () => {
   const { user } = useAuth();
+  const { links, isAdmin } = useNavigationLinks('shop');
   
-  const isAdmin = user?.app_metadata?.role === 'admin';
+  console.log("Sidebar - Links available:", links);
   console.log("Sidebar - isAdmin check result:", isAdmin);
-  console.log("Admin navigation items:", adminNavigationItems);
-
-  const filteredNavigationItems = navigationItems.filter(item => !item.adminOnly || isAdmin);
 
   return (
     <>
       {/* Desktop Sidebar */}
       <div className="h-full border-r bg-background w-full">
         <div className="py-4">
-          {filteredNavigationItems.map((item) => (
+          {links.map((item) => (
             <SidebarItem 
-              key={item.href}
-              href={item.href}
-              title={item.title}
-              icon={item.icon}
+              key={item.href || item.path}
+              href={item.href || item.path}
+              title={item.title || item.name}
+              icon={pathIconMap[item.href || item.path] || BarChart}
             />
           ))}
-          
-          {/* Admin section if user is admin */}
-          {isAdmin && (
-            <>
-              <div className="mx-4 my-2">
-                <div className="h-px bg-border" />
-                <h3 className="text-xs font-medium text-muted-foreground pt-2 pl-2">Admin</h3>
-              </div>
-              {adminNavigationItems.map((item) => (
-                <SidebarItem
-                  key={item.href}
-                  href={item.href}
-                  title={item.title}
-                  icon={item.icon}
-                />
-              ))}
-            </>
-          )}
         </div>
       </div>
       
@@ -147,32 +83,14 @@ export const Sidebar = () => {
             </SheetDescription>
           </SheetHeader>
           <div className="py-4">
-            {filteredNavigationItems.map((item) => (
+            {links.map((item) => (
               <SidebarItem 
-                key={item.href}
-                href={item.href}
-                title={item.title}
-                icon={item.icon}
+                key={item.href || item.path}
+                href={item.href || item.path}
+                title={item.title || item.name}
+                icon={pathIconMap[item.href || item.path] || BarChart}
               />
             ))}
-            
-            {/* Admin section for mobile if user is admin */}
-            {isAdmin && (
-              <>
-                <div className="mx-4 my-2">
-                  <div className="h-px bg-border" />
-                  <h3 className="text-xs font-medium text-muted-foreground pt-2 pl-2">Admin</h3>
-                </div>
-                {adminNavigationItems.map((item) => (
-                  <SidebarItem
-                    key={item.href}
-                    href={item.href}
-                    title={item.title}
-                    icon={item.icon}
-                  />
-                ))}
-              </>
-            )}
           </div>
         </SheetContent>
       </Sheet>

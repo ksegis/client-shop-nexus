@@ -30,13 +30,17 @@ export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
     { name: 'Invoices', path: '/shop/invoices' }
   ];
   
-  // Add Users link for admin users
-  if (isAdmin && portalType === 'shop') {
-    shopLinks.push({ name: 'Users', path: '/shop/users' });
-  }
+  // Admin links for shop portal
+  const adminLinks: NavigationLink[] = [
+    { name: 'Users', path: '/shop/users', adminOnly: true },
+    { name: 'API Connections', path: '/shop/admin/api-connections', adminOnly: true }
+  ];
+  
+  // Add admin links for admin users
+  const allShopLinks = isAdmin ? [...shopLinks, ...adminLinks] : shopLinks;
   
   return {
-    links: portalType === 'customer' ? customerLinks : shopLinks,
+    links: portalType === 'customer' ? customerLinks : allShopLinks,
     isAdmin
   };
 };
