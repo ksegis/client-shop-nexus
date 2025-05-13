@@ -17,7 +17,7 @@ export interface InviteUserFormValues {
   email: string;
   firstName: string;
   lastName: string;
-  role: string;
+  role: "admin" | "staff"; // Restricting to valid role values
   password: string;
 }
 

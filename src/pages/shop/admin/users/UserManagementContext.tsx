@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { User } from './types';
+import { User, InviteUserFormValues } from './types';
 
 interface UserManagementContextType {
   users: User[];
@@ -11,7 +11,7 @@ interface UserManagementContextType {
   customers: User[];
   isLoading: boolean;
   error: Error | null;
-  inviteUser: (email: string, firstName: string, lastName: string, role: string, password: string) => Promise<void>;
+  inviteUser: (email: string, firstName: string, lastName: string, role: "admin" | "staff", password: string) => Promise<void>;
   resetPassword: (userId: string, email: string, newPassword: string) => Promise<void>;
   refetchUsers: () => Promise<void>;
 }
@@ -55,7 +55,7 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
     await refetch();
   };
 
-  const inviteUser = async (email: string, firstName: string, lastName: string, role: string, password: string) => {
+  const inviteUser = async (email: string, firstName: string, lastName: string, role: "admin" | "staff", password: string) => {
     try {
       // First check if user exists in employees table
       const { data: employeeData, error: employeeError } = await supabase
@@ -90,15 +90,17 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
 
       if (signUpError) throw signUpError;
       
-      // Update profile with force_password_change flag
-      await supabase
-        .from('profiles')
-        .update({ 
-          force_password_change: true,
-          first_name: firstName,
-          last_name: lastName
-        })
-        .eq('id', data.user?.id);
+      // Update profile with force_password_change flag using raw SQL
+      // Since the profiles table schema doesn't have force_password_change field defined in the type
+      const { error: updateError } = await supabase
+        .rpc('update_user_profile_with_password_change', {
+          user_id: data.user?.id,
+          first_name_val: firstName,
+          last_name_val: lastName,
+          force_change: true
+        });
+
+      if (updateError) throw updateError;
 
       // Simulate sending invitation email
       toast({
@@ -122,11 +124,12 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
       // In a real application, this would use the Supabase admin API to reset passwords
       // For this demo, we'll simulate it and show a success message
       
-      // Update the force_password_change flag
+      // Update the force_password_change flag using RPC
       const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ force_password_change: true })
-        .eq('id', userId);
+        .rpc('update_password_change_flag', {
+          user_id: userId,
+          force_change: true
+        });
         
       if (updateError) throw updateError;
       
