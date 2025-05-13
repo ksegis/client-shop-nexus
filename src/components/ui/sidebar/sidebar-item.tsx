@@ -11,7 +11,8 @@ interface SidebarItemProps {
 }
 
 export const SidebarItem = ({ href, title, icon: Icon }: SidebarItemProps) => {
-  // Ensure proper navigation with React Router
+  // Ensure proper navigation with React Router using relative paths
+  // This approach avoids hard-coded URLs like localhost
   return (
     <NavLink
       to={href}
