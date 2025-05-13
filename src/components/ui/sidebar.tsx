@@ -1,3 +1,4 @@
+
 import React from "react";
 import {
   Sheet,
@@ -10,7 +11,7 @@ import {
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarItem } from "./SidebarItem";
-import { useAuth } from '@/contexts/auth'; // Updated import
+import { useAuth } from '@/contexts/auth'; 
 import { Shield, Users, BarChart, Package, ListChecks, UserPlus, Settings, FileText, FileCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -84,7 +85,7 @@ export const Sidebar = ({ children, showNavigation = true }: Props) => {
   return (
     <>
       {/* Desktop Sidebar */}
-      <div className="h-full border-r bg-background p-0">
+      <div className="h-full border-r bg-background w-full">
         <div className="py-4">
           {showNavigation && filteredNavigationItems.map((item) => (
             <SidebarItem 
