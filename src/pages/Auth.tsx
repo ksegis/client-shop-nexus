@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 const Auth = () => {
   const navigate = useNavigate();
   
-  // Handle hash fragment if it exists
+  // Handle hash fragment if it exists and clean up URL
   useEffect(() => {
-    if (window.location.hash === '#') {
+    // Remove any hash fragments from the URL
+    if (window.location.hash) {
       window.history.replaceState(null, '', window.location.pathname);
     }
   }, []);

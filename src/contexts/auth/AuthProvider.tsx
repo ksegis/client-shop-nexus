@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from './AuthContext';
 import { fetchUserProfile } from './authUtils';
 
@@ -12,6 +13,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Handle hash fragments on initial load
+  useEffect(() => {
+    // Handle empty hash fragment - redirect to auth page
+    if (location.hash === '#' && location.pathname === '/') {
+      navigate('/auth', { replace: true });
+    }
+  }, [location, navigate]);
 
   useEffect(() => {
     console.log("Setting up auth state listener");

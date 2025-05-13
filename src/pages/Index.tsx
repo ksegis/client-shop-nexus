@@ -11,9 +11,11 @@ const Index = () => {
 
   // Handle hash fragment routing and authentication state
   useEffect(() => {
-    // Remove hash fragment if it exists without any meaningful content
-    if (window.location.hash === '#') {
-      window.history.replaceState(null, '', window.location.pathname);
+    // Force redirect to auth page if there's a hash in the URL
+    if (window.location.hash) {
+      window.history.replaceState(null, '', '/auth');
+      navigate('/auth', { replace: true });
+      return;
     }
     
     // Redirect based on authentication state
