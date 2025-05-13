@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/auth"; 
-import { Loader2 } from "lucide-react";
+import { Loader2, ShoppingBag } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -68,11 +69,40 @@ const Index = () => {
   }, [navigate, user, loading]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
       <div className="text-center p-6 max-w-md">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-        <h1 className="text-2xl font-bold mb-4">Loading Shop Management System...</h1>
-        <p className="text-gray-500 mb-6">Please wait while we prepare your dashboard</p>
+        <div className="mb-6">
+          <ShoppingBag className="h-16 w-16 mx-auto text-shop-primary" />
+          <h1 className="text-3xl font-bold mt-4 mb-2">Shop Management System</h1>
+          <p className="text-gray-600">Access your shop dashboard or sign in</p>
+        </div>
+        
+        {loading ? (
+          <div className="flex flex-col items-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-gray-500">Loading authentication state...</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <Button 
+              onClick={() => navigate("/shop/login")} 
+              className="w-full py-6 text-lg"
+              size="lg"
+            >
+              Go to Shop Login
+            </Button>
+            
+            {user && (
+              <Button 
+                onClick={() => navigate("/shop")} 
+                className="w-full" 
+                variant="outline"
+              >
+                Access Dashboard
+              </Button>
+            )}
+          </div>
+        )}
         
         {error && (
           <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
