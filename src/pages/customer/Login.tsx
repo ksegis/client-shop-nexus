@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/auth';
 import CustomerLoginHeader from '@/components/customer/auth/CustomerLoginHeader';
 import CustomerLoginForm from '@/components/customer/auth/CustomerLoginForm';
 import SocialLoginOptions from '@/components/customer/auth/SocialLoginOptions';
@@ -36,6 +36,11 @@ const CustomerLogin = () => {
     const hash = window.location.hash;
     if (hash && hash.includes('type=recovery')) {
       setInPasswordResetMode(true);
+      // Extract token from hash if present
+      const tokenMatch = hash.match(/token=([^&]+)/);
+      if (tokenMatch && tokenMatch[1]) {
+        console.log("Password recovery token detected in URL");
+      }
     }
   }, [searchParams]);
   
@@ -144,6 +149,7 @@ const CustomerLogin = () => {
           <>
             <CustomerLoginForm 
               onResetPassword={() => setShowResetForm(true)} 
+              onEmailChange={setEmail}
             />
             <SocialLoginOptions />
           </>

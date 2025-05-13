@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,6 +28,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (event === 'SIGNED_OUT') {
           console.log("User signed out, redirecting to login");
           navigate('/auth', { replace: true });
+        }
+        
+        if (event === 'PASSWORD_RECOVERY') {
+          console.log("Password recovery event detected");
+          navigate('/customer/login?reset=true', { replace: true });
+        }
+        
+        if (event === 'USER_UPDATED') {
+          console.log("User updated event detected");
+          toast({
+            title: "Account updated",
+            description: "Your account has been updated successfully."
+          });
         }
         
         // Mark loading as false after any auth change
@@ -77,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, toast]);
 
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
     try {

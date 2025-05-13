@@ -10,9 +10,10 @@ import { useNavigate } from 'react-router-dom';
 
 interface CustomerLoginFormProps {
   onResetPassword: () => void;
+  onEmailChange?: (email: string) => void;
 }
 
-const CustomerLoginForm = ({ onResetPassword }: CustomerLoginFormProps) => {
+const CustomerLoginForm = ({ onResetPassword, onEmailChange }: CustomerLoginFormProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,6 +39,14 @@ const CustomerLoginForm = ({ onResetPassword }: CustomerLoginFormProps) => {
     }
   };
 
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newEmail = e.target.value;
+    setEmail(newEmail);
+    if (onEmailChange) {
+      onEmailChange(newEmail);
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4 mt-6">
       <div className="space-y-2">
@@ -47,7 +56,7 @@ const CustomerLoginForm = ({ onResetPassword }: CustomerLoginFormProps) => {
           type="email" 
           placeholder="your@email.com"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={handleEmailChange}
           required
           className="w-full"
         />
