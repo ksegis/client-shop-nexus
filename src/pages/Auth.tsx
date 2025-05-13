@@ -3,9 +3,12 @@ import { useEffect } from "react";
 import { ShoppingBag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/auth";
+import { toast } from "@/hooks/use-toast";
 
 const Auth = () => {
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
   
   // Handle hash fragment if it exists and clean up URL
   useEffect(() => {
@@ -13,14 +16,37 @@ const Auth = () => {
     if (window.location.hash) {
       window.history.replaceState(null, '', window.location.pathname);
     }
-  }, []);
+    
+    // If user is already authenticated, redirect to appropriate portal
+    if (!loading && user) {
+      const role = user.app_metadata?.role;
+      if (role === 'admin' || role === 'staff') {
+        navigate("/shop", { replace: true });
+      } else if (role === 'customer') {
+        navigate("/customer/profile", { replace: true });
+      }
+    }
+  }, [loading, user, navigate]);
   
   const goToCustomerLogin = () => {
     navigate("/customer/login");
   };
   
   const goToShopLogin = () => {
-    navigate("/shop/login");
+    // Log for debugging
+    console.log("Shop login clicked, current user:", user?.email);
+    console.log("User metadata:", user?.app_metadata);
+    
+    if (user?.app_metadata?.role === 'customer') {
+      toast({
+        title: "Access Restricted",
+        description: "Customers can only access the Customer Portal",
+        variant: "destructive",
+      });
+      navigate("/customer/profile");
+    } else {
+      navigate("/shop/login");
+    }
   };
 
   return (

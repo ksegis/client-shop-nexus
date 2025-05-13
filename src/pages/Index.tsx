@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/auth"; 
 import { Loader2, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -22,8 +23,9 @@ const Index = () => {
     if (!loading) {
       if (user) {
         const role = user.app_metadata?.role;
+        console.log("Index page: redirecting based on role:", role);
         const redirectPath = getRedirectPathByRole(role);
-        navigate(redirectPath);
+        navigate(redirectPath, { replace: true });
       }
     }
   }, [user, loading, navigate, getRedirectPathByRole]);
@@ -33,7 +35,19 @@ const Index = () => {
   };
   
   const goToShopLogin = () => {
-    navigate("/shop/login");
+    console.log("Shop login clicked, current user:", user?.email);
+    console.log("User metadata:", user?.app_metadata);
+    
+    if (user?.app_metadata?.role === 'customer') {
+      toast({
+        title: "Access Restricted",
+        description: "Customers can only access the Customer Portal",
+        variant: "destructive",
+      });
+      navigate("/customer/profile");
+    } else {
+      navigate("/shop/login");
+    }
   };
 
   return (

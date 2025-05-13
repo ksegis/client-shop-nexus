@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // Set up auth state listener FIRST (important to prevent deadlocks)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
+      async (event, currentSession) => {
         console.log("Auth state changed:", event, currentSession?.user?.email);
         
         // Handle synchronous state updates immediately
@@ -52,15 +52,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         }
         
-        // If user just signed in, redirect to the appropriate portal
-        if (event === 'SIGNED_IN' && currentSession?.user) {
-          // Fetch profile data in a separate non-blocking operation
-          fetchUserProfile(currentSession.user.id).then(profile => {
-            if (profile?.role) {
-              // Force redirection based on role
-              redirectUserBasedOnRole(profile.role, location.pathname);
+        // If user just signed in, fetch profile data in a non-blocking way
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && currentSession?.user) {
+          // Use setTimeout to avoid deadlock with Supabase client
+          setTimeout(async () => {
+            try {
+              const profile = await fetchUserProfile(currentSession.user.id);
+              if (profile?.role) {
+                console.log("Setting user role from profile:", profile.role);
+                
+                // Update local state with profile role
+                setUser(prevUser => {
+                  if (!prevUser) return null;
+                  return {
+                    ...prevUser,
+                    app_metadata: {
+                      ...prevUser.app_metadata,
+                      role: profile.role
+                    }
+                  };
+                });
+                
+                // Force redirection based on role
+                redirectUserBasedOnRole(profile.role, location.pathname);
+              }
+            } catch (error) {
+              console.error("Failed to fetch profile after auth event:", error);
             }
-          });
+          }, 0);
         }
         
         // Mark loading as false after any auth change
@@ -69,48 +88,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
     
     // THEN check for existing session (with a slight delay to avoid race conditions)
-    setTimeout(() => {
-      supabase.auth.getSession()
-        .then(({ data: { session: initialSession } }) => {
-          console.log("Initial session check:", initialSession?.user?.email);
+    setTimeout(async () => {
+      try {
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        console.log("Initial session check:", initialSession?.user?.email);
+        
+        if (initialSession?.user) {
+          setUser(initialSession.user);
+          setSession(initialSession);
           
-          if (initialSession?.user) {
-            setUser(initialSession.user);
-            setSession(initialSession);
-            
-            // Fetch profile data in a separate non-blocking operation
-            if (initialSession.user.id) {
-              fetchUserProfile(initialSession.user.id).then(profile => {
-                if (profile?.role) {
-                  setUser(currentUser => {
-                    if (!currentUser) return null;
-                    
-                    // Update user with role from profile
-                    const updatedUser = {
-                      ...currentUser,
-                      app_metadata: {
-                        ...currentUser.app_metadata,
-                        role: profile.role
-                      }
-                    };
-                    
-                    // Check if user is on the correct portal for their role
-                    redirectUserBasedOnRole(profile.role, location.pathname);
-                    
-                    return updatedUser;
-                  });
-                }
-              });
+          // Fetch profile data in a separate non-blocking operation
+          if (initialSession.user.id) {
+            try {
+              const profile = await fetchUserProfile(initialSession.user.id);
+              if (profile?.role) {
+                console.log("Initial session: got user role from profile:", profile.role);
+                
+                // Update user with role from profile
+                setUser(currentUser => {
+                  if (!currentUser) return null;
+                  
+                  const updatedUser = {
+                    ...currentUser,
+                    app_metadata: {
+                      ...currentUser.app_metadata,
+                      role: profile.role
+                    }
+                  };
+                  
+                  return updatedUser;
+                });
+                
+                // Check if user is on the correct portal for their role
+                setTimeout(() => {
+                  redirectUserBasedOnRole(profile.role, location.pathname);
+                }, 0);
+              }
+            } catch (profileError) {
+              console.error("Failed to fetch initial profile:", profileError);
             }
           }
-          
-          // Make sure loading is set to false after initial session check
-          setLoading(false);
-        })
-        .catch(error => {
-          console.error("Failed to get session:", error);
-          setLoading(false);
-        });
+        }
+      } catch (sessionError) {
+        console.error("Failed to get session:", sessionError);
+      } finally {
+        // Make sure loading is set to false after initial session check
+        setLoading(false);
+      }
     }, 100);
 
     return () => {
@@ -120,11 +144,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Redirect user based on their role and current path
   const redirectUserBasedOnRole = (role: string, currentPath: string) => {
+    console.log("Redirecting based on role:", role, "Current path:", currentPath);
     const isShopPath = currentPath.startsWith('/shop');
     const isCustomerPath = currentPath.startsWith('/customer');
+    const isAuthPath = currentPath === '/auth' || currentPath === '/';
     
+    // Only redirect if on an auth path or if trying to access wrong portal
+    if (isAuthPath) {
+      // Redirect from auth to appropriate portal
+      if (role === 'customer') {
+        navigate('/customer/profile', { replace: true });
+      } else if (role === 'staff' || role === 'admin') {
+        navigate('/shop', { replace: true });
+      }
+    } 
     // Strict enforcement of portal access based on role
-    if (role === 'customer' && isShopPath) {
+    else if (role === 'customer' && isShopPath) {
       // Customer trying to access shop portal - redirect to customer portal
       console.log('Customer attempting to access shop portal - redirecting to customer portal');
       toast({

@@ -10,7 +10,7 @@ export const fetchUserProfile = async (userId: string) => {
     console.log("Fetching profile for user:", userId);
     const { data: profile, error } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, first_name, last_name, email')
       .eq('id', userId)
       .single();
       
@@ -24,5 +24,23 @@ export const fetchUserProfile = async (userId: string) => {
   } catch (error) {
     console.error("Error in fetchUserProfile:", error);
     return null;
+  }
+};
+
+/**
+ * Synchronizes the user's role from profile to auth metadata
+ * @param userId The user ID to update
+ * @param role The role to set
+ */
+export const syncUserRoleToMetadata = async (userId: string, role: string) => {
+  try {
+    await supabase.auth.admin.updateUserById(userId, {
+      app_metadata: { role }
+    });
+    console.log("Successfully synced role to auth metadata:", role);
+    return true;
+  } catch (error) {
+    console.error("Error syncing user role to metadata:", error);
+    return false;
   }
 };
