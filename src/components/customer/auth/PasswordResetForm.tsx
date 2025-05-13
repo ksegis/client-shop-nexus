@@ -23,11 +23,11 @@ const PasswordResetForm = ({ email, onCancel }: PasswordResetFormProps) => {
     try {
       setLoading(true);
       
-      // Get the current origin for proper redirect URL
-      const origin = window.location.origin;
+      // Use the full URL for the customer portal login page
+      const redirectUrl = 'https://ctc.modworx.online/customer/login';
       
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${origin}/customer/login?reset=true`,
+        redirectTo: `${redirectUrl}?reset=true`,
       });
       
       if (error) throw error;
