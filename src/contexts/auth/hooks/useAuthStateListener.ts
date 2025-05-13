@@ -7,20 +7,23 @@ import { useNavigate } from 'react-router-dom';
 import { fetchUserProfile } from '../authUtils';
 
 export function useAuthStateListener() {
+  // All useState hooks must be declared at the top level, in the same order every time
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [roleLoaded, setRoleLoaded] = useState(false);
+  const [lastRefreshAttempt, setLastRefreshAttempt] = useState(0);
+  const [refreshFailCount, setRefreshFailCount] = useState(0);
+  
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // Rate limiting protection
-  const [lastRefreshAttempt, setLastRefreshAttempt] = useState(0);
-  const [refreshFailCount, setRefreshFailCount] = useState(0);
+  // Rate limiting constants
   const REFRESH_COOLDOWN_MS = 3000; // 3 seconds between refresh attempts
   const MAX_REFRESH_ATTEMPTS = 3; // Maximum refresh attempts before backing off
 
-  // Exposed function to update user with role
+  // Exposed function to update user with role - make sure it's defined with useCallback
+  // and that it always comes after the useState calls but before useEffect
   const updateUserWithRole = useCallback(async (userId: string, profileRole: string) => {
     console.log("Updating user with role:", profileRole);
     
@@ -234,8 +237,6 @@ export function useAuthStateListener() {
     session, 
     loading, 
     roleLoaded,
-    setUser, 
-    setSession, 
     setLoading, 
     updateUserWithRole 
   };

@@ -56,12 +56,6 @@ const Auth = () => {
       // Try again after a delay
       const timer = setTimeout(() => {
         setRedirectAttempts(prev => prev + 1);
-        
-        // After 3 attempts without success, try a reload as a last resort
-        if (redirectAttempts >= 3) {
-          // Try one more reload to see if role info appears
-          window.location.reload();
-        }
       }, 2000);
       
       return () => {

@@ -6,6 +6,15 @@ import { fetchUserProfile } from './authUtils';
 import { useAuthStateListener, useRedirection, useAuthMethods } from './hooks';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // Create all useState hooks first
+  const [loading, setLoadingState] = useState(true);
+  const [lastRedirectAttempt, setLastRedirectAttempt] = useState<number>(0);
+  const [redirectAttempted, setRedirectAttempted] = useState<boolean>(false);
+  
+  // Define the redirect cooldown constant
+  const REDIRECT_COOLDOWN_MS = 8000; // 8 second cooldown between redirects
+  
+  // Then use custom hooks
   const { 
     user, 
     session, 
@@ -17,13 +26,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   const { getRedirectPathByRole } = useRedirection();
   const { signUp, signIn, signOut } = useAuthMethods();
-  const location = useLocation();
-  const [loading, setLoadingState] = useState(true);
   
-  // Track redirect attempts with a cooldown mechanism
-  const [lastRedirectAttempt, setLastRedirectAttempt] = useState<number>(0);
-  const [redirectAttempted, setRedirectAttempted] = useState<boolean>(false);
-  const REDIRECT_COOLDOWN_MS = 8000; // 8 second cooldown between redirects
+  // Then useLocation
+  const location = useLocation();
   
   // Sync loading state from the auth listener
   useEffect(() => {
