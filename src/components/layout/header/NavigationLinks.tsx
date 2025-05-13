@@ -33,7 +33,8 @@ export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
   // Admin links for shop portal
   const adminLinks: NavigationLink[] = [
     { name: 'Users', path: '/shop/users', adminOnly: true },
-    { name: 'API Connections', path: '/shop/admin/api-connections', adminOnly: true }
+    { name: 'API Connections', path: '/shop/admin/api-connections', adminOnly: true },
+    { name: 'User Management', path: '/shop/admin/users', adminOnly: true }
   ];
   
   // Add admin links for admin users

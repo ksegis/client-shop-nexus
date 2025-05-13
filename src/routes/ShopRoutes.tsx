@@ -12,6 +12,7 @@ import Reports from "@/pages/shop/Reports";
 import UserManagement from "@/pages/shop/UserManagement";
 import Employees from "@/pages/shop/Employees";
 import ApiConnectionsManager from "@/pages/shop/admin/ApiConnectionsManager";
+import AdminUserManagement from "@/pages/shop/admin/UserManagement";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import Layout from "@/components/layout/Layout";
 import NotFound from "@/pages/NotFound";
@@ -118,6 +119,14 @@ const ShopRoutes = () => {
           element={
             <ProtectedRoute>
               <ApiConnectionsManager />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <ProtectedRoute>
+              <AdminUserManagement />
             </ProtectedRoute>
           }
         />
