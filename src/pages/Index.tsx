@@ -8,48 +8,25 @@ import { Button } from "@/components/ui/button";
 const Index = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
-  const [showDebug, setShowDebug] = useState(false);
+  const [showDebug, setShowDebug] = useState(true); // Show debug immediately
   const [error, setError] = useState<string | null>(null);
 
-  // Show debug info immediately to help with navigation issues
-  useEffect(() => {
-    setShowDebug(true);
-    console.log("Index: Debug information shown immediately");
-  }, []);
-
-  // Simplified navigation logic - redirect immediately when auth state is determined
-  useEffect(() => {
-    if (loading) {
-      console.log("Index: Auth state still loading");
-      return;
-    }
-    
-    console.log("Index: Auth state determined", { user: !!user, loading });
-    
-    try {
-      if (user) {
-        console.log("Index: User is authenticated, redirecting to shop dashboard");
-        navigate("/shop", { replace: true });
-      } else {
-        console.log("Index: No authenticated user, redirecting to login");
-        navigate("/shop/login", { replace: true });
-      }
-    } catch (navigationError) {
-      console.error("Index: Navigation error", navigationError);
-      setError("Navigation error: Could not redirect automatically. Please use the buttons below.");
-    }
-  }, [navigate, user, loading]);
-
-  // Handle manual navigation
+  // Simplified direct navigation function that uses window.location for reliability
   const goToLogin = () => {
     console.log("Manual navigation to login triggered");
     window.location.href = "/shop/login";
   };
-
+  
   const goToDashboard = () => {
     console.log("Manual navigation to dashboard triggered");
     window.location.href = "/shop";
   };
+
+  // For debugging purposes only
+  useEffect(() => {
+    console.log("Index: Debug information shown immediately");
+    console.log("Index: Current auth state", { user: !!user, loading });
+  }, [user, loading]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
@@ -60,30 +37,31 @@ const Index = () => {
           <p className="text-gray-600">Access your shop dashboard or sign in</p>
         </div>
         
-        {loading ? (
-          <div className="flex flex-col items-center">
+        {/* Always show primary button options regardless of auth state */}
+        <div className="space-y-4 mb-6">
+          <Button 
+            onClick={goToLogin} 
+            className="w-full py-6 text-lg"
+            size="lg"
+          >
+            Go to Shop Login
+          </Button>
+          
+          {user && (
+            <Button 
+              onClick={goToDashboard} 
+              className="w-full" 
+              variant="outline"
+            >
+              Access Dashboard
+            </Button>
+          )}
+        </div>
+        
+        {loading && (
+          <div className="flex flex-col items-center my-4">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
             <p className="text-gray-500">Loading authentication state...</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <Button 
-              onClick={goToLogin} 
-              className="w-full py-6 text-lg"
-              size="lg"
-            >
-              Go to Shop Login
-            </Button>
-            
-            {user && (
-              <Button 
-                onClick={goToDashboard} 
-                className="w-full" 
-                variant="outline"
-              >
-                Access Dashboard
-              </Button>
-            )}
           </div>
         )}
         
@@ -93,6 +71,7 @@ const Index = () => {
           </div>
         )}
         
+        {/* Debug information */}
         {showDebug && (
           <div className="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-md text-left">
             <p className="font-semibold text-amber-800 mb-2">Navigation Help</p>
