@@ -13,6 +13,11 @@ const CustomerRoutes = () => {
   return (
     <Routes>
       <Route path="login" element={<CustomerLogin />} />
+      <Route index element={
+        <ProtectedRoute>
+          <CustomerProfile />
+        </ProtectedRoute>
+      } />
       <Route path="profile" element={
         <ProtectedRoute>
           <CustomerProfile />
