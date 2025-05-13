@@ -2,16 +2,17 @@
 import React from 'react';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Key, UserX } from 'lucide-react';
+import { Key, UserX, UserCheck } from 'lucide-react';
 import { useUserManagement } from './UserManagementContext';
 import { isRoleInactive } from '@/pages/shop/users/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface UsersTableProps {
   onResetPassword: (userId: string, email: string) => void;
+  onEditProfile: (userId: string, email: string) => void;
 }
 
-export const UsersTable = ({ onResetPassword }: UsersTableProps) => {
+export const UsersTable = ({ onResetPassword, onEditProfile }: UsersTableProps) => {
   const { employees, customers, isLoading, error } = useUserManagement();
 
   if (isLoading) {
@@ -77,13 +78,22 @@ export const UsersTable = ({ onResetPassword }: UsersTableProps) => {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={() => onResetPassword(user.id, user.email || '')}
-                    >
-                      <Key className="h-4 w-4" />
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => onEditProfile(user.id, user.email || '')}
+                      >
+                        <UserCheck className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => onResetPassword(user.id, user.email || '')}
+                      >
+                        <Key className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -130,13 +140,22 @@ export const UsersTable = ({ onResetPassword }: UsersTableProps) => {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={() => onResetPassword(user.id, user.email || '')}
-                    >
-                      <Key className="h-4 w-4" />
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => onEditProfile(user.id, user.email || '')}
+                      >
+                        <UserCheck className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => onResetPassword(user.id, user.email || '')}
+                      >
+                        <Key className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

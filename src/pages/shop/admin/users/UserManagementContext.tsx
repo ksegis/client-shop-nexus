@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,6 +12,7 @@ interface UserManagementContextType {
   error: Error | null;
   inviteUser: (email: string, firstName: string, lastName: string, role: "admin" | "staff", password: string) => Promise<void>;
   resetPassword: (userId: string, email: string, newPassword: string) => Promise<void>;
+  updateUserProfile: (userId: string, profileData: Partial<User>) => Promise<void>;
   refetchUsers: () => Promise<void>;
 }
 
@@ -149,6 +149,34 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateUserProfile = async (userId: string, profileData: Partial<User>) => {
+    try {
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          first_name: profileData.first_name,
+          last_name: profileData.last_name,
+          phone: profileData.phone,
+          facebook_url: profileData.facebook_url,
+          twitter_url: profileData.twitter_url,
+          instagram_url: profileData.instagram_url,
+          linkedin_url: profileData.linkedin_url,
+        })
+        .eq('id', userId);
+
+      if (updateError) throw updateError;
+      
+      await refetchUsers();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+      throw error;
+    }
+  };
+
   return (
     <UserManagementContext.Provider
       value={{
@@ -159,6 +187,7 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
         error,
         inviteUser,
         resetPassword,
+        updateUserProfile,
         refetchUsers,
       }}
     >

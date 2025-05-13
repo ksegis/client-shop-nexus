@@ -7,10 +7,12 @@ import { UsersTable } from './users/UsersTable';
 import { UserHeader } from './users/UserHeader';
 import { InviteUserDialog } from './users/InviteUserDialog';
 import { ResetPasswordDialog } from './users/ResetPasswordDialog';
+import { ProfileDialog } from './users/ProfileDialog';
 
 const UserManagement = () => {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserEmail, setSelectedUserEmail] = useState<string | null>(null);
   
@@ -18,6 +20,12 @@ const UserManagement = () => {
     setSelectedUserId(userId);
     setSelectedUserEmail(email);
     setResetDialogOpen(true);
+  };
+  
+  const handleEditProfile = (userId: string, email: string) => {
+    setSelectedUserId(userId);
+    setSelectedUserEmail(email);
+    setProfileDialogOpen(true);
   };
   
   return (
@@ -34,11 +42,14 @@ const UserManagement = () => {
               User Management
             </CardTitle>
             <CardDescription>
-              Manage users, send invites, and reset passwords.
+              Manage users, send invites, reset passwords, and update profiles.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <UsersTable onResetPassword={handleResetPassword} />
+            <UsersTable 
+              onResetPassword={handleResetPassword}
+              onEditProfile={handleEditProfile} 
+            />
           </CardContent>
         </Card>
         
@@ -52,6 +63,14 @@ const UserManagement = () => {
         <ResetPasswordDialog
           open={resetDialogOpen}
           onOpenChange={setResetDialogOpen}
+          userId={selectedUserId}
+          userEmail={selectedUserEmail}
+        />
+        
+        {/* Profile Dialog */}
+        <ProfileDialog
+          open={profileDialogOpen}
+          onOpenChange={setProfileDialogOpen}
           userId={selectedUserId}
           userEmail={selectedUserEmail}
         />

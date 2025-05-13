@@ -11,6 +11,11 @@ export interface User {
   created_at: string;
   updated_at: string;
   force_password_change?: boolean;
+  avatar_url?: string | null;
+  facebook_url?: string | null;
+  twitter_url?: string | null;
+  instagram_url?: string | null;
+  linkedin_url?: string | null;
 }
 
 export interface InviteUserFormValues {
@@ -24,4 +29,14 @@ export interface InviteUserFormValues {
 export interface ResetPasswordFormValues {
   password: string;
   confirmPassword: string;
+}
+
+export interface ProfileFormValues {
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  facebook: string | null;
+  twitter: string | null;
+  instagram: string | null;
+  linkedin: string | null;
 }
