@@ -21,9 +21,10 @@ export function useRedirection() {
     const isCustomerPath = currentPath.startsWith('/customer');
     const isAuthPath = currentPath === '/auth' || currentPath === '/';
     
-    // If no role, don't redirect automatically - this helps break redirect loops
+    // If no role, redirect to auth page to break potential redirect loops
     if (!role) {
-      console.log("No role found - not redirecting automatically");
+      console.log("No role found - redirecting to auth page");
+      navigate('/auth', { replace: true });
       return;
     }
     

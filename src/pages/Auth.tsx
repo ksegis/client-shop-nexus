@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from "react";
-import { ShoppingBag, Loader2 } from "lucide-react";
+import { ShoppingBag, Loader2, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth";
@@ -13,6 +13,7 @@ const Auth = () => {
   const [loadingState, setLoadingState] = useState<'idle' | 'redirecting'>('idle');
   const [redirectAttempts, setRedirectAttempts] = useState(0);
   const [showTimeoutMessage, setShowTimeoutMessage] = useState(false);
+  const [manualIntervention, setManualIntervention] = useState(false);
   
   // Handle redirection based on user state
   useEffect(() => {
@@ -20,6 +21,13 @@ const Auth = () => {
     if (window.location.hash) {
       window.history.replaceState(null, '', window.location.pathname);
     }
+    
+    // Show timeout message after 10 seconds
+    const timeoutMessage = setTimeout(() => {
+      if (loading || !user?.app_metadata?.role) {
+        setShowTimeoutMessage(true);
+      }
+    }, 10000);
     
     // Only redirect if we have both user and role information and we're not loading
     if (!loading && user && user.app_metadata?.role) {
@@ -44,16 +52,14 @@ const Auth = () => {
         }
       }, 400);
       
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(timeoutMessage);
+      };
     }
     
     // If we're not loading but have a user without a role, we need to wait or retry
     if (!loading && user && !user.app_metadata?.role && redirectAttempts < 5) {
-      // Show a timeout message after a few seconds
-      const timeoutMessage = setTimeout(() => {
-        setShowTimeoutMessage(true);
-      }, 5000);
-      
       // Try again after a delay
       const timer = setTimeout(() => {
         setRedirectAttempts(prev => prev + 1);
@@ -64,7 +70,9 @@ const Auth = () => {
         clearTimeout(timeoutMessage);
       };
     }
-  }, [loading, user, navigate, redirectAttempts]);
+    
+    return () => clearTimeout(timeoutMessage);
+  }, [loading, user, navigate, redirectAttempts, manualIntervention]);
   
   const goToCustomerLogin = () => {
     navigate("/customer/login");
@@ -72,6 +80,22 @@ const Auth = () => {
   
   const goToShopLogin = () => {
     navigate("/shop/login");
+  };
+
+  const forceReload = () => {
+    // Attempt to clear any stuck state
+    window.localStorage.removeItem('custom_truck_connection_auth');
+    window.location.reload();
+  };
+  
+  const forceShopNavigation = () => {
+    setManualIntervention(true);
+    navigate("/shop", { replace: true });
+  };
+  
+  const forceCustomerNavigation = () => {
+    setManualIntervention(true);
+    navigate("/customer/profile", { replace: true });
   };
 
   // Show a loading state when redirecting or just after authentication
@@ -85,24 +109,41 @@ const Auth = () => {
           
           {showTimeoutMessage && (
             <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-md">
-              <p className="text-amber-800">
-                Taking a bit longer than usual... We're still working on it.
+              <p className="text-amber-800 mb-3">
+                Taking longer than usual... 
+                {redirectAttempts > 2 ? " We're having trouble determining your role." : " We're still working on it."}
               </p>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => window.location.reload()}
-                className="mt-3"
-              >
-                Refresh Page
-              </Button>
+              <div className="flex justify-center space-x-3">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={forceReload}
+                  className="flex items-center"
+                >
+                  <RefreshCw className="mr-1 h-4 w-4" />
+                  Refresh
+                </Button>
+                
+                {redirectAttempts > 2 && (
+                  <>
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      onClick={forceShopNavigation}
+                    >
+                      Go to Shop Portal
+                    </Button>
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      onClick={forceCustomerNavigation}
+                    >
+                      Go to Customer Portal
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
-          )}
-          
-          {redirectAttempts > 2 && (
-            <p className="text-sm text-gray-500 mt-6">
-              Experiencing issues? Try signing out and signing back in.
-            </p>
           )}
         </div>
       </div>

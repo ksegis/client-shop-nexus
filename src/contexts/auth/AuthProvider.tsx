@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from './AuthContext';
 import { fetchUserProfile } from './authUtils';
 import { useAuthStateListener, useRedirection, useAuthMethods } from './hooks';
@@ -13,8 +13,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [lastRedirectAttempt, setLastRedirectAttempt] = useState<number>(0);
   const [redirectAttempted, setRedirectAttempted] = useState<boolean>(false);
   const [connectionError, setConnectionError] = useState<boolean>(false);
+  const [maxWaitTimeReached, setMaxWaitTimeReached] = useState<boolean>(false);
   
   // THEN all hook calls from other hooks
+  const navigate = useNavigate();
   const { 
     user, 
     session, 
@@ -31,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   // Constants (not hooks) can be defined anywhere
   const REDIRECT_COOLDOWN_MS = 8000; // 8 second cooldown between redirects
+  const MAX_WAIT_TIME_MS = 15000; // 15 second maximum wait time
 
   // Check connection status on mount
   useEffect(() => {
@@ -57,7 +60,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [location.pathname]);
   
-  // useEffect hooks must come after all other hooks
+  // Set a maximum timeout for authentication loading
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => {
+        console.log("Maximum wait time reached, forcing auth state to loaded");
+        setMaxWaitTimeReached(true);
+        setLoadingState(false);
+      }, MAX_WAIT_TIME_MS);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
+  
   // Sync loading state from the auth listener
   useEffect(() => {
     setLoadingState(authStateLoading);
@@ -71,6 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.history.replaceState(null, '', '/auth');
     }
   }, [location]);
+
+  // Force redirect to auth page if user is null and we've waited too long
+  useEffect(() => {
+    if (maxWaitTimeReached && !user && location.pathname !== '/auth') {
+      navigate('/auth', { replace: true });
+    }
+  }, [maxWaitTimeReached, user, location.pathname, navigate]);
 
   // Setup profile-based redirections
   useEffect(() => {
@@ -121,7 +143,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } catch (error) {
           console.error("Error fetching profile:", error);
-          // Don't set redirectAttempted to false here - we'll try again after cooldown
+          // Force loading to complete after error - prevent infinite loading
+          setLoadingState(false);
         }
       };
       

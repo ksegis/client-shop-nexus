@@ -213,12 +213,16 @@ export function useAuthStateListener() {
                 } catch (error) {
                   console.error("Failed to update user with role:", error);
                 }
+              } else {
+                // Even if no role is found, still mark loading as complete
+                if (isMounted) setLoading(false);
               }
             } catch (profileError) {
               console.error("Failed to fetch initial profile:", profileError);
-            } finally {
               if (isMounted) setLoading(false);
             }
+          } else {
+            if (isMounted) setLoading(false);
           }
         } else {
           if (isMounted) setLoading(false);
@@ -229,11 +233,20 @@ export function useAuthStateListener() {
       }
     }, 500);
 
+    // For safety, add a timer to force loading state to false after 15 seconds
+    const safetyTimer = setTimeout(() => {
+      if (isMounted && loading) {
+        console.warn("Safety timeout reached - forcing loading state to false");
+        setLoading(false);
+      }
+    }, 15000);
+
     return () => {
       isMounted = false;
       if (profileCheckTimeout) {
         clearTimeout(profileCheckTimeout);
       }
+      clearTimeout(safetyTimer);
       // Always unsubscribe from auth state changes when component unmounts
       if (subscription && typeof subscription.unsubscribe === 'function') {
         try {
@@ -243,7 +256,7 @@ export function useAuthStateListener() {
         }
       }
     };
-  }, [navigate, toast, updateUserWithRole]);
+  }, [navigate, toast, updateUserWithRole, loading]);
 
   return { 
     user, 
