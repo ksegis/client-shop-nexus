@@ -59,10 +59,10 @@ export const Sidebar = () => {
         <div className="py-4">
           {links.map((item) => (
             <SidebarItem 
-              key={item.href || item.path}
-              href={item.href || item.path}
-              title={item.title || item.name}
-              icon={pathIconMap[item.href || item.path] || BarChart}
+              key={item.path}
+              href={item.path}
+              title={item.name}
+              icon={pathIconMap[item.path] || BarChart}
             />
           ))}
         </div>
@@ -85,10 +85,10 @@ export const Sidebar = () => {
           <div className="py-4">
             {links.map((item) => (
               <SidebarItem 
-                key={item.href || item.path}
-                href={item.href || item.path}
-                title={item.title || item.name}
-                icon={pathIconMap[item.href || item.path] || BarChart}
+                key={item.path}
+                href={item.path}
+                title={item.name}
+                icon={pathIconMap[item.path] || BarChart}
               />
             ))}
           </div>
@@ -97,3 +97,4 @@ export const Sidebar = () => {
     </>
   );
 };
+
