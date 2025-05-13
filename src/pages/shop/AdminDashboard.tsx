@@ -1,5 +1,6 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, KeySquare, Users } from 'lucide-react';
@@ -8,7 +9,37 @@ import StaffManager from './admin/StaffManager';
 import SystemHealth from './admin/SystemHealth';
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('api-keys');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const path = location.pathname;
+  
+  // Set the active tab based on the current route
+  const [activeTab, setActiveTab] = useState(() => {
+    if (path.includes('/api-keys')) return 'api-keys';
+    if (path.includes('/staff')) return 'staff';
+    if (path.includes('/system')) return 'health';
+    return 'api-keys'; // Default to api-keys
+  });
+  
+  // Update the URL when the tab changes
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    
+    // Navigate to the appropriate route
+    switch(value) {
+      case 'api-keys':
+        navigate('/shop/admin/api-keys');
+        break;
+      case 'staff':
+        navigate('/shop/admin/staff');
+        break;
+      case 'health':
+        navigate('/shop/admin/system');
+        break;
+      default:
+        navigate('/shop/admin');
+    }
+  };
   
   return (
     <div className="space-y-6">
@@ -21,7 +52,7 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList>
           <TabsTrigger value="api-keys" className="flex items-center gap-2">
             <KeySquare className="h-4 w-4" />
