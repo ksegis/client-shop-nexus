@@ -8,6 +8,7 @@ import { useUserManagement } from './UserManagementContext';
 import { UserDialog } from './UserDialog';
 import { isRoleInactive } from './types';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export const UsersTable = () => {
   const { toast } = useToast();
@@ -61,7 +62,7 @@ export const UsersTable = () => {
   };
 
   return (
-    <>
+    <TooltipProvider>
       <Table>
         <TableHeader>
           <TableRow>
@@ -102,31 +103,43 @@ export const UsersTable = () => {
                 )}
               </TableCell>
               <TableCell className="text-right">
-                {(user.role === 'staff' || user.role === 'admin' || 
-                  user.role === 'inactive_staff' || user.role === 'inactive_admin') && (
-                  <div className="flex justify-end gap-2">
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditUser(user);
-                      }}
-                    >
-                      <UserCheck className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleUserActive(user);
-                      }}
-                    >
-                      <UserX className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                <div className="flex justify-end gap-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditUser(user);
+                        }}
+                      >
+                        <UserCheck className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Edit user profile</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleUserActive(user);
+                        }}
+                      >
+                        <UserX className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {isRoleInactive(user.role) ? <p>Activate user</p> : <p>Deactivate user</p>}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </TableCell>
             </TableRow>
           ))}
@@ -144,6 +157,6 @@ export const UsersTable = () => {
         }}
         userData={selectedUser}
       />
-    </>
+    </TooltipProvider>
   );
 };
