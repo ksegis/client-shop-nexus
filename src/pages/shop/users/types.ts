@@ -35,5 +35,5 @@ export const getBaseRole = (role: ExtendedUserRole): FormRole => {
 };
 
 export const isRoleInactive = (role: ExtendedUserRole): boolean => {
-  return role === 'inactive_staff' || role === 'inactive_admin';
+  return role.startsWith('inactive_');
 };

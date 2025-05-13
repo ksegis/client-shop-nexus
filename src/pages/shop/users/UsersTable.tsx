@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useUserManagement } from './UserManagementContext';
 import { UserDialog } from './UserDialog';
 import { isRoleInactive } from './types';
+import { Badge } from '@/components/ui/badge';
 
 export const UsersTable = () => {
   const { toast } = useToast();
@@ -43,6 +44,22 @@ export const UsersTable = () => {
     return <div className="text-center text-red-500 py-4">Error loading user data</div>;
   }
 
+  const getRoleBadgeColor = (role: string) => {
+    if (role === 'admin' || role === 'inactive_admin') {
+      return 'bg-purple-100 text-purple-800';
+    } else if (role === 'staff' || role === 'inactive_staff') {
+      return 'bg-blue-100 text-blue-800';
+    } else {
+      return 'bg-green-100 text-green-800';
+    }
+  };
+
+  const getDisplayRole = (role: string) => {
+    if (role === 'inactive_admin') return 'admin';
+    if (role === 'inactive_staff') return 'staff';
+    return role;
+  };
+
   return (
     <>
       <Table>
@@ -69,28 +86,19 @@ export const UsersTable = () => {
               <TableCell>{user.email}</TableCell>
               <TableCell>{user.phone || "—"}</TableCell>
               <TableCell>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  user.role === 'admin' || user.role === 'inactive_admin'
-                    ? 'bg-purple-100 text-purple-800' 
-                    : user.role === 'staff' || user.role === 'inactive_staff'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-green-100 text-green-800'
-                }`}>
-                  {user.role === 'inactive_admin' ? 'admin' : 
-                   user.role === 'inactive_staff' ? 'staff' : 
-                   user.role}
-                </span>
+                <Badge variant="outline" className={`${getRoleBadgeColor(user.role)}`}>
+                  {getDisplayRole(user.role)}
+                </Badge>
               </TableCell>
               <TableCell>
-                {(user.role === 'staff' || user.role === 'admin' || 
-                  user.role === 'inactive_staff' || user.role === 'inactive_admin') && (
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    isRoleInactive(user.role) 
-                      ? 'bg-red-100 text-red-800' 
-                      : 'bg-green-100 text-green-800'
-                  }`}>
-                    {isRoleInactive(user.role) ? 'inactive' : 'active'}
-                  </span>
+                {isRoleInactive(user.role) ? (
+                  <Badge variant="outline" className="bg-red-100 text-red-800">
+                    inactive
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-green-100 text-green-800">
+                    active
+                  </Badge>
                 )}
               </TableCell>
               <TableCell className="text-right">
