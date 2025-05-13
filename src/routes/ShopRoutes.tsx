@@ -9,7 +9,6 @@ import Invoices from "@/pages/shop/invoices";
 import NewInvoiceFromEstimate from "@/pages/shop/invoices/NewInvoiceFromEstimate";
 import Inventory from "@/pages/shop/Inventory";
 import Reports from "@/pages/shop/Reports";
-import AdminDashboard from "@/pages/shop/AdminDashboard";
 import ApiKeysManager from "@/pages/shop/admin/ApiKeysManager";
 import StaffManager from "@/pages/shop/admin/StaffManager";
 import SystemHealth from "@/pages/shop/admin/SystemHealth";
@@ -108,7 +107,7 @@ const ShopRoutes = () => {
           path="/admin/api-keys"
           element={
             <ProtectedRoute requiredRole="admin">
-              <AdminDashboard />
+              <ApiKeysManager />
             </ProtectedRoute>
           }
         />
@@ -116,7 +115,7 @@ const ShopRoutes = () => {
           path="/admin/staff"
           element={
             <ProtectedRoute requiredRole="admin">
-              <AdminDashboard />
+              <StaffManager />
             </ProtectedRoute>
           }
         />
@@ -124,7 +123,7 @@ const ShopRoutes = () => {
           path="/admin/system"
           element={
             <ProtectedRoute requiredRole="admin">
-              <AdminDashboard />
+              <SystemHealth />
             </ProtectedRoute>
           }
         />

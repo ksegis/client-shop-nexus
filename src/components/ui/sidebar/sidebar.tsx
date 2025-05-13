@@ -82,11 +82,6 @@ const navigationItems = [
 // Admin-specific navigation items
 const adminNavigationItems = [
   {
-    title: "Admin Dashboard",
-    href: "/shop/admin/api-keys",
-    icon: Shield,
-  },
-  {
     title: "API Keys",
     href: "/shop/admin/api-keys",
     icon: Key,
