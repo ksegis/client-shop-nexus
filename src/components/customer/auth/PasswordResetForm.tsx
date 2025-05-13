@@ -23,9 +23,26 @@ const PasswordResetForm = ({ email, onCancel }: PasswordResetFormProps) => {
     try {
       setLoading(true);
       
-      // Use the full URL for the customer portal login page
-      const redirectUrl = 'https://ctc.modworx.online/customer/login';
+      // First check if the user exists and what their role is
+      const { data, error: userCheckError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('email', resetEmail)
+        .single();
       
+      // Determine the appropriate redirect URL based on user role
+      let redirectUrl = 'https://ctc.modworx.online/customer/login';
+      
+      if (data && (data.role === 'staff' || data.role === 'admin')) {
+        // For staff or admin users
+        redirectUrl = 'https://ctc.modworx.online/shop/login';
+        console.log('Staff/admin reset link - redirecting to shop portal');
+      } else {
+        // For customers or if no role is found (default to customer)
+        console.log('Customer reset link - redirecting to customer portal');
+      }
+      
+      // Send the reset email with the appropriate redirect URL
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: `${redirectUrl}?reset=true`,
       });
