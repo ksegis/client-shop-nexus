@@ -1,5 +1,5 @@
 
-// Export all sidebar components from one central file
+// Export sidebar components from one central file
 export { Sidebar } from './sidebar';
 export { SidebarItem } from './sidebar-item';
 export {
