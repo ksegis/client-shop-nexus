@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/components/ui/use-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,7 +21,7 @@ const Auth = () => {
   const [resetPasswordMode, setResetPasswordMode] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const { toast } = useToast();
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, user, getRedirectPathByRole } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
@@ -41,13 +40,10 @@ const Auth = () => {
     // Redirect if already logged in
     if (user) {
       const userRole = user.app_metadata?.role;
-      if (userRole === 'customer') {
-        navigate('/customer/profile');
-      } else {
-        navigate('/shop');
-      }
+      const redirectPath = getRedirectPathByRole(userRole);
+      navigate(redirectPath);
     }
-  }, [searchParams, user, navigate]);
+  }, [searchParams, user, navigate, getRedirectPathByRole]);
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
