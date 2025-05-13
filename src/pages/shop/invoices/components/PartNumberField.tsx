@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { InventorySearchPopover } from '@/components/shop/shared/InventorySearchPopover';
 import { InventoryItem } from '@/pages/shop/inventory/types';
 import { usePartNumberSearch } from '@/hooks/usePartNumberSearch';
+import { cn } from '@/lib/utils';
 
 interface PartNumberFieldProps {
   value: string;
@@ -50,7 +51,10 @@ export const PartNumberField = ({
         onChange={handlePartNumberChange}
         onClick={handleFocusPartNumber}
         placeholder="Part #"
-        className="w-full cursor-text"
+        className={cn(
+          "w-full cursor-text",
+          "border border-input focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        )}
       />
     </InventorySearchPopover>
   );
