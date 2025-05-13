@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import Layout from "@/components/layout/Layout";
 import { EstimatesTable } from "./estimates/EstimatesTable";
 import EstimateDialog from "./estimates/EstimateDialog";
 import { EstimatesProvider, useEstimates } from "./estimates/EstimatesContext";
@@ -99,10 +98,8 @@ export default function Estimates() {
   }, []);
   
   return (
-    <Layout portalType="shop">
-      <EstimatesProvider>
-        <EstimatesContent />
-      </EstimatesProvider>
-    </Layout>
+    <EstimatesProvider>
+      <EstimatesContent />
+    </EstimatesProvider>
   );
 }
