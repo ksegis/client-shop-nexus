@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchUserProfile } from '../authUtils';
 
 export function useAuthStateListener() {
-  // All useState hooks must be declared at the top level, in the same order every time
+  // ALL useState hooks must be declared first, in the same order every render
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -15,6 +15,7 @@ export function useAuthStateListener() {
   const [lastRefreshAttempt, setLastRefreshAttempt] = useState(0);
   const [refreshFailCount, setRefreshFailCount] = useState(0);
   
+  // Then hook calls from other hooks (useToast, useNavigate, etc.)
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -22,8 +23,7 @@ export function useAuthStateListener() {
   const REFRESH_COOLDOWN_MS = 3000; // 3 seconds between refresh attempts
   const MAX_REFRESH_ATTEMPTS = 3; // Maximum refresh attempts before backing off
 
-  // Exposed function to update user with role - make sure it's defined with useCallback
-  // and that it always comes after the useState calls but before useEffect
+  // All useCallback hooks must come after useState but before useEffect
   const updateUserWithRole = useCallback(async (userId: string, profileRole: string) => {
     console.log("Updating user with role:", profileRole);
     
@@ -87,6 +87,7 @@ export function useAuthStateListener() {
     }
   }, [lastRefreshAttempt, refreshFailCount, toast]);
 
+  // useEffect hooks must come after all other hooks
   useEffect(() => {
     console.log("Setting up auth state listener");
     let isMounted = true;

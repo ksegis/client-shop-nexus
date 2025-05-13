@@ -7,13 +7,14 @@ import { useAuth } from "@/contexts/auth";
 import { toast } from "@/components/ui/use-toast";
 
 const Auth = () => {
+  // Declare all hooks first
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [loadingState, setLoadingState] = useState<'idle' | 'redirecting'>('idle');
   const [redirectAttempts, setRedirectAttempts] = useState(0);
   const [showTimeoutMessage, setShowTimeoutMessage] = useState(false);
   
-  // Handle hash fragment if it exists and clean up URL
+  // Handle redirection based on user state
   useEffect(() => {
     // Remove any hash fragments from the URL
     if (window.location.hash) {

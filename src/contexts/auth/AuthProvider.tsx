@@ -6,15 +6,12 @@ import { fetchUserProfile } from './authUtils';
 import { useAuthStateListener, useRedirection, useAuthMethods } from './hooks';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Create all useState hooks first
+  // ALL useState hooks must be declared first, in the same order every render
   const [loading, setLoadingState] = useState(true);
   const [lastRedirectAttempt, setLastRedirectAttempt] = useState<number>(0);
   const [redirectAttempted, setRedirectAttempted] = useState<boolean>(false);
   
-  // Define the redirect cooldown constant
-  const REDIRECT_COOLDOWN_MS = 8000; // 8 second cooldown between redirects
-  
-  // Then use custom hooks
+  // THEN all hook calls from other hooks
   const { 
     user, 
     session, 
@@ -27,9 +24,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { getRedirectPathByRole } = useRedirection();
   const { signUp, signIn, signOut } = useAuthMethods();
   
-  // Then useLocation
   const location = useLocation();
   
+  // Constants (not hooks) can be defined anywhere
+  const REDIRECT_COOLDOWN_MS = 8000; // 8 second cooldown between redirects
+  
+  // useEffect hooks must come after all other hooks
   // Sync loading state from the auth listener
   useEffect(() => {
     setLoadingState(authStateLoading);
