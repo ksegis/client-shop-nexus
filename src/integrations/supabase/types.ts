@@ -311,6 +311,7 @@ export type Database = {
           email: string
           facebook_url: string | null
           first_name: string | null
+          force_password_change: boolean | null
           id: string
           instagram_url: string | null
           last_name: string | null
@@ -326,6 +327,7 @@ export type Database = {
           email: string
           facebook_url?: string | null
           first_name?: string | null
+          force_password_change?: boolean | null
           id: string
           instagram_url?: string | null
           last_name?: string | null
@@ -341,6 +343,7 @@ export type Database = {
           email?: string
           facebook_url?: string | null
           first_name?: string | null
+          force_password_change?: boolean | null
           id?: string
           instagram_url?: string | null
           last_name?: string | null
@@ -558,6 +561,19 @@ export type Database = {
       is_staff_or_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      update_password_change_flag: {
+        Args: { user_id: string; force_change: boolean }
+        Returns: undefined
+      }
+      update_user_profile_with_password_change: {
+        Args: {
+          user_id: string
+          first_name_val: string
+          last_name_val: string
+          force_change: boolean
+        }
+        Returns: undefined
       }
     }
     Enums: {
