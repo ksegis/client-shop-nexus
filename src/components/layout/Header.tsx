@@ -39,7 +39,7 @@ const Header = ({ portalType }: HeaderProps) => {
   }, [isHeaderMounted, setHeaderMounted]);
   
   // If a header is already mounted, don't render another one
-  if (isHeaderMounted) {
+  if (isHeaderMounted && location.pathname !== '/') {
     return null;
   }
 

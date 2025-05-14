@@ -1,573 +1,681 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
+
+import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  Dialog,
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader,
-  DialogTitle,
-  DialogFooter 
-} from '@/components/ui/dialog';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
-import { Search, ShoppingCart, Box, Filter, Grid3X3, List, Plus, Check } from 'lucide-react';
+import { Search, Filter, ShoppingCart, Clock, ArrowRight, Plus, Minus, ChevronRight } from 'lucide-react';
+import { useVehicles } from '@/hooks/useVehicles';
+
+// Fake data for parts catalog
+const PARTS_CATEGORIES = [
+  'All Parts',
+  'Brake System',
+  'Engine Components',
+  'Suspension',
+  'Electrical',
+  'Filters',
+  'Transmission',
+  'Exhaust'
+];
+
+const SAMPLE_PARTS = [
+  {
+    id: '1',
+    name: 'Brake Pads - Premium',
+    category: 'Brake System',
+    price: 89.99,
+    image: 'https://placehold.co/300x200',
+    description: 'High-performance ceramic brake pads designed for increased stopping power and reduced noise.',
+    stock: 12,
+    compatibility: ['Ford F-150 (2018-2023)', 'Ford F-250 (2017-2022)'],
+    partNumber: 'BP-10045',
+    brand: 'StopRight'
+  },
+  {
+    id: '2',
+    name: 'Oil Filter - Standard',
+    category: 'Filters',
+    price: 12.99,
+    image: 'https://placehold.co/300x200',
+    description: 'Standard replacement oil filter for most common truck applications.',
+    stock: 24,
+    compatibility: ['Ford F-150 (2010-2023)', 'Chevy Silverado (2014-2022)'],
+    partNumber: 'OF-22098',
+    brand: 'FilterPro'
+  },
+  {
+    id: '3',
+    name: 'Alternator - Heavy Duty',
+    category: 'Electrical',
+    price: 189.99,
+    image: 'https://placehold.co/300x200',
+    description: 'Heavy-duty alternator with increased amperage output for commercial applications.',
+    stock: 6,
+    compatibility: ['Ford F-250 (2015-2022)', 'Ford F-350 (2015-2022)'],
+    partNumber: 'ALT-HD5500',
+    brand: 'PowerMax'
+  },
+  {
+    id: '4',
+    name: 'Shock Absorber - Off Road',
+    category: 'Suspension',
+    price: 129.99,
+    image: 'https://placehold.co/300x200',
+    description: 'Heavy-duty shock absorbers designed for off-road performance and durability.',
+    stock: 8,
+    compatibility: ['Ford F-150 Raptor (2018-2023)', 'Ford F-250 (2018-2022)'],
+    partNumber: 'SA-OR8700',
+    brand: 'RideTech'
+  },
+  {
+    id: '5',
+    name: 'Spark Plugs - High Performance',
+    category: 'Engine Components',
+    price: 8.99,
+    image: 'https://placehold.co/300x200',
+    description: 'Iridium-tipped spark plugs for improved fuel efficiency and performance.',
+    stock: 40,
+    compatibility: ['Most Ford Models (2010-2023)', 'Most Chevy Models (2010-2023)'],
+    partNumber: 'SP-IR9078',
+    brand: 'SparkMaster'
+  },
+  {
+    id: '6',
+    name: 'Air Filter - Performance',
+    category: 'Filters',
+    price: 34.99,
+    image: 'https://placehold.co/300x200',
+    description: 'Washable performance air filter for increased airflow and engine response.',
+    stock: 15,
+    compatibility: ['Ford F-150 (2015-2023)', 'Ford F-250 (2017-2022)'],
+    partNumber: 'AF-P4567',
+    brand: 'FlowMax'
+  },
+  {
+    id: '7',
+    name: 'Exhaust Tip - Chrome',
+    category: 'Exhaust',
+    price: 49.99,
+    image: 'https://placehold.co/300x200',
+    description: 'Polished chrome exhaust tip for improved appearance and sound.',
+    stock: 20,
+    compatibility: ['Universal Fit (3-inch exhaust)'],
+    partNumber: 'ET-CH300',
+    brand: 'ExhaustPro'
+  },
+  {
+    id: '8',
+    name: 'Transmission Fluid - Synthetic',
+    category: 'Transmission',
+    price: 14.99,
+    image: 'https://placehold.co/300x200',
+    description: 'Full synthetic transmission fluid for smooth shifting and extended transmission life.',
+    stock: 30,
+    compatibility: ['Most Ford Automatic Transmissions'],
+    partNumber: 'TF-SYN1',
+    brand: 'SmoothShift'
+  }
+];
+
+// Sample data for orders
+const SAMPLE_ORDERS = [
+  {
+    id: 'ORD-1234',
+    date: '2023-05-15',
+    status: 'Shipped',
+    total: 102.98,
+    items: [
+      { name: 'Brake Pads - Premium', quantity: 1, price: 89.99 },
+      { name: 'Oil Filter - Standard', quantity: 1, price: 12.99 }
+    ],
+    trackingNumber: '1Z999AA10123456784'
+  },
+  {
+    id: 'ORD-1210',
+    date: '2023-04-28',
+    status: 'Delivered',
+    total: 189.99,
+    items: [
+      { name: 'Alternator - Heavy Duty', quantity: 1, price: 189.99 }
+    ]
+  }
+];
 
 const CustomerParts = () => {
   const { toast } = useToast();
+  const { vehicles } = useVehicles();
+  const [activeCategory, setActiveCategory] = useState('All Parts');
+  const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [selectedVehicle, setSelectedVehicle] = useState<string>('');
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedPart, setSelectedPart] = useState<any>(null);
   const [cartItems, setCartItems] = useState<any[]>([]);
-  const [cartOpen, setCartOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [filteredParts, setFilteredParts] = useState(SAMPLE_PARTS);
   
-  // Mock vehicles for the selector
-  const vehicles = [
-    { id: 'v1', name: '2023 Ford F-150' },
-    { id: 'v2', name: '2022 Chevrolet Silverado' },
-  ];
-  
-  // Mock parts data
-  const parts = [
-    {
-      id: 'p1',
-      name: 'Premium Brake Pads',
-      price: 79.99,
-      category: 'Brakes',
-      manufacturer: 'TerraStop',
-      compatibility: ['v1', 'v2'],
-      stock: 12,
-      description: 'High-performance ceramic brake pads designed for durability and stopping power. Compatible with most truck models.',
-      image: 'https://placehold.co/300x200/e2e8f0/1e293b?text=Brake+Pads'
-    },
-    {
-      id: 'p2',
-      name: 'Heavy-Duty Shock Absorber',
-      price: 129.99,
-      category: 'Suspension',
-      manufacturer: 'RideControl',
-      compatibility: ['v1'],
-      stock: 8,
-      description: 'Rugged shock absorbers built for off-road performance and smooth highway driving.',
-      image: 'https://placehold.co/300x200/e2e8f0/1e293b?text=Shock+Absorber'
-    },
-    {
-      id: 'p3',
-      name: 'Long-Life Oil Filter',
-      price: 24.99,
-      category: 'Engine',
-      manufacturer: 'FilterMax',
-      compatibility: ['v1', 'v2'],
-      stock: 30,
-      description: 'Advanced filtration technology that removes more contaminants for extended engine life.',
-      image: 'https://placehold.co/300x200/e2e8f0/1e293b?text=Oil+Filter'
-    },
-    {
-      id: 'p4',
-      name: 'All-Terrain Tire',
-      price: 195.99,
-      category: 'Tires',
-      manufacturer: 'RoadGrip',
-      compatibility: ['v1', 'v2'],
-      stock: 16,
-      description: 'Rugged all-terrain tires with enhanced grip for both highway and off-road conditions.',
-      image: 'https://placehold.co/300x200/e2e8f0/1e293b?text=Truck+Tire'
-    },
-    {
-      id: 'p5',
-      name: 'LED Headlight Kit',
-      price: 149.99,
-      category: 'Lighting',
-      manufacturer: 'BrightView',
-      compatibility: ['v1'],
-      stock: 7,
-      description: 'Ultra-bright LED headlight conversion kit for improved visibility and modern appearance.',
-      image: 'https://placehold.co/300x200/e2e8f0/1e293b?text=LED+Headlights'
-    },
-    {
-      id: 'p6',
-      name: 'Premium Air Filter',
-      price: 34.99,
-      category: 'Engine',
-      manufacturer: 'FilterMax',
-      compatibility: ['v1', 'v2'],
-      stock: 22,
-      description: 'High-flow air filter that improves engine performance while blocking more contaminants.',
-      image: 'https://placehold.co/300x200/e2e8f0/1e293b?text=Air+Filter'
-    }
-  ];
-  
-  const filteredParts = parts.filter(part => {
-    const matchesSearch = part.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          part.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          part.manufacturer.toLowerCase().includes(searchQuery.toLowerCase());
-                          
-    const matchesVehicle = !selectedVehicle || part.compatibility.includes(selectedVehicle);
+  // Update filtered parts when search query, category or vehicle changes
+  useEffect(() => {
+    let filtered = SAMPLE_PARTS;
     
-    return matchesSearch && matchesVehicle;
-  });
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(part => 
+        part.name.toLowerCase().includes(query) || 
+        part.description.toLowerCase().includes(query) ||
+        part.partNumber.toLowerCase().includes(query) ||
+        part.brand.toLowerCase().includes(query)
+      );
+    }
+    
+    // Filter by category
+    if (activeCategory !== 'All Parts') {
+      filtered = filtered.filter(part => part.category === activeCategory);
+    }
+    
+    // Filter by vehicle (simplified for demo)
+    if (selectedVehicle && vehicles.length > 0) {
+      const vehicle = vehicles.find(v => v.id === selectedVehicle);
+      if (vehicle) {
+        const vehicleString = `${vehicle.make} ${vehicle.model}`;
+        filtered = filtered.filter(part => 
+          part.compatibility.some(c => c.includes(vehicleString))
+        );
+      }
+    }
+    
+    setFilteredParts(filtered);
+  }, [searchQuery, activeCategory, selectedVehicle, vehicles]);
   
-  const openPartDetails = (part: any) => {
+  // Open detail dialog for a part
+  const openDetailDialog = (part: any) => {
     setSelectedPart(part);
-    setDetailsOpen(true);
+    setIsDetailDialogOpen(true);
   };
   
-  const addToCart = (part: any, quantity: number = 1) => {
-    // Check if item is already in cart
-    const existingItemIndex = cartItems.findIndex(item => item.part.id === part.id);
+  // Add item to cart
+  const addToCart = (part: any, quantity = 1) => {
+    const existingItemIndex = cartItems.findIndex(item => item.id === part.id);
     
     if (existingItemIndex >= 0) {
-      // Update quantity of existing item
-      const updatedCart = [...cartItems];
-      updatedCart[existingItemIndex].quantity += quantity;
-      setCartItems(updatedCart);
+      // Update quantity if item exists
+      const updatedItems = [...cartItems];
+      updatedItems[existingItemIndex] = {
+        ...updatedItems[existingItemIndex],
+        quantity: updatedItems[existingItemIndex].quantity + quantity
+      };
+      setCartItems(updatedItems);
     } else {
       // Add new item
-      setCartItems([...cartItems, { part, quantity }]);
+      setCartItems([...cartItems, { ...part, quantity }]);
     }
     
     toast({
-      title: "Added to Cart",
-      description: `${part.name} has been added to your cart`,
-      duration: 2000,
+      title: "Added to cart",
+      description: `${part.name} added to your cart.`
     });
     
-    setDetailsOpen(false);
+    setIsDetailDialogOpen(false);
   };
   
-  const removeFromCart = (partId: string) => {
-    setCartItems(cartItems.filter(item => item.part.id !== partId));
+  // Remove item from cart
+  const removeFromCart = (id: string) => {
+    setCartItems(cartItems.filter(item => item.id !== id));
   };
   
-  const updateCartQuantity = (partId: string, quantity: number) => {
+  // Update item quantity in cart
+  const updateCartQuantity = (id: string, quantity: number) => {
     if (quantity <= 0) {
-      removeFromCart(partId);
+      removeFromCart(id);
       return;
     }
     
-    setCartItems(
-      cartItems.map(item => 
-        item.part.id === partId ? { ...item, quantity } : item
-      )
-    );
-  };
-  
-  const calculateCartTotal = () => {
-    return cartItems.reduce((total, item) => total + (item.part.price * item.quantity), 0);
-  };
-  
-  const handleCheckout = () => {
-    toast({
-      title: "Order Submitted",
-      description: "Your parts order has been submitted for processing",
-      duration: 3000,
+    const updatedItems = cartItems.map(item => {
+      if (item.id === id) {
+        return { ...item, quantity };
+      }
+      return item;
     });
     
-    setCartItems([]);
-    setCartOpen(false);
+    setCartItems(updatedItems);
   };
-
+  
+  // Calculate cart total
+  const cartTotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+  
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Parts Catalog</h1>
-          <p className="text-gray-500">Browse and order parts for your vehicles</p>
-        </div>
+    <div className="container mx-auto p-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <h1 className="text-3xl font-bold">Parts Desk</h1>
         
-        <Button variant="outline" onClick={() => setCartOpen(true)} className="relative">
-          <ShoppingCart className="mr-2 h-4 w-4" />
-          Cart
-          {cartItems.length > 0 && (
-            <span className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-shop-primary text-xs text-white flex items-center justify-center">
-              {cartItems.length}
-            </span>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            className="relative"
+            onClick={() => setIsCartOpen(true)}
+          >
+            <ShoppingCart className="h-5 w-5" />
+            <span className="ml-2">Cart</span>
+            {cartItems.length > 0 && (
+              <Badge className="absolute -top-2 -right-2 px-1 min-w-[20px] h-5 rounded-full">
+                {cartItems.length}
+              </Badge>
+            )}
+          </Button>
+          <Button 
+            variant="outline"
+            asChild
+          >
+            <a href="/customer/parts/orders">
+              <Clock className="h-5 w-5 mr-2" />
+              Orders
+            </a>
+          </Button>
+        </div>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Filters Panel */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Filter className="mr-2 h-4 w-4" />
-              Filters
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="vehicle-select">Your Vehicle</Label>
-              <Select value={selectedVehicle} onValueChange={setSelectedVehicle}>
-                <SelectTrigger id="vehicle-select">
+      <div className="grid grid-cols-1 md:grid-cols-[250px_1fr] gap-6">
+        {/* Sidebar with filters */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Search</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input 
+                  className="pl-10" 
+                  placeholder="Search parts..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Filter By Vehicle</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select value={selectedVehicle || ''} onValueChange={setSelectedVehicle}>
+                <SelectTrigger>
                   <SelectValue placeholder="Select a vehicle" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All Vehicles</SelectItem>
                   {vehicles.map(vehicle => (
-                    <SelectItem key={vehicle.id} value={vehicle.id}>{vehicle.name}</SelectItem>
+                    <SelectItem key={vehicle.id} value={vehicle.id}>
+                      {vehicle.year} {vehicle.make} {vehicle.model}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-gray-500">
-                Shows parts compatible with the selected vehicle
-              </p>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="search-parts">Search Parts</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input 
-                  id="search-parts"
-                  placeholder="Search by name, category..." 
-                  className="pl-9" 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </div>
-            
-            <div className="pt-4 border-t space-y-4">
-              <div>
-                <Label className="text-sm font-medium pb-2 block">View Mode</Label>
-                <div className="flex gap-2">
-                  <Button 
-                    variant={viewMode === 'grid' ? "default" : "outline"} 
-                    size="sm" 
-                    className="flex-1"
-                    onClick={() => setViewMode('grid')}
+              {selectedVehicle && (
+                <Button variant="link" className="p-0 h-auto mt-2" onClick={() => setSelectedVehicle(null)}>
+                  Clear selection
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Categories</CardTitle>
+            </CardHeader>
+            <CardContent className="px-2">
+              <div className="space-y-1">
+                {PARTS_CATEGORIES.map(category => (
+                  <Button
+                    key={category}
+                    variant={activeCategory === category ? "default" : "ghost"}
+                    className="w-full justify-start"
+                    onClick={() => setActiveCategory(category)}
                   >
-                    <Grid3X3 className="h-4 w-4 mr-1" />
-                    Grid
+                    {category}
                   </Button>
-                  <Button 
-                    variant={viewMode === 'list' ? "default" : "outline"} 
-                    size="sm" 
-                    className="flex-1"
-                    onClick={() => setViewMode('list')}
-                  >
-                    <List className="h-4 w-4 mr-1" />
-                    List
-                  </Button>
-                </div>
+                ))}
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
         
-        {/* Parts Catalog */}
-        <div className="lg:col-span-3 space-y-6">
-          {/* Category Tabs */}
-          <Tabs defaultValue="all" className="w-full">
-            <TabsList className="w-full flex overflow-x-auto hide-scrollbar">
-              <TabsTrigger value="all" className="flex-1">All Parts</TabsTrigger>
-              <TabsTrigger value="brakes" className="flex-1">Brakes</TabsTrigger>
-              <TabsTrigger value="engine" className="flex-1">Engine</TabsTrigger>
-              <TabsTrigger value="suspension" className="flex-1">Suspension</TabsTrigger>
-              <TabsTrigger value="lighting" className="flex-1">Lighting</TabsTrigger>
-              <TabsTrigger value="tires" className="flex-1">Tires</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="all" className="mt-6">
-              {viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {filteredParts.map(part => (
-                    <Card key={part.id} className="overflow-hidden hover:shadow-md transition-shadow border cursor-pointer" onClick={() => openPartDetails(part)}>
-                      <AspectRatio ratio={16/9}>
-                        <img 
-                          src={part.image} 
-                          alt={part.name}
-                          className="object-cover w-full h-full"
-                        />
-                      </AspectRatio>
-                      
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-start">
-                          <div className="space-y-1">
-                            <h3 className="font-medium line-clamp-1">{part.name}</h3>
-                            <div className="flex items-center text-sm">
-                              <Badge variant="outline" className="mr-2">{part.category}</Badge>
-                              <span className="text-gray-500 text-xs">{part.manufacturer}</span>
-                            </div>
-                          </div>
-                          <span className="font-bold text-lg">${part.price.toFixed(2)}</span>
-                        </div>
-                        
-                        <div className="mt-4 pt-4 border-t flex justify-between">
-                          <span className={`text-xs ${part.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {part.stock > 0 ? `In Stock (${part.stock})` : 'Out of Stock'}
-                          </span>
-                          
-                          <Button size="sm" variant="outline" onClick={(e) => {
-                            e.stopPropagation();
-                            addToCart(part);
-                          }}>
-                            <Plus className="h-3 w-3 mr-1" />
-                            Add to Cart
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {filteredParts.map(part => (
-                    <div 
-                      key={part.id} 
-                      className="border rounded-lg p-4 flex flex-col md:flex-row md:items-center gap-4 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => openPartDetails(part)}
-                    >
-                      <div className="w-full md:w-20 h-20">
-                        <img 
-                          src={part.image} 
-                          alt={part.name}
-                          className="object-cover w-full h-full rounded-md"
-                        />
-                      </div>
-                      
-                      <div className="flex-grow">
-                        <h3 className="font-medium">{part.name}</h3>
-                        <div className="flex items-center mt-1">
-                          <Badge variant="outline" className="mr-2">{part.category}</Badge>
-                          <span className="text-gray-500 text-xs">{part.manufacturer}</span>
-                        </div>
-                        <p className="text-sm text-gray-500 line-clamp-1 mt-1">
-                          {part.description}
-                        </p>
-                      </div>
-                      
-                      <div className="flex flex-col md:flex-row items-start md:items-center gap-2 mt-2 md:mt-0">
-                        <span className="font-bold text-lg whitespace-nowrap">${part.price.toFixed(2)}</span>
-                        <Button size="sm" variant="outline" onClick={(e) => {
-                          e.stopPropagation();
-                          addToCart(part);
-                        }}>
-                          <Plus className="h-3 w-3 mr-1" />
-                          Add to Cart
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        {/* Main content - Parts grid */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">
+              {activeCategory}
+              {filteredParts.length > 0 && (
+                <span className="text-gray-500 text-sm ml-2">
+                  ({filteredParts.length} items)
+                </span>
               )}
+            </h2>
+            
+            <div className="flex items-center gap-2">
+              <Select defaultValue="relevance">
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Sort By" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="relevance">Relevance</SelectItem>
+                  <SelectItem value="price-low">Price: Low to High</SelectItem>
+                  <SelectItem value="price-high">Price: High to Low</SelectItem>
+                  <SelectItem value="name-asc">Name: A-Z</SelectItem>
+                </SelectContent>
+              </Select>
               
-              {filteredParts.length === 0 && (
-                <div className="text-center py-12 border rounded-lg">
-                  <div className="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                    <Box className="h-6 w-6 text-gray-500" />
-                  </div>
-                  <h3 className="text-lg font-medium">No Parts Found</h3>
-                  <p className="text-muted-foreground mt-1">
-                    Try adjusting your search or filters
-                  </p>
-                </div>
-              )}
-            </TabsContent>
-            
-            {/* Other tabs would follow the same pattern */}
-            <TabsContent value="brakes" className="mt-6">
-              {/* Brakes category content */}
-              <div className="text-center py-12 border rounded-lg">
-                <p>Brake parts would be shown here</p>
+              <Button size="icon" variant="outline">
+                <Filter className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          
+          {filteredParts.length === 0 ? (
+            <div className="text-center py-12 border rounded-lg bg-gray-50">
+              <div className="mx-auto max-w-sm">
+                <h3 className="text-lg font-medium mb-2">No parts found</h3>
+                <p className="text-gray-500 mb-4">
+                  Try adjusting your search or filter criteria to find what you're looking for.
+                </p>
+                <Button onClick={() => {
+                  setSearchQuery('');
+                  setActiveCategory('All Parts');
+                  setSelectedVehicle(null);
+                }}>
+                  Clear filters
+                </Button>
               </div>
-            </TabsContent>
-            
-            {/* More tabs... */}
-          </Tabs>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredParts.map(part => (
+                <Card key={part.id} className="overflow-hidden">
+                  <div 
+                    className="h-48 overflow-hidden cursor-pointer"
+                    onClick={() => openDetailDialog(part)}
+                  >
+                    <img 
+                      src={part.image} 
+                      alt={part.name}
+                      className="w-full h-full object-cover transition-transform hover:scale-105"
+                    />
+                  </div>
+                  <CardContent className="p-4">
+                    <div className="mb-2">
+                      <Badge variant="outline" className="text-xs">
+                        {part.category}
+                      </Badge>
+                    </div>
+                    <CardTitle className="text-lg mb-1 cursor-pointer" onClick={() => openDetailDialog(part)}>
+                      {part.name}
+                    </CardTitle>
+                    <div className="flex justify-between items-center mt-2">
+                      <p className="font-bold text-lg">${part.price.toFixed(2)}</p>
+                      <p className={`text-sm ${part.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {part.stock > 0 ? `${part.stock} in stock` : 'Out of stock'}
+                      </p>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      <span>Part #: {part.partNumber}</span>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="p-4 pt-0 flex justify-between">
+                    <Button 
+                      variant="outline" 
+                      className="w-full mr-2" 
+                      onClick={() => openDetailDialog(part)}
+                    >
+                      Details
+                    </Button>
+                    <Button 
+                      className="w-full" 
+                      onClick={() => addToCart(part)}
+                      disabled={part.stock <= 0}
+                    >
+                      Add to Cart
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       
-      {/* Part Details Dialog */}
-      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        {selectedPart && (
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>{selectedPart.name}</DialogTitle>
-              <DialogDescription>
-                {selectedPart.manufacturer} | {selectedPart.category}
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <AspectRatio ratio={16/9}>
-                <img 
-                  src={selectedPart.image} 
-                  alt={selectedPart.name}
-                  className="object-cover w-full h-full rounded-md"
-                />
-              </AspectRatio>
+      {/* Part Detail Dialog */}
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+        <DialogContent className="sm:max-w-[650px]">
+          {selectedPart && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedPart.name}</DialogTitle>
+                <DialogDescription>
+                  Part #: {selectedPart.partNumber} | Brand: {selectedPart.brand}
+                </DialogDescription>
+              </DialogHeader>
               
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-xl">${selectedPart.price.toFixed(2)}</span>
-                <span className={`text-sm ${selectedPart.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {selectedPart.stock > 0 ? `In Stock (${selectedPart.stock})` : 'Out of Stock'}
-                </span>
-              </div>
-              
-              <div>
-                <h4 className="font-medium mb-1">Description</h4>
-                <p className="text-sm text-gray-600">{selectedPart.description}</p>
-              </div>
-              
-              <div>
-                <h4 className="font-medium mb-1">Compatible with</h4>
-                <div className="flex flex-wrap gap-2">
-                  {selectedPart.compatibility.map((vId: string) => {
-                    const vehicle = vehicles.find(v => v.id === vId);
-                    return vehicle && (
-                      <Badge key={vId} variant="outline">{vehicle.name}</Badge>
-                    );
-                  })}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <img 
+                    src={selectedPart.image} 
+                    alt={selectedPart.name}
+                    className="w-full rounded-md"
+                  />
                 </div>
-              </div>
-              
-              <div className="border-t pt-4 mt-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="w-24">
-                    <Label htmlFor="quantity" className="text-sm">Quantity</Label>
-                    <Input 
-                      id="quantity" 
-                      type="number" 
-                      min="1" 
-                      max={selectedPart.stock}
-                      defaultValue="1"
-                      className="mt-1"
-                    />
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500">Price</h4>
+                    <p className="text-2xl font-bold">${selectedPart.price.toFixed(2)}</p>
                   </div>
                   
-                  <Button className="flex-1" onClick={() => addToCart(selectedPart)}>
-                    <ShoppingCart className="mr-2 h-4 w-4" />
-                    Add to Cart
-                  </Button>
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500">Availability</h4>
+                    <p className={`font-medium ${selectedPart.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {selectedPart.stock > 0 ? `${selectedPart.stock} in stock` : 'Out of stock'}
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500">Description</h4>
+                    <p className="text-sm">{selectedPart.description}</p>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500">Compatible With</h4>
+                    <ul className="text-sm list-disc list-inside">
+                      {selectedPart.compatibility.map((item: string, index: number) => (
+                        <li key={index}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
-            </div>
-          </DialogContent>
-        )}
+              
+              <DialogFooter>
+                <Button 
+                  className="w-full md:w-auto" 
+                  onClick={() => addToCart(selectedPart)}
+                  disabled={selectedPart.stock <= 0}
+                >
+                  Add to Cart
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
       </Dialog>
       
-      {/* Shopping Cart Dialog */}
-      <Dialog open={cartOpen} onOpenChange={setCartOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <ShoppingCart className="mr-2 h-5 w-5" />
-              Shopping Cart
-            </DialogTitle>
+      {/* Shopping Cart Sidebar */}
+      <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
+        <DialogContent className="sm:max-w-[450px] sm:h-[80vh] flex flex-col p-0">
+          <DialogHeader className="p-6 pb-2">
+            <DialogTitle>Your Cart</DialogTitle>
             <DialogDescription>
-              {cartItems.length === 0 ? 
-                'Your cart is empty' : 
-                `${cartItems.length} ${cartItems.length === 1 ? 'item' : 'items'} in your cart`
-              }
+              {cartItems.length} {cartItems.length === 1 ? 'item' : 'items'} in your cart
             </DialogDescription>
           </DialogHeader>
           
-          {cartItems.length > 0 ? (
-            <div className="space-y-4">
-              <div className="max-h-[300px] overflow-y-auto space-y-3 pr-1">
-                {cartItems.map(item => (
-                  <div key={item.part.id} className="flex gap-3 border-b pb-3">
-                    <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0">
-                      <img 
-                        src={item.part.image}
-                        alt={item.part.name}
-                        className="object-cover w-full h-full"
-                      />
-                    </div>
-                    
-                    <div className="flex-grow">
-                      <h4 className="font-medium text-sm">{item.part.name}</h4>
-                      <p className="text-sm text-gray-500">${item.part.price.toFixed(2)} each</p>
-                      
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center">
-                          <Button 
-                            variant="outline" 
-                            size="icon" 
-                            className="h-6 w-6 rounded-full"
-                            onClick={() => updateCartQuantity(item.part.id, item.quantity - 1)}
-                          >
-                            <span className="sr-only">Decrease</span>
-                            <span>-</span>
-                          </Button>
-                          
-                          <span className="w-8 text-center">{item.quantity}</span>
-                          
-                          <Button 
-                            variant="outline" 
-                            size="icon" 
-                            className="h-6 w-6 rounded-full"
-                            onClick={() => updateCartQuantity(item.part.id, item.quantity + 1)}
-                            disabled={item.quantity >= item.part.stock}
-                          >
-                            <span className="sr-only">Increase</span>
-                            <span>+</span>
-                          </Button>
-                        </div>
-                        
-                        <span className="font-medium">${(item.part.price * item.quantity).toFixed(2)}</span>
-                      </div>
-                    </div>
-                    
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-6 w-6 text-gray-400 hover:text-red-500"
-                      onClick={() => removeFromCart(item.part.id)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="border-t pt-3">
-                <div className="flex justify-between items-center font-medium">
-                  <span>Total</span>
-                  <span>${calculateCartTotal().toFixed(2)}</span>
-                </div>
-              </div>
-              
-              <DialogFooter className="mt-6">
+          <div className="flex-grow overflow-auto p-6 pt-2">
+            {cartItems.length === 0 ? (
+              <div className="text-center py-8">
+                <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="font-medium text-lg mb-1">Your cart is empty</h3>
+                <p className="text-gray-500 mb-4">
+                  Browse our parts catalog and add items to your cart.
+                </p>
                 <Button 
-                  type="button" 
                   variant="outline" 
-                  onClick={() => setCartOpen(false)}
-                  className="flex-1 sm:flex-none"
+                  onClick={() => setIsCartOpen(false)}
                 >
                   Continue Shopping
                 </Button>
-                <Button 
-                  onClick={handleCheckout}
-                  className="flex-1 sm:flex-none"
-                >
-                  <Check className="mr-2 h-4 w-4" />
-                  Checkout
-                </Button>
-              </DialogFooter>
-            </div>
-          ) : (
-            <div className="py-8 text-center">
-              <div className="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                <ShoppingCart className="h-6 w-6 text-gray-500" />
               </div>
-              <p className="mb-4">Your shopping cart is empty</p>
-              <Button onClick={() => setCartOpen(false)}>
+            ) : (
+              <div className="space-y-4">
+                {cartItems.map(item => (
+                  <div key={item.id} className="flex gap-3 border-b pb-4">
+                    <div className="w-20 h-20 rounded-md overflow-hidden flex-shrink-0">
+                      <img 
+                        src={item.image} 
+                        alt={item.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-grow">
+                      <h4 className="font-medium">{item.name}</h4>
+                      <p className="text-sm text-gray-500">Part #: {item.partNumber}</p>
+                      <div className="flex justify-between items-center mt-2">
+                        <div className="flex items-center space-x-2">
+                          <Button 
+                            size="icon" 
+                            variant="outline" 
+                            className="h-7 w-7"
+                            onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="text-sm w-8 text-center">{item.quantity}</span>
+                          <Button 
+                            size="icon" 
+                            variant="outline" 
+                            className="h-7 w-7"
+                            onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">${(item.price * item.quantity).toFixed(2)}</p>
+                          <button 
+                            className="text-xs text-red-600 hover:underline"
+                            onClick={() => removeFromCart(item.id)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {cartItems.length > 0 && (
+            <div className="border-t p-6">
+              <div className="flex justify-between mb-2">
+                <span>Subtotal</span>
+                <span className="font-medium">${cartTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between mb-4">
+                <span>Estimated Tax</span>
+                <span className="font-medium">${(cartTotal * 0.08).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-lg font-bold mb-6">
+                <span>Total</span>
+                <span>${(cartTotal * 1.08).toFixed(2)}</span>
+              </div>
+              <Button className="w-full">
+                Proceed to Checkout <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                className="w-full mt-2"
+                onClick={() => setIsCartOpen(false)}
+              >
                 Continue Shopping
               </Button>
             </div>
           )}
         </DialogContent>
       </Dialog>
+      
+      {/* Orders Tab - For demonstration purposes, this would be its own page */}
+      <div className="hidden">
+        <Tabs defaultValue="active">
+          <TabsList className="mb-4">
+            <TabsTrigger value="active">Active Orders</TabsTrigger>
+            <TabsTrigger value="past">Past Orders</TabsTrigger>
+          </TabsList>
+          <TabsContent value="active">
+            {SAMPLE_ORDERS.map(order => (
+              <Card key={order.id} className="mb-4">
+                <CardHeader>
+                  <div className="flex justify-between">
+                    <div>
+                      <CardTitle className="text-base">Order #{order.id}</CardTitle>
+                      <CardDescription>Placed on {order.date}</CardDescription>
+                    </div>
+                    <Badge variant={order.status === 'Delivered' ? 'outline' : 'default'}>
+                      {order.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {order.items.map((item, index) => (
+                      <div key={index} className="flex justify-between">
+                        <span>
+                          {item.quantity}x {item.name}
+                        </span>
+                        <span className="font-medium">${(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {order.trackingNumber && (
+                    <div className="mt-4 p-3 bg-gray-50 rounded-md text-sm">
+                      <p className="font-medium">Tracking Number:</p>
+                      <p className="font-mono">{order.trackingNumber}</p>
+                    </div>
+                  )}
+                </CardContent>
+                <CardFooter className="flex justify-between">
+                  <div>
+                    <span className="font-semibold">Total: </span>
+                    <span className="font-bold">${order.total.toFixed(2)}</span>
+                  </div>
+                  <Button variant="outline" size="sm" className="flex items-center gap-1">
+                    View Details <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+          </TabsContent>
+          <TabsContent value="past">
+            <div className="text-center py-12">
+              <p className="text-gray-500">You don't have any past orders yet.</p>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 };

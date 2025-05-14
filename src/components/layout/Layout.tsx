@@ -5,7 +5,7 @@ import Header from './Header';
 import { HeaderProvider } from './HeaderContext';
 
 interface LayoutProps {
-  portalType: 'shop';
+  portalType: 'shop' | 'customer';
   children?: React.ReactNode;
 }
 

@@ -1,22 +1,23 @@
 
-import React from 'react';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AspectRatio } from '@/components/ui/aspect-ratio';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, User, Phone, Mail, Check } from 'lucide-react';
+import { Form, FormControl, FormField, FormItem, FormLabel } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { useVehicleManagement } from '@/hooks/useVehicleManagement';
+import { User, Phone, Mail, Truck as TruckIcon } from 'lucide-react';
+import { Link as RouterLink } from 'react-router-dom';
+import { useProfileData } from '@/hooks/profile';
+import { useAuth } from '@/contexts/auth';
 
 const profileFormSchema = z.object({
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Invalid email address').min(1, 'Email is required'),
+  firstName: z.string().min(2, { message: "First name must be at least 2 characters." }),
+  lastName: z.string().min(2, { message: "Last name must be at least 2 characters." }),
+  email: z.string().email({ message: "Please enter a valid email address." }),
   phone: z.string().optional(),
 });
 
@@ -24,71 +25,57 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 const CustomerProfile = () => {
   const { toast } = useToast();
-  const { vehicles } = useVehicleManagement();
-  
-  // Mock profile data
-  const profileData = {
-    id: 'mock-user-id',
-    email: 'customer@example.com',
-    first_name: 'John',
-    last_name: 'Driver',
-    phone: '555-123-4567',
-    role: 'customer',
-  };
+  const { user } = useAuth();
+  const { profileData, updateProfileData } = useProfileData();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Initialize the form with user data
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
     defaultValues: {
-      firstName: profileData.first_name || '',
-      lastName: profileData.last_name || '',
-      email: profileData.email || '',
-      phone: profileData.phone || '',
+      firstName: profileData?.first_name || '',
+      lastName: profileData?.last_name || '',
+      email: user?.email || '',
+      phone: profileData?.phone || '',
     },
   });
 
   const onSubmit = async (data: ProfileFormValues) => {
     try {
-      // Simulate API call with timeout
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      setIsSubmitting(true);
+      await updateProfileData({
+        first_name: data.firstName,
+        last_name: data.lastName,
+        phone: data.phone,
+      });
+
       toast({
         title: "Profile updated",
-        description: "Your profile information has been updated successfully",
+        description: "Your profile has been successfully updated.",
       });
     } catch (error) {
-      console.error('Error updating profile:', error);
+      console.error("Error updating profile:", error);
       toast({
         variant: "destructive",
         title: "Update failed",
-        description: "There was a problem updating your profile information",
+        description: "There was a problem updating your profile.",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
+    <div className="container mx-auto max-w-4xl p-4">
+      <h1 className="text-3xl font-bold mb-6">My Profile</h1>
       
-      <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-          <TabsTrigger value="profile">Personal Info</TabsTrigger>
-          <TabsTrigger value="vehicles">My Vehicles</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="profile" className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2">
           <Card>
             <CardHeader>
-              <div className="flex items-center space-x-4">
-                <div className="w-20 h-20 rounded-full bg-shop-primary flex items-center justify-center text-white text-2xl">
-                  {profileData.first_name?.[0]}{profileData.last_name?.[0]}
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold">{profileData.first_name} {profileData.last_name}</h2>
-                  <p className="text-gray-500">{profileData.email}</p>
-                </div>
-              </div>
+              <CardTitle>Personal Information</CardTitle>
+              <CardDescription>Update your account details and contact information</CardDescription>
             </CardHeader>
-            
             <CardContent>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -99,10 +86,14 @@ const CustomerProfile = () => {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>First Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} icon={<User className="h-4 w-4 text-gray-400" />} />
-                          </FormControl>
-                          <FormMessage />
+                          <div className="relative">
+                            <span className="absolute left-3 top-3 text-gray-400">
+                              <User size={18} />
+                            </span>
+                            <FormControl>
+                              <Input className="pl-10" {...field} />
+                            </FormControl>
+                          </div>
                         </FormItem>
                       )}
                     />
@@ -113,10 +104,14 @@ const CustomerProfile = () => {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Last Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} icon={<User className="h-4 w-4 text-gray-400" />} />
-                          </FormControl>
-                          <FormMessage />
+                          <div className="relative">
+                            <span className="absolute left-3 top-3 text-gray-400">
+                              <User size={18} />
+                            </span>
+                            <FormControl>
+                              <Input className="pl-10" {...field} />
+                            </FormControl>
+                          </div>
                         </FormItem>
                       )}
                     />
@@ -128,10 +123,14 @@ const CustomerProfile = () => {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input {...field} disabled icon={<Mail className="h-4 w-4 text-gray-400" />} />
-                        </FormControl>
-                        <FormMessage />
+                        <div className="relative">
+                          <span className="absolute left-3 top-3 text-gray-400">
+                            <Mail size={18} />
+                          </span>
+                          <FormControl>
+                            <Input className="pl-10" {...field} disabled />
+                          </FormControl>
+                        </div>
                       </FormItem>
                     )}
                   />
@@ -142,81 +141,51 @@ const CustomerProfile = () => {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Phone</FormLabel>
-                        <FormControl>
-                          <Input {...field} icon={<Phone className="h-4 w-4 text-gray-400" />} />
-                        </FormControl>
-                        <FormMessage />
+                        <div className="relative">
+                          <span className="absolute left-3 top-3 text-gray-400">
+                            <Phone size={18} />
+                          </span>
+                          <FormControl>
+                            <Input className="pl-10" {...field} />
+                          </FormControl>
+                        </div>
                       </FormItem>
                     )}
                   />
                   
-                  <Button type="submit" disabled={!form.formState.isDirty} className="w-full md:w-auto">
-                    {form.formState.isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="mr-2 h-4 w-4" />
-                        Save Changes
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? "Saving..." : "Save Changes"}
+                    </Button>
+                  </div>
                 </form>
               </Form>
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
         
-        <TabsContent value="vehicles" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {vehicles && vehicles.length > 0 ? (
-              vehicles.map((vehicle) => (
-                <Card key={vehicle.id} className="overflow-hidden">
-                  <AspectRatio ratio={16/9}>
-                    <div className="h-full bg-gray-100 flex items-center justify-center">
-                      {vehicle.images && vehicle.images.length > 0 ? (
-                        <img 
-                          src={vehicle.images[0]} 
-                          alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                          className="object-cover w-full h-full"
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center text-gray-400">
-                          <Truck size={48} />
-                          <p className="text-sm mt-2">No Image</p>
-                        </div>
-                      )}
-                    </div>
-                  </AspectRatio>
-                  
-                  <CardContent className="p-4">
-                    <h3 className="text-lg font-bold">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
-                    <p className="text-gray-500 text-sm">
-                      {vehicle.license_plate && `License: ${vehicle.license_plate}`}
-                      {vehicle.vin && <span className="block">VIN: {vehicle.vin}</span>}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <Card className="col-span-full p-6">
-                <div className="flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                    <Truck className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <h3 className="font-medium">No Vehicles Added</h3>
-                  <p className="text-gray-500 text-sm">You haven't added any vehicles to your account yet.</p>
-                  <Button asChild>
-                    <Link to="/customer/vehicles">Add a Vehicle</Link>
-                  </Button>
-                </div>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
+        <div>
+          <Card>
+            <CardHeader>
+              <CardTitle>My Vehicles</CardTitle>
+              <CardDescription>Manage your registered vehicles</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-center h-24">
+                <TruckIcon className="h-12 w-12 text-gray-300" />
+              </div>
+              <p className="text-center text-sm text-gray-500">
+                Add your vehicles to receive personalized service and maintenance recommendations
+              </p>
+              <Button variant="outline" className="w-full" asChild>
+                <RouterLink to="/customer/vehicles">
+                  Manage Vehicles
+                </RouterLink>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };
