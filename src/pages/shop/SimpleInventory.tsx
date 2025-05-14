@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Search, RefreshCw } from 'lucide-react';
+import { InventoryStatCards } from './inventory/components/InventoryStatCards';
 
 const SimpleInventory = () => {
   const { inventoryItems, isLoading, refetch } = useInventoryData();
@@ -33,6 +34,9 @@ const SimpleInventory = () => {
         </Button>
       </div>
 
+      {/* Add the statistics cards component */}
+      {!isLoading && <InventoryStatCards items={inventoryItems} />}
+
       <Card>
         <CardHeader>
           <CardTitle>Inventory Items</CardTitle>
@@ -41,11 +45,14 @@ const SimpleInventory = () => {
           <div className="relative mb-4">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search inventory items..."
+              placeholder="Search inventory items... (type here to search)"
               className="pl-8"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+            <div className="text-xs text-muted-foreground mt-1">
+              Search updates as you type. You can search by name, SKU, or description.
+            </div>
           </div>
 
           {isLoading ? (
