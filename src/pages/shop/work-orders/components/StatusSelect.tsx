@@ -23,7 +23,7 @@ export const StatusSelect = ({ form }: StatusSelectProps) => {
     >
       <Select
         onValueChange={form.setValue.bind(null, 'status')}
-        defaultValue={form.getValues('status')}
+        defaultValue={form.getValues('status') || 'pending'}
       >
         <SelectTrigger>
           <SelectValue placeholder="Select status" />

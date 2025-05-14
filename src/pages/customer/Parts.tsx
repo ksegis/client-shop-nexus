@@ -168,12 +168,12 @@ const CustomerParts = () => {
               <CardTitle>Filter By Vehicle</CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={selectedVehicle || ''} onValueChange={setSelectedVehicle}>
+              <Select value={selectedVehicle || 'none'} onValueChange={setSelectedVehicle}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a vehicle" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Vehicles</SelectItem>
+                  <SelectItem value="none">All Vehicles</SelectItem>
                   {vehicles.map(vehicle => (
                     <SelectItem key={vehicle.id} value={vehicle.id}>
                       {vehicle.year} {vehicle.make} {vehicle.model}
@@ -181,7 +181,7 @@ const CustomerParts = () => {
                   ))}
                 </SelectContent>
               </Select>
-              {selectedVehicle && (
+              {selectedVehicle && selectedVehicle !== 'none' && (
                 <Button variant="link" className="p-0 h-auto mt-2" onClick={() => setSelectedVehicle(null)}>
                   Clear selection
                 </Button>

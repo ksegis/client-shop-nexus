@@ -3,8 +3,9 @@ import { toast as sonnerToast } from "sonner";
 import { ToastActionElement } from "@/components/ui/toast";
 
 type ToastProps = React.ComponentPropsWithoutRef<typeof import("@/components/ui/toast").Toast> & {
+  action?: ToastActionElement,
   description?: React.ReactNode;
-  action?: ToastActionElement;
+  title?: React.ReactNode;
 };
 
 export const useToast = () => {
@@ -13,7 +14,7 @@ export const useToast = () => {
       sonnerToast(props.title, {
         description: props.description,
         action: props.action,
-        // Remove the variant property as it doesn't exist in ExternalToast
+        // Using consistent props that are compatible with ExternalToast
       });
     },
   };
@@ -23,6 +24,6 @@ export const toast = (props: ToastProps) => {
   sonnerToast(props.title, {
     description: props.description,
     action: props.action,
-    // Remove the variant property as it doesn't exist in ExternalToast
+    // Using consistent props that are compatible with ExternalToast
   });
 };
