@@ -5,7 +5,7 @@ import Header from './Header';
 import { HeaderProvider } from './HeaderContext';
 
 interface LayoutProps {
-  portalType: 'customer' | 'shop';
+  portalType: 'shop';
   children?: React.ReactNode;
 }
 
@@ -18,7 +18,6 @@ const Layout: React.FC<LayoutProps> = ({ portalType, children }) => {
   // We should only hide the header on very specific standalone pages
   const isStandalonePage = 
     (location.pathname === '/auth') || 
-    (location.pathname === '/customer/login') ||
     (location.pathname === '/shop/login');
   
   return (

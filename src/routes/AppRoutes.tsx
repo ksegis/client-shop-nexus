@@ -2,7 +2,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import NotFound from "@/pages/NotFound";
 import AuthRoutes from "./AuthRoutes";
-import CustomerRoutes from "./CustomerRoutes";
 import ShopRoutes from "./ShopRoutes";
 import Index from "@/pages/Index";
 import ShopLogin from "@/pages/shop/Login";
@@ -29,13 +28,6 @@ const AppRoutes = () => {
       
       {/* Shop Routes */}
       <Route path="/shop/*" element={<ShopRoutes />} />
-      
-      {/* Customer Routes */}
-      <Route path="/customer/*" element={<CustomerRoutes />} />
-      
-      {/* Add a redirect for /customers to /customer for backward compatibility */}
-      <Route path="/customers" element={<Navigate to="/customer" replace />} />
-      <Route path="/customers/*" element={<Navigate to="/customer" replace />} />
       
       {/* Not Found Route */}
       <Route path="*" element={<NotFound />} />
