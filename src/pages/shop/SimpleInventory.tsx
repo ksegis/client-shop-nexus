@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InventorySummaryCards } from '@/components/shop/inventory/InventorySummaryCards';
-import { InventoryStatCards } from '@/pages/shop/inventory/components/InventoryStatCards';
 import { Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 
 const SimpleInventory = () => {
@@ -13,9 +12,8 @@ const SimpleInventory = () => {
   const { 
     inventoryItems, 
     isLoading, 
-    error, 
-    refetch,
-    isAuthenticated
+    fetchError: error, 
+    refetch 
   } = useRlsAwareInventoryData();
 
   const filteredItems = searchTerm
@@ -42,8 +40,8 @@ const SimpleInventory = () => {
         </Button>
       </div>
 
-      {/* New Summary Cards */}
-      <InventorySummaryCards items={filteredItems} />
+      {/* Pass inventory prop correctly */}
+      <InventorySummaryCards inventory={filteredItems} />
 
       <Card>
         <CardHeader>

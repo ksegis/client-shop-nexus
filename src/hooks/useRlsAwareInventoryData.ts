@@ -1,236 +1,146 @@
 
-import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/hooks/use-toast';
 import { InventoryItem } from '@/pages/shop/inventory/types';
-import { handleRlsError } from '@/integrations/supabase/client';
 
-/**
- * Hook for fetching inventory data with RLS awareness
- * This hook will track RLS-related errors and provide troubleshooting utilities
- */
 export const useRlsAwareInventoryData = () => {
   const { toast } = useToast();
-  const { user } = useAuth();
-  const [troubleshootingMode, setTroubleshootingMode] = useState(false);
-  const [fixAttempted, setFixAttempted] = useState(false);
   
-  // Fetch inventory data
-  const { 
-    data: inventoryItems = [], 
-    isLoading, 
-    error: fetchError, 
-    refetch 
-  } = useQuery({
-    queryKey: ['inventory-with-rls'],
+  // Query to fetch inventory data
+  const { data: inventoryItems, isLoading, error: fetchError, refetch } = useQuery({
+    queryKey: ['rls-aware-inventory'],
     queryFn: async () => {
       try {
-        console.log('Fetching inventory with RLS awareness...');
-        console.log('Current user:', user ? `ID: ${user.id}, Email: ${user.email}` : 'Not authenticated');
+        // Check if user is authenticated
+        const { data: session } = await supabase.auth.getSession();
+        const isAuthenticated = !!session?.session;
+        console.log('Current authentication status:', isAuthenticated ? 'Authenticated' : 'Not authenticated');
         
-        // Try to fetch inventory data
+        // Test connection to database
+        console.log('Testing Supabase connection...');
+        const { error: connectionError } = await supabase.from('inventory').select('count').limit(1);
+        
+        if (connectionError) {
+          console.error('Supabase connection error:', connectionError);
+          throw new Error(`Connection error: ${connectionError.message}`);
+        }
+        
+        // If connection is good, fetch all inventory items
+        console.log('Fetching inventory data...');
         const { data, error } = await supabase
           .from('inventory')
           .select('*')
           .order('name');
         
         if (error) {
-          console.error('Error fetching inventory:', error);
-          
-          // Check if error is RLS related
-          const isRlsError = handleRlsError(error, toast);
-          if (isRlsError) {
-            setTroubleshootingMode(true);
-            throw new Error(`Row Level Security permission denied`);
-          }
-          
+          console.error('Error from Supabase:', error);
           throw error;
         }
         
-        if (data && data.length === 0) {
-          console.info('No inventory items found, but query succeeded');
+        console.log(`Fetched ${data?.length || 0} inventory items`);
+        
+        if (data && data.length > 0) {
+          console.log('Sample inventory item:', data[0]);
+        } else {
+          console.log('No inventory items found in database');
         }
         
         return data as InventoryItem[];
-      } catch (err) {
-        console.error('Error in inventory data query:', err);
-        throw err;
+      } catch (error: any) {
+        console.error('Error in fetching inventory:', error);
+        toast({
+          variant: "destructive",
+          title: "Database Error",
+          description: `Failed to load inventory: ${error.message || 'Unknown error'}`
+        });
+        throw error;
       }
     },
-    retry: false,
-    enabled: !!user,
+    staleTime: 1000 * 60, // 1 minute
+    retry: 1
   });
-  
-  // Check RLS configuration
-  const { data: rlsConfig, isLoading: isLoadingRls } = useQuery({
-    queryKey: ['rls-config'],
-    queryFn: async () => {
-      try {
-        // Check if user is authenticated
-        if (!user) return { enabled: false, hasPermission: false };
-        
-        console.log('Checking RLS configuration...');
-        
-        // Get tables with RLS enabled
-        const { data: rlsStatus, error: rlsError } = await supabase
-          .from('rls_status')
-          .select('*')
-          .eq('table_name', 'inventory');
-        
-        if (rlsError) {
-          console.error('Error checking RLS status:', rlsError);
-          return { enabled: false, hasPermission: false, error: rlsError.message };
-        }
-        
-        // Try a simple count query to check if we have read permission
-        const { count, error: countError } = await supabase
-          .from('inventory')
-          .select('*', { count: 'exact', head: true });
-        
-        console.log('Inventory count check:', count !== null ? count : 'Error');
-        
-        return {
-          enabled: rlsStatus && rlsStatus[0]?.row_security_active === true,
-          hasPermission: !countError,
-          error: countError?.message
-        };
-      } catch (err: any) {
-        console.error('Error checking RLS configuration:', err);
-        return { 
-          enabled: false, 
-          hasPermission: false, 
-          error: err.message 
-        };
-      }
+
+  // RPC function to check database connectivity
+  const checkConnection = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('is_authenticated');
+      if (error) throw error;
+      return data;
     },
-    enabled: troubleshootingMode,
-  });
-  
-  // Temporary RLS disable mutation (for admin use only)
-  const disableRls = useMutation({
-    mutationFn: async () => {
-      try {
-        console.log('Attempting to temporarily disable RLS...');
-        
-        if (!user) {
-          throw new Error('Must be authenticated to manage RLS');
-        }
-        
-        // Try to disable RLS using a database function
-        // This should be restricted to admins only via RLS on the function itself
-        const { data, error } = await supabase.rpc('disable_all_rls');
-        
-        if (error) throw error;
-        
-        console.log('RLS disabled successfully:', data);
-        setFixAttempted(true);
-        
-        // Refetch inventory data
-        setTimeout(() => {
-          refetch();
-        }, 500);
-        
-        return true;
-      } catch (err: any) {
-        console.error('Error disabling RLS:', err);
-        toast({
-          variant: "destructive",
-          title: "Permission Error",
-          description: "You don't have permission to disable RLS.",
-        });
-        return false;
-      }
-    }
-  });
-  
-  // Add standard RLS policies mutation
-  const addStandardPolicies = useMutation({
-    mutationFn: async () => {
-      try {
-        console.log('Attempting to add standard RLS policies...');
-        
-        if (!user) {
-          throw new Error('Must be authenticated to manage RLS');
-        }
-        
-        // Add standard RLS policies to inventory table
-        const { data, error } = await supabase.rpc(
-          'add_public_read_policy', 
-          { target_table: 'inventory' }
-        );
-        
-        if (error) throw error;
-        
-        console.log('Standard RLS policies added:', data);
-        setFixAttempted(true);
-        
-        // Refetch inventory data
-        setTimeout(() => {
-          refetch();
-        }, 500);
-        
-        return true;
-      } catch (err: any) {
-        console.error('Error adding RLS policies:', err);
-        toast({
-          variant: "destructive",
-          title: "Permission Error",
-          description: "You don't have permission to modify RLS policies.",
-        });
-        return false;
-      }
-    }
-  });
-  
-  // List policies mutation (for troubleshooting)
-  const listPolicies = useMutation({
-    mutationFn: async () => {
-      try {
-        console.log('Listing RLS policies...');
-        
-        if (!user) {
-          throw new Error('Must be authenticated to list policies');
-        }
-        
-        // Get RLS policies using a custom query since we can't access pg_policies directly
-        const { data, error } = await supabase.rpc('list_policies');
-        
-        if (error) throw error;
-        
-        console.log('RLS policies:', data);
-        return data || [];
-      } catch (err: any) {
-        console.error('Error listing policies:', err);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to list RLS policies.",
-        });
-        return [];
-      }
+    onSuccess: (data) => {
+      toast({
+        title: "Connection Test",
+        description: `Database connected: ${data ? 'Authenticated' : 'Not authenticated'}`
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Connection Error",
+        description: `Failed to connect to database: ${error.message}`
+      });
     }
   });
 
-  // Determine if we have an RLS issue
-  const hasRlsIssue = troubleshootingMode && 
-    rlsConfig && 
-    (rlsConfig.enabled && !rlsConfig.hasPermission);
-  
+  // Check RLS status
+  const checkRlsStatus = useMutation({
+    mutationFn: async () => {
+      // Direct query to view all RLS policies
+      const { data, error } = await supabase
+        .from('rls_status')
+        .select('*');
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "RLS Status",
+        description: `Retrieved RLS status for ${data.length} tables`
+      });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "RLS Status Error",
+        description: `Failed to check RLS status: ${error.message}`
+      });
+    }
+  });
+
+  // Direct query to disable RLS (admin only)
+  const disableRls = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('disable_all_rls');
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: "RLS Disabled",
+        description: "Row Level Security has been disabled for all tables"
+      });
+      // Refresh the inventory data
+      refetch();
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to disable RLS: ${error.message}`
+      });
+    }
+  });
+
+  // Return the hook data
   return {
-    inventoryItems,
+    inventoryItems: inventoryItems || [],
     isLoading,
     fetchError,
     refetch,
-    troubleshootingMode,
-    setTroubleshootingMode,
-    rlsConfig,
-    isLoadingRls,
-    hasRlsIssue,
-    fixAttempted,
-    disableRls,
-    addStandardPolicies,
-    listPolicies
+    checkConnection,
+    checkRlsStatus,
+    disableRls
   };
 };

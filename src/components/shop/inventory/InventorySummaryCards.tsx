@@ -1,7 +1,7 @@
 
 import { useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Box, AlertTriangle, Package, Tag, Truck } from 'lucide-react';
+import { Box, AlertTriangle, Package, Tag } from 'lucide-react';
 import { InventoryItem } from '@/pages/shop/inventory/types';
 
 interface InventorySummaryCardsProps {
@@ -10,6 +10,18 @@ interface InventorySummaryCardsProps {
 
 export const InventorySummaryCards = ({ inventory }: InventorySummaryCardsProps) => {
   const summaryData = useMemo(() => {
+    // Add a null check to prevent the error
+    if (!inventory || inventory.length === 0) {
+      return {
+        totalItems: 0,
+        totalQuantity: 0,
+        lowStockItems: 0,
+        outOfStockItems: 0,
+        totalValue: 0,
+        averagePrice: 0
+      };
+    }
+    
     // Calculate total items
     const totalItems = inventory.length;
     
@@ -93,7 +105,7 @@ export const InventorySummaryCards = ({ inventory }: InventorySummaryCardsProps)
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-          <Truck className="h-4 w-4 text-muted-foreground" />
+          <Tag className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">${summaryData.totalValue.toFixed(2)}</div>

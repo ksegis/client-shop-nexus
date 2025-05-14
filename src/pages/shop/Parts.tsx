@@ -14,7 +14,6 @@ const ShopParts = () => {
   const {
     parts,
     isLoading,
-    error,
     searchFilters,
     setSearchFilters,
     categories,
@@ -50,16 +49,6 @@ const ShopParts = () => {
         onCheckInventory={handleCheckInventory}
         onAddSamplePart={handleAddSamplePart}
       />
-      
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            Failed to load parts catalog: {error.message || 'Unknown error'}
-          </AlertDescription>
-        </Alert>
-      )}
       
       {showDemo && parts.length === 0 && !isLoading && (
         <Alert>
