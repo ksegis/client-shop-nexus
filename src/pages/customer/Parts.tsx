@@ -1,194 +1,70 @@
-import React, { useState, useEffect } from 'react';
+
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useToast } from '@/components/ui/use-toast';
-import { Search, Filter, ShoppingCart, Clock, ArrowRight, Plus, Minus, ChevronRight } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Search, Filter, ShoppingCart, Plus, Minus, ArrowRight } from 'lucide-react';
 import { useVehicles } from '@/hooks/useVehicles';
 import { PartsCatalogGrid } from '@/components/shared/parts/PartsCatalogGrid';
-import { usePartsPage } from '@/hooks/parts/usePartsPage';
-
-// Fake data for parts catalog
-const PARTS_CATEGORIES = [
-  'All Parts',
-  'Brake System',
-  'Engine Components',
-  'Suspension',
-  'Electrical',
-  'Filters',
-  'Transmission',
-  'Exhaust'
-];
-
-const SAMPLE_PARTS = [
-  {
-    id: '1',
-    name: 'Brake Pads - Premium',
-    category: 'Brake System',
-    price: 89.99,
-    image: 'https://placehold.co/300x200',
-    description: 'High-performance ceramic brake pads designed for increased stopping power and reduced noise.',
-    stock: 12,
-    compatibility: ['Ford F-150 (2018-2023)', 'Ford F-250 (2017-2022)'],
-    partNumber: 'BP-10045',
-    brand: 'StopRight'
-  },
-  {
-    id: '2',
-    name: 'Oil Filter - Standard',
-    category: 'Filters',
-    price: 12.99,
-    image: 'https://placehold.co/300x200',
-    description: 'Standard replacement oil filter for most common truck applications.',
-    stock: 24,
-    compatibility: ['Ford F-150 (2010-2023)', 'Chevy Silverado (2014-2022)'],
-    partNumber: 'OF-22098',
-    brand: 'FilterPro'
-  },
-  {
-    id: '3',
-    name: 'Alternator - Heavy Duty',
-    category: 'Electrical',
-    price: 189.99,
-    image: 'https://placehold.co/300x200',
-    description: 'Heavy-duty alternator with increased amperage output for commercial applications.',
-    stock: 6,
-    compatibility: ['Ford F-250 (2015-2022)', 'Ford F-350 (2015-2022)'],
-    partNumber: 'ALT-HD5500',
-    brand: 'PowerMax'
-  },
-  {
-    id: '4',
-    name: 'Shock Absorber - Off Road',
-    category: 'Suspension',
-    price: 129.99,
-    image: 'https://placehold.co/300x200',
-    description: 'Heavy-duty shock absorbers designed for off-road performance and durability.',
-    stock: 8,
-    compatibility: ['Ford F-150 Raptor (2018-2023)', 'Ford F-250 (2018-2022)'],
-    partNumber: 'SA-OR8700',
-    brand: 'RideTech'
-  },
-  {
-    id: '5',
-    name: 'Spark Plugs - High Performance',
-    category: 'Engine Components',
-    price: 8.99,
-    image: 'https://placehold.co/300x200',
-    description: 'Iridium-tipped spark plugs for improved fuel efficiency and performance.',
-    stock: 40,
-    compatibility: ['Most Ford Models (2010-2023)', 'Most Chevy Models (2010-2023)'],
-    partNumber: 'SP-IR9078',
-    brand: 'SparkMaster'
-  },
-  {
-    id: '6',
-    name: 'Air Filter - Performance',
-    category: 'Filters',
-    price: 34.99,
-    image: 'https://placehold.co/300x200',
-    description: 'Washable performance air filter for increased airflow and engine response.',
-    stock: 15,
-    compatibility: ['Ford F-150 (2015-2023)', 'Ford F-250 (2017-2022)'],
-    partNumber: 'AF-P4567',
-    brand: 'FlowMax'
-  },
-  {
-    id: '7',
-    name: 'Exhaust Tip - Chrome',
-    category: 'Exhaust',
-    price: 49.99,
-    image: 'https://placehold.co/300x200',
-    description: 'Polished chrome exhaust tip for improved appearance and sound.',
-    stock: 20,
-    compatibility: ['Universal Fit (3-inch exhaust)'],
-    partNumber: 'ET-CH300',
-    brand: 'ExhaustPro'
-  },
-  {
-    id: '8',
-    name: 'Transmission Fluid - Synthetic',
-    category: 'Transmission',
-    price: 14.99,
-    image: 'https://placehold.co/300x200',
-    description: 'Full synthetic transmission fluid for smooth shifting and extended transmission life.',
-    stock: 30,
-    compatibility: ['Most Ford Automatic Transmissions'],
-    partNumber: 'TF-SYN1',
-    brand: 'SmoothShift'
-  }
-];
-
-// Sample data for orders
-const SAMPLE_ORDERS = [
-  {
-    id: 'ORD-1234',
-    date: '2023-05-15',
-    status: 'Shipped',
-    total: 102.98,
-    items: [
-      { name: 'Brake Pads - Premium', quantity: 1, price: 89.99 },
-      { name: 'Oil Filter - Standard', quantity: 1, price: 12.99 }
-    ],
-    trackingNumber: '1Z999AA10123456784'
-  },
-  {
-    id: 'ORD-1210',
-    date: '2023-04-28',
-    status: 'Delivered',
-    total: 189.99,
-    items: [
-      { name: 'Alternator - Heavy Duty', quantity: 1, price: 189.99 }
-    ]
-  }
-];
+import { usePartsCatalog } from '@/hooks/parts/usePartsCatalog';
+import { Part } from '@/types/parts';
 
 const CustomerParts = () => {
   const { toast } = useToast();
   const { vehicles } = useVehicles();
-  const [activeCategory, setActiveCategory] = useState('All Parts');
+  const [activeCategory, setActiveCategory] = useState<string>('All Parts');
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
-  const [selectedPart, setSelectedPart] = useState<any>(null);
-  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [selectedPart, setSelectedPart] = useState<Part | null>(null);
+  const [cartItems, setCartItems] = useState<(Part & { quantity: number })[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [categories, setCategories] = useState<string[]>(['All Parts']);
   
-  // Use the hooks/parts/usePartsPage hook
-  const partsPageHook = usePartsPage();
+  // Use the catalog hook for data fetching
+  const { 
+    parts, 
+    isLoading, 
+    searchFilters, 
+    setSearchFilters, 
+    getCategories, 
+    refreshCatalog 
+  } = usePartsCatalog();
   
-  // Log that we're loading the page
+  // Initialize and load categories
   useEffect(() => {
-    console.log('CustomerParts component mounted');
-    toast({
-      title: "Loading Parts Catalog",
-      description: "Fetching parts from inventory...",
-    });
+    const loadCategories = async () => {
+      toast({
+        title: "Loading Parts Catalog",
+        description: "Fetching parts and categories...",
+      });
+      
+      refreshCatalog();
+      const fetchedCategories = await getCategories();
+      if (fetchedCategories && fetchedCategories.length > 0) {
+        setCategories(['All Parts', ...fetchedCategories]);
+      }
+    };
+    
+    loadCategories();
   }, []);
   
-  // Handle filtering parts based on search, category and vehicle
+  // Update search filters when inputs change
   useEffect(() => {
-    if (partsPageHook.parts.length > 0) {
-      console.log('Parts loaded from hook:', partsPageHook.parts.length);
-    }
-    
-    // Update search filters in the hook
-    partsPageHook.setSearchFilters({
-      ...partsPageHook.searchFilters,
+    setSearchFilters({
       query: searchQuery,
       category: activeCategory !== 'All Parts' ? activeCategory : undefined
     });
-    
-  }, [searchQuery, activeCategory, selectedVehicle]);
+  }, [searchQuery, activeCategory, setSearchFilters]);
   
   // Open detail dialog for a part
   const openDetailDialog = (partId: string) => {
-    const part = partsPageHook.parts.find(p => p.id === partId);
+    const part = parts.find(p => p.id === partId);
     if (part) {
       setSelectedPart(part);
       setIsDetailDialogOpen(true);
@@ -196,7 +72,7 @@ const CustomerParts = () => {
   };
   
   // Add item to cart
-  const addToCart = (part: any, quantity = 1) => {
+  const addToCart = (part: Part, quantity = 1) => {
     const existingItemIndex = cartItems.findIndex(item => item.id === part.id);
     
     if (existingItemIndex >= 0) {
@@ -245,16 +121,10 @@ const CustomerParts = () => {
   // Calculate cart total
   const cartTotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
   
-  // Create a list of part categories from the available parts
-  const PARTS_CATEGORIES = [
-    'All Parts',
-    ...Array.from(new Set(partsPageHook.parts.map(part => part.category || 'Uncategorized')))
-  ];
-  
   return (
     <div className="container mx-auto p-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <h1 className="text-3xl font-bold">Parts Desk</h1>
+        <h1 className="text-3xl font-bold">Parts Catalog</h1>
         
         <div className="flex items-center gap-2">
           <Button 
@@ -269,15 +139,6 @@ const CustomerParts = () => {
                 {cartItems.length}
               </Badge>
             )}
-          </Button>
-          <Button 
-            variant="outline"
-            asChild
-          >
-            <a href="/customer/parts/orders">
-              <Clock className="h-5 w-5 mr-2" />
-              Orders
-            </a>
           </Button>
         </div>
       </div>
@@ -334,7 +195,7 @@ const CustomerParts = () => {
             </CardHeader>
             <CardContent className="px-2">
               <div className="space-y-1">
-                {PARTS_CATEGORIES.map(category => (
+                {categories.map(category => (
                   <Button
                     key={category}
                     variant={activeCategory === category ? "default" : "ghost"}
@@ -355,7 +216,7 @@ const CustomerParts = () => {
             <h2 className="text-xl font-semibold">
               {activeCategory}
               <span className="text-gray-500 text-sm ml-2">
-                ({partsPageHook.parts.length} items)
+                ({parts.length} items)
               </span>
             </h2>
             
@@ -380,8 +241,8 @@ const CustomerParts = () => {
           
           {/* Use the PartsCatalogGrid component */}
           <PartsCatalogGrid
-            parts={partsPageHook.parts}
-            isLoading={partsPageHook.isLoading}
+            parts={parts}
+            isLoading={isLoading}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             onAddToCart={addToCart}
@@ -399,17 +260,23 @@ const CustomerParts = () => {
               <DialogHeader>
                 <DialogTitle>{selectedPart.name}</DialogTitle>
                 <DialogDescription>
-                  Part #: {selectedPart.partNumber} | Brand: {selectedPart.brand}
+                  Part #: {selectedPart.sku} | Brand: {selectedPart.supplier || 'Unknown'}
                 </DialogDescription>
               </DialogHeader>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <img 
-                    src={selectedPart.image} 
-                    alt={selectedPart.name}
-                    className="w-full rounded-md"
-                  />
+                  <div className="bg-gray-100 rounded-md h-48 w-full flex items-center justify-center">
+                    {selectedPart.images && selectedPart.images.length > 0 ? (
+                      <img 
+                        src={selectedPart.images[0]} 
+                        alt={selectedPart.name}
+                        className="w-full h-full object-contain rounded-md"
+                      />
+                    ) : (
+                      <div className="text-gray-400">No image available</div>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-4">
                   <div>
@@ -419,24 +286,29 @@ const CustomerParts = () => {
                   
                   <div>
                     <h4 className="text-sm font-medium text-gray-500">Availability</h4>
-                    <p className={`font-medium ${selectedPart.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {selectedPart.stock > 0 ? `${selectedPart.stock} in stock` : 'Out of stock'}
+                    <p className={`font-medium ${selectedPart.quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {selectedPart.quantity > 0 ? `${selectedPart.quantity} in stock` : 'Out of stock'}
                     </p>
                   </div>
                   
                   <div>
                     <h4 className="text-sm font-medium text-gray-500">Description</h4>
-                    <p className="text-sm">{selectedPart.description}</p>
+                    <p className="text-sm">{selectedPart.description || 'No description available'}</p>
                   </div>
                   
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-500">Compatible With</h4>
-                    <ul className="text-sm list-disc list-inside">
-                      {selectedPart.compatibility.map((item: string, index: number) => (
-                        <li key={index}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
+                  {selectedPart.compatibility && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-500">Compatible With</h4>
+                      <ul className="text-sm list-disc list-inside">
+                        {Array.isArray(selectedPart.compatibility) ? 
+                          selectedPart.compatibility.map((item: string, index: number) => (
+                            <li key={index}>{item}</li>
+                          )) : 
+                          <li>{selectedPart.compatibility}</li>
+                        }
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -444,7 +316,7 @@ const CustomerParts = () => {
                 <Button 
                   className="w-full md:w-auto" 
                   onClick={() => addToCart(selectedPart)}
-                  disabled={selectedPart.stock <= 0}
+                  disabled={selectedPart.quantity <= 0}
                 >
                   Add to Cart
                 </Button>
@@ -454,7 +326,7 @@ const CustomerParts = () => {
         </DialogContent>
       </Dialog>
       
-      {/* Shopping Cart Sidebar */}
+      {/* Shopping Cart Dialog */}
       <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
         <DialogContent className="sm:max-w-[450px] sm:h-[80vh] flex flex-col p-0">
           <DialogHeader className="p-6 pb-2">
@@ -483,16 +355,20 @@ const CustomerParts = () => {
               <div className="space-y-4">
                 {cartItems.map(item => (
                   <div key={item.id} className="flex gap-3 border-b pb-4">
-                    <div className="w-20 h-20 rounded-md overflow-hidden flex-shrink-0">
-                      <img 
-                        src={item.image} 
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="w-20 h-20 rounded-md overflow-hidden flex-shrink-0 bg-gray-100 flex items-center justify-center">
+                      {item.images && item.images.length > 0 ? (
+                        <img 
+                          src={item.images[0]} 
+                          alt={item.name}
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="text-gray-400 text-xs">No image</div>
+                      )}
                     </div>
                     <div className="flex-grow">
                       <h4 className="font-medium">{item.name}</h4>
-                      <p className="text-sm text-gray-500">Part #: {item.partNumber}</p>
+                      <p className="text-sm text-gray-500">Part #: {item.sku}</p>
                       <div className="flex justify-between items-center mt-2">
                         <div className="flex items-center space-x-2">
                           <Button 
@@ -558,66 +434,6 @@ const CustomerParts = () => {
           )}
         </DialogContent>
       </Dialog>
-      
-      {/* Orders Tab - For demonstration purposes, this would be its own page */}
-      <div className="hidden">
-        <Tabs defaultValue="active">
-          <TabsList className="mb-4">
-            <TabsTrigger value="active">Active Orders</TabsTrigger>
-            <TabsTrigger value="past">Past Orders</TabsTrigger>
-          </TabsList>
-          <TabsContent value="active">
-            {SAMPLE_ORDERS.map(order => (
-              <Card key={order.id} className="mb-4">
-                <CardHeader>
-                  <div className="flex justify-between">
-                    <div>
-                      <CardTitle className="text-base">Order #{order.id}</CardTitle>
-                      <CardDescription>Placed on {order.date}</CardDescription>
-                    </div>
-                    <Badge variant={order.status === 'Delivered' ? 'outline' : 'default'}>
-                      {order.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {order.items.map((item, index) => (
-                      <div key={index} className="flex justify-between">
-                        <span>
-                          {item.quantity}x {item.name}
-                        </span>
-                        <span className="font-medium">${(item.price * item.quantity).toFixed(2)}</span>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {order.trackingNumber && (
-                    <div className="mt-4 p-3 bg-gray-50 rounded-md text-sm">
-                      <p className="font-medium">Tracking Number:</p>
-                      <p className="font-mono">{order.trackingNumber}</p>
-                    </div>
-                  )}
-                </CardContent>
-                <CardFooter className="flex justify-between">
-                  <div>
-                    <span className="font-semibold">Total: </span>
-                    <span className="font-bold">${order.total.toFixed(2)}</span>
-                  </div>
-                  <Button variant="outline" size="sm" className="flex items-center gap-1">
-                    View Details <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </TabsContent>
-          <TabsContent value="past">
-            <div className="text-center py-12">
-              <p className="text-gray-500">You don't have any past orders yet.</p>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </div>
     </div>
   );
 };

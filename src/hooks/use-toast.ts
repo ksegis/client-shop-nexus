@@ -1,28 +1,6 @@
 
-import { toast as sonnerToast } from "sonner";
+import { useToast as useShadcnToast } from "@/components/ui/use-toast";
 
-type ToastProps = {
-  title?: string;
-  description?: string;
-  variant?: "default" | "destructive";
-};
+export const useToast = useShadcnToast;
 
-export const toast = ({ title, description, variant, ...props }: ToastProps) => {
-  if (variant === "destructive") {
-    return sonnerToast.error(title, {
-      description,
-      ...props
-    });
-  }
-  
-  return sonnerToast(title || "", {
-    description,
-    ...props
-  });
-};
-
-export const useToast = () => {
-  return {
-    toast
-  };
-};
+export { toast } from "@/components/ui/use-toast";
