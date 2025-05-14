@@ -5,12 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Search, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw, Plus } from 'lucide-react';
 import { InventoryStatCards } from './inventory/components/InventoryStatCards';
+import { InventoryDialog } from './inventory/InventoryDialog';
+import { InventoryFormValues } from './inventory/types';
+import { useInventory } from './inventory/useInventory';
 
 const SimpleInventory = () => {
   const { inventoryItems, isLoading, refetch } = useInventoryData();
   const [searchTerm, setSearchTerm] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const { addItemMutation } = useInventory();
   
   // Filter items based on search term
   const filteredItems = inventoryItems.filter(item => 
@@ -31,6 +36,15 @@ const SimpleInventory = () => {
     }
   );
 
+  const handleAddItem = (values: InventoryFormValues) => {
+    addItemMutation.mutate(values, {
+      onSuccess: () => {
+        setDialogOpen(false);
+        refetch();
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -40,10 +54,19 @@ const SimpleInventory = () => {
             View available inventory items
           </p>
         </div>
-        <Button onClick={() => refetch()} disabled={isLoading}>
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => setDialogOpen(true)}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Item
+          </Button>
+          <Button onClick={() => refetch()} disabled={isLoading}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Always show the stats cards, even when loading or empty */}
@@ -110,6 +133,15 @@ const SimpleInventory = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Add Item Dialog */}
+      <InventoryDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSubmit={handleAddItem}
+        editingItem={null}
+        isSubmitting={addItemMutation.isPending}
+      />
     </div>
   );
 };
