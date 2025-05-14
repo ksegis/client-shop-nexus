@@ -1,90 +1,99 @@
 
-import React, { ReactNode, useEffect } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 import { AuthContext } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { AuthContextType } from './types';
+import { useAuthStateListener } from './hooks';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { user: authUser, session, loading: authLoading } = useAuthStateListener();
+  const [loading, setLoading] = useState<boolean>(true);
   
-  // Set up auto-authentication with a mock admin user for development
+  // Set up auto-authentication with a development admin user
   useEffect(() => {
     const autoSignIn = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // If no active session, perform automatic authentication
-      if (!session) {
+      if (!authUser) {
         console.log('No active session found, performing automatic authentication...');
         
         try {
-          // Try to sign in using a mock session for development
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: 'admin@example.com',
-            password: 'password123'
+          // First check if the development user exists
+          const { data: existingUser, error: checkError } = await supabase.auth.signInWithPassword({
+            email: 'dev@example.com',
+            password: 'devpassword123'
           });
           
-          if (error) {
-            console.log('Could not auto-sign in, attempting to create mock user...');
+          if (checkError) {
+            console.log('Development user does not exist, creating one...');
             
-            // If user doesn't exist, create one
-            const { error: signUpError } = await supabase.auth.signUp({
-              email: 'admin@example.com',
-              password: 'password123',
+            // Create the development user
+            const { data, error: signUpError } = await supabase.auth.signUp({
+              email: 'dev@example.com',
+              password: 'devpassword123',
               options: {
                 data: {
-                  role: 'admin',
-                  first_name: 'Admin',
-                  last_name: 'User'
+                  first_name: 'Dev',
+                  last_name: 'User',
+                  role: 'admin'
                 }
               }
             });
             
             if (signUpError) {
-              console.error('Error creating mock user:', signUpError);
+              console.error('Error creating development user:', signUpError);
               toast({
                 title: "Development Mode",
-                description: "For development: Please create a user with email 'admin@example.com' and password 'password123'",
+                description: "Could not create development user. Check console for details.",
                 variant: "destructive"
               });
             } else {
+              console.log('Development user created:', data.user?.email);
               toast({
                 title: "Development Mode",
-                description: "Created mock admin account for development",
+                description: "Created development user: dev@example.com / devpassword123",
               });
               
-              // Try signing in again
+              // Sign in with the new user
               await supabase.auth.signInWithPassword({
-                email: 'admin@example.com',
-                password: 'password123'
+                email: 'dev@example.com',
+                password: 'devpassword123'
               });
             }
           } else {
-            console.log('Auto-signed in with development account');
+            console.log('Signed in with development user:', existingUser.user?.email);
+            toast({
+              title: "Development Mode",
+              description: "Auto-signed in as development user",
+            });
           }
         } catch (error) {
           console.error('Auto-authentication error:', error);
         }
       } else {
-        console.log('Active session found:', session.user.email);
+        console.log('User already authenticated:', authUser.email);
       }
+      
+      setLoading(false);
     };
     
-    // Attempt auto-authentication on component mount
-    autoSignIn();
-  }, []);
-  
-  // Mock user with admin role for development (fallback if auto-auth fails)
-  const mockUser = {
-    id: 'mock-user-id',
-    email: 'admin@example.com',
+    // Only attempt auto-authentication when auth state is loaded
+    if (!authLoading) {
+      autoSignIn();
+    }
+  }, [authLoading, authUser, toast]);
+
+  // Define fallback user for when authentication is still loading
+  const devUser = {
+    id: 'dev-user-id',
+    email: 'dev@example.com',
     app_metadata: {
-      role: 'admin' // Admin role for full access
+      role: 'admin'
     },
     user_metadata: {
-      first_name: 'Admin',
+      first_name: 'Dev',
       last_name: 'User',
       phone: '555-1234',
       role: 'admin'
@@ -93,8 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Context value that matches AuthContextType
   const value: AuthContextType = {
-    user: mockUser,
-    session: null,
+    user: authUser || devUser,
+    session: session,
     signUp: async (email: string, password: string, firstName = '', lastName = '') => {
       try {
         const metadata = { first_name: firstName, last_name: lastName };
@@ -149,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error };
       }
     },
-    loading: false,
+    loading: loading || authLoading,
     getRedirectPathByRole: (role: string) => {
       return role === 'customer' ? '/customer/profile' : '/shop';
     },
