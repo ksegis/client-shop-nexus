@@ -3,38 +3,18 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/hooks/use-toast';
+import { MessageThread, Message } from '@/integrations/supabase/types-extensions';
 
-export interface Message {
-  id: string;
-  content: string;
-  sender_id: string;
-  sender_type: 'customer' | 'shop';
-  timestamp: string;
-  is_read: boolean;
-  attachments?: string[];
-  thread_id: string;
-  sender_name?: string;
-}
-
-export interface Thread {
-  id: string;
-  customer_id: string;
-  vehicle_id?: string;
-  subject: string;
-  last_message_at: string;
-  is_closed: boolean;
-  unread_count: number;
-  customer_name?: string;
-  vehicle_info?: string;
-}
+// Reuse the types from types-extensions
+export type { Message, MessageThread as Thread };
 
 interface MessagingContextType {
-  threads: Thread[];
-  activeThread: Thread | null;
+  threads: MessageThread[];
+  activeThread: MessageThread | null;
   messages: Message[];
   isLoading: boolean;
   error: Error | null;
-  setActiveThread: (thread: Thread | null) => void;
+  setActiveThread: (thread: MessageThread | null) => void;
   sendMessage: (content: string, attachments?: File[]) => Promise<void>;
   createThread: (customer_id: string, subject: string, vehicleId?: string) => Promise<string>;
   markThreadAsRead: (threadId: string) => Promise<void>;
@@ -45,8 +25,8 @@ interface MessagingContextType {
 const MessagingContext = createContext<MessagingContextType | undefined>(undefined);
 
 export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [threads, setThreads] = useState<Thread[]>([]);
-  const [activeThread, setActiveThread] = useState<Thread | null>(null);
+  const [threads, setThreads] = useState<MessageThread[]>([]);
+  const [activeThread, setActiveThread] = useState<MessageThread | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -64,7 +44,10 @@ export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children 
       // This is just a simplified example - in a real app, you'd check user roles
       const isShopStaff = user.email?.includes('shop') || true; // Temporary simple check
       
-      let query = supabase
+      // Cast supabase to use our extended types
+      const supabaseWithTypes = supabase as any;
+      
+      let query = supabaseWithTypes
         .from('message_threads')
         .select(`
           *,
@@ -123,7 +106,10 @@ export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       setIsLoading(true);
       
-      const { data, error: queryError } = await supabase
+      // Cast supabase to use our extended types
+      const supabaseWithTypes = supabase as any;
+      
+      const { data, error: queryError } = await supabaseWithTypes
         .from('messages')
         .select(`
           *,
@@ -256,7 +242,10 @@ export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
       
       // Insert message
-      const { error: insertError } = await supabase
+      // Cast supabase to use our extended types
+      const supabaseWithTypes = supabase as any;
+      
+      const { error: insertError } = await supabaseWithTypes
         .from('messages')
         .insert({
           thread_id: activeThread.id,
@@ -270,7 +259,7 @@ export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (insertError) throw insertError;
       
       // Update thread's last_message_at
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseWithTypes
         .from('message_threads')
         .update({ 
           last_message_at: new Date().toISOString(),
@@ -298,7 +287,10 @@ export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (!user) throw new Error('User must be authenticated');
     
     try {
-      const { data, error: insertError } = await supabase
+      // Cast supabase to use our extended types
+      const supabaseWithTypes = supabase as any;
+      
+      const { data, error: insertError } = await supabaseWithTypes
         .from('message_threads')
         .insert({
           customer_id: customerId,
@@ -334,8 +326,11 @@ export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (!user) return;
     
     try {
+      // Cast supabase to use our extended types
+      const supabaseWithTypes = supabase as any;
+      
       // Mark all messages from the other party as read
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseWithTypes
         .from('messages')
         .update({ is_read: true })
         .eq('thread_id', threadId)
@@ -344,7 +339,7 @@ export const MessagingProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (updateError) throw updateError;
       
       // Reset unread count on thread
-      const { error: threadError } = await supabase
+      const { error: threadError } = await supabaseWithTypes
         .from('message_threads')
         .update({ unread_count: 0 })
         .eq('id', threadId);

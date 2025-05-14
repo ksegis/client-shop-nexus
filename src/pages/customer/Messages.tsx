@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
 function MessagesContent() {
-  const { threads, activeThread, messages, isLoading, setActiveThread, sendMessage } = useMessaging();
+  const { threads, activeThread, messages, isLoading, setActiveThread, sendMessage, createThread } = useMessaging();
   const { user } = useAuth();
   const { toast } = useToast();
   const [showNewThreadDialog, setShowNewThreadDialog] = useState(false);
@@ -51,7 +51,7 @@ function MessagesContent() {
       const shopId = "shop-placeholder-id"; // This should come from your auth system
       
       // Create the thread
-      await createThread(shopId, newSubject);
+      await createThread(user.id, newSubject);
       
       // Close dialog and reset form
       setShowNewThreadDialog(false);
