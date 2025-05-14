@@ -1,92 +1,91 @@
 
-import { format } from 'date-fns';
+import { ServiceHistoryEntry } from '@/hooks/useServiceHistory';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CarFront, Wrench, DollarSign, Clock, FileText } from 'lucide-react';
-import { ServiceHistoryEntry } from '@/hooks/useServiceHistory';
+import { format } from 'date-fns';
+import { FileText, Clock, DollarSign, Tool } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useState } from 'react';
 
 interface ServiceHistoryCardProps {
-  entry: ServiceHistoryEntry & {
-    vehicles?: { make: string; model: string; year: number | string };
-    profiles?: { first_name: string | null; last_name: string | null };
-  };
+  entry: ServiceHistoryEntry;
 }
 
 const ServiceHistoryCard = ({ entry }: ServiceHistoryCardProps) => {
-  const { 
-    service_date, 
-    service_type, 
-    description, 
-    technician_notes, 
-    parts_used, 
-    labor_hours, 
-    total_cost,
-    vehicles,
-    profiles
-  } = entry;
+  const [expanded, setExpanded] = useState(false);
+  
+  // Format service date
+  const formattedDate = entry.service_date 
+    ? format(new Date(entry.service_date), 'PP') 
+    : 'Not specified';
+    
+  // Format description to truncate if too long
+  const truncatedDescription = entry.description && entry.description.length > 100 
+    ? `${entry.description.substring(0, 100)}...` 
+    : entry.description;
+    
+  // Service type badge color
+  const getBadgeVariant = (type: string) => {
+    switch(type.toLowerCase()) {
+      case 'oil change':
+      case 'maintenance':
+        return 'bg-blue-100 text-blue-800 hover:bg-blue-200';
+      case 'repair':
+        return 'bg-amber-100 text-amber-800 hover:bg-amber-200';
+      case 'diagnosis':
+        return 'bg-purple-100 text-purple-800 hover:bg-purple-200';
+      case 'inspection':
+        return 'bg-green-100 text-green-800 hover:bg-green-200';
+      default:
+        return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
+    }
+  };
   
   return (
     <Card>
       <CardHeader className="pb-2">
-        <div className="flex justify-between items-start mb-2">
-          <CardTitle className="text-lg">
-            {vehicles ? `${vehicles.year} ${vehicles.make} ${vehicles.model}` : 'Vehicle Service'}
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-lg flex items-center">
+            <FileText className="mr-2 h-5 w-5" /> 
+            {entry.service_type}
           </CardTitle>
-          <Badge className="bg-blue-100 text-blue-800">{service_type}</Badge>
-        </div>
-        <div className="text-sm text-muted-foreground">
-          {format(new Date(service_date), 'PPP')}
-          {profiles && (
-            <span> • Technician: {profiles.first_name} {profiles.last_name}</span>
-          )}
+          <Badge className={getBadgeVariant(entry.service_type)}>
+            {formattedDate}
+          </Badge>
         </div>
       </CardHeader>
       
-      <CardContent className="space-y-3 pt-2">
-        {description && (
-          <div>
-            <div className="flex items-center gap-1.5 mb-1 text-sm font-medium">
-              <FileText className="h-3.5 w-3.5" />
-              Service Details:
+      <CardContent>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            {expanded ? entry.description : truncatedDescription}
+          </p>
+          
+          {entry.description && entry.description.length > 100 && (
+            <Button 
+              variant="link" 
+              className="p-0 h-auto text-xs text-blue-600"
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? 'Read less' : 'Read more'}
+            </Button>
+          )}
+          
+          <div className="grid grid-cols-3 gap-2 text-sm">
+            <div className="flex items-center">
+              <Clock className="h-4 w-4 text-gray-400 mr-1" />
+              <span>{entry.labor_hours} hrs</span>
             </div>
-            <p className="text-sm">{description}</p>
-          </div>
-        )}
-        
-        {technician_notes && (
-          <div>
-            <div className="flex items-center gap-1.5 mb-1 text-sm font-medium">
-              <Wrench className="h-3.5 w-3.5" />
-              Technician Notes:
+            
+            <div className="flex items-center">
+              <DollarSign className="h-4 w-4 text-gray-400 mr-1" />
+              <span>${entry.total_cost.toFixed(2)}</span>
             </div>
-            <p className="text-sm">{technician_notes}</p>
-          </div>
-        )}
-        
-        {parts_used && parts_used.length > 0 && (
-          <div>
-            <div className="flex items-center gap-1.5 mb-1 text-sm font-medium">
-              <CarFront className="h-3.5 w-3.5" />
-              Parts Used:
+            
+            <div className="flex items-center">
+              <Tool className="h-4 w-4 text-gray-400 mr-1" />
+              <span>{(entry.parts_used?.length || 0)} parts</span>
             </div>
-            <div className="grid grid-cols-2 gap-1">
-              {parts_used.map((part, index) => (
-                <span key={index} className="text-sm">{part}</span>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        <div className="pt-2 flex flex-wrap gap-4">
-          <div className="flex items-center text-sm">
-            <Clock className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
-            <span className="font-medium mr-1">Labor:</span>
-            {labor_hours} {labor_hours === 1 ? 'hour' : 'hours'}
-          </div>
-          <div className="flex items-center text-sm">
-            <DollarSign className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
-            <span className="font-medium mr-1">Total:</span>
-            ${total_cost.toFixed(2)}
           </div>
         </div>
       </CardContent>

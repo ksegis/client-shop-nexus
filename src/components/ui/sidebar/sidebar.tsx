@@ -30,8 +30,7 @@ import {
   Activity,
   Webhook,
   Calendar,
-  ShoppingCart,
-  Package2
+  ShoppingCart
 } from "lucide-react";
 
 // Map paths to icons
@@ -42,7 +41,6 @@ const pathIconMap = {
   "/shop/inventory": Package,
   "/shop/work-orders": ListChecks,
   "/shop/parts": ShoppingCart,
-  "/shop/parts-inventory": Package2,
   "/shop/service-appointments": Calendar,
   "/shop/customers": UserPlus,
   "/shop/estimates": FileText,
@@ -103,4 +101,3 @@ export const Sidebar = () => {
     </>
   );
 };
-

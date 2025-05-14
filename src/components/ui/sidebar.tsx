@@ -23,7 +23,6 @@ import {
   FileText, 
   FileCheck,
   Truck,
-  Package2,
   ShoppingCart,
   Calendar
 } from "lucide-react";
@@ -58,11 +57,6 @@ const navigationItems = [
     title: "Parts Desk",
     href: "/shop/parts",
     icon: ShoppingCart,
-  },
-  {
-    title: "Parts Inventory",
-    href: "/shop/parts-inventory",
-    icon: Package2,
   },
   {
     title: "Service Appointments",

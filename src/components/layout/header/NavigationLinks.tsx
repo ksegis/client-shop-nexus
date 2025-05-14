@@ -25,7 +25,6 @@ export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
     { name: 'Reports', path: '/shop/reports' },
     { name: 'Employees', path: '/shop/employees' },
     { name: 'Inventory', path: '/shop/inventory' },
-    { name: 'Parts Inventory', path: '/shop/parts-inventory' },
     { name: 'Parts Desk', path: '/shop/parts' },
     { name: 'Work Orders', path: '/shop/work-orders' },
     { name: 'Service Appointments', path: '/shop/service-appointments' },
