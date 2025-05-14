@@ -10,6 +10,7 @@ import {
 } from './profileDbOperations';
 import { createProfileFromUserMetadata } from './profileUtils';
 import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
+import { toast } from "@/hooks/use-toast";
 
 export const useProfileData = () => {
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
@@ -104,7 +105,7 @@ export const useProfileData = () => {
     // Skip DB operations for mock user
     if (user.id === 'mock-user-id') {
       // Just update the local state for development use
-      const updatedProfile = { ...profileData, ...updateData };
+      const updatedProfile = { ...profileData, ...updateData, updated_at: new Date().toISOString() };
       setProfileData(updatedProfile as ProfileData);
       toast({
         title: "Profile updated (development mode)",
@@ -129,6 +130,3 @@ export const useProfileData = () => {
 
   return { profileData, isLoading, error, updateProfileData, refreshProfile: fetchProfileData };
 };
-
-// Add missing toast import
-import { toast } from "@/hooks/use-toast";

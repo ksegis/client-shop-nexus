@@ -2,7 +2,7 @@
 export interface AuthContextType {
   user: {
     id: string;
-    email: string | null;
+    email: string | null; // Changed from string to string | null to match Supabase's User type
     app_metadata?: {
       role?: string;
     };
