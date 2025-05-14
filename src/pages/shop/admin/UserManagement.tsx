@@ -1,10 +1,9 @@
 
 import React, { useState } from 'react';
-import { Shield } from 'lucide-react';
 import { UserManagementProvider } from './users/UserManagementContext';
 import { UsersTable } from './users/UsersTable';
 import { UserHeader } from './users/UserHeader';
-import { UserDialog } from './users/UserDialog'; 
+import { UserDialog } from './users/UserDialog';
 
 const UserManagement = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
