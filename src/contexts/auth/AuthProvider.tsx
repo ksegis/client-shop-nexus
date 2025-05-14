@@ -16,6 +16,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isDevMode, setIsDevMode] = useState<boolean>(false);
+  const [alreadyNotified, setAlreadyNotified] = useState<boolean>(false);
   
   // Define static mock user for development
   const mockUser = {
@@ -95,20 +96,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('Error checking/creating profile:', err);
         }
       } else {
-        console.log('Development mode: Using mock authentication');
-        setProfile(mockProfile);
-        setIsDevMode(true);
-        
-        if (useDevCustomer) {
-          toast({
-            title: "Customer Development Mode",
-            description: "Using mock customer authentication credentials",
-          });
-        } else {
-          toast({
-            title: "Development Mode",
-            description: "Using mock authentication credentials",
-          });
+        // Only show dev mode message once
+        if (!alreadyNotified) {
+          console.log('Development mode: Using mock authentication');
+          setProfile(mockProfile);
+          setIsDevMode(true);
+          
+          if (useDevCustomer) {
+            toast({
+              title: "Customer Development Mode",
+              description: "Using mock customer authentication credentials",
+            });
+          } else {
+            toast({
+              title: "Development Mode",
+              description: "Using mock authentication credentials",
+            });
+          }
+          setAlreadyNotified(true);
         }
       }
       
@@ -118,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!authLoading) {
       initializeAuth();
     }
-  }, [authLoading, authUser, toast, useDevCustomer]);
+  }, [authLoading, authUser, toast, useDevCustomer, alreadyNotified]);
 
   // Context value that matches AuthContextType
   const value: AuthContextType = {

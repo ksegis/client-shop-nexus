@@ -12,7 +12,7 @@ export interface Vehicle {
   images?: string[];
   created_at: string;
   updated_at: string;
-  mileage?: number; // Ensure mileage property is defined
+  mileage?: number;
 }
 
 export type VehicleFormData = {
@@ -23,7 +23,7 @@ export type VehicleFormData = {
   vin?: string;
   license_plate?: string;
   vehicle_type: 'car' | 'truck' | 'motorcycle' | 'other';
-  mileage?: number; // Ensure mileage property is defined
+  mileage?: number;
 };
 
 // Add NewVehicleData type that was missing

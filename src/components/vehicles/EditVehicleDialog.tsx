@@ -52,7 +52,7 @@ export const EditVehicleDialog: React.FC<EditVehicleDialogProps> = ({
       form.reset({
         make: vehicle.make,
         model: vehicle.model,
-        year: vehicle.year,
+        year: String(vehicle.year),
         vehicle_type: vehicle.vehicle_type || 'car',
         vin: vehicle.vin || '',
         license_plate: vehicle.license_plate || '',
@@ -69,7 +69,7 @@ export const EditVehicleDialog: React.FC<EditVehicleDialogProps> = ({
       setIsSubmitting(true);
       await onSubmit(vehicle.id, {
         ...data,
-        year: data.year,
+        year: Number(data.year),
         mileage: data.mileage ? Number(data.mileage) : undefined,
       });
       onOpenChange(false);

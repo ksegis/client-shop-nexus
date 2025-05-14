@@ -5,25 +5,24 @@ type ToastProps = {
   title?: string;
   description?: string;
   variant?: "default" | "destructive";
-  // Allow other props from sonner to be passed through
-  [key: string]: any;
 };
 
-// Create a hook to maintain API compatibility
+export const toast = ({ title, description, variant, ...props }: ToastProps) => {
+  if (variant === "destructive") {
+    return sonnerToast.error(title, {
+      description,
+      ...props
+    });
+  }
+  
+  return sonnerToast(title || "", {
+    description,
+    ...props
+  });
+};
+
 export const useToast = () => {
   return {
-    toast: (props: ToastProps) => toast(props)
+    toast
   };
-};
-
-export const toast = ({ 
-  title, 
-  description, 
-  variant = "default", 
-  ...props 
-}: ToastProps) => {
-  return sonnerToast(title, {
-    description,
-    ...props,
-  });
 };

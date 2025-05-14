@@ -8,15 +8,22 @@ export function useAuthStateListener() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [hasLogged, setHasLogged] = useState<boolean>(false);
   
   // Listen for authentication state changes
   useEffect(() => {
-    console.log('Setting up auth state listener...');
+    // Only log once
+    if (!hasLogged) {
+      console.log('Setting up auth state listener...');
+      setHasLogged(true);
+    }
     
     // First set up the auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
-        console.log('Auth state change:', event);
+        if (!hasLogged) {
+          console.log('Auth state change:', event);
+        }
         
         // Only synchronously update state in the callback
         setSession(currentSession);
@@ -38,7 +45,7 @@ export function useAuthStateListener() {
                 console.error('Error fetching user profile:', profileError);
               } else if (!profileData) {
                 console.warn('No profile found for user, this may cause RLS issues');
-              } else {
+              } else if (!hasLogged) {
                 console.log('User profile verified, role:', profileData.role);
               }
             } catch (err) {
@@ -53,7 +60,9 @@ export function useAuthStateListener() {
     const initSession = async () => {
       try {
         const { data } = await supabase.auth.getSession();
-        console.log('Got existing session:', data.session?.user?.email || 'none');
+        if (!hasLogged && data.session?.user?.email) {
+          console.log('Got existing session:', data.session?.user?.email);
+        }
         
         if (data.session) {
           setSession(data.session);
@@ -72,7 +81,7 @@ export function useAuthStateListener() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [hasLogged]);
   
   return { user, session, loading };
 }

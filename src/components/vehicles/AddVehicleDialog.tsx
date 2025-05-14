@@ -34,7 +34,7 @@ export const AddVehicleDialog: React.FC<AddVehicleDialogProps> = ({
       await onSubmit({
         make: data.make,
         model: data.model,
-        year: data.year,
+        year: Number(data.year),
         vehicle_type: data.vehicle_type,
         vin: data.vin || '',
         color: data.color,
