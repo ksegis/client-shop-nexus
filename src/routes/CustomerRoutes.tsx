@@ -1,4 +1,3 @@
-
 import { Routes, Route } from "react-router-dom";
 import CustomerLogin from "@/pages/customer/Login";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -10,7 +9,7 @@ import CustomerTransactions from "@/pages/customer/Transactions";
 import CustomerSettings from "@/pages/customer/Settings";
 import CustomerParts from "@/pages/customer/Parts";
 import CustomerCheckout from "@/pages/customer/Checkout";
-import CustomerServiceAppointments from "@/pages/customer/ServiceAppointments"; // Add this import
+import CustomerServiceAppointments from "@/pages/customer/ServiceAppointments";
 import NotFound from "@/pages/NotFound";
 import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
 import Layout from "@/components/layout/Layout";
@@ -70,14 +69,11 @@ const CustomerRoutes = () => {
               <CustomerCheckout />
             </ProtectedRoute>
           } />
-          {/* Add new route for Service Appointments */}
           <Route path="service-appointments" element={
             <ProtectedRoute allowedRoles={customerRoles}>
               <CustomerServiceAppointments />
             </ProtectedRoute>
           } />
-          
-          {/* Catch any unknown routes within /customer/ */}
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
