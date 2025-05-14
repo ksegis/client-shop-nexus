@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Part, PartSearchFilters } from '@/types/parts';
@@ -15,22 +15,15 @@ export const usePartsCatalog = () => {
   const [searchFilters, setSearchFilters] = useState<PartSearchFilters>({});
   const [debouncedFilters, setDebouncedFilters] = useState<PartSearchFilters>({});
   
-  // Create a simple debounced filter effect without the ref pattern that's causing issues
+  // Simple implementation to avoid React state update issues
   useEffect(() => {
-    // Create a new debounced function in each effect
-    const debouncedSetFilters = debounce((filters: PartSearchFilters) => {
-      console.log('Applying debounced filters:', filters);
-      setDebouncedFilters(filters);
+    const timer = setTimeout(() => {
+      console.log('Applying debounced filters:', searchFilters);
+      setDebouncedFilters({...searchFilters});
     }, 500);
     
-    // Apply it immediately with current filters
-    debouncedSetFilters(searchFilters);
-    
-    // Clean up function to cancel any pending debounced calls
-    return () => {
-      debouncedSetFilters.cancel();
-    };
-  }, [searchFilters]); // Only re-run when searchFilters change
+    return () => clearTimeout(timer);
+  }, [searchFilters]);
   
   const { 
     data: parts, 
