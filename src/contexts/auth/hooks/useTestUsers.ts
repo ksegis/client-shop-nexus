@@ -14,7 +14,7 @@ export function useTestUsers() {
   const [testMode, setTestMode] = useState<boolean>(false);
   const [activeTestRole, setActiveTestRole] = useState<UserRole | null>(null);
 
-  // Create test user profiles
+  // Define test users before using them
   const testUsers: Record<UserRole, { user: User; profile: UserProfile }> = {
     test_customer: {
       user: {
@@ -27,6 +27,7 @@ export function useTestUsers() {
         },
         aud: 'authenticated',
         email: 'test.customer@example.com',
+        created_at: new Date().toISOString(),
       } as User,
       profile: {
         id: testUserIds.test_customer,
@@ -48,6 +49,7 @@ export function useTestUsers() {
         },
         aud: 'authenticated',
         email: 'test.staff@example.com',
+        created_at: new Date().toISOString(),
       } as User,
       profile: {
         id: testUserIds.test_staff,
@@ -69,6 +71,7 @@ export function useTestUsers() {
         },
         aud: 'authenticated',
         email: 'test.admin@example.com',
+        created_at: new Date().toISOString(),
       } as User,
       profile: {
         id: testUserIds.test_admin,
@@ -79,15 +82,15 @@ export function useTestUsers() {
         is_test_account: true
       }
     },
-    staff: testUsers?.staff || {
+    staff: {
       user: {} as User,
       profile: {} as UserProfile
     },
-    admin: testUsers?.admin || {
+    admin: {
       user: {} as User,
       profile: {} as UserProfile
     },
-    customer: testUsers?.customer || {
+    customer: {
       user: {} as User,
       profile: {} as UserProfile
     }

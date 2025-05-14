@@ -41,7 +41,10 @@ export function useVehicles() {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           color: 'Blue',
-          images: []
+          images: [],
+          vin: '',
+          license_plate: '',
+          mileage: 45000
         },
         {
           id: 'mock-vehicle-2',
@@ -49,11 +52,14 @@ export function useVehicles() {
           model: 'CR-V',
           year: 2019,
           owner_id: user.id,
-          vehicle_type: 'suv',
+          vehicle_type: 'car',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           color: 'Red',
-          images: []
+          images: [],
+          vin: '',
+          license_plate: '',
+          mileage: 32000
         }
       ];
       
