@@ -49,8 +49,7 @@ export const useAddVehicle = () => {
       // Ensure year is a number for database insertion
       const dbVehicleData = {
         ...vehicleData,
-        year: Number(vehicleData.year), // Ensure year is a number
-        mileage: vehicleData.mileage,
+        year: Number(vehicleData.year),
         owner_id: effectiveOwnerId
       };
 
@@ -70,8 +69,8 @@ export const useAddVehicle = () => {
       // Convert to our interface format with explicit mileage handling
       const newVehicle: Vehicle = {
         ...data,
-        year: Number(data.year), // Ensure year is a number
-        mileage: data.mileage || undefined
+        year: Number(data.year),
+        mileage: data.mileage
       };
       
       toast({

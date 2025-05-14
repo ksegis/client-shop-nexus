@@ -24,11 +24,11 @@ export const useUpdateVehicle = () => {
       
       if (error) throw error;
       
-      // Convert back to our interface format with explicit mileage handling
+      // Convert back to our interface format
       const updatedVehicle: Vehicle = {
         ...data,
         year: Number(data.year),
-        mileage: data.mileage || undefined
+        mileage: data.mileage
       };
       
       toast({

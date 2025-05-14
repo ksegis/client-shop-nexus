@@ -34,8 +34,8 @@ export const useFetchVehicles = () => {
       // Ensure all data is properly typed with explicit mileage handling
       const typedVehicles: Vehicle[] = data?.map(vehicle => ({
         ...vehicle,
-        year: Number(vehicle.year), // Ensure year is a number
-        mileage: vehicle.mileage || undefined
+        year: Number(vehicle.year),
+        mileage: vehicle.mileage
       })) || [];
       
       return typedVehicles;

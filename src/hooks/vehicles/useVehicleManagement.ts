@@ -1,13 +1,23 @@
-import { useState, useEffect } from 'react';
+
+import { useEffect } from 'react';
 import { Vehicle, NewVehicleData } from '@/types/vehicle';
 import { useAuth } from '@/contexts/auth';
 import { useVehicleCrud } from './useVehicleCrud';
 import { useVehicleImages } from './useVehicleImages';
+import { useMockVehicles } from './useMockVehicles';
+import { useVehicleState } from './useVehicleState';
 
 export const useVehicleManagement = () => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
   const { user } = useAuth();
+  const { 
+    vehicles, 
+    loading, 
+    setLoading,
+    updateVehicleState,
+    addVehicleToState,
+    updateVehicleInState,
+    removeVehicleFromState
+  } = useVehicleState();
   
   const { 
     fetchVehicles, 
@@ -21,6 +31,8 @@ export const useVehicleManagement = () => {
     removeVehicleImage
   } = useVehicleImages();
 
+  const { getMockVehicles, createMockVehicle } = useMockVehicles();
+
   const fetchAndSetVehicles = async (ownerId?: string) => {
     const userIdToFetch = ownerId || user?.id;
     
@@ -31,37 +43,8 @@ export const useVehicleManagement = () => {
 
     // Handle mock user ID scenario
     if (userIdToFetch === 'mock-user-id') {
-      const mockVehicles: Vehicle[] = [
-        {
-          id: 'mock-vehicle-1',
-          make: 'Toyota',
-          model: 'Camry',
-          year: 2020,
-          vehicle_type: 'car',
-          color: 'Silver',
-          license_plate: 'ABC123',
-          vin: '1HGBH41JXMN109186',
-          owner_id: 'mock-user-id',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          mileage: 45000
-        },
-        {
-          id: 'mock-vehicle-2',
-          make: 'Honda',
-          model: 'Civic',
-          year: 2019,
-          vehicle_type: 'car',
-          color: 'Blue',
-          license_plate: 'XYZ789',
-          vin: '2FMDK3GC4BBA52681',
-          owner_id: 'mock-user-id',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          mileage: 32000
-        }
-      ];
-      setVehicles(mockVehicles);
+      const mockVehicles = getMockVehicles();
+      updateVehicleState(mockVehicles);
       setLoading(false);
       return;
     }
@@ -69,7 +52,7 @@ export const useVehicleManagement = () => {
     try {
       setLoading(true);
       const fetchedVehicles = await fetchVehicles(userIdToFetch);
-      setVehicles(fetchedVehicles);
+      updateVehicleState(fetchedVehicles);
     } finally {
       setLoading(false);
     }
@@ -81,15 +64,9 @@ export const useVehicleManagement = () => {
   ) => {
     // For mock user, add to local state only
     if (user?.id === 'mock-user-id' || customerId === 'mock-user-id') {
-      const mockVehicle: Vehicle = {
-        id: `mock-vehicle-${Date.now()}`,
-        ...vehicleData,
-        owner_id: customerId || user?.id || 'mock-user-id',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
-      setVehicles(prev => [mockVehicle, ...prev]);
+      const ownerId = customerId || user?.id || 'mock-user-id';
+      const mockVehicle = createMockVehicle(vehicleData, ownerId);
+      addVehicleToState(mockVehicle);
       return true;
     }
     
@@ -98,7 +75,7 @@ export const useVehicleManagement = () => {
     // If we're adding a vehicle for the current user or for the customer we're viewing,
     // add it to the state
     if (!customerId || (user?.id && customerId === user.id)) {
-      setVehicles(prev => [newVehicle, ...prev]);
+      addVehicleToState(newVehicle);
     }
     
     return true;
@@ -107,27 +84,30 @@ export const useVehicleManagement = () => {
   const updateVehicle = async (id: string, vehicleData: Partial<Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>>) => {
     // For mock vehicles, update locally
     if (user?.id === 'mock-user-id' || id.startsWith('mock-vehicle')) {
-      setVehicles(prev => prev.map(vehicle => 
-        vehicle.id === id ? { ...vehicle, ...vehicleData, updated_at: new Date().toISOString() } : vehicle
-      ));
+      const updatedVehicle = {
+        ...vehicles.find(v => v.id === id)!,
+        ...vehicleData,
+        updated_at: new Date().toISOString()
+      };
+      updateVehicleInState(id, updatedVehicle);
       return true;
     }
     
     const updatedVehicle = await updateVehicleBase(id, vehicleData);
-    setVehicles(prev => prev.map(vehicle => vehicle.id === id ? updatedVehicle : vehicle));
+    updateVehicleInState(id, updatedVehicle);
     return true;
   };
 
   const removeVehicle = async (id: string) => {
     // For mock vehicles, remove locally
     if (user?.id === 'mock-user-id' || id.startsWith('mock-vehicle')) {
-      setVehicles(prev => prev.filter(vehicle => vehicle.id !== id));
+      removeVehicleFromState(id);
       return true;
     }
     
     const success = await removeVehicleBase(id);
     if (success) {
-      setVehicles(prev => prev.filter(vehicle => vehicle.id !== id));
+      removeVehicleFromState(id);
     }
     return success;
   };
@@ -139,9 +119,9 @@ export const useVehicleManagement = () => {
   return { 
     vehicles, 
     loading, 
-    addVehicle: (vehicleData: NewVehicleData, customerId?: string) => addVehicle(vehicleData, customerId),
-    updateVehicle: (id: string, vehicleData: Partial<Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>>) => updateVehicle(id, vehicleData),
-    removeVehicle: (id: string) => removeVehicle(id),
+    addVehicle,
+    updateVehicle,
+    removeVehicle,
     uploadVehicleImage,
     removeVehicleImage,
     refreshVehicles: fetchAndSetVehicles

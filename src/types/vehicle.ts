@@ -26,5 +26,5 @@ export type VehicleFormData = {
   mileage?: number;
 };
 
-// Add NewVehicleData type that was missing
+// NewVehicleData type for adding new vehicles
 export type NewVehicleData = Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>;
