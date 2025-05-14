@@ -33,7 +33,6 @@ const CustomerWorkOrderDetail = () => {
           const mockWorkOrder = {
             id: id,
             title: 'Brake Service',
-            vehicle: '2023 Ford F-150',
             description: 'Complete brake service including replacement of front and rear brake pads, inspection of rotors and brake lines.',
             status: 'in_progress',
             date: '2023-05-10',
@@ -317,3 +316,4 @@ const CustomerWorkOrderDetail = () => {
 };
 
 export default CustomerWorkOrderDetail;
+
