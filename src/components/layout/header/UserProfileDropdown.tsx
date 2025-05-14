@@ -13,7 +13,12 @@ import { User, LogOut, Settings, ChevronDown } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/auth";
 
-const UserProfileDropdown = () => {
+interface UserProfileDropdownProps {
+  portalType?: 'customer' | 'shop';
+  onSignOut?: () => Promise<void>;
+}
+
+const UserProfileDropdown = ({ portalType, onSignOut }: UserProfileDropdownProps) => {
   const [open, setOpen] = useState(false);
   const { user, profile, signOut, isDevMode } = useAuth();
   const navigate = useNavigate();
@@ -27,8 +32,12 @@ const UserProfileDropdown = () => {
   const role = profile?.role || user?.user_metadata?.role || "user";
   
   const handleSignOut = async () => {
-    await signOut();
-    navigate("/auth");
+    if (onSignOut) {
+      await onSignOut();
+    } else {
+      await signOut();
+      navigate("/auth");
+    }
   };
   
   return (
@@ -59,13 +68,13 @@ const UserProfileDropdown = () => {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to="/profile" className="cursor-pointer flex w-full items-center">
+          <Link to={portalType === 'customer' ? "/customer/profile" : "/profile"} className="cursor-pointer flex w-full items-center">
             <User className="mr-2 h-4 w-4" />
             Profile
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/settings" className="cursor-pointer flex w-full items-center">
+          <Link to={portalType === 'customer' ? "/customer/settings" : "/settings"} className="cursor-pointer flex w-full items-center">
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </Link>
