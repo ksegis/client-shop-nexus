@@ -1,3 +1,4 @@
+
 import { Routes, Route } from "react-router-dom";
 import Dashboard from "@/pages/shop/Dashboard";
 import Parts from "@/pages/shop/Parts";
@@ -10,9 +11,7 @@ import Estimates from "@/pages/shop/Estimates";
 import ServiceDesk from "@/pages/shop/ServiceDesk";
 import Invoices from "@/pages/shop/invoices";
 import Reports from "@/pages/shop/Reports";
-import ApiConnectionsManager from "@/pages/shop/admin/ApiConnectionsManager";
-import UserManagement from "@/pages/shop/UserManagement";
-import AdminUserManagement from "@/pages/shop/admin/UserManagement";
+import AdminPage from "@/pages/shop/admin/AdminPage";
 import RlsTroubleshooter from "@/components/dev/RlsTroubleshooter";
 import NotFound from "@/pages/NotFound";
 import Layout from "@/components/layout/Layout";
@@ -89,19 +88,9 @@ const ShopRoutes = () => {
             <Reports />
           </ProtectedRoute>
         } />
-        <Route path="admin/api-connections" element={
+        <Route path="admin/*" element={
           <ProtectedRoute allowedRoles={adminOnly}>
-            <ApiConnectionsManager />
-          </ProtectedRoute>
-        } />
-        <Route path="users" element={
-          <ProtectedRoute allowedRoles={adminOnly}>
-            <UserManagement />
-          </ProtectedRoute>
-        } />
-        <Route path="admin/users" element={
-          <ProtectedRoute allowedRoles={adminOnly}>
-            <AdminUserManagement />
+            <AdminPage />
           </ProtectedRoute>
         } />
         <Route path="dev/rls" element={<RlsTroubleshooter />} />

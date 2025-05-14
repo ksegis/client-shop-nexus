@@ -44,9 +44,7 @@ const pathIconMap = {
   "/shop/customers": UserPlus,
   "/shop/estimates": FileText,
   "/shop/invoices": FileCheck,
-  "/shop/users": Shield,
-  "/shop/admin/users": Users,
-  "/shop/admin/api-connections": Webhook
+  "/shop/admin": Shield,
 };
 
 export const Sidebar = () => {

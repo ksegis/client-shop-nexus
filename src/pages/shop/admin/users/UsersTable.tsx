@@ -1,179 +1,145 @@
 
-import React from 'react';
-import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Key, UserX, UserCheck, Badge } from 'lucide-react';
+import React, { useState } from 'react';
 import { useUserManagement } from './UserManagementContext';
-import { isRoleInactive } from '@/pages/shop/users/types';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge as UIBadge } from '@/components/ui/badge';
+import { EyeIcon, Key, UserCog, UserRoundCheck } from 'lucide-react';
+import { formatUserRole, formatDate } from './utils';
+import { useImpersonation } from '@/utils/admin/impersonationUtils';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/hooks/use-toast';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
-export interface UsersTableProps {
+interface UsersTableProps {
   onResetPassword: (userId: string, email: string) => void;
   onEditProfile: (userId: string, email: string) => void;
+  onImpersonate: (userId: string, email: string) => void;
 }
 
-export const UsersTable = ({ onResetPassword, onEditProfile }: UsersTableProps) => {
-  const { employees, customers, isLoading, error } = useUserManagement();
+export const UsersTable: React.FC<UsersTableProps> = ({ 
+  onResetPassword, 
+  onEditProfile,
+  onImpersonate
+}) => {
+  const { users, isLoading } = useUserManagement();
+  const { impersonateUser } = useImpersonation();
+  const [impersonationLoading, setImpersonationLoading] = useState<string | null>(null);
+
+  const handleImpersonate = async (userId: string, email: string) => {
+    try {
+      setImpersonationLoading(userId);
+      const userName = users.find(u => u.id === userId)?.first_name || email;
+      
+      // Call impersonation utility
+      const success = await impersonateUser(userId, userName);
+      
+      if (!success) {
+        throw new Error('Failed to impersonate user');
+      }
+      
+      onImpersonate(userId, email);
+    } catch (error) {
+      console.error('Impersonation error:', error);
+      toast({
+        title: 'Impersonation failed',
+        description: 'There was an error impersonating this user.',
+        variant: 'destructive',
+      });
+    } finally {
+      setImpersonationLoading(null);
+    }
+  };
 
   if (isLoading) {
-    return <div className="text-center py-4">Loading user data...</div>;
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
   }
 
-  if (error) {
-    return <div className="text-center text-red-500 py-4">Error loading user data</div>;
+  if (users.length === 0) {
+    return (
+      <div className="text-center py-10">
+        <p className="text-muted-foreground">No users found</p>
+      </div>
+    );
   }
 
   return (
-    <Tabs defaultValue="employees">
-      <TabsList className="mb-4">
-        <TabsTrigger value="employees">Employees</TabsTrigger>
-        <TabsTrigger value="customers">Customers</TabsTrigger>
-      </TabsList>
-      
-      <TabsContent value="employees">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Password Change</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {employees.length > 0 ? (
-              employees.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">
-                    {user.first_name} {user.last_name}
-                  </TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    <UIBadge variant={user.role === 'admin' || user.role === 'inactive_admin' ? 'default' : 'secondary'} className={`
-                      ${user.role === 'admin' || user.role === 'inactive_admin' 
-                        ? 'bg-purple-100 text-purple-800 hover:bg-purple-100' 
-                        : 'bg-blue-100 text-blue-800 hover:bg-blue-100'}
-                    `}>
-                      {user.role === 'inactive_admin' ? 'admin' : 
-                       user.role === 'inactive_staff' ? 'staff' : 
-                       user.role}
-                    </UIBadge>
-                  </TableCell>
-                  <TableCell>
-                    <UIBadge variant={isRoleInactive(user.role) ? 'destructive' : 'default'} className={`
-                      ${isRoleInactive(user.role) 
-                        ? 'bg-red-100 text-red-800 hover:bg-red-100' 
-                        : 'bg-green-100 text-green-800 hover:bg-green-100'}
-                    `}>
-                      {isRoleInactive(user.role) ? 'inactive' : 'active'}
-                    </UIBadge>
-                  </TableCell>
-                  <TableCell>
-                    {user.force_password_change && (
-                      <UIBadge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-100">
-                        Required
-                      </UIBadge>
+    <div className="border rounded-md">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Role</TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {users.map((user) => (
+            <TableRow key={user.id}>
+              <TableCell>
+                {user.first_name} {user.last_name}
+              </TableCell>
+              <TableCell>{user.email}</TableCell>
+              <TableCell>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  user.role === 'admin' ? 'bg-blue-100 text-blue-800' : 
+                  user.role === 'staff' ? 'bg-green-100 text-green-800' : 
+                  user.role === 'customer' ? 'bg-gray-100 text-gray-800' : 
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {formatUserRole(user.role)}
+                </span>
+              </TableCell>
+              <TableCell>{formatDate(user.created_at)}</TableCell>
+              <TableCell className="text-right">
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    title="Reset Password"
+                    onClick={() => onResetPassword(user.id, user.email)}
+                  >
+                    <Key className="h-4 w-4" />
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    title="Edit Profile"
+                    onClick={() => onEditProfile(user.id, user.email)}
+                  >
+                    <UserCog className="h-4 w-4" />
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    title="Impersonate User"
+                    onClick={() => handleImpersonate(user.id, user.email)}
+                    disabled={impersonationLoading === user.id}
+                  >
+                    {impersonationLoading === user.id ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    ) : (
+                      <EyeIcon className="h-4 w-4" />
                     )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => onEditProfile(user.id, user.email || '')}
-                        title="Edit Profile"
-                      >
-                        <UserCheck className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => onResetPassword(user.id, user.email || '')}
-                        title="Reset Password"
-                      >
-                        <Key className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-4">
-                  No employees found
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TabsContent>
-      
-      <TabsContent value="customers">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Password Change</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+                  </Button>
+                </div>
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {customers.length > 0 ? (
-              customers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">
-                    {user.first_name} {user.last_name}
-                  </TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    <UIBadge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-100">
-                      customer
-                    </UIBadge>
-                  </TableCell>
-                  <TableCell>
-                    {user.force_password_change && (
-                      <UIBadge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-100">
-                        Required
-                      </UIBadge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => onEditProfile(user.id, user.email || '')}
-                        title="Edit Profile"
-                      >
-                        <UserCheck className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => onResetPassword(user.id, user.email || '')}
-                        title="Reset Password"
-                      >
-                        <Key className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-4">
-                  No customers found
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TabsContent>
-    </Tabs>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 };
