@@ -28,10 +28,10 @@ interface ProfileDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string | null;
-  userEmail: string | null;
+  email: string | null;
 }
 
-export const ProfileDialog = ({ open, onOpenChange, userId, userEmail }: ProfileDialogProps) => {
+export const ProfileDialog = ({ open, onOpenChange, userId, email }: ProfileDialogProps) => {
   const { toast } = useToast();
   const { users, updateUserProfile } = useUserManagement();
   
@@ -80,7 +80,7 @@ export const ProfileDialog = ({ open, onOpenChange, userId, userEmail }: Profile
       
       toast({
         title: "Profile updated",
-        description: `Profile for ${userEmail} has been updated successfully.`,
+        description: `Profile for ${email} has been updated successfully.`,
       });
       
       onOpenChange(false);

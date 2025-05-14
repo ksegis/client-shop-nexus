@@ -39,14 +39,14 @@ interface ResetPasswordDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string | null;
-  userEmail: string | null;
+  email: string | null;
 }
 
 export const ResetPasswordDialog = ({ 
   open, 
   onOpenChange,
   userId,
-  userEmail,
+  email,
 }: ResetPasswordDialogProps) => {
   const { resetPassword } = useUserManagement();
   
@@ -68,10 +68,10 @@ export const ResetPasswordDialog = ({
   }, [open, form]);
 
   const onSubmit = async (values: z.infer<typeof resetPasswordSchema>) => {
-    if (!userId || !userEmail) return;
+    if (!userId || !email) return;
     
     try {
-      await resetPassword(userId, userEmail, values.password);
+      await resetPassword(userId, email, values.password);
       onOpenChange(false);
       form.reset();
     } catch (error) {
@@ -85,7 +85,7 @@ export const ResetPasswordDialog = ({
         <DialogHeader>
           <DialogTitle>Reset Password</DialogTitle>
           <DialogDescription>
-            Reset password for {userEmail}. User will be required to change this password on next login.
+            Reset password for {email}. User will be required to change this password on next login.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>

@@ -22,3 +22,26 @@ export const generateStrongPassword = (length: number = 12): string => {
   // Shuffle the password
   return password.split('').sort(() => 0.5 - Math.random()).join('');
 };
+
+// Format user role for display
+export const formatUserRole = (role: string): string => {
+  // Handle inactive roles by removing the "inactive_" prefix
+  const roleWithoutPrefix = role.replace('inactive_', '');
+  
+  // Capitalize first letter
+  return roleWithoutPrefix.charAt(0).toUpperCase() + roleWithoutPrefix.slice(1);
+};
+
+// Format date for display
+export const formatDate = (dateString: string): string => {
+  if (!dateString) return 'N/A';
+  
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Invalid Date';
+  
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+};

@@ -24,6 +24,11 @@ const UserManagement = () => {
     setProfileDialogOpen(true);
   };
   
+  const handleImpersonate = (userId: string, email: string) => {
+    setSelectedUserId(userId);
+    setSelectedUserEmail(email);
+  };
+  
   return (
     <UserManagementProvider>
       <div className="space-y-6">
@@ -31,6 +36,7 @@ const UserManagement = () => {
         <UsersTable 
           onResetPassword={handleResetPassword}
           onEditProfile={handleEditProfile}
+          onImpersonate={handleImpersonate}
         />
         
         {/* Add User Dialog */}
