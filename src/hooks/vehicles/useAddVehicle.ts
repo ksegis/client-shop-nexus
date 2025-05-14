@@ -72,7 +72,7 @@ export const useAddVehicle = () => {
       const newVehicle: Vehicle = {
         ...data,
         year: Number(data.year),
-        mileage: data.mileage,
+        mileage: data.mileage || undefined,
         images: data.images || []
       };
       

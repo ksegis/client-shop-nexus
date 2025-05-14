@@ -50,7 +50,7 @@ export const useUpdateVehicle = () => {
       
       const updatedVehicle: Vehicle = {
         ...data,
-        mileage: data.mileage,
+        mileage: data.mileage || undefined,
         images: data.images || []
       };
       

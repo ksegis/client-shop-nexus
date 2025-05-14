@@ -60,7 +60,7 @@ export const useFetchVehicles = () => {
       // Convert to our Vehicle interface
       const vehicles: Vehicle[] = data.map(item => ({
         ...item,
-        mileage: item.mileage, // Ensure mileage is properly included
+        mileage: item.mileage || undefined, // Ensure mileage is properly included
         images: item.images || []
       }));
       
