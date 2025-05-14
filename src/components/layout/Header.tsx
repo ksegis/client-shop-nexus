@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/auth';
 import { Logo } from './header/Logo';
 import { DesktopNavigation } from './header/DesktopNavigation';
 import { MobileMenu } from './header/MobileMenu';
-import { UserProfileDropdown } from './header/UserProfileDropdown';
+import UserProfileDropdown from './header/UserProfileDropdown';
 import { MobileMenuButton } from './header/MobileMenuButton';
 import { PortalIndicator } from './header/PortalIndicator';
 import { useNavigationLinks } from './header/NavigationLinks';
