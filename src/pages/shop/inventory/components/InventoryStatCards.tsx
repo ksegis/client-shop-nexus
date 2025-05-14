@@ -11,7 +11,17 @@ interface InventoryStatCardsProps {
 export const InventoryStatCards = ({ items }: InventoryStatCardsProps) => {
   // Calculate statistics from inventory items
   const stats = useMemo(() => {
-    console.log('Calculating stats for items:', items.length, items);
+    console.log('Calculating stats for items:', items?.length || 0, items);
+    
+    // Default values in case items is undefined or empty
+    if (!items || items.length === 0) {
+      return {
+        totalItems: 0,
+        lowStockItems: 0,
+        uniqueCategories: 0,
+        uniqueSuppliers: 0
+      };
+    }
     
     // Count items by category
     const categoriesMap = new Map<string, number>();

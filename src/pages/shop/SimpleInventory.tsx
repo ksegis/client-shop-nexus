@@ -37,8 +37,8 @@ const SimpleInventory = () => {
         </Button>
       </div>
 
-      {/* Add the statistics cards component only when data is loaded */}
-      {!isLoading && inventoryItems.length > 0 && <InventoryStatCards items={inventoryItems} />}
+      {/* Always show the stats cards, even when loading or empty */}
+      <InventoryStatCards items={inventoryItems} />
 
       <Card>
         <CardHeader>
