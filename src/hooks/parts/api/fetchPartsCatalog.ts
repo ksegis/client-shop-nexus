@@ -1,7 +1,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { Part, PartSearchFilters } from '@/types/parts';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 
 // Function to fetch the parts catalog from the database
 export const fetchPartsCatalog = async (searchFilters: PartSearchFilters, toast: ReturnType<typeof useToast>['toast']) => {

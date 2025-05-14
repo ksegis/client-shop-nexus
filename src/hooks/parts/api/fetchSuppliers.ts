@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 
 // Function to fetch unique suppliers from the database
 export const fetchSuppliers = async (toast: ReturnType<typeof useToast>['toast']) => {
