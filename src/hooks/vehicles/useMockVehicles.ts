@@ -16,7 +16,8 @@ export const useMockVehicles = () => {
         owner_id: 'mock-user-id',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        mileage: 45000
+        mileage: 45000,
+        images: []
       },
       {
         id: 'mock-vehicle-2',
@@ -30,7 +31,8 @@ export const useMockVehicles = () => {
         owner_id: 'mock-user-id',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        mileage: 32000
+        mileage: 32000,
+        images: []
       }
     ];
   };
@@ -41,7 +43,8 @@ export const useMockVehicles = () => {
       ...vehicleData,
       owner_id: ownerId,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      images: vehicleData.images || []
     };
   };
 

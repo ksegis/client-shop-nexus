@@ -1,6 +1,28 @@
 
-import { useToast as useShadcnToast } from "@/components/ui/use-toast";
+import { toast as sonnerToast, useToast as useSonnerToast } from "sonner";
+import { ToastActionElement } from "@/components/ui/toast";
 
-export const useToast = useShadcnToast;
+type ToastProps = React.ComponentPropsWithoutRef<typeof import("@/components/ui/toast").Toast> & {
+  description?: React.ReactNode;
+  action?: ToastActionElement;
+};
 
-export { toast } from "@/components/ui/use-toast";
+export const useToast = () => {
+  return {
+    toast: (props: ToastProps) => {
+      sonnerToast(props.title, {
+        description: props.description,
+        action: props.action,
+        variant: props.variant as any,
+      });
+    },
+  };
+};
+
+export const toast = (props: ToastProps) => {
+  sonnerToast(props.title, {
+    description: props.description,
+    action: props.action,
+    variant: props.variant as any,
+  });
+};
