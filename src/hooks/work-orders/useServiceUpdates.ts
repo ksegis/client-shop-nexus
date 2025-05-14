@@ -10,6 +10,7 @@ export interface ServiceUpdate {
   milestone_completed: boolean;
   created_at: string;
   updated_at: string;
+  images?: string[];  // Add the optional images property
   created_by: {
     name: string;
   };
@@ -63,6 +64,11 @@ export const useServiceUpdates = (workOrderId: string) => {
               milestone_completed: true,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
+              // Add some example images to the last update
+              images: [
+                'https://images.unsplash.com/photo-1618160702438-9b02ab6515c9',
+                'https://images.unsplash.com/photo-1582562124811-c09040d0a901'
+              ],
               created_by: {
                 name: 'Mike Technician'
               }
