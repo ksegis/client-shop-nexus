@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { User } from '@supabase/supabase-js';
 import { UserProfile } from '../types';
 import { toast } from '@/hooks/use-toast';

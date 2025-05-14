@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { 
         user: iframeAuth.user, 
         profile: iframeAuth.profile,
-        portalType: 'shop' // Iframe is only used for shop portal
+        portalType: 'shop' as 'shop' | 'customer' // Explicitly type as 'shop'
       };
     }
     
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: authUser, 
       profile: authProfile,
       portalType: authUser ? 
-        (authUser.user_metadata?.role?.includes('customer') ? 'customer' : 'shop') : 
+        (authUser.user_metadata?.role?.includes('customer') ? 'customer' : 'shop') as 'shop' | 'customer' : 
         null
     };
   }, [authUser, authProfile, testRole, isInIframe, iframeAuth]);

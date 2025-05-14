@@ -1,10 +1,10 @@
 
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShoppingBag, User, Users, FlaskConical } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/auth";
-import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Auth = () => {
@@ -13,7 +13,7 @@ const Auth = () => {
   const [isLoadingTest, setIsLoadingTest] = useState(false);
   
   // If already authenticated, redirect to the appropriate portal
-  React.useEffect(() => {
+  useEffect(() => {
     if (isAuthenticated && profile?.role) {
       const path = profile.role.includes('customer') ? 
         '/customer/profile' : 

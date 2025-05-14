@@ -25,21 +25,15 @@ export function useAuthLogging() {
         return;
       }
       
-      // Log to Supabase (create a table if it doesn't exist)
-      await supabase
-        .from('auth_logs')
-        .insert({
-          event_type: eventType,
-          user_id: user?.id,
-          email: user?.email,
-          user_role: user?.user_metadata?.role || metadata.role,
-          metadata,
-          ip_address: await fetch('https://api.ipify.org?format=json')
-            .then(res => res.json())
-            .then(data => data.ip)
-            .catch(() => null),
-          user_agent: navigator.userAgent
-        });
+      // Since auth_logs table doesn't exist yet, just log to console
+      console.log('Auth event:', {
+        event_type: eventType,
+        user_id: user?.id,
+        email: user?.email,
+        user_role: user?.user_metadata?.role || metadata.role,
+        metadata,
+        timestamp: new Date().toISOString()
+      });
         
       console.log(`Auth event logged: ${eventType}`);
     } catch (error) {
