@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { Part, PartSearchFilters } from '@/types/parts';
@@ -8,10 +8,26 @@ import { fetchCategories } from './api/fetchCategories';
 import { fetchSuppliers } from './api/fetchSuppliers';
 import { addSamplePart } from './api/addSamplePart';
 import { testDirectFetch } from './api/testDirectFetch';
+import debounce from 'lodash/debounce';
 
 export const usePartsCatalog = () => {
   const { toast } = useToast();
   const [searchFilters, setSearchFilters] = useState<PartSearchFilters>({});
+  const [debouncedFilters, setDebouncedFilters] = useState<PartSearchFilters>({});
+  
+  // Set up debounced filter updates
+  const debouncedSetFilters = useCallback(
+    debounce((filters: PartSearchFilters) => {
+      console.log('Applying debounced filters:', filters);
+      setDebouncedFilters(filters);
+    }, 500),
+    []
+  );
+  
+  // Update debounced filters whenever searchFilters changes
+  useEffect(() => {
+    debouncedSetFilters(searchFilters);
+  }, [searchFilters, debouncedSetFilters]);
   
   const { 
     data: parts, 
@@ -19,8 +35,8 @@ export const usePartsCatalog = () => {
     error, 
     refetch 
   } = useQuery({
-    queryKey: ['parts-catalog', searchFilters],
-    queryFn: async () => fetchPartsCatalog(searchFilters, toast),
+    queryKey: ['parts-catalog', debouncedFilters],
+    queryFn: async () => fetchPartsCatalog(debouncedFilters, toast),
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
@@ -30,9 +46,9 @@ export const usePartsCatalog = () => {
       partsCount: parts?.length || 0,
       isLoading,
       error: error ? 'Error fetching parts' : null,
-      filters: searchFilters
+      filters: debouncedFilters
     });
-  }, [parts, isLoading, error, searchFilters]);
+  }, [parts, isLoading, error, debouncedFilters]);
   
   const getCategories = async () => {
     return fetchCategories(toast);
