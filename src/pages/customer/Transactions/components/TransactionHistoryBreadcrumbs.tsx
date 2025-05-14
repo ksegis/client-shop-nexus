@@ -16,7 +16,9 @@ export default function TransactionHistoryBreadcrumbs() {
       <BreadcrumbList>
         <BreadcrumbItem>
           <BreadcrumbLink asChild>
-            <Link to="/customer">Dashboard</Link>
+            <Link to="/customer" className="text-shop-primary hover:text-shop-secondary transition-colors">
+              Dashboard
+            </Link>
           </BreadcrumbLink>
         </BreadcrumbItem>
         
@@ -25,7 +27,7 @@ export default function TransactionHistoryBreadcrumbs() {
         </BreadcrumbSeparator>
         
         <BreadcrumbItem>
-          <BreadcrumbPage>Transaction History</BreadcrumbPage>
+          <BreadcrumbPage className="font-medium">Transaction History</BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>
