@@ -24,6 +24,7 @@ export interface NewVehicleData {
   license_plate?: string;
   vin?: string;
   mileage?: number;
+  images?: string[];
 }
 
 export interface VehicleFilters {

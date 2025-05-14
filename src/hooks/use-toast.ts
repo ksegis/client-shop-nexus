@@ -1,29 +1,30 @@
 
 import { toast as sonnerToast } from "sonner";
-import { ToastActionElement } from "@/components/ui/toast";
 
-type ToastProps = React.ComponentPropsWithoutRef<typeof import("@/components/ui/toast").Toast> & {
-  action?: ToastActionElement,
-  description?: React.ReactNode;
-  title?: React.ReactNode;
+type ToastProps = {
+  title?: string;
+  description?: string;
+  action?: React.ReactNode;
+  cancel?: React.ReactNode;
+  duration?: number;
 };
 
-export const useToast = () => {
-  return {
-    toast: (props: ToastProps) => {
-      sonnerToast(props.title, {
-        description: props.description,
-        action: props.action,
-        // Using consistent props that are compatible with ExternalToast
-      });
-    },
-  };
-};
-
-export const toast = (props: ToastProps) => {
-  sonnerToast(props.title, {
-    description: props.description,
-    action: props.action,
-    // Using consistent props that are compatible with ExternalToast
+export function toast({
+  title,
+  description,
+  action,
+  cancel,
+  duration,
+  ...props
+}: ToastProps) {
+  sonnerToast(title, {
+    description,
+    action,
+    cancel,
+    duration,
+    ...props,
   });
-};
+}
+
+export { toast };
+export { useToast } from "sonner";

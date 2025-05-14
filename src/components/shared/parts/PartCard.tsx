@@ -15,6 +15,8 @@ interface PartCardProps {
   onViewDetails: (partId: string) => void;
   onOpenCoreReturn?: (part: Part) => void;
   showInventory?: boolean;
+  hideSupplier?: boolean;
+  hideSku?: boolean;
 }
 
 export const PartCard = ({ 
@@ -23,7 +25,9 @@ export const PartCard = ({
   onAddToQuotation,
   onViewDetails,
   onOpenCoreReturn,
-  showInventory = false 
+  showInventory = false,
+  hideSupplier = false,
+  hideSku = false 
 }: PartCardProps) => {
   const { id, name, sku, description, price, quantity, category, core_charge } = part;
   const [isHovered, setIsHovered] = useState(false);
