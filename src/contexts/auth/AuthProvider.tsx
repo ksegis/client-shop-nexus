@@ -4,6 +4,7 @@ import { AuthContext } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { AuthContextType } from './types';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
@@ -90,12 +91,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Mock context with simplified authentication
-  const value = {
+  // Context value that matches AuthContextType
+  const value: AuthContextType = {
     user: mockUser,
     session: null,
-    signUp: async (email: string, password: string, metadata = {}) => {
+    signUp: async (email: string, password: string, firstName = '', lastName = '') => {
       try {
+        const metadata = { first_name: firstName, last_name: lastName };
         const { data, error } = await supabase.auth.signUp({ 
           email, 
           password,

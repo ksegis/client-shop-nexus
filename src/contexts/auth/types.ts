@@ -14,9 +14,20 @@ export interface AuthContextType {
     };
   };
   session: null;
-  signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
-  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
-  signOut: () => Promise<void>;
+  signUp: (email: string, password: string, firstName?: string, lastName?: string) => Promise<{ 
+    success: boolean;
+    data?: any;
+    error?: any;
+  }>;
+  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ 
+    success: boolean;
+    data?: any;
+    error?: any;
+  }>;
+  signOut: () => Promise<{ 
+    success: boolean;
+    error?: any;
+  }>;
   loading: boolean;
   getRedirectPathByRole: (role?: string) => string;
   updateUserWithRole?: (userId: string, role: string) => Promise<void>;

@@ -44,7 +44,10 @@ const CustomerLoginForm = ({ onResetPassword, onEmailChange }: CustomerLoginForm
     setLoading(true);
     
     try {
-      await signIn(email, password);
+      const result = await signIn(email, password);
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Login failed');
+      }
       // The redirect will happen automatically based on role in AuthProvider
     } catch (error: any) {
       toast({
