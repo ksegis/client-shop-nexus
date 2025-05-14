@@ -42,7 +42,7 @@ export const PartsSearchFilters = ({
   const handleCategoryChange = (value: string) => {
     setLocalFilters({
       ...localFilters,
-      category: value
+      category: value === "all" ? undefined : value
     });
   };
   
@@ -50,7 +50,7 @@ export const PartsSearchFilters = ({
   const handleManufacturerChange = (value: string) => {
     setLocalFilters({
       ...localFilters,
-      manufacturer: value
+      manufacturer: value === "all" ? undefined : value
     });
   };
   
@@ -95,14 +95,14 @@ export const PartsSearchFilters = ({
           <div className="space-y-2">
             <Label>Category</Label>
             <Select 
-              value={localFilters.category || ''}
+              value={localFilters.category || "all"}
               onValueChange={handleCategoryChange}
             >
               <SelectTrigger>
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Categories</SelectItem>
+                <SelectItem value="all">All Categories</SelectItem>
                 {categories.map(category => (
                   <SelectItem key={category} value={category}>{category}</SelectItem>
                 ))}
@@ -113,14 +113,14 @@ export const PartsSearchFilters = ({
           <div className="space-y-2">
             <Label>Manufacturer</Label>
             <Select 
-              value={localFilters.manufacturer || ''}
+              value={localFilters.manufacturer || "all"}
               onValueChange={handleManufacturerChange}
             >
               <SelectTrigger>
                 <SelectValue placeholder="All Manufacturers" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Manufacturers</SelectItem>
+                <SelectItem value="all">All Manufacturers</SelectItem>
                 {suppliers.map(supplier => (
                   <SelectItem key={supplier} value={supplier}>{supplier}</SelectItem>
                 ))}
