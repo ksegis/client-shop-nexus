@@ -5,15 +5,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { AuthContextType, AuthResult, UserProfile } from './types';
-import { useAuthStateListener } from './hooks';
+import { useAuthStateListener, useAuthMethods } from './hooks';
 import { User } from '@supabase/supabase-js';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user: authUser, session, loading: authLoading } = useAuthStateListener();
+  const { signUp: authSignUp, signIn: authSignIn, signOut: authSignOut, impersonateCustomer: authImpersonateCustomer } = useAuthMethods();
   const [loading, setLoading] = useState<boolean>(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isDevMode, setIsDevMode] = useState<boolean>(false);
   
   // Define static mock user for development
   const mockUser = {
@@ -32,12 +34,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     created_at: new Date().toISOString()
   } as User;
   
+  // Define mock customer user for development
+  const mockCustomerUser = localStorage.getItem('dev-customer-user') 
+    ? JSON.parse(localStorage.getItem('dev-customer-user')!) as User 
+    : null;
+  
+  // Check if we should use dev customer mode
+  const useDevCustomer = !!mockCustomerUser;
+  
+  // Select the appropriate mock user
+  const devUser = useDevCustomer ? mockCustomerUser : mockUser;
+  
+  // Create appropriate mock profile
   const mockProfile: UserProfile = {
-    id: 'mock-user-id',
-    email: 'dev@example.com',
-    first_name: 'Dev',
-    last_name: 'User',
-    role: 'admin'
+    id: devUser.id,
+    email: devUser.email || '',
+    first_name: devUser.user_metadata?.first_name || '',
+    last_name: devUser.user_metadata?.last_name || '',
+    role: devUser.user_metadata?.role as 'admin' | 'staff' | 'customer'
   };
   
   // Set up automatic authentication for development
@@ -83,10 +97,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         console.log('Development mode: Using mock authentication');
         setProfile(mockProfile);
-        toast({
-          title: "Development Mode",
-          description: "Using mock authentication credentials",
-        });
+        setIsDevMode(true);
+        
+        if (useDevCustomer) {
+          toast({
+            title: "Customer Development Mode",
+            description: "Using mock customer authentication credentials",
+          });
+        } else {
+          toast({
+            title: "Development Mode",
+            description: "Using mock authentication credentials",
+          });
+        }
       }
       
       setLoading(false);
@@ -95,30 +118,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!authLoading) {
       initializeAuth();
     }
-  }, [authLoading, authUser, toast]);
+  }, [authLoading, authUser, toast, useDevCustomer]);
 
   // Context value that matches AuthContextType
   const value: AuthContextType = {
-    user: authUser || mockUser,
+    user: authUser || devUser,
     profile,
     session,
     isLoading: loading || authLoading,
-    isAuthenticated: !!authUser || !!mockUser,
+    isAuthenticated: !!authUser || !!devUser,
+    isDevMode,
     signUp: async (email: string, password: string, firstName = '', lastName = ''): Promise<AuthResult> => {
       try {
         const metadata = { first_name: firstName, last_name: lastName, role: 'customer' };
-        const { data, error } = await supabase.auth.signUp({ 
-          email, 
-          password,
-          options: { data: metadata }
-        });
+        const result = await authSignUp({ email, password, metadata });
         
-        if (error) throw error;
+        if (!result.success) throw result.error;
         
         // Create profile for new user (important for RLS policies)
-        if (data?.user) {
+        if (result.data?.user) {
           await supabase.from('profiles').insert({
-            id: data.user.id,
+            id: result.data.user.id,
             email,
             role: 'customer',
             first_name: firstName,
@@ -126,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         }
         
-        return { success: true, data };
+        return { success: true, data: result.data };
       } catch (error: any) {
         console.error('Sign up error:', error);
         toast({
@@ -138,49 +158,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     },
     signIn: async (email: string, password: string, rememberMe = false): Promise<AuthResult> => {
-      try {
-        console.log(`Attempting to sign in with email: ${email}`);
-        const { data, error } = await supabase.auth.signInWithPassword({ 
-          email, 
-          password 
-        });
-        
-        if (error) {
-          console.error('Sign in error:', error);
-          throw error;
-        }
-        
-        console.log('Sign in successful:', data.user?.email);
-        return { success: true, data };
-      } catch (error: any) {
-        console.error('Sign in error:', error);
-        toast({
-          variant: "destructive",
-          title: "Login failed",
-          description: error.message || "Invalid credentials"
-        });
-        return { success: false, error };
-      }
+      return await authSignIn({ email, password });
     },
     signOut: async (): Promise<AuthResult> => {
-      try {
-        console.log('Signing out user');
-        const { error } = await supabase.auth.signOut();
-        
-        if (error) throw error;
-        
-        navigate('/auth');
-        console.log('User signed out successfully');
+      // If in dev customer mode, clear the localStorage
+      if (useDevCustomer) {
+        localStorage.removeItem('dev-customer-user');
+        window.location.reload();
         return { success: true };
-      } catch (error: any) {
-        console.error('Sign out error:', error);
-        toast({
-          variant: "destructive",
-          title: "Logout failed",
-          description: error.message || "Failed to log out"
-        });
-        return { success: false, error };
       }
+      
+      const result = await authSignOut();
+      
+      if (result.success) {
+        navigate('/auth');
+      }
+      
+      return result;
     },
     resetPassword: async (email: string): Promise<AuthResult> => {
       try {
@@ -208,6 +202,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     getRedirectPathByRole: (role: string) => {
       return role === 'customer' ? '/customer/profile' : '/shop';
+    },
+    impersonateCustomer: () => {
+      authImpersonateCustomer();
     }
   };
 

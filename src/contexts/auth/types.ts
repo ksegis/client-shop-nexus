@@ -29,4 +29,6 @@ export interface AuthContextType {
   resetPassword: (email: string) => Promise<AuthResult>;
   updatePassword: (password: string) => Promise<AuthResult>;
   getRedirectPathByRole: (role: string) => string;
+  impersonateCustomer: () => void;
+  isDevMode: boolean;
 }

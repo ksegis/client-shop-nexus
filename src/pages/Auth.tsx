@@ -1,10 +1,12 @@
 
 import { Button } from "@/components/ui/button";
-import { ShoppingBag } from "lucide-react";
+import { ShoppingBag, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/auth";
 
 const Auth = () => {
   const navigate = useNavigate();
+  const { impersonateCustomer } = useAuth();
   
   const goToCustomerLogin = () => {
     navigate("/customer/profile");
@@ -12,6 +14,10 @@ const Auth = () => {
   
   const goToShopLogin = () => {
     navigate("/shop");
+  };
+
+  const switchToDevCustomerMode = () => {
+    impersonateCustomer();
   };
 
   return (
@@ -40,6 +46,19 @@ const Auth = () => {
           >
             Customer Portal
           </Button>
+          
+          <div className="border-t border-gray-200 pt-4 mt-6">
+            <p className="text-gray-500 text-sm mb-2">Developer Options</p>
+            <Button
+              onClick={switchToDevCustomerMode}
+              variant="secondary"
+              className="w-full"
+              size="sm"
+            >
+              <User className="mr-2 h-4 w-4" />
+              Use Dev Customer Account
+            </Button>
+          </div>
         </div>
       </div>
     </div>
