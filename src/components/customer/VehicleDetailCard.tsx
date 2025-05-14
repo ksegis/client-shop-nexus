@@ -3,7 +3,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Vehicle } from '@/types/vehicle';
-import { Car, Calendar, FileText, Tool, Activity } from 'lucide-react';
+import { Car, Calendar, FileText, Wrench, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import VehicleServiceHistory from './VehicleServiceHistory';
 
@@ -89,7 +89,7 @@ const VehicleDetailCard = ({ vehicle, onEdit, onRemove }: VehicleDetailCardProps
                 <Calendar className="h-4 w-4" /> Schedule Service
               </Button>
               <Button variant="outline" size="sm" className="flex items-center gap-1">
-                <Tool className="h-4 w-4" /> Request Estimate
+                <Wrench className="h-4 w-4" /> Request Estimate
               </Button>
             </div>
           </TabsContent>

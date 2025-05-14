@@ -3,7 +3,7 @@ import { ServiceHistoryEntry } from '@/hooks/useServiceHistory';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-import { FileText, Clock, DollarSign, Tool } from 'lucide-react';
+import { FileText, Clock, DollarSign, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 
@@ -83,7 +83,7 @@ const ServiceHistoryCard = ({ entry }: ServiceHistoryCardProps) => {
             </div>
             
             <div className="flex items-center">
-              <Tool className="h-4 w-4 text-gray-400 mr-1" />
+              <Wrench className="h-4 w-4 text-gray-400 mr-1" />
               <span>{(entry.parts_used?.length || 0)} parts</span>
             </div>
           </div>

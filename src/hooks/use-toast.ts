@@ -1,8 +1,13 @@
 
-import { toast as sonnerToast, type Toast as SonnerToast } from "sonner"
+import { toast as sonnerToast } from "sonner"
 
-type ToastProps = SonnerToast & {
-  variant?: "default" | "destructive" | "success"
+type ToastProps = {
+  title?: string;
+  description?: string;
+  variant?: "default" | "destructive" | "success";
+  duration?: number;
+  action?: React.ReactNode;
+  [key: string]: any;
 }
 
 export function toast({ variant = "default", ...props }: ToastProps) {
