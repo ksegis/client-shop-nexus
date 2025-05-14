@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Logo } from './header/Logo';
@@ -11,7 +10,7 @@ import { useNavigationLinks } from './header/NavigationLinks';
 import { useHeaderContext } from './HeaderContext';
 
 interface HeaderProps {
-  portalType: 'shop' | 'customer';  // Updated type definition to accept both values
+  portalType: 'shop' | 'customer';  // Already updated to accept both values
 }
 
 const Header = ({ portalType }: HeaderProps) => {
