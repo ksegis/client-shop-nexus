@@ -3,12 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { vehicleSchema, VehicleFormValues } from './VehicleFormSchema';
 import { Vehicle } from '@/types/vehicle';
-import { VehicleForm } from './form/VehicleForm';
-import { DeleteVehicleDialog } from './dialogs/DeleteVehicleDialog';
+import { VehicleDetailsTab } from './dialogs/VehicleDetailsTab';
 import { VehicleImageTab } from './dialogs/VehicleImageTab';
 
 interface EditVehicleDialogProps {
@@ -118,20 +116,14 @@ export const EditVehicleDialog: React.FC<EditVehicleDialogProps> = ({
           </TabsList>
           
           <TabsContent value="details" className="space-y-4">
-            <VehicleForm 
+            <VehicleDetailsTab
               form={form}
               onSubmit={handleSubmit}
               onCancel={handleCancel}
               isSubmitting={isSubmitting}
-              submitButtonText="Update Vehicle"
+              onDelete={handleDelete}
+              isDeleting={isDeleting}
             />
-            
-            <div className="flex justify-start mt-4">
-              <DeleteVehicleDialog 
-                onDelete={handleDelete}
-                isDeleting={isDeleting}
-              />
-            </div>
           </TabsContent>
           
           <TabsContent value="images" className="space-y-4">
