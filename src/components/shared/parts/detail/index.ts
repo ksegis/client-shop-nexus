@@ -1,0 +1,2 @@
+
+export { PartDetailDialog } from './PartDetailDialog';
