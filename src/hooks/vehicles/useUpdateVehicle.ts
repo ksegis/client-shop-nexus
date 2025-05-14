@@ -1,49 +1,52 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Vehicle } from '@/types';
-import { useToast } from '@/hooks/use-toast';
+import { Vehicle } from '@/types/vehicle';
+import { toast } from '@/hooks/use-toast';
 
-export const useUpdateVehicle = () => {
+export function useUpdateVehicle() {
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const [error, setError] = useState<string | null>(null);
 
-  const updateVehicle = async (id: string, data: Partial<Vehicle>) => {
+  const updateVehicle = async (id: string, vehicleData: Partial<Vehicle>) => {
     setLoading(true);
+    setError(null);
+    
     try {
-      // Normalize the vehicle data to remove mileage
-      const normalizedData = normalizeVehicleData(data);
-
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('vehicles')
-        .update(normalizedData)
-        .eq('id', id);
-
-      if (error) {
-        throw error;
-      }
+        .update(vehicleData)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
       toast({
-        title: 'Success',
-        description: 'Vehicle updated successfully.',
+        title: "Vehicle updated",
+        description: "Vehicle has been updated successfully"
       });
-      return true;
-    } catch (error: any) {
-      console.error('Error updating vehicle:', error);
+      
+      return data as Vehicle;
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to update vehicle';
+      setError(errorMessage);
+      
       toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
+        variant: "destructive",
+        title: "Error updating vehicle",
+        description: errorMessage
       });
-      return false;
+      
+      return null;
     } finally {
       setLoading(false);
     }
   };
 
-  // Just fixing the mileage property issue by removing references to it
-  const normalizeVehicleData = (data: any) => {
-    const { mileage, ...rest } = data;
-    return rest;
+  return {
+    updateVehicle,
+    loading,
+    error
   };
-
-  return { updateVehicle, loading };
-};
+}

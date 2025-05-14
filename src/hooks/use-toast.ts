@@ -1,6 +1,6 @@
 
-// Re-export from sonner with proper typings
-import { toast as sonnerToast, type Toast, type ToastT } from "sonner";
+// Implementation for toast functionality
+import { toast as sonnerToast, type ToastT } from "sonner";
 
 type ToastProps = Omit<ToastT, "id"> & {
   title?: string;
@@ -16,4 +16,9 @@ export function toast({ title, description, variant, ...props }: ToastProps) {
   });
 }
 
-export { useToast } from "sonner";
+// Create our own useToast hook since sonner doesn't export one
+export function useToast() {
+  return {
+    toast,
+  };
+}

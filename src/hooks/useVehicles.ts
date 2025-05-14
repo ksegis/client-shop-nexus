@@ -1,65 +1,41 @@
+// Re-export from the vehicles index file
+export { useVehicles, useAddVehicle, useUpdateVehicle } from './vehicles';
 
-import { useState, useEffect } from 'react';
-import { Vehicle, NewVehicleData } from '@/types/vehicle';
-import { useAddVehicle } from './vehicles/useAddVehicle';
-import { useFetchVehicles } from './vehicles/useFetchVehicles';
-import { useUpdateVehicle } from './vehicles/useUpdateVehicle';
-import { useRemoveVehicle } from './vehicles/useRemoveVehicle';
-import { useAuth } from '@/contexts/auth';
+// Optional: If there's additional functionality needed in this file,
+// we can implement it here.
+import { Vehicle } from '@/types/vehicle';
+import { useState } from 'react';
+import { useVehicles as useFetchVehiclesHook } from './vehicles';
 
-export const useVehicles = () => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const { user } = useAuth();
-  
-  const { fetchVehicles } = useFetchVehicles();
-  const { addVehicle: addVehicleToDb } = useAddVehicle();
-  const { updateVehicle: updateVehicleInDb } = useUpdateVehicle();
-  const { removeVehicle } = useRemoveVehicle();
-  
-  const loadVehicles = async () => {
-    if (!user?.id) return;
-    
+// This hook provides a simplified interface for vehicle management
+export function useVehicleManagement() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { vehicles, fetchVehicles } = useFetchVehiclesHook();
+
+  // Remove a vehicle by ID
+  const removeVehicle = (id: string) => {
     setLoading(true);
     try {
-      const fetchedVehicles = await fetchVehicles(user.id);
-      setVehicles(fetchedVehicles);
-    } catch (error) {
-      console.error('Error loading vehicles:', error);
+      // Update state to remove the vehicle
+      setVehicles((prevVehicles) => prevVehicles.filter((vehicle) => vehicle.id !== id));
+      return true;
+    } catch (err: any) {
+      setError(err.message || 'Failed to remove vehicle');
+      return false;
     } finally {
       setLoading(false);
     }
   };
-  
-  const addVehicle = async (vehicleData: NewVehicleData) => {
-    const newVehicle = await addVehicleToDb(vehicleData);
-    setVehicles(prevVehicles => [newVehicle, ...prevVehicles]);
-    return newVehicle;
-  };
-  
-  const updateVehicle = async (id: string, vehicleData: Partial<NewVehicleData>) => {
-    const updatedVehicle = await updateVehicleInDb(id, vehicleData);
-    setVehicles(prevVehicles => 
-      prevVehicles.map(vehicle => vehicle.id === id ? updatedVehicle : vehicle)
-    );
-    return updatedVehicle;
-  };
-  
-  const deleteVehicle = async (id: string) => {
-    await removeVehicle(id);
-    setVehicles(prevVehicles => prevVehicles.filter(vehicle => vehicle.id !== id));
-  };
-  
-  useEffect(() => {
-    loadVehicles();
-  }, [user?.id]);
-  
+
+  // Update vehicles state
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+
   return {
     vehicles,
     loading,
-    addVehicle,
-    updateVehicle,
-    deleteVehicle,
-    refreshVehicles: loadVehicles
+    error,
+    removeVehicle,
+    refreshVehicles: fetchVehicles
   };
-};
+}

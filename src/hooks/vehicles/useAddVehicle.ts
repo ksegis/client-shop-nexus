@@ -1,52 +1,51 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Vehicle } from '@/types';
-import { useToast } from '@/hooks/use-toast';
+import { Vehicle } from '@/types/vehicle';
+import { toast } from '@/hooks/use-toast';
 
-export const useAddVehicle = () => {
+export function useAddVehicle() {
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const [error, setError] = useState<string | null>(null);
 
-  const addVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at'>): Promise<Vehicle | null> => {
+  const addVehicle = async (vehicleData: Omit<Vehicle, 'id'>) => {
     setLoading(true);
+    setError(null);
+    
     try {
-      // Normalize the vehicle data to remove mileage
-      const normalizedVehicleData = normalizeVehicleData(vehicleData);
-
       const { data, error } = await supabase
         .from('vehicles')
-        .insert([normalizedVehicleData])
+        .insert(vehicleData)
         .select()
         .single();
-
-      if (error) {
-        throw error;
-      }
-
+      
+      if (error) throw error;
+      
       toast({
-        title: 'Success',
-        description: 'Vehicle added successfully.',
+        title: "Vehicle added",
+        description: "Vehicle has been added successfully"
       });
-
+      
       return data as Vehicle;
-    } catch (error: any) {
-      console.error('Error adding vehicle:', error);
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to add vehicle';
+      setError(errorMessage);
+      
       toast({
-        title: 'Error',
-        description: error.message,
-        variant: 'destructive',
+        variant: "destructive",
+        title: "Error adding vehicle",
+        description: errorMessage
       });
+      
       return null;
     } finally {
       setLoading(false);
     }
   };
 
-  // Just fixing the mileage property issue by removing references to it
-  const normalizeVehicleData = (data: any) => {
-    const { mileage, ...rest } = data;
-    return rest;
+  return {
+    addVehicle,
+    loading,
+    error
   };
-
-  return { addVehicle, loading };
-};
+}
