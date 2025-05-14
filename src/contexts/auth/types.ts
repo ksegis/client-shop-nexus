@@ -1,6 +1,12 @@
 
 import { User, Session } from '@supabase/supabase-js';
 
+export interface AuthResult {
+  success: boolean;
+  data?: any;
+  error?: any;
+}
+
 export interface UserProfile {
   id: string;
   first_name?: string;
@@ -17,9 +23,9 @@ export interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  signUp: (email: string, password: string, metadata?: object) => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
-  updatePassword: (password: string) => Promise<void>;
+  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<AuthResult>;
+  signOut: () => Promise<AuthResult>;
+  signUp: (email: string, password: string, firstName?: string, lastName?: string) => Promise<AuthResult>;
+  resetPassword: (email: string) => Promise<AuthResult>;
+  updatePassword: (password: string) => Promise<AuthResult>;
 }

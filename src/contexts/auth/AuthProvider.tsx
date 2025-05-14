@@ -4,18 +4,20 @@ import { AuthContext } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { AuthContextType } from './types';
+import { AuthContextType, AuthResult, UserProfile } from './types';
 import { useAuthStateListener } from './hooks';
+import { User } from '@supabase/supabase-js';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user: authUser, session, loading: authLoading } = useAuthStateListener();
   const [loading, setLoading] = useState<boolean>(true);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   
   // Define static mock user for development
   const mockUser = {
-    id: 'mock-user-id',  // Using a string format that's for display only, not for DB queries
+    id: 'mock-user-id',
     email: 'dev@example.com',
     app_metadata: {
       role: 'admin'
@@ -25,7 +27,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       last_name: 'User',
       phone: '555-1234',
       role: 'admin'
-    }
+    },
+    aud: 'authenticated',
+    created_at: new Date().toISOString()
+  } as User;
+  
+  const mockProfile: UserProfile = {
+    id: 'mock-user-id',
+    email: 'dev@example.com',
+    first_name: 'Dev',
+    last_name: 'User',
+    role: 'admin'
   };
   
   // Set up automatic authentication for development
@@ -39,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
-            .select('id')
+            .select('id, email, first_name, last_name, role')
             .eq('id', authUser.id)
             .maybeSingle();
           
@@ -62,12 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } else {
               console.log('Profile created successfully for RLS policies');
             }
+          } else {
+            setProfile(profileData as UserProfile);
           }
         } catch (err) {
           console.error('Error checking/creating profile:', err);
         }
       } else {
         console.log('Development mode: Using mock authentication');
+        setProfile(mockProfile);
         toast({
           title: "Development Mode",
           description: "Using mock authentication credentials",
@@ -82,26 +97,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [authLoading, authUser, toast]);
 
-  // Create a properly typed user object that strictly conforms to our AuthContextType
-  const userValue: AuthContextType['user'] = authUser ? {
-    id: authUser.id,
-    email: authUser.email || '', // Convert null to empty string to satisfy the type
-    app_metadata: {
-      role: authUser.app_metadata?.role || undefined
-    },
-    user_metadata: {
-      first_name: authUser.user_metadata?.first_name || undefined,
-      last_name: authUser.user_metadata?.last_name || undefined,
-      phone: authUser.user_metadata?.phone || undefined,
-      role: authUser.user_metadata?.role || undefined
-    }
-  } : mockUser;
-
   // Context value that matches AuthContextType
   const value: AuthContextType = {
-    user: userValue,
-    session: session,
-    signUp: async (email: string, password: string, firstName = '', lastName = '') => {
+    user: authUser || mockUser,
+    profile,
+    session,
+    isLoading: loading || authLoading,
+    isAuthenticated: !!authUser || !!mockUser,
+    signUp: async (email: string, password: string, firstName = '', lastName = ''): Promise<AuthResult> => {
       try {
         const metadata = { first_name: firstName, last_name: lastName, role: 'customer' };
         const { data, error } = await supabase.auth.signUp({ 
@@ -134,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error };
       }
     },
-    signIn: async (email: string, password: string) => {
+    signIn: async (email: string, password: string, rememberMe = false): Promise<AuthResult> => {
       try {
         console.log(`Attempting to sign in with email: ${email}`);
         const { data, error } = await supabase.auth.signInWithPassword({ 
@@ -159,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error };
       }
     },
-    signOut: async () => {
+    signOut: async (): Promise<AuthResult> => {
       try {
         console.log('Signing out user');
         const { error } = await supabase.auth.signOut();
@@ -179,11 +182,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error };
       }
     },
-    loading: loading || authLoading,
+    resetPassword: async (email: string): Promise<AuthResult> => {
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + '/customer/reset-password'
+        });
+        
+        if (error) throw error;
+        
+        return { success: true };
+      } catch (error: any) {
+        return { success: false, error };
+      }
+    },
+    updatePassword: async (password: string): Promise<AuthResult> => {
+      try {
+        const { error } = await supabase.auth.updateUser({ password });
+        
+        if (error) throw error;
+        
+        return { success: true };
+      } catch (error: any) {
+        return { success: false, error };
+      }
+    },
     getRedirectPathByRole: (role: string) => {
       return role === 'customer' ? '/customer/profile' : '/shop';
-    },
-    updateUserWithRole: undefined
+    }
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

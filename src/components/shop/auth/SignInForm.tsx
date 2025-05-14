@@ -67,7 +67,7 @@ const SignInForm = () => {
     try {
       console.log("SignIn: Attempting to sign in with email:", email);
       
-      // Sign in using auth context
+      // Sign in using auth context - now using rememberMe as a boolean
       await signIn(email, password, rememberMe);
       
       // Small delay to ensure role is fetched
