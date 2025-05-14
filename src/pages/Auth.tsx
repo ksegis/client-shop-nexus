@@ -23,7 +23,7 @@ const Auth = () => {
   }, [isAuthenticated, profile, navigate]);
   
   const goToCustomerLogin = () => {
-    navigate("/customer/profile");
+    navigate("/customer");
   };
   
   const goToShopLogin = () => {
