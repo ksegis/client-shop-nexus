@@ -3,224 +3,139 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Database } from '@/integrations/supabase/types';
 
-type Estimate = Database['public']['Tables']['estimates']['Row'];
-type EstimateWithDetails = Estimate & {
-  vehicles: {
-    make: string;
-    model: string;
-    year: number;
-  } | null;
-  estimate_items: {
-    id: string;
-    description: string;
-    quantity: number;
-    price: number;
-    part_number?: string;
-    vendor?: string;
-    approved: boolean;
-  }[];
+// Helper function to check if a userId is a valid UUID
+const isValidUuid = (id: string): boolean => {
+  return id?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) !== null;
 };
 
 export const useCustomerEstimates = () => {
-  const [estimates, setEstimates] = useState<EstimateWithDetails[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [estimates, setEstimates] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<Error | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Fetch estimates for the current user
-  const fetchEstimates = async () => {
-    if (!user) return;
-    
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('estimates')
-        .select(`
-          *,
-          vehicles (
-            make,
-            model,
-            year
-          ),
-          estimate_items (
-            id,
-            description,
-            quantity,
-            price,
-            part_number,
-            vendor
-          )
-        `)
-        .eq('customer_id', user.id)
-        .order('created_at', { ascending: false });
-        
-      if (error) throw error;
-      
-      // Transform the data to include approved status for items
-      const transformedEstimates = (data || []).map(estimate => ({
-        ...estimate,
-        estimate_items: estimate.estimate_items.map(item => ({
-          ...item,
-          approved: estimate.status === 'approved'
-        }))
-      }));
-      
-      setEstimates(transformedEstimates);
-    } catch (error: any) {
-      console.error('Error fetching estimates:', error);
-      toast({
-        title: 'Error fetching estimates',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Subscribe to realtime updates for estimates
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) {
+      setEstimates([]);
+      setLoading(false);
+      return;
+    }
+
+    const fetchEstimates = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // For test/mock users, provide mock data
+        if (!isValidUuid(user.id)) {
+          console.log(`Using mock estimates for non-UUID user: ${user.id}`);
+          
+          const mockEstimates = [
+            {
+              id: 'mock-est-1',
+              title: 'Brake Service Estimate',
+              status: 'pending',
+              total_amount: 450.75,
+              created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+              vehicles: {
+                make: 'Toyota',
+                model: 'Camry',
+                year: 2020
+              },
+              estimate_items: [
+                {
+                  id: 'mock-item-1',
+                  description: 'Front Brake Pads',
+                  quantity: 1,
+                  price: 120,
+                  part_number: 'BP-2234'
+                },
+                {
+                  id: 'mock-item-2',
+                  description: 'Brake Labor',
+                  quantity: 2,
+                  price: 165.38,
+                  part_number: null
+                }
+              ]
+            },
+            {
+              id: 'mock-est-2',
+              title: 'Oil Change Estimate',
+              status: 'approved',
+              total_amount: 85.99,
+              created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+              vehicles: {
+                make: 'Toyota',
+                model: 'Camry',
+                year: 2020
+              },
+              estimate_items: [
+                {
+                  id: 'mock-item-3',
+                  description: 'Synthetic Oil',
+                  quantity: 1,
+                  price: 45.99,
+                  part_number: 'OIL-5W30'
+                },
+                {
+                  id: 'mock-item-4',
+                  description: 'Oil Change Labor',
+                  quantity: 1,
+                  price: 40,
+                  part_number: null
+                }
+              ]
+            }
+          ];
+          
+          setEstimates(mockEstimates);
+          setLoading(false);
+          return;
+        }
+        
+        // For real users, fetch from database
+        const { data, error: estimatesError } = await supabase
+          .from('estimates')
+          .select(`
+            *,
+            vehicles (
+              make,
+              model,
+              year
+            ),
+            estimate_items (
+              id,
+              description,
+              quantity,
+              price,
+              part_number,
+              vendor
+            )
+          `)
+          .eq('customer_id', user.id)
+          .order('created_at', { ascending: false });
+          
+        if (estimatesError) throw estimatesError;
+        
+        setEstimates(data || []);
+      } catch (err: any) {
+        console.error('Error fetching estimates:', err);
+        setError(err);
+        toast({
+          variant: "destructive",
+          title: "Error loading estimates",
+          description: err.message || "Failed to load your estimates"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
     
     fetchEstimates();
-    
-    // Set up realtime subscription
-    const estimatesChannel = supabase
-      .channel('customer-estimates')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'estimates',
-          filter: `customer_id=eq.${user.id}`
-        }, 
-        (payload) => {
-          console.log('Realtime estimate update:', payload);
-          fetchEstimates(); // Refresh estimates when changes occur
-          
-          // Show notification for new estimates
-          if (payload.eventType === 'INSERT') {
-            toast({
-              title: 'New Estimate Available',
-              description: 'You have a new estimate to review',
-              variant: 'default',
-            });
-          }
-          
-          // Show notification for updated estimates
-          if (payload.eventType === 'UPDATE') {
-            toast({
-              title: 'Estimate Updated',
-              description: 'An estimate has been updated',
-              variant: 'default',
-            });
-          }
-        }
-      )
-      .subscribe();
-      
-    // Also subscribe to estimate_items changes
-    const itemsChannel = supabase
-      .channel('customer-estimate-items')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'estimate_items'
-        }, 
-        () => {
-          fetchEstimates(); // Refresh estimates when line items change
-        }
-      )
-      .subscribe();
-    
-    return () => {
-      supabase.removeChannel(estimatesChannel);
-      supabase.removeChannel(itemsChannel);
-    };
-  }, [user, toast]);
-
-  // Function to approve an estimate
-  const approveEstimate = async (estimateId: string, comments?: string) => {
-    if (!user) return;
-    
-    try {
-      const { error } = await supabase
-        .from('estimates')
-        .update({ 
-          status: 'approved',
-          description: comments ? `${comments}\n\n${comments}` : undefined
-        })
-        .eq('id', estimateId)
-        .eq('customer_id', user.id);
-        
-      if (error) throw error;
-      
-      toast({
-        title: 'Estimate Approved',
-        description: 'Your approval has been sent to the shop',
-        variant: 'default',
-      });
-      
-      // Refresh estimates to update UI
-      fetchEstimates();
-      
-      return true;
-    } catch (error: any) {
-      console.error('Error approving estimate:', error);
-      toast({
-        title: 'Error',
-        description: `Failed to approve estimate: ${error.message}`,
-        variant: 'destructive',
-      });
-      return false;
-    }
-  };
+  }, [user?.id, toast]);
   
-  // Function to reject an estimate
-  const rejectEstimate = async (estimateId: string, comments?: string) => {
-    if (!user) return;
-    
-    try {
-      const { error } = await supabase
-        .from('estimates')
-        .update({ 
-          status: 'declined',
-          description: comments ? `${comments}\n\n${comments}` : undefined
-        })
-        .eq('id', estimateId)
-        .eq('customer_id', user.id);
-        
-      if (error) throw error;
-      
-      toast({
-        title: 'Estimate Rejected',
-        description: 'Your rejection has been sent to the shop',
-        variant: 'default',
-      });
-      
-      // Refresh estimates to update UI
-      fetchEstimates();
-      
-      return true;
-    } catch (error: any) {
-      console.error('Error rejecting estimate:', error);
-      toast({
-        title: 'Error',
-        description: `Failed to reject estimate: ${error.message}`,
-        variant: 'destructive',
-      });
-      return false;
-    }
-  };
-
-  return {
-    estimates,
-    loading,
-    approveEstimate,
-    rejectEstimate,
-    refreshEstimates: fetchEstimates
-  };
+  return { estimates, loading, error };
 };

@@ -28,16 +28,20 @@ export const useProfileData = () => {
       setIsLoading(true);
       setError(null); // Reset any previous errors
       
-      // Check if this is our mock user, if so, create a profile locally without DB access
-      if (user.id === 'mock-user-id') {
-        console.log('Using mock user profile');
+      // Check if this is a mock or test user by looking at the ID format
+      // UUID format validation check - mock and test users have string IDs, not UUIDs
+      const isValidUuid = 
+        user.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) !== null;
+      
+      if (!isValidUuid || user.id.includes('mock') || user.id.includes('test')) {
+        console.log('Using mock or test user profile, skipping database fetch');
         const mockProfile: ProfileData = {
-          id: 'mock-user-id',
-          email: user.email || 'dev@example.com',
-          first_name: user.user_metadata?.first_name || 'Dev',
+          id: user.id,
+          email: user.email || 'user@example.com',
+          first_name: user.user_metadata?.first_name || 'Test',
           last_name: user.user_metadata?.last_name || 'User',
           phone: user.user_metadata?.phone || '555-1234',
-          role: (user.user_metadata?.role || 'admin') as ExtendedUserRole,
+          role: (user.user_metadata?.role || 'customer') as ExtendedUserRole,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -47,7 +51,7 @@ export const useProfileData = () => {
         return;
       }
 
-      // Regular flow for real users
+      // Regular flow for real users with valid UUIDs
       const data = await fetchProfile(user.id);
       
       if (data) {
@@ -60,7 +64,7 @@ export const useProfileData = () => {
             if (first_name) updateData.first_name = first_name;
             if (last_name) updateData.last_name = last_name;
             if (phone) updateData.phone = phone;
-            if (role) updateData.role = role as ExtendedUserRole; // Cast the role to ExtendedUserRole
+            if (role) updateData.role = role as ExtendedUserRole;
             
             const updated = await updateProfileMetadata(user.id, updateData);
             
@@ -69,7 +73,7 @@ export const useProfileData = () => {
               data.first_name = first_name || data.first_name;
               data.last_name = last_name || data.last_name;
               data.phone = phone || data.phone;
-              if (role) data.role = role as ExtendedUserRole; // Cast the role to ExtendedUserRole
+              if (role) data.role = role as ExtendedUserRole;
             }
           }
         }
@@ -102,14 +106,17 @@ export const useProfileData = () => {
       throw new Error('User not authenticated');
     }
 
-    // Skip DB operations for mock user
-    if (user.id === 'mock-user-id') {
+    // Check if this is a mock or test user
+    const isValidUuid = 
+      user.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) !== null;
+    
+    if (!isValidUuid || user.id.includes('mock') || user.id.includes('test')) {
       // Just update the local state for development use
       const updatedProfile = { ...profileData, ...updateData, updated_at: new Date().toISOString() };
       setProfileData(updatedProfile as ProfileData);
       toast({
-        title: "Profile updated (development mode)",
-        description: "Profile updated successfully in mock mode",
+        title: "Profile updated (test mode)",
+        description: "Profile updated successfully in test/mock mode",
       });
       return;
     }

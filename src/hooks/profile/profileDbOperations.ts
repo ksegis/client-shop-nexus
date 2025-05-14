@@ -4,7 +4,18 @@ import { mapExtendedRoleToDbRole } from '@/integrations/supabase/types-extension
 import { ProfileData, ProfileUpdateData } from './types';
 import { mapDbProfileToExtendedProfile, createProfileFromUserMetadata } from './profileUtils';
 
+// Helper function to check if a userId is a valid UUID
+const isValidUuid = (id: string): boolean => {
+  return id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) !== null;
+};
+
 export const fetchProfile = async (userId: string): Promise<ProfileData | null> => {
+  // Skip database operations for non-UUID values to prevent 400 errors
+  if (!isValidUuid(userId)) {
+    console.log(`Skipping database fetch for non-UUID user ID: ${userId}`);
+    return null;
+  }
+
   try {
     const { data, error: fetchError } = await supabase
       .from('profiles')
@@ -22,6 +33,12 @@ export const fetchProfile = async (userId: string): Promise<ProfileData | null> 
 };
 
 export const updateProfileMetadata = async (userId: string, updateData: Record<string, any>) => {
+  // Skip database operations for non-UUID values
+  if (!isValidUuid(userId)) {
+    console.log(`Skipping database update for non-UUID user ID: ${userId}`);
+    return true; // Pretend success for mock/test users
+  }
+
   try {
     const { error: updateError } = await supabase
       .from('profiles')
@@ -39,6 +56,12 @@ export const updateProfileMetadata = async (userId: string, updateData: Record<s
 };
 
 export const createNewProfile = async (userId: string, email: string, metadata: any) => {
+  // Skip database operations for non-UUID values
+  if (!isValidUuid(userId)) {
+    console.log(`Skipping database create for non-UUID user ID: ${userId}`);
+    return true; // Pretend success for mock/test users
+  }
+
   try {
     // When saving to the database, we need to map the extended role to a database role
     const dbRole = mapExtendedRoleToDbRole(metadata?.role || 'customer');
@@ -63,6 +86,12 @@ export const createNewProfile = async (userId: string, email: string, metadata: 
 };
 
 export const updateUserProfile = async (userId: string, updateData: ProfileUpdateData) => {
+  // Skip database operations for non-UUID values
+  if (!isValidUuid(userId)) {
+    console.log(`Skipping database update for non-UUID user ID: ${userId}`);
+    return true; // Pretend success for mock/test users
+  }
+
   try {
     // Create a new object for database update that doesn't include extended role
     const dbUpdateData: Record<string, any> = {};
