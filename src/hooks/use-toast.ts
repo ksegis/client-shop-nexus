@@ -1,22 +1,27 @@
 
-// Implementation for toast functionality
-import { toast as sonnerToast, type ToastT } from "sonner";
+import { toast as sonnerToast, type ToastOptions as SonnerToastOptions } from "sonner";
 
-type ToastProps = Omit<ToastT, "id"> & {
+export interface ToastProps {
   title?: string;
-  description?: React.ReactNode;
+  description?: string;
   variant?: "default" | "destructive";
-};
+  action?: React.ReactNode;
+  id?: string;
+}
 
-export function toast({ title, description, variant, ...props }: ToastProps) {
-  return sonnerToast(title as string, {
-    ...props,
+export function toast({
+  title,
+  description,
+  variant,
+  ...props
+}: ToastProps & Omit<SonnerToastOptions, "className">) {
+  return sonnerToast(title, {
     description,
     className: variant === "destructive" ? "destructive" : undefined,
+    ...props,
   });
 }
 
-// Create our own useToast hook since sonner doesn't export one
 export function useToast() {
   return {
     toast,

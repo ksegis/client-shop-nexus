@@ -23,7 +23,7 @@ export const useVehicleManagement = () => {
     fetchVehicles, 
     addVehicle: addVehicleBase, 
     updateVehicle: updateVehicleBase,
-    removeVehicle: removeVehicleBase
+    deleteVehicle: removeVehicleBase
   } = useVehicleCrud();
   
   const {
@@ -51,8 +51,8 @@ export const useVehicleManagement = () => {
 
     try {
       setLoading(true);
-      const fetchedVehicles = await fetchVehicles(userIdToFetch);
-      updateVehicleState(fetchedVehicles);
+      const fetchedVehicles = await fetchVehicles();
+      updateVehicleState(fetchedVehicles || []);
     } finally {
       setLoading(false);
     }
@@ -70,7 +70,7 @@ export const useVehicleManagement = () => {
       return true;
     }
     
-    const newVehicle = await addVehicleBase(vehicleData, customerId);
+    const newVehicle = await addVehicleBase(vehicleData);
     
     // If we're adding a vehicle for the current user or for the customer we're viewing,
     // add it to the state

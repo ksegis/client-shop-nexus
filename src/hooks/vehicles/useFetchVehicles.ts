@@ -14,7 +14,7 @@ export function useVehicles() {
   const fetchVehicles = async () => {
     if (!user) {
       setVehicles([]);
-      return;
+      return [];
     }
     
     setLoading(true);
@@ -24,12 +24,13 @@ export function useVehicles() {
       const { data, error } = await supabase
         .from('vehicles')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('owner_id', user.id)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       
       setVehicles(data as Vehicle[]);
+      return data as Vehicle[];
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch vehicles';
       setError(errorMessage);
@@ -39,6 +40,8 @@ export function useVehicles() {
         title: "Error fetching vehicles",
         description: errorMessage
       });
+      
+      return [];
     } finally {
       setLoading(false);
     }

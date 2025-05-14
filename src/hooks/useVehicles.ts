@@ -3,4 +3,4 @@
 export { useVehicles, useAddVehicle, useUpdateVehicle } from './vehicles';
 
 // Re-export the refactored useVehicleManagement
-export { useVehicleManagement } from './useVehicleManagement';
+export { useVehicleManagement } from './vehicles/useVehicleManagement';

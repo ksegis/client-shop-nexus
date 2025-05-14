@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { useVehicles } from '@/hooks/useVehicles';
+import { useVehicleManagement } from '@/hooks/vehicles';
 import { useVehicleImages } from '@/hooks/vehicles/useVehicleImages';
 import { Vehicle, NewVehicleData } from '@/types/vehicle';
 import { VehiclesList } from '@/components/vehicles/VehiclesList';
@@ -10,7 +11,7 @@ import { AddVehicleDialog } from '@/components/vehicles/AddVehicleDialog';
 import { EditVehicleDialog } from '@/components/vehicles/EditVehicleDialog';
 
 const CustomerVehicles = () => {
-  const { vehicles, loading, addVehicle, updateVehicle, deleteVehicle } = useVehicles();
+  const { vehicles, loading, addVehicle, updateVehicle, removeVehicle } = useVehicleManagement();
   const { uploadVehicleImage } = useVehicleImages();
   const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -92,7 +93,7 @@ const CustomerVehicles = () => {
   // Handle deleting a vehicle
   const handleDeleteVehicle = async (id: string) => {
     try {
-      await deleteVehicle(id);
+      await removeVehicle(id);
       toast({
         title: "Vehicle removed",
         description: "Your vehicle has been removed successfully.",
