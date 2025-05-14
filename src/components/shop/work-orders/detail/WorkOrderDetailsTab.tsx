@@ -2,6 +2,8 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface WorkOrderDetailsTabProps {
   workOrder: any;
@@ -72,7 +74,7 @@ export const WorkOrderDetailsTab: React.FC<WorkOrderDetailsTabProps> = ({
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {lineItems.length > 0 ? (
+                  {lineItems && lineItems.length > 0 ? (
                     lineItems.map((item) => (
                       <tr key={item.id}>
                         <td className="px-4 py-3">
@@ -156,7 +158,3 @@ export const WorkOrderDetailsTab: React.FC<WorkOrderDetailsTabProps> = ({
     </div>
   );
 };
-
-// Import at the top
-import { FileText } from 'lucide-react';
-import { Button } from '@/components/ui/button';
