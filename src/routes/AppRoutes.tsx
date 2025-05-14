@@ -10,6 +10,7 @@ import ShopRoutes from './ShopRoutes';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Index from '@/pages/Index';
 import Auth from '@/pages/Auth';
+import ShopLogin from '@/pages/shop/Login';
 import NotFound from '@/pages/NotFound';
 import TestingDashboard from '@/pages/TestingDashboard';
 
@@ -20,8 +21,11 @@ const AppRoutes: React.FC = () => {
         <TestingProvider>
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/auth/*" element={<Auth />} />
+            
+            {/* Auth routes */}
+            <Route path="/auth/*" element={<AuthRoutes />} />
             <Route path="/auth" element={<Navigate to="/auth/login" replace />} />
+            <Route path="/shop/login" element={<ShopLogin />} />
             
             {/* Testing Dashboard */}
             <Route 

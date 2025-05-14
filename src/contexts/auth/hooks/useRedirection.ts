@@ -11,14 +11,16 @@ export const useRedirection = () => {
   useEffect(() => {
     if (isLoading) return;
 
+    // Check if we're on any auth-related pages
     const isAuthPage = 
       location.pathname === '/auth' || 
+      location.pathname === '/auth/login' ||
       location.pathname === '/shop/login';
     
     // Only redirect if on auth pages and authenticated, or if not authenticated and not on auth pages
     if (!user && !isAuthPage) {
       // Redirect to login if not authenticated
-      navigate('/shop/login', { replace: true });
+      navigate('/auth', { replace: true });
     } else if (user && isAuthPage) {
       // Redirect to shop dashboard if already authenticated
       const redirectPath = user?.user_metadata?.role?.includes('customer') ? 
