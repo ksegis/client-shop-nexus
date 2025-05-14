@@ -1,0 +1,64 @@
+
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useAuth } from '@/contexts/auth';
+
+/**
+ * A diagnostic hook to help troubleshoot authentication and authorization issues.
+ * This can be temporarily added to components to log relevant information.
+ */
+export const useAuthDiagnostics = (componentName: string = 'Unknown') => {
+  const { 
+    user, 
+    profile, 
+    isLoading, 
+    isAuthenticated,
+    portalType,
+    isTestUser,
+    validateAccess 
+  } = useAuth();
+  const location = useLocation();
+
+  // Log authentication state on mount and when auth changes
+  useEffect(() => {
+    console.group(`🔍 Auth Diagnostics: ${componentName}`);
+    console.log('Current path:', location.pathname);
+    console.log('Auth loading:', isLoading);
+    console.log('Is authenticated:', isAuthenticated);
+    console.log('Portal type:', portalType);
+    console.log('Is test user:', isTestUser);
+    
+    // Check user data sources
+    if (user) {
+      console.log('User ID:', user.id);
+      console.log('User metadata role:', user.user_metadata?.role);
+      console.log('User app metadata role:', user.app_metadata?.role);
+    } else {
+      console.log('User: null');
+    }
+    
+    // Check profile data
+    if (profile) {
+      console.log('Profile ID:', profile.id);
+      console.log('Profile role:', profile.role);
+    } else {
+      console.log('Profile: null');
+    }
+    
+    // Test access to different roles
+    if (isAuthenticated && profile?.role) {
+      console.log('Access to customer routes:', validateAccess(['customer', 'test_customer']));
+      console.log('Access to staff routes:', validateAccess(['staff', 'test_staff']));
+      console.log('Access to admin routes:', validateAccess(['admin', 'test_admin']));
+    }
+    
+    console.groupEnd();
+  }, [user, profile, isLoading, isAuthenticated, location.pathname, portalType, isTestUser, validateAccess]);
+  
+  // Log navigation events
+  useEffect(() => {
+    console.log(`📍 Navigation: ${componentName} -> ${location.pathname}`);
+  }, [location.pathname, componentName]);
+  
+  return null;
+};

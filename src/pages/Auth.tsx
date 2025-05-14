@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,11 +5,21 @@ import { ShoppingBag, User, Users, FlaskConical } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AuthDebugger } from "@/components/debug/AuthDebugger";
 
 const Auth = () => {
   const navigate = useNavigate();
   const { impersonateTestUser, isAuthenticated, profile } = useAuth();
   const [isLoadingTest, setIsLoadingTest] = useState(false);
+  
+  // Log initial authentication state
+  useEffect(() => {
+    console.log('Auth Page - Initial State:', { 
+      isAuthenticated, 
+      profileRole: profile?.role,
+      pathname: window.location.pathname
+    });
+  }, []);
   
   // If already authenticated, redirect to the appropriate portal
   useEffect(() => {
@@ -18,6 +27,7 @@ const Auth = () => {
       const path = profile.role.includes('customer') ? 
         '/customer/profile' : 
         '/shop';
+      console.log(`Auth Page - Redirecting to ${path} (already authenticated)`);
       navigate(path, { replace: true });
     }
   }, [isAuthenticated, profile, navigate]);
@@ -40,6 +50,7 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+      {process.env.NODE_ENV === 'development' && <AuthDebugger componentName="AuthPage" />}
       <div className="w-full max-w-md p-6">
         <Card>
           <CardHeader className="text-center">

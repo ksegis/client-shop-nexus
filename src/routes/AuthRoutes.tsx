@@ -3,15 +3,19 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Auth from "@/pages/Auth";
 import ShopLogin from "@/pages/shop/Login";
 import NotFound from "@/pages/NotFound";
+import { AuthDebugger } from "@/components/debug/AuthDebugger";
 
 const AuthRoutes = () => {
   return (
-    <Routes>
-      <Route path="/" element={<Auth />} />
-      <Route path="/login" element={<Auth />} />
-      <Route path="/shop/login" element={<ShopLogin />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <>
+      {process.env.NODE_ENV === 'development' && <AuthDebugger componentName="AuthRoutes" />}
+      <Routes>
+        <Route path="/" element={<Auth />} />
+        <Route path="/login" element={<Auth />} />
+        <Route path="/shop/login" element={<ShopLogin />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </>
   );
 };
 

@@ -25,6 +25,30 @@ const ProtectedRoute = ({
   } = useAuth();
   const location = useLocation();
 
+  // Add debugging for protected route
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.group('🔒 ProtectedRoute');
+      console.log('Path:', location.pathname);
+      console.log('Auth loading:', isLoading);
+      console.log('Allowed roles:', allowedRoles);
+      console.log('Required portal:', requiredPortal);
+      console.log('User authenticated:', isAuthenticated);
+      console.log('User profile:', profile);
+      console.log('User portal type:', portalType);
+      
+      if (profile?.role && allowedRoles.length > 0) {
+        console.log('Has required role:', validateAccess(allowedRoles));
+      }
+      
+      if (requiredPortal) {
+        console.log('Has portal access:', portalType === requiredPortal);
+      }
+      
+      console.groupEnd();
+    }
+  }, [location.pathname, isLoading, isAuthenticated, profile, portalType, requiredPortal, allowedRoles, validateAccess]);
+
   // Handle routing based on authentication state
   if (isLoading) {
     // Show loading state while checking authentication
@@ -37,6 +61,7 @@ const ProtectedRoute = ({
 
   // If not authenticated, redirect to login
   if (!isAuthenticated) {
+    console.log(`🚫 Access denied: Not authenticated, redirecting to /auth from ${location.pathname}`);
     return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
   }
 
@@ -52,6 +77,9 @@ const ProtectedRoute = ({
     const defaultPath = profile?.role ? 
       (profile.role.includes('customer') ? '/customer' : '/shop') : 
       '/auth';
+    
+    console.log(`🚫 Access denied: Role or portal mismatch, redirecting to ${defaultPath} from ${location.pathname}`);
+    console.log('Role check:', { hasRole, hasPortalAccess, userRole: profile?.role });
       
     return <Navigate to={defaultPath} replace />;
   }
