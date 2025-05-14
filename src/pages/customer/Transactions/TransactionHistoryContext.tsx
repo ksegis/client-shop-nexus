@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -44,8 +44,35 @@ export const TransactionHistoryProvider: React.FC<{ children: ReactNode }> = ({ 
       try {
         setLoading(true);
         
-        // For now, we'll fetch invoices and use them as transactions
-        // since we don't have a dedicated transactions table yet
+        // Check if we're using a mock user ID (for development)
+        if (user.id === 'mock-user-id') {
+          // Return mock data for development
+          setTransactions([
+            {
+              id: '1',
+              created_at: new Date().toISOString(),
+              invoice_id: 'inv-001',
+              amount: 249.99,
+              payment_method: 'Credit Card',
+              status: 'completed',
+              description: 'Oil change and tire rotation',
+              invoice_title: 'Regular Maintenance'
+            },
+            {
+              id: '2',
+              created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+              invoice_id: 'inv-002',
+              amount: 149.50,
+              payment_method: 'Debit Card',
+              status: 'pending',
+              description: 'Brake inspection',
+              invoice_title: 'Brake Service'
+            }
+          ]);
+          return;
+        }
+        
+        // For real users, fetch from Supabase
         const { data, error: fetchError } = await supabase
           .from('invoices')
           .select('id, created_at, title, total_amount, status, customer_id')
@@ -68,6 +95,7 @@ export const TransactionHistoryProvider: React.FC<{ children: ReactNode }> = ({ 
         setTransactions(formattedTransactions);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to fetch transactions'));
+        console.error('Transaction fetch error:', err);
         toast({
           title: 'Error',
           description: 'Failed to load transaction history.',

@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/auth';
@@ -12,6 +13,12 @@ export const useVehicleCrud = () => {
     const currentUserId = userId || user?.id;
     
     if (!currentUserId) {
+      return [];
+    }
+    
+    // Handle mock user ID case
+    if (currentUserId === 'mock-user-id') {
+      console.log('Using mock data for vehicles');
       return [];
     }
 
@@ -56,6 +63,24 @@ export const useVehicleCrud = () => {
         variant: 'destructive',
       });
       throw new Error('Owner ID is required');
+    }
+    
+    // Handle mock user case
+    if (effectiveOwnerId === 'mock-user-id') {
+      const mockVehicle: Vehicle = {
+        id: `mock-vehicle-${Date.now()}`,
+        ...vehicleData,
+        owner_id: 'mock-user-id',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      toast({
+        title: 'Vehicle added',
+        description: `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} added successfully`,
+      });
+      
+      return mockVehicle;
     }
 
     try {
