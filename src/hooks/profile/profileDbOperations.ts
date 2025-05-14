@@ -11,6 +11,12 @@ const isValidUuid = (id: string): boolean => {
 
 // Helper function to check if a user is a test/mock user
 export const isTestUser = (userId: string): boolean => {
+  // Check for test user IDs (which use the reserved format with all zeros)
+  if (userId.startsWith('00000000-0000-0000-0000-00000000000')) {
+    return true;
+  }
+  
+  // Check for mock users or other test indicators
   return !isValidUuid(userId) || userId.includes('mock') || userId.includes('test');
 };
 
