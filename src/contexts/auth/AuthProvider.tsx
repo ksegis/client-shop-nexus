@@ -44,12 +44,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [authLoading, authUser, toast]);
 
-  // Create a properly typed user object
-  const userValue = authUser ? {
+  // Create a properly typed user object that strictly conforms to our AuthContextType
+  const userValue: AuthContextType['user'] = authUser ? {
     id: authUser.id,
-    email: authUser.email, // This might be null but our type now allows it
-    app_metadata: authUser.app_metadata,
-    user_metadata: authUser.user_metadata
+    email: authUser.email || '', // Convert null to empty string to satisfy the type
+    app_metadata: {
+      role: authUser.app_metadata?.role || undefined
+    },
+    user_metadata: {
+      first_name: authUser.user_metadata?.first_name || undefined,
+      last_name: authUser.user_metadata?.last_name || undefined,
+      phone: authUser.user_metadata?.phone || undefined,
+      role: authUser.user_metadata?.role || undefined
+    }
   } : mockUser;
 
   // Context value that matches AuthContextType
