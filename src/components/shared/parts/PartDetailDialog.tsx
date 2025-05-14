@@ -90,8 +90,8 @@ export const PartDetailDialog = ({
   
   const getStockStatusColor = (quantity: number, reorderLevel: number = 10) => {
     if (quantity <= 0) return "destructive";
-    if (quantity <= reorderLevel) return "warning";
-    return "success";
+    if (quantity <= reorderLevel) return "secondary";
+    return "default";
   };
   
   const getStockStatusText = (quantity: number, reorderLevel: number = 10) => {

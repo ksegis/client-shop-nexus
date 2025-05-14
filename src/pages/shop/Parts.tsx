@@ -11,6 +11,7 @@ import { usePartsCart } from '@/contexts/parts/PartsCartContext';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { Part } from '@/types/parts';
 
 const ShopParts = () => {
   const { toast } = useToast();
@@ -55,8 +56,14 @@ const ShopParts = () => {
     setSelectedPartId(null);
   };
   
-  const handleAddToCartFromDialog = (part: any, quantity: number) => {
+  // Modified to match the expected signature in PartDetailDialog
+  const handleAddToCartFromDialog = (part: Part, quantity: number) => {
     addToCart(part, quantity);
+  };
+  
+  // Simple adapter function to handle single-parameter calls from PartCard
+  const handleAddToCart = (part: Part) => {
+    addToCart(part, 1);  // Default to quantity of 1
   };
   
   const handleProcessTransaction = () => {
@@ -159,7 +166,7 @@ const ShopParts = () => {
       <PartsCatalogGrid
         parts={parts}
         isLoading={isLoading}
-        onAddToCart={addToCart}
+        onAddToCart={handleAddToCart}
         onViewDetails={handleViewDetails}
         showInventory={true}  // Show stock levels for shop staff
       />

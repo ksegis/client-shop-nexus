@@ -10,6 +10,7 @@ import { usePartsCatalog } from '@/hooks/parts/usePartsCatalog';
 import { usePartsCart } from '@/contexts/parts/PartsCartContext';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
+import { Part } from '@/types/parts';
 
 const CustomerParts = () => {
   const navigate = useNavigate();
@@ -52,8 +53,14 @@ const CustomerParts = () => {
     setSelectedPartId(null);
   };
   
-  const handleAddToCartFromDialog = (part: any, quantity: number) => {
+  // Modified to match the expected signature in PartDetailDialog
+  const handleAddToCartFromDialog = (part: Part, quantity: number) => {
     addToCart(part, quantity);
+  };
+  
+  // Simple adapter function to handle single-parameter calls from PartCard
+  const handleAddToCart = (part: Part) => {
+    addToCart(part, 1);  // Default to quantity of 1
   };
   
   const handleCheckout = () => {
@@ -97,7 +104,7 @@ const CustomerParts = () => {
       <PartsCatalogGrid
         parts={parts}
         isLoading={isLoading}
-        onAddToCart={addToCart}
+        onAddToCart={handleAddToCart}
         onViewDetails={handleViewDetails}
         showInventory={false}  // Don't show stock levels for customers
       />
