@@ -1,8 +1,7 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/contexts/auth';
 import CustomerLoginHeader from '@/components/customer/auth/CustomerLoginHeader';
 import CustomerLoginForm from '@/components/customer/auth/CustomerLoginForm';
 import SocialLoginOptions from '@/components/customer/auth/SocialLoginOptions';
@@ -21,12 +20,11 @@ const CustomerLogin = () => {
   const [newPassword, setNewPassword] = useState('');
   const [inPasswordResetMode, setInPasswordResetMode] = useState(false);
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   
   // Check for reset parameter or recovery hash in URL
-  useEffect(() => {
+  useState(() => {
     // Check if we're in password reset mode based on URL params
     if (searchParams.get('reset') === 'true') {
       setInPasswordResetMode(true);
@@ -36,20 +34,8 @@ const CustomerLogin = () => {
     const hash = window.location.hash;
     if (hash && hash.includes('type=recovery')) {
       setInPasswordResetMode(true);
-      // Extract token from hash if present
-      const tokenMatch = hash.match(/token=([^&]+)/);
-      if (tokenMatch && tokenMatch[1]) {
-        console.log("Password recovery token detected in URL");
-      }
     }
-  }, [searchParams]);
-  
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user) {
-      navigate('/customer/profile');
-    }
-  }, [user, navigate]);
+  });
 
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,7 +1,6 @@
 
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/auth';
 import { Logo } from './header/Logo';
 import { DesktopNavigation } from './header/DesktopNavigation';
 import { MobileMenu } from './header/MobileMenu';
@@ -19,7 +18,6 @@ const Header = ({ portalType }: HeaderProps) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
   const { links, isAdmin } = useNavigationLinks(portalType);
   
   // Use header context to prevent duplicate headers
@@ -44,16 +42,10 @@ const Header = ({ portalType }: HeaderProps) => {
   if (isHeaderMounted) {
     return null;
   }
-  
-  // Debug logging
-  console.log("Header - User object:", user);
-  console.log("Header - User metadata:", user?.user_metadata);
-  console.log("Header - Role value:", user?.app_metadata?.role);
-  console.log("Header - Is admin check:", isAdmin);
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      // Simply navigate to auth page without auth logic
       navigate('/auth');
     } catch (error) {
       console.error('Error signing out:', error);
@@ -77,7 +69,7 @@ const Header = ({ portalType }: HeaderProps) => {
           <div className="flex items-center gap-4">
             <UserProfileDropdown 
               portalType={portalType} 
-              onSignOut={handleSignOut}
+              onSignOut={handleSignOut} 
             />
             <MobileMenuButton 
               isOpen={mobileMenuOpen} 

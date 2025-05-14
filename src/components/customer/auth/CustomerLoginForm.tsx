@@ -1,6 +1,5 @@
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/auth';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,38 +16,22 @@ const CustomerLoginForm = ({ onResetPassword, onEmailChange }: CustomerLoginForm
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  
-  // Check if user is already authenticated with an inappropriate role
-  useEffect(() => {
-    if (user) {
-      const role = user.app_metadata?.role;
-      if (role === 'admin' || role === 'staff') {
-        // Staff/admin trying to access customer login - redirect to shop portal
-        toast({
-          title: "Access Restricted",
-          description: "Staff members must use the Shop Management Portal",
-        });
-        navigate('/shop', { replace: true });
-      } else if (role === 'customer') {
-        // Customer already logged in
-        navigate('/customer/profile', { replace: true });
-      }
-    }
-  }, [user, navigate, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-      const result = await signIn(email, password);
-      if (!result.success) {
-        throw new Error(result.error?.message || 'Login failed');
-      }
-      // The redirect will happen automatically based on role in AuthProvider
+      // Simulate login success
+      setTimeout(() => {
+        toast({
+          title: "Login Successful",
+          description: "Welcome to the Customer Portal!",
+        });
+        navigate('/customer/profile');
+      }, 1000);
     } catch (error: any) {
       toast({
         variant: "destructive",

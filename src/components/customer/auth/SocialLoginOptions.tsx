@@ -2,24 +2,26 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 
 const SocialLoginOptions = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
   
   const handleSocialLogin = async (provider: 'google') => {
     try {
       setLoading(true);
       
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/customer/profile`
-        }
-      });
-      
-      if (error) throw error;
+      // Simulate login process
+      setTimeout(() => {
+        toast({
+          title: "Login Successful",
+          description: `Logged in with ${provider}`,
+        });
+        navigate('/customer/profile');
+        setLoading(false);
+      }, 1000);
     } catch (error: any) {
       console.error('Social login error:', error);
       toast({

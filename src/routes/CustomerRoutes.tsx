@@ -1,7 +1,6 @@
 
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import CustomerLogin from "@/pages/customer/Login";
-import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import CustomerProfile from "@/pages/customer/Profile";
 import CustomerEstimates from "@/pages/customer/Estimates";
 import CustomerEstimateDetail from "@/pages/customer/EstimateDetail";
@@ -15,9 +14,6 @@ import NotFound from "@/pages/NotFound";
 import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
 import Layout from "@/components/layout/Layout";
 
-// Define which roles are allowed to access customer routes
-const customerRoles = ['customer'];
-
 const CustomerRoutes = () => {
   return (
     <PartsCartProvider>
@@ -25,56 +21,16 @@ const CustomerRoutes = () => {
         <Route path="login" element={<CustomerLogin />} />
         
         <Route element={<Layout portalType="customer" />}>
-          <Route index element={
-            <ProtectedRoute allowedRoles={customerRoles}>
-              <CustomerProfile />
-            </ProtectedRoute>
-          } />
-          <Route path="profile" element={
-            <ProtectedRoute allowedRoles={customerRoles}>
-              <CustomerProfile />
-            </ProtectedRoute>
-          } />
-          <Route path="estimates" element={
-            <ProtectedRoute allowedRoles={customerRoles}>
-              <CustomerEstimates />
-            </ProtectedRoute>
-          } />
-          <Route path="estimates/:estimateId" element={
-            <ProtectedRoute allowedRoles={customerRoles}>
-              <CustomerEstimateDetail />
-            </ProtectedRoute>
-          } />
-          <Route path="invoices" element={
-            <ProtectedRoute allowedRoles={customerRoles}>
-              <CustomerInvoices />
-            </ProtectedRoute>
-          } />
-          <Route path="transactions" element={
-            <ProtectedRoute allowedRoles={customerRoles}>
-              <CustomerTransactions />
-            </ProtectedRoute>
-          } />
-          <Route path="settings" element={
-            <ProtectedRoute allowedRoles={customerRoles}>
-              <CustomerSettings />
-            </ProtectedRoute>
-          } />
-          <Route path="parts" element={
-            <ProtectedRoute allowedRoles={customerRoles}>
-              <CustomerParts />
-            </ProtectedRoute>
-          } />
-          <Route path="checkout" element={
-            <ProtectedRoute allowedRoles={customerRoles}>
-              <CustomerCheckout />
-            </ProtectedRoute>
-          } />
-          <Route path="service-appointments" element={
-            <ProtectedRoute allowedRoles={customerRoles}>
-              <CustomerServiceAppointments />
-            </ProtectedRoute>
-          } />
+          <Route index element={<CustomerProfile />} />
+          <Route path="profile" element={<CustomerProfile />} />
+          <Route path="estimates" element={<CustomerEstimates />} />
+          <Route path="estimates/:estimateId" element={<CustomerEstimateDetail />} />
+          <Route path="invoices" element={<CustomerInvoices />} />
+          <Route path="transactions" element={<CustomerTransactions />} />
+          <Route path="settings" element={<CustomerSettings />} />
+          <Route path="parts" element={<CustomerParts />} />
+          <Route path="checkout" element={<CustomerCheckout />} />
+          <Route path="service-appointments" element={<CustomerServiceAppointments />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

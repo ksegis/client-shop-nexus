@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { User, LogOut, Settings, ChevronDown } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/auth";
 
 interface UserProfileDropdownProps {
   portalType?: 'customer' | 'shop';
@@ -20,22 +19,28 @@ interface UserProfileDropdownProps {
 
 const UserProfileDropdown = ({ portalType, onSignOut }: UserProfileDropdownProps) => {
   const [open, setOpen] = useState(false);
-  const { user, profile, signOut, isDevMode } = useAuth();
   const navigate = useNavigate();
   
-  if (!user) return null;
+  // Mock user data
+  const mockUser = {
+    firstName: "Dev",
+    lastName: "User",
+    email: "customer@example.com",
+    role: "customer"
+  };
   
-  const firstName = profile?.first_name || user?.user_metadata?.first_name || "";
-  const lastName = profile?.last_name || user?.user_metadata?.last_name || "";
+  const firstName = mockUser.firstName;
+  const lastName = mockUser.lastName;
   const initials = firstName && lastName ? `${firstName[0]}${lastName[0]}` : "U";
-  const fullName = firstName && lastName ? `${firstName} ${lastName}` : user?.email || "User";
-  const role = profile?.role || user?.user_metadata?.role || "user";
+  const fullName = firstName && lastName ? `${firstName} ${lastName}` : mockUser.email || "User";
+  const role = mockUser.role;
+  const isDevMode = true;
   
   const handleSignOut = async () => {
     if (onSignOut) {
       await onSignOut();
     } else {
-      await signOut();
+      // Simply navigate without auth check
       navigate("/auth");
     }
   };
@@ -48,7 +53,7 @@ const UserProfileDropdown = ({ portalType, onSignOut }: UserProfileDropdownProps
           className="relative h-10 w-10 rounded-full flex items-center justify-center"
         >
           <Avatar className="h-8 w-8">
-            <AvatarImage src={profile?.avatar_url || ""} alt={fullName} />
+            <AvatarImage src="" alt={fullName} />
             <AvatarFallback className="bg-shop-primary text-white">
               {initials}
             </AvatarFallback>
