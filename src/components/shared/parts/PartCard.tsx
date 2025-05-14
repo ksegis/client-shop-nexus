@@ -27,7 +27,7 @@ export const PartCard = ({
   
   const getStockStatusColor = (quantity: number, reorderLevel: number = 10) => {
     if (quantity <= 0) return "destructive";
-    if (quantity <= reorderLevel) return "secondary";
+    if (quantity <= reorderLevel) return "secondary"; // Changed from "warning" to "secondary"
     return "default";
   };
   

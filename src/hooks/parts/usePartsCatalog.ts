@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +18,8 @@ export const usePartsCatalog = () => {
     queryKey: ['parts-catalog', searchFilters],
     queryFn: async () => {
       try {
+        console.log('Fetching parts with filters:', JSON.stringify(searchFilters));
+        
         // Start building the query
         let query = supabase
           .from('inventory')
@@ -26,28 +28,43 @@ export const usePartsCatalog = () => {
         
         // Apply filters if they exist
         if (searchFilters.query) {
-          query = query.or(`name.ilike.%${searchFilters.query}%,sku.ilike.%${searchFilters.query}%,description.ilike.%${searchFilters.query}%`);
+          const searchTerm = searchFilters.query.trim();
+          console.log('Applying search term filter:', searchTerm);
+          query = query.or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
         }
         
         if (searchFilters.category) {
+          console.log('Applying category filter:', searchFilters.category);
           query = query.eq('category', searchFilters.category);
         }
         
         if (searchFilters.manufacturer) {
+          console.log('Applying manufacturer filter:', searchFilters.manufacturer);
           query = query.eq('supplier', searchFilters.manufacturer);
         }
         
         if (searchFilters.minPrice !== undefined) {
+          console.log('Applying min price filter:', searchFilters.minPrice);
           query = query.gte('price', searchFilters.minPrice);
         }
         
         if (searchFilters.maxPrice !== undefined) {
+          console.log('Applying max price filter:', searchFilters.maxPrice);
           query = query.lte('price', searchFilters.maxPrice);
         }
         
         const { data, error } = await query;
         
         if (error) throw error;
+        
+        console.log('Parts data fetched:', data ? data.length : 0, 'items found');
+        if (data && data.length === 0) {
+          // No results found, show a toast
+          toast({
+            title: "No parts found",
+            description: "Try adjusting your search filters or add items to inventory",
+          });
+        }
         
         // Map the inventory items to the Part interface
         const partsData: Part[] = (data || []).map((item: any) => ({
@@ -79,6 +96,16 @@ export const usePartsCatalog = () => {
       }
     },
   });
+
+  // Debug effect to log state changes
+  useEffect(() => {
+    console.log('Parts catalog state:', {
+      partsCount: parts?.length || 0,
+      isLoading,
+      error: error ? 'Error fetching parts' : null,
+      filters: searchFilters
+    });
+  }, [parts, isLoading, error, searchFilters]);
   
   const getCategories = async () => {
     try {
@@ -92,7 +119,9 @@ export const usePartsCatalog = () => {
       
       // Extract unique categories
       const categories = new Set(data.map((item: any) => item.category).filter(Boolean));
-      return Array.from(categories);
+      const categoriesArray = Array.from(categories);
+      console.log('Categories fetched:', categoriesArray);
+      return categoriesArray;
     } catch (err) {
       console.error('Error fetching categories:', err);
       toast({
@@ -116,7 +145,9 @@ export const usePartsCatalog = () => {
       
       // Extract unique suppliers
       const suppliers = new Set(data.map((item: any) => item.supplier).filter(Boolean));
-      return Array.from(suppliers);
+      const suppliersArray = Array.from(suppliers);
+      console.log('Suppliers fetched:', suppliersArray);
+      return suppliersArray;
     } catch (err) {
       console.error('Error fetching suppliers:', err);
       toast({
@@ -125,6 +156,48 @@ export const usePartsCatalog = () => {
         description: "Failed to load suppliers.",
       });
       return [];
+    }
+  };
+
+  // Helper function to add a sample part for testing
+  const addSamplePart = async () => {
+    try {
+      const samplePart = {
+        name: "Sample Brake Pad",
+        description: "High-quality brake pads for heavy-duty trucks",
+        sku: "BP-12345",
+        category: "Brakes",
+        supplier: "BrakeMaster",
+        price: 89.99,
+        cost: 45.50,
+        quantity: 25,
+        reorder_level: 10
+      };
+
+      const { data, error } = await supabase
+        .from('inventory')
+        .insert(samplePart)
+        .select();
+
+      if (error) throw error;
+      
+      toast({
+        title: "Sample part added",
+        description: "A sample part has been added to inventory for testing.",
+      });
+      
+      // Refresh the catalog
+      refetch();
+      
+      return data;
+    } catch (err) {
+      console.error('Error adding sample part:', err);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to add sample part to inventory.",
+      });
+      return null;
     }
   };
   
@@ -136,6 +209,7 @@ export const usePartsCatalog = () => {
     setSearchFilters,
     getCategories,
     getSuppliers,
-    refreshCatalog: refetch
+    refreshCatalog: refetch,
+    addSamplePart // Added for testing
   };
 };

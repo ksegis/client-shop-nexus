@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Package } from 'lucide-react';
+import { ShoppingCart, Package, Plus } from 'lucide-react';
 import { PartsSearchFilters } from '@/components/shared/parts/PartsSearchFilters';
 import { PartsCatalogGrid } from '@/components/shared/parts/PartsCatalogGrid';
 import { PartDetailDialog } from '@/components/shared/parts/PartDetailDialog';
@@ -22,7 +22,8 @@ const ShopParts = () => {
     setSearchFilters,
     getCategories,
     getSuppliers,
-    refreshCatalog
+    refreshCatalog,
+    addSamplePart
   } = usePartsCatalog();
   
   const { 
@@ -46,6 +47,13 @@ const ShopParts = () => {
     };
     
     loadFilterOptions();
+    
+    // Log some debug information
+    console.log('ShopParts component mounted', {
+      searchFilters,
+      isLoading,
+      partsCount: parts.length
+    });
   }, []);
   
   const handleViewDetails = (partId: string) => {
@@ -93,6 +101,11 @@ const ShopParts = () => {
   
   // Calculate out of stock items for dashboard
   const outOfStockCount = parts.filter(part => part.quantity <= 0).length;
+
+  // Handle adding a sample part for testing
+  const handleAddSamplePart = async () => {
+    await addSamplePart();
+  };
   
   return (
     <div className="space-y-6">
@@ -104,19 +117,30 @@ const ShopParts = () => {
           </p>
         </div>
         
-        <Button 
-          onClick={() => setCartOpen(true)} 
-          variant={getCartItemCount() > 0 ? "default" : "outline"}
-          className="sm:self-end"
-        >
-          <ShoppingCart className="mr-2 h-4 w-4" />
-          Sale Cart
-          {getCartItemCount() > 0 && (
-            <Badge variant="secondary" className="ml-2">
-              {getCartItemCount()}
-            </Badge>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            onClick={handleAddSamplePart}
+            className="sm:self-end"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Sample Part
+          </Button>
+
+          <Button 
+            onClick={() => setCartOpen(true)} 
+            variant={getCartItemCount() > 0 ? "default" : "outline"}
+            className="sm:self-end"
+          >
+            <ShoppingCart className="mr-2 h-4 w-4" />
+            Sale Cart
+            {getCartItemCount() > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {getCartItemCount()}
+              </Badge>
+            )}
+          </Button>
+        </div>
       </div>
       
       {/* Quick stats */}
