@@ -1,74 +1,112 @@
 
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, Package, BarChart, Plus } from "lucide-react";
+import { 
+  Package2, 
+  Search, 
+  ShoppingCart,
+  FileText,
+  ClipboardList,
+} from "lucide-react";
+import { useState } from "react";
 import { PartNumberSearch } from "./PartNumberSearch";
-import { InventoryItem } from '@/pages/shop/inventory/types';
+import { SpecialOrderDialog } from "@/components/shared/parts/SpecialOrderDialog";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface PartsHeaderProps {
   getCartItemCount: () => number;
   setCartOpen: (open: boolean) => void;
   onCheckInventory: () => Promise<void>;
   onAddSamplePart: () => Promise<void>;
-  onSelectPart?: (part: InventoryItem) => void;
+  onSelectPart?: (item: any) => void;
 }
 
-export const PartsHeader = ({
+export function PartsHeader({
   getCartItemCount,
   setCartOpen,
   onCheckInventory,
   onAddSamplePart,
   onSelectPart
-}: PartsHeaderProps) => {
+}: PartsHeaderProps) {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [specialOrderOpen, setSpecialOrderOpen] = useState(false);
+  
+  const cartCount = getCartItemCount();
+  
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="flex flex-col space-y-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Parts Desk</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Parts Desk</h1>
           <p className="text-muted-foreground">
-            Browse, search and order parts for your shop
+            Search, order, and manage parts inventory
           </p>
         </div>
         
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          {getCartItemCount() > 0 ? (
-            <Button 
-              variant="outline" 
-              className="relative"
-              onClick={() => setCartOpen(true)}
-            >
-              <ShoppingCart className="h-5 w-5 mr-2" />
-              Cart
-              <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {getCartItemCount()}
-              </span>
-            </Button>
-          ) : null}
+        <div className="flex items-center space-x-2 mt-2 sm:mt-0">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => setSpecialOrderOpen(true)}>
+                  <ClipboardList className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Special Order</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           
-          <Button 
-            variant="default" 
-            onClick={onAddSamplePart}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <Plus className="h-5 w-5 mr-2" />
-            Add Sample Part
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => setSearchOpen(true)}>
+                  <Search className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Search by Part #</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          <Button variant="outline" size="icon" onClick={() => setCartOpen(true)} className="relative">
+            <ShoppingCart className="h-4 w-4" />
+            {cartCount > 0 && (
+              <Badge variant="destructive" className="absolute -top-2 -right-2 px-1 min-w-[1.1rem] h-[1.1rem] flex items-center justify-center text-xs">
+                {cartCount}
+              </Badge>
+            )}
           </Button>
           
-          <Button 
-            variant="secondary" 
-            onClick={onCheckInventory}
-          >
-            <BarChart className="h-5 w-5 mr-2" />
-            Check Inventory
-          </Button>
+          {process.env.NODE_ENV !== 'production' && (
+            <>
+              <Button variant="outline" size="icon" onClick={onCheckInventory}>
+                <FileText className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" onClick={onAddSamplePart}>
+                <Package2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
         </div>
       </div>
       
-      {/* Quick part number search */}
-      {onSelectPart && (
-        <div className="w-full md:max-w-md">
-          <PartNumberSearch onSelectPart={onSelectPart} />
-        </div>
-      )}
+      <PartNumberSearch 
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onSelectPart={onSelectPart}
+      />
+      
+      <SpecialOrderDialog
+        open={specialOrderOpen}
+        onOpenChange={setSpecialOrderOpen}
+      />
     </div>
   );
-};
+}

@@ -66,3 +66,22 @@ export interface PartOrder {
   updated_at: string;
   estimated_delivery?: string;
 }
+
+export interface CoreCharge {
+  id: string;
+  part_id: string;
+  amount: number;
+  is_refundable: boolean;
+  description: string;
+}
+
+export interface PartReturn {
+  id: string;
+  order_item_id: string;
+  return_date: string;
+  reason: string;
+  condition: 'new' | 'used' | 'damaged';
+  approved: boolean;
+  refund_amount: number;
+  processed_by?: string;
+}

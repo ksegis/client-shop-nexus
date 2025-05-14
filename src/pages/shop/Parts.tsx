@@ -5,10 +5,12 @@ import { PartDetailDialog } from '@/components/shared/parts/PartDetailDialog';
 import { PartsCart } from '@/components/shared/parts/PartsCart';
 import { PartsHeader } from '@/components/shop/parts/PartsHeader';
 import { PartsInventorySummary } from '@/components/shop/parts/PartsInventorySummary';
+import { SpecialOrdersTracker } from '@/components/shop/parts/SpecialOrdersTracker';
 import { usePartsPage } from '@/hooks/parts/usePartsPage';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { useEffect, useState } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const ShopParts = () => {
   const {
@@ -62,22 +64,44 @@ const ShopParts = () => {
         </Alert>
       )}
       
-      {parts.length > 0 && <PartsInventorySummary parts={parts} />}
-      
-      <PartsSearchFilters
-        searchFilters={searchFilters}
-        setSearchFilters={setSearchFilters}
-        categories={categories}
-        suppliers={suppliers}
-      />
-      
-      <PartsCatalogGrid
-        parts={parts}
-        isLoading={isLoading}
-        onAddToCart={handleAddToCart}
-        onViewDetails={handleViewDetails}
-        showInventory={true}  // Show stock levels for shop staff
-      />
+      <Tabs defaultValue="catalog" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="catalog">Parts Catalog</TabsTrigger>
+          <TabsTrigger value="special-orders">Special Orders</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="catalog" className="space-y-6">
+          {parts.length > 0 && <PartsInventorySummary parts={parts} />}
+          
+          <PartsSearchFilters
+            searchFilters={searchFilters}
+            setSearchFilters={setSearchFilters}
+            categories={categories}
+            suppliers={suppliers}
+          />
+          
+          <PartsCatalogGrid
+            parts={parts}
+            isLoading={isLoading}
+            onAddToCart={handleAddToCart}
+            onViewDetails={handleViewDetails}
+            showInventory={true}  // Show stock levels for shop staff
+          />
+        </TabsContent>
+        
+        <TabsContent value="special-orders">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-xl font-semibold mb-2">Special Orders</h2>
+              <p className="text-muted-foreground">
+                Track parts that are not in regular inventory and have been specially ordered.
+              </p>
+            </div>
+            
+            <SpecialOrdersTracker />
+          </div>
+        </TabsContent>
+      </Tabs>
       
       <PartDetailDialog
         partId={selectedPartId}
@@ -92,6 +116,6 @@ const ShopParts = () => {
       />
     </div>
   );
-};
+}
 
 export default ShopParts;

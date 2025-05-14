@@ -5,6 +5,7 @@ import { usePartsCart } from '@/contexts/parts/PartsCartContext';
 import { useToast } from '@/hooks/use-toast';
 import { Part } from '@/types/parts';
 import { InventoryItem } from '@/pages/shop/inventory/types';
+import { useSpecialOrder } from '@/hooks/parts/useSpecialOrder';
 
 export const usePartsPage = () => {
   const { toast } = useToast();
@@ -26,6 +27,8 @@ export const usePartsPage = () => {
     cart
   } = usePartsCart();
   
+  const { specialOrders, fetchSpecialOrders } = useSpecialOrder();
+  
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
@@ -41,6 +44,7 @@ export const usePartsPage = () => {
     };
     
     loadFilterOptions();
+    fetchSpecialOrders();
     
     // Log some debug information
     console.log('ShopParts component mounted', {
@@ -133,6 +137,7 @@ export const usePartsPage = () => {
     setSearchFilters,
     categories,
     suppliers,
+    specialOrders,
     selectedPartId,
     cartOpen,
     setCartOpen,
