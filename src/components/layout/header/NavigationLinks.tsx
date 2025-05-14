@@ -20,16 +20,17 @@ export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
     { name: 'Parts Catalog', path: '/customer/parts' }
   ];
   
+  // Reordered according to the specified sequence
   const shopLinks: NavigationLink[] = [
     { name: 'Dashboard', path: '/shop' },
     { name: 'Service Desk', path: '/shop/service-desk' },
-    { name: 'Reports', path: '/shop/reports' },
-    { name: 'Employees', path: '/shop/employees' },
-    { name: 'Inventory', path: '/shop/inventory' },
-    { name: 'Parts Desk', path: '/shop/parts' },
     { name: 'Customers', path: '/shop/customers' },
     { name: 'Estimates', path: '/shop/estimates' },
-    { name: 'Invoices', path: '/shop/invoices' }
+    { name: 'Invoices', path: '/shop/invoices' },
+    { name: 'Parts Desk', path: '/shop/parts' },
+    { name: 'Inventory', path: '/shop/inventory' },
+    { name: 'Reports', path: '/shop/reports' },
+    { name: 'Employees', path: '/shop/employees' }
   ];
   
   // Admin links for shop portal

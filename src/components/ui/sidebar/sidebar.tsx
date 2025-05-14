@@ -36,14 +36,14 @@ import {
 // Map paths to icons
 const pathIconMap = {
   "/shop": BarChart,
-  "/shop/reports": BarChart,
-  "/shop/employees": Users,
-  "/shop/inventory": Package,
   "/shop/service-desk": ListChecks,
-  "/shop/parts": ShoppingCart,
   "/shop/customers": UserPlus,
   "/shop/estimates": FileText,
   "/shop/invoices": FileCheck,
+  "/shop/parts": ShoppingCart,
+  "/shop/inventory": Package,
+  "/shop/reports": BarChart,
+  "/shop/employees": Users,
   "/shop/admin": Shield,
 };
 
