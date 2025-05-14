@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Vehicle } from '@/types/vehicle';
 import { useAuth } from '@/contexts/auth';
@@ -44,7 +43,8 @@ export const useVehicleManagement = () => {
           vin: '1HGBH41JXMN109186',
           owner_id: 'mock-user-id',
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          mileage: 45000
         },
         {
           id: 'mock-vehicle-2',
@@ -57,7 +57,8 @@ export const useVehicleManagement = () => {
           vin: '2FMDK3GC4BBA52681',
           owner_id: 'mock-user-id',
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          mileage: 32000
         }
       ];
       setVehicles(mockVehicles);

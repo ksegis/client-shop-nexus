@@ -12,9 +12,11 @@ export interface Vehicle {
   created_at: string;
   updated_at: string;
   images?: string[] | null; // Array of image URLs
+  mileage?: number; // Added mileage property
 }
 
 export type NewVehicleData = Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'> & {
   color?: string;
   license_plate?: string;
+  mileage?: number; // Also adding it here
 };

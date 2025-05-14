@@ -34,7 +34,8 @@ export const useVehicleCrud = () => {
       // Ensure all data is properly typed
       const typedVehicles: Vehicle[] = data?.map(vehicle => ({
         ...vehicle,
-        year: vehicle.year.toString() // Convert number to string to match our interface
+        year: vehicle.year.toString(), // Convert number to string to match our interface
+        mileage: vehicle.mileage // Include mileage if it exists
       })) || [];
       
       return typedVehicles;
@@ -90,6 +91,7 @@ export const useVehicleCrud = () => {
       const dbVehicleData = {
         ...vehicleData,
         year: parseInt(vehicleData.year, 10), // Convert string to number explicitly
+        mileage: vehicleData.mileage, // Include mileage
         owner_id: effectiveOwnerId // This is crucial for RLS - set owner_id to the customer's ID
       };
 
@@ -109,7 +111,8 @@ export const useVehicleCrud = () => {
       // Convert back to our interface format
       const newVehicle: Vehicle = {
         ...data,
-        year: data.year.toString() // Convert number back to string
+        year: data.year.toString(), // Convert number back to string
+        mileage: data.mileage // Include mileage
       };
       
       toast({
@@ -149,7 +152,8 @@ export const useVehicleCrud = () => {
       // Convert back to our interface format
       const updatedVehicle: Vehicle = {
         ...data,
-        year: data.year.toString() // Convert number back to string
+        year: data.year.toString(), // Convert number back to string
+        mileage: data.mileage // Include mileage
       };
       
       toast({
