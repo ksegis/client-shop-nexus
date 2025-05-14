@@ -8,8 +8,6 @@ import {
   ClipboardList,
   ArrowLeftRight,
   FileBarChart,
-  LayoutGrid,
-  LayoutList
 } from "lucide-react";
 import { useState } from "react";
 import { PartNumberSearch } from "./PartNumberSearch";
@@ -24,7 +22,6 @@ import {
 import { PartQuotationDialog } from "@/components/shared/parts/PartQuotationDialog";
 import { CoreChargeHandler } from "@/components/shared/parts/CoreChargeHandler";
 import { Part } from "@/types/parts";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface PartsHeaderProps {
   getCartItemCount: () => number;
@@ -38,7 +35,7 @@ interface PartsHeaderProps {
   onSelectPart?: (item: any) => void;
   selectedPartForCoreReturn: Part | null;
   isCoreReturnOpen: boolean;
-  setCoreReturnOpen: (open: boolean) => void; // This now expects a boolean parameter
+  setCoreReturnOpen: (open: boolean) => void;
   onProcessCoreReturn?: (refundAmount: number, condition: string) => void;
   viewMode?: 'grid' | 'table';
   onViewModeChange?: (mode: 'grid' | 'table') => void;
@@ -58,7 +55,7 @@ export function PartsHeader({
   isCoreReturnOpen,
   setCoreReturnOpen,
   onProcessCoreReturn,
-  viewMode = 'grid',
+  viewMode,
   onViewModeChange
 }: PartsHeaderProps) {
   const [searchOpen, setSearchOpen] = useState(false);
@@ -78,21 +75,6 @@ export function PartsHeader({
         </div>
         
         <div className="flex items-center space-x-2 mt-2 sm:mt-0">
-          {onViewModeChange && (
-            <div className="border rounded-md mr-2">
-              <ToggleGroup type="single" value={viewMode} onValueChange={(value: 'grid' | 'table') => onViewModeChange(value)}>
-                <ToggleGroupItem value="grid" aria-label="Grid view">
-                  <LayoutGrid className="h-4 w-4" />
-                  <span className="sr-only">Grid</span>
-                </ToggleGroupItem>
-                <ToggleGroupItem value="table" aria-label="Table view">
-                  <LayoutList className="h-4 w-4" />
-                  <span className="sr-only">Table</span>
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </div>
-          )}
-          
           <Button 
             variant="outline" 
             className="text-xs"

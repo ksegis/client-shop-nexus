@@ -77,8 +77,6 @@ const ShopParts = () => {
         isCoreReturnOpen={coreReturn.isCoreReturnDialogOpen}
         setCoreReturnOpen={handleCoreReturnOpenChange}
         onProcessCoreReturn={coreReturn.handleProcessCoreReturn}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
       />
       
       {showDemo && catalog.parts.length === 0 && !catalog.isLoading && (
@@ -111,6 +109,7 @@ const ShopParts = () => {
             parts={catalog.parts}
             isLoading={catalog.isLoading}
             viewMode={viewMode}
+            onViewModeChange={setViewMode}
             onAddToCart={cart.handleAddToCart}
             onAddToQuotation={quotation.handleAddToQuotation}
             onViewDetails={catalog.handleViewDetails}

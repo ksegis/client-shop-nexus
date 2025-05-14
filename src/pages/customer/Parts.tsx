@@ -6,7 +6,7 @@ import { PartDetailDialog } from '@/components/shared/parts/PartDetailDialog';
 import { PartsCart } from '@/components/shared/parts/PartsCart';
 import { usePartsCatalog } from '@/hooks/parts/usePartsCatalog';
 import { usePartsCart } from '@/contexts/parts/PartsCartContext';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { Part } from '@/types/parts';
 import { ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -116,6 +116,7 @@ const CustomerParts = () => {
         parts={parts}
         isLoading={isLoading}
         viewMode={viewMode}
+        onViewModeChange={setViewMode}
         onAddToCart={handleAddToCart}
         onViewDetails={handleViewDetails}
         showInventory={false} // Don't show stock levels for customers

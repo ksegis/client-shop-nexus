@@ -8,11 +8,13 @@ import { PartsGrid } from './grid/PartsGrid';
 import { PartsGridHeader } from './grid/PartsGridHeader';
 import { CatalogPagination } from './grid/CatalogPagination';
 import { PartsTable } from './grid/PartsTable';
+import { ViewModeToggle } from './grid/ViewModeToggle';
 
 interface PartsCatalogGridProps {
   parts: Part[];
   isLoading: boolean;
   viewMode: 'grid' | 'table';
+  onViewModeChange: (mode: 'grid' | 'table') => void;
   onAddToCart?: (part: Part) => void;
   onAddToQuotation?: (part: Part) => void;
   onViewDetails: (partId: string) => void;
@@ -24,6 +26,7 @@ export const PartsCatalogGrid = ({
   parts,
   isLoading,
   viewMode = 'grid',
+  onViewModeChange,
   onAddToCart,
   onAddToQuotation,
   onViewDetails,
@@ -91,10 +94,12 @@ export const PartsCatalogGrid = ({
         startIndex={startIndex}
         endIndex={endIndex}
         pageSize={pageSize}
-        viewMode={viewMode}
         onPageSizeChange={handlePageSizeChange}
-        onViewModeChange={undefined}  // We'll manage viewMode at a higher level
       />
+      
+      <div className="flex justify-end mb-4">
+        <ViewModeToggle viewMode={viewMode} onViewModeChange={onViewModeChange} />
+      </div>
       
       {viewMode === 'grid' ? (
         <PartsGrid
