@@ -20,7 +20,16 @@ const SimpleInventory = () => {
   );
 
   // Debug log to check if inventory items are loaded
-  console.log('Inventory items loaded:', inventoryItems.length, inventoryItems);
+  console.log('SimpleInventory component - Inventory items loaded:', inventoryItems.length, inventoryItems);
+  
+  // Force a re-render when data changes
+  console.log('Rendering SimpleInventory with data:', 
+    { 
+      itemCount: inventoryItems.length,
+      hasData: inventoryItems.length > 0,
+      firstItemQuantity: inventoryItems[0]?.quantity
+    }
+  );
 
   return (
     <div className="space-y-6">
@@ -61,7 +70,11 @@ const SimpleInventory = () => {
           {isLoading ? (
             <div className="text-center py-6">Loading inventory data...</div>
           ) : filteredItems.length === 0 ? (
-            <div className="text-center py-6">No inventory items found</div>
+            <div className="text-center py-6">
+              {inventoryItems.length === 0 ? 
+                "No inventory items found in database. The table might be empty." : 
+                "No items match your search criteria"}
+            </div>
           ) : (
             <div className="rounded-md border">
               <Table>

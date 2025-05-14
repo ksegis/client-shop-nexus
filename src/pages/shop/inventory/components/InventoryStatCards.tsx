@@ -11,10 +11,12 @@ interface InventoryStatCardsProps {
 export const InventoryStatCards = ({ items }: InventoryStatCardsProps) => {
   // Calculate statistics from inventory items
   const stats = useMemo(() => {
-    console.log('Calculating stats for items:', items?.length || 0, items);
+    console.log('InventoryStatCards - Calculating stats for items:', items?.length || 0);
+    console.log('Items data sample:', items && items.length > 0 ? items[0] : 'No items');
     
     // Default values in case items is undefined or empty
     if (!items || items.length === 0) {
+      console.log('No items provided to InventoryStatCards - using default values');
       return {
         totalItems: 0,
         lowStockItems: 0,
@@ -49,15 +51,19 @@ export const InventoryStatCards = ({ items }: InventoryStatCardsProps) => {
       suppliersMap.set(supplier, (suppliersMap.get(supplier) || 0) + 1);
     });
     
-    return {
+    const result = {
       totalItems,
       lowStockItems,
       uniqueCategories: categoriesMap.size,
       uniqueSuppliers: suppliersMap.size
     };
+    
+    console.log('Calculated stats result:', result);
+    
+    return result;
   }, [items]);
 
-  console.log('Calculated stats:', stats);
+  console.log('InventoryStatCards - Rendering with stats:', stats);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
