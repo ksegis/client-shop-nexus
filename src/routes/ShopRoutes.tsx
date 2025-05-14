@@ -8,16 +8,17 @@ import Profile from "@/pages/shop/Profile";
 import Employees from "@/pages/shop/Employees";
 import Customers from "@/pages/shop/Customers";
 import Estimates from "@/pages/shop/Estimates";
-import ServiceAppointments from "@/pages/shop/ServiceAppointments"; // Add this import
+import ServiceAppointments from "@/pages/shop/ServiceAppointments";
 import WorkOrders from "@/pages/shop/WorkOrders";
 import Invoices from "@/pages/shop/invoices";
 import Reports from "@/pages/shop/Reports";
 import ApiConnectionsManager from "@/pages/shop/admin/ApiConnectionsManager";
 import UserManagement from "@/pages/shop/UserManagement";
-import RlsTroubleshooter from "@/components/dev/RlsTroubleshooter";
+import { RlsTroubleshooter } from "@/components/dev/RlsTroubleshooter";
 import NotFound from "@/pages/NotFound";
 import Layout from "@/components/layout/Layout";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
 
 // Define which roles are allowed to access shop routes
 const staffAndAdmin = ['staff', 'admin'];
@@ -39,7 +40,9 @@ const ShopRoutes = () => {
         } />
         <Route path="parts" element={
           <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <Parts />
+            <PartsCartProvider>
+              <Parts />
+            </PartsCartProvider>
           </ProtectedRoute>
         } />
         <Route path="inventory/simple" element={
@@ -87,7 +90,6 @@ const ShopRoutes = () => {
             <Reports />
           </ProtectedRoute>
         } />
-        {/* Add new route for Service Appointments */}
         <Route path="service-appointments" element={
           <ProtectedRoute allowedRoles={staffAndAdmin}>
             <ServiceAppointments />
