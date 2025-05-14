@@ -67,3 +67,10 @@
     padding: 0 0.5rem;
   }
 }
+
+/* hide lovable edit icon */
+.lovable-icon,
+.lovable-editor-button,
+.lovable-badge {
+  display: none !important;
+}
