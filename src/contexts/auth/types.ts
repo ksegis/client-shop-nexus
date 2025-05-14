@@ -28,4 +28,5 @@ export interface AuthContextType {
   signUp: (email: string, password: string, firstName?: string, lastName?: string) => Promise<AuthResult>;
   resetPassword: (email: string) => Promise<AuthResult>;
   updatePassword: (password: string) => Promise<AuthResult>;
+  getRedirectPathByRole: (role: string) => string;
 }
