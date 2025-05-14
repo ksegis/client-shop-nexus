@@ -15,9 +15,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   // Core authentication state
   const { user: authUser, session, loading: authLoading } = useAuthStateListener();
-  const { profile: authProfile, setProfile } = useProfileManagement(authUser);
   
-  // First define all useState hooks to maintain consistent hook order
+  // Define all useState hooks first to maintain consistent hook order
   const [loading, setLoading] = useState<boolean>(true);
   const [testRole, setTestRole] = useState<UserRole | null>(() => {
     // Check for persisted test role
@@ -25,15 +24,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return savedRole && isTestRole(savedRole) ? savedRole : null;
   });
   
+  // All other hooks after useState hooks
+  const { logAuthEvent } = useAuthLogging();
+  const { profile: authProfile, setProfile } = useProfileManagement(authUser);
+  const { testMode, testUsers, testProfiles, impersonateTestUser, stopImpersonation, getTestUserByRole } = useTestUsers();
+  const { iframeAuth, isInIframe } = useIframeAuth();
+  
   // Determine whether we're in dev mode
   const isDevMode = useMemo(() => {
     return process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
   }, []);
-  
-  // All other hooks after useState hooks
-  const { logAuthEvent } = useAuthLogging();
-  const { testMode, testUsers, testProfiles, impersonateTestUser, stopImpersonation, getTestUserByRole } = useTestUsers();
-  const { iframeAuth, isInIframe } = useIframeAuth();
   
   // Generate actual user and profile based on auth state
   const { user, profile, portalType } = useMemo(() => {
