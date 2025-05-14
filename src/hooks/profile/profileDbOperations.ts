@@ -63,8 +63,11 @@ export const createNewProfile = async (userId: string, email: string, metadata: 
   }
 
   try {
+    // Map test roles to valid database roles
+    let role = metadata?.role || 'customer';
+    
     // When saving to the database, we need to map the extended role to a database role
-    const dbRole = mapExtendedRoleToDbRole(metadata?.role || 'customer');
+    const dbRole = mapExtendedRoleToDbRole(role);
     
     const { error: insertError } = await supabase.from('profiles').insert({
       id: userId,

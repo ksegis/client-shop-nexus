@@ -1,108 +1,38 @@
 
-import { Database } from './types'
+import { Database } from './types';
 
-// Export the role types for use throughout the application
-export type ExtendedUserRole = 'customer' | 'staff' | 'admin' | 'inactive_staff' | 'inactive_admin';
-
-// Define the database user role type that matches what's in the database schema
+// Define the database role type from the Supabase schema
 export type DatabaseUserRole = Database['public']['Enums']['user_role'];
 
-// Define the mapping of extended roles to database roles
-export const mapExtendedRoleToDbRole = (role: ExtendedUserRole): DatabaseUserRole => {
-  // For inactive roles, we map them to their active versions in the database
-  if (role === 'inactive_staff') return 'staff';
-  if (role === 'inactive_admin') return 'admin';
-  
-  // For active roles, we can safely cast as they have the same names
-  return role as DatabaseUserRole;
-};
+// Extended roles include both database roles and application-specific roles
+export type ExtendedUserRole = 
+  | DatabaseUserRole 
+  | 'test_customer' 
+  | 'test_staff' 
+  | 'test_admin';
 
-// Define extended database type as an interface extension rather than redefining Database
-export interface ExtendedDatabase {
-  public: Database['public'] & {
-    Tables: Database['public']['Tables'] & {
-      service_appointments: {
-        Row: {
-          id: string;
-          customer_id: string;
-          vehicle_id: string;
-          appointment_date: string;
-          appointment_time: string;
-          service_type: string;
-          description: string | null;
-          status: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          customer_id: string;
-          vehicle_id: string;
-          appointment_date: string;
-          appointment_time: string;
-          service_type: string;
-          description?: string | null;
-          status?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          customer_id?: string;
-          vehicle_id?: string;
-          appointment_date?: string;
-          appointment_time?: string;
-          service_type?: string;
-          description?: string | null;
-          status?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
-      service_history: {
-        Row: {
-          id: string;
-          customer_id: string;
-          vehicle_id: string;
-          service_date: string;
-          service_type: string;
-          description: string;
-          technician_notes: string | null;
-          parts_used: string[] | null;
-          labor_hours: number;
-          total_cost: number;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          customer_id: string;
-          vehicle_id: string;
-          service_date: string;
-          service_type: string;
-          description: string;
-          technician_notes?: string | null;
-          parts_used?: string[] | null;
-          labor_hours?: number;
-          total_cost?: number;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          customer_id?: string;
-          vehicle_id?: string;
-          service_date?: string;
-          service_type?: string;
-          description?: string;
-          technician_notes?: string | null;
-          parts_used?: string[] | null;
-          labor_hours?: number;
-          total_cost?: number;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
-    }
+// Function to map extended roles to valid database roles
+export function mapExtendedRoleToDbRole(extendedRole: ExtendedUserRole): DatabaseUserRole {
+  // Map test roles to their corresponding database roles
+  switch(extendedRole) {
+    case 'test_customer':
+      return 'customer';
+    case 'test_staff':
+      return 'staff';
+    case 'test_admin':
+      return 'admin';
+    default:
+      // For all other values, assume they are already valid database roles
+      return extendedRole as DatabaseUserRole;
   }
+}
+
+// Function to determine if a role is a test role
+export function isTestRole(role: ExtendedUserRole): boolean {
+  return role.startsWith('test_');
+}
+
+// Function to get the base role from an extended role
+export function getBaseRole(role: ExtendedUserRole): DatabaseUserRole {
+  return mapExtendedRoleToDbRole(role);
 }
