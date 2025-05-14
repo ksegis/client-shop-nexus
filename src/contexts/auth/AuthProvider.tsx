@@ -30,17 +30,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   // Set up automatic authentication for development
   useEffect(() => {
-    setLoading(false);
+    const initializeAuth = async () => {
+      // First check if we have a session
+      if (authUser) {
+        console.log('User already authenticated:', authUser.email);
+        
+        // Check if profile exists for RLS policies to work correctly
+        try {
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', authUser.id)
+            .maybeSingle();
+          
+          if (profileError || !profileData) {
+            console.warn('Profile not found for authenticated user, creating one...');
+            
+            // Create profile if none exists (important for RLS policies)
+            const { error: insertError } = await supabase
+              .from('profiles')
+              .insert({
+                id: authUser.id,
+                email: authUser.email || '',
+                role: authUser.user_metadata?.role || 'staff',
+                first_name: authUser.user_metadata?.first_name || '',
+                last_name: authUser.user_metadata?.last_name || ''
+              });
+              
+            if (insertError) {
+              console.error('Failed to create profile:', insertError);
+            } else {
+              console.log('Profile created successfully for RLS policies');
+            }
+          }
+        } catch (err) {
+          console.error('Error checking/creating profile:', err);
+        }
+      } else {
+        console.log('Development mode: Using mock authentication');
+        toast({
+          title: "Development Mode",
+          description: "Using mock authentication credentials",
+        });
+      }
+      
+      setLoading(false);
+    };
     
-    // For development, just log that we're using mock auth
-    if (!authUser) {
-      console.log('Development mode: Using mock authentication');
-      toast({
-        title: "Development Mode",
-        description: "Using mock authentication credentials",
-      });
-    } else {
-      console.log('User already authenticated:', authUser.email);
+    if (!authLoading) {
+      initializeAuth();
     }
   }, [authLoading, authUser, toast]);
 
@@ -65,13 +103,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session: session,
     signUp: async (email: string, password: string, firstName = '', lastName = '') => {
       try {
-        const metadata = { first_name: firstName, last_name: lastName };
+        const metadata = { first_name: firstName, last_name: lastName, role: 'customer' };
         const { data, error } = await supabase.auth.signUp({ 
           email, 
           password,
           options: { data: metadata }
         });
+        
         if (error) throw error;
+        
+        // Create profile for new user (important for RLS policies)
+        if (data?.user) {
+          await supabase.from('profiles').insert({
+            id: data.user.id,
+            email,
+            role: 'customer',
+            first_name: firstName,
+            last_name: lastName
+          });
+        }
+        
         return { success: true, data };
       } catch (error: any) {
         console.error('Sign up error:', error);
@@ -85,11 +136,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     signIn: async (email: string, password: string) => {
       try {
+        console.log(`Attempting to sign in with email: ${email}`);
         const { data, error } = await supabase.auth.signInWithPassword({ 
           email, 
           password 
         });
-        if (error) throw error;
+        
+        if (error) {
+          console.error('Sign in error:', error);
+          throw error;
+        }
+        
+        console.log('Sign in successful:', data.user?.email);
         return { success: true, data };
       } catch (error: any) {
         console.error('Sign in error:', error);
@@ -103,9 +161,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     signOut: async () => {
       try {
+        console.log('Signing out user');
         const { error } = await supabase.auth.signOut();
+        
         if (error) throw error;
+        
         navigate('/auth');
+        console.log('User signed out successfully');
         return { success: true };
       } catch (error: any) {
         console.error('Sign out error:', error);

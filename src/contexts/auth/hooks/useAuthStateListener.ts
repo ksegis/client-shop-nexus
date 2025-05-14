@@ -17,19 +17,56 @@ export function useAuthStateListener() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
         console.log('Auth state change:', event);
+        
+        // Only synchronously update state in the callback
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         setLoading(false);
+        
+        // Use setTimeout to defer any complex operations
+        if (currentSession?.user) {
+          setTimeout(async () => {
+            try {
+              // Check if user has a profile
+              const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', currentSession.user.id)
+                .maybeSingle();
+                
+              if (profileError) {
+                console.error('Error fetching user profile:', profileError);
+              } else if (!profileData) {
+                console.warn('No profile found for user, this may cause RLS issues');
+              } else {
+                console.log('User profile verified, role:', profileData.role);
+              }
+            } catch (err) {
+              console.error('Error in deferred profile check:', err);
+            }
+          }, 0);
+        }
       }
     );
     
-    // Then check for existing session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      console.log('Got existing session:', currentSession?.user?.email || 'none');
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      setLoading(false);
-    });
+    // Then check for existing session (always after setting up the listener)
+    const initSession = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        console.log('Got existing session:', data.session?.user?.email || 'none');
+        
+        if (data.session) {
+          setSession(data.session);
+          setUser(data.session.user);
+        }
+      } catch (error) {
+        console.error('Error getting session:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    initSession();
     
     // Cleanup subscription on unmount
     return () => {

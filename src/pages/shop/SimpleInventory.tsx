@@ -1,150 +1,102 @@
+
 import { useState } from 'react';
-import { useInventoryData } from '@/hooks/useInventoryData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Search, RefreshCw, Plus } from 'lucide-react';
-import { InventoryStatCards } from './inventory/components/InventoryStatCards';
-import { InventoryDialog } from './inventory/InventoryDialog';
-import { InventoryFormValues } from './inventory/types';
-import { useInventory } from './inventory/useInventory';
-import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/auth';
+import { useRlsAwareInventoryData } from '@/hooks/useRlsAwareInventoryData';
+import { RlsTroubleshooter } from '@/components/dev/RlsTroubleshooter';
 
 const SimpleInventory = () => {
-  const { inventoryItems, isLoading, refetch } = useInventoryData();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const { addItemMutation } = useInventory();
-  const { toast } = useToast();
+  const { user, loading } = useAuth();
+  const { 
+    inventoryItems, 
+    isLoading,
+    error
+  } = useRlsAwareInventoryData();
   
-  // Filter items based on search term
-  const filteredItems = inventoryItems.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.sku && item.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  // Debug log to check if inventory items are loaded
-  console.log('SimpleInventory component - Inventory items loaded:', inventoryItems.length, inventoryItems);
+  const [showTroubleshooter, setShowTroubleshooter] = useState(false);
   
-  const handleAddItem = async (values: InventoryFormValues) => {
-    console.log('Adding inventory item with values:', values);
-    
-    addItemMutation.mutate(values, {
-      onSuccess: () => {
-        console.log('Item added successfully');
-        setDialogOpen(false);
-        refetch();
-      },
-      onError: (error) => {
-        console.error('Error adding item:', error);
-        toast({
-          variant: "destructive",
-          title: "Error adding item",
-          description: error.message || "An unknown error occurred"
-        });
-      }
-    });
-  };
-
+  if (loading) {
+    return <div className="p-8 text-center">Loading authentication status...</div>;
+  }
+  
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="container mx-auto p-4 space-y-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Parts Inventory</h1>
+          <h1 className="text-2xl font-bold">Simple Inventory</h1>
           <p className="text-muted-foreground">
-            View available inventory items
+            {user 
+              ? `Authenticated as ${user.email} (${user.app_metadata?.role || user.user_metadata?.role || 'no role'})` 
+              : 'Not authenticated - RLS policies may block access'}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            onClick={() => setDialogOpen(true)}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Item
-          </Button>
-          <Button onClick={() => refetch()} disabled={isLoading}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-        </div>
+        <button 
+          onClick={() => setShowTroubleshooter(!showTroubleshooter)}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          {showTroubleshooter ? 'Hide' : 'Show'} RLS Troubleshooter
+        </button>
       </div>
-
-      {/* Always show the stats cards, even when loading or empty */}
-      <InventoryStatCards items={inventoryItems} />
-
+      
+      {showTroubleshooter && (
+        <RlsTroubleshooter />
+      )}
+      
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="text-red-700">Error Loading Inventory</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-red-700">
+              {error instanceof Error ? error.message : 'An unknown error occurred'}
+            </p>
+            <p className="mt-2 text-sm text-red-600">
+              This may be due to Row Level Security (RLS) policies. Use the troubleshooter above to diagnose.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+      
       <Card>
         <CardHeader>
-          <CardTitle>Inventory Items</CardTitle>
+          <CardTitle>Inventory Items ({inventoryItems.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="relative mb-4">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search inventory items... (type here to search)"
-              className="pl-8"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <div className="text-xs text-muted-foreground mt-1">
-              Search updates as you type. You can search by name, SKU, or description.
-            </div>
-          </div>
-
           {isLoading ? (
-            <div className="text-center py-6">Loading inventory data...</div>
-          ) : filteredItems.length === 0 ? (
-            <div className="text-center py-6">
-              {inventoryItems.length === 0 ? 
-                "No inventory items found in database. The table might be empty." : 
-                "No items match your search criteria"}
+            <p>Loading inventory data...</p>
+          ) : inventoryItems.length > 0 ? (
+            <div className="grid gap-4">
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100">
+                      <th className="p-2 text-left">Name</th>
+                      <th className="p-2 text-left">Description</th>
+                      <th className="p-2 text-left">Quantity</th>
+                      <th className="p-2 text-left">Price</th>
+                      <th className="p-2 text-left">Category</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventoryItems.map((item) => (
+                      <tr key={item.id} className="border-t">
+                        <td className="p-2 font-medium">{item.name}</td>
+                        <td className="p-2">{item.description || '—'}</td>
+                        <td className="p-2">{item.quantity}</td>
+                        <td className="p-2">${item.price.toFixed(2)}</td>
+                        <td className="p-2">{item.category || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[200px]">Name</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Quantity</TableHead>
-                    <TableHead>Price</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredItems.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <div className="font-medium">{item.name}</div>
-                        {item.description && (
-                          <div className="text-xs text-muted-foreground truncate max-w-[300px]">
-                            {item.description}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>{item.category || "—"}</TableCell>
-                      <TableCell>{item.sku || "—"}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
-                      <TableCell>${item.price.toFixed(2)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <p>No inventory items found. This could be due to RLS policies or empty table.</p>
           )}
         </CardContent>
       </Card>
-
-      {/* Add Item Dialog */}
-      <InventoryDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onSubmit={handleAddItem}
-        editingItem={null}
-        isSubmitting={addItemMutation.isPending}
-      />
     </div>
   );
 };

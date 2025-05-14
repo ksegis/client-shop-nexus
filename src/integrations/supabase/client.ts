@@ -39,3 +39,61 @@ export const checkSupabaseConnection = async () => {
     return false;
   }
 };
+
+// Helper to check authentication status
+export const isAuthenticated = async () => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return !!session;
+  } catch (e) {
+    console.error('Auth check failed:', e);
+    return false;
+  }
+};
+
+// Helper to check current user's role
+export const getUserRole = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    if (error || !data) return null;
+    return data.role;
+  } catch (e) {
+    console.error('Role check failed:', e);
+    return null;
+  }
+};
+
+// Helper to check if current user is admin
+export const isUserAdmin = async () => {
+  const role = await getUserRole();
+  return role === 'admin';
+};
+
+// Helper for error handling with RLS policies
+export const handleRlsError = (error: any, toast: any) => {
+  console.error('Database operation failed:', error);
+  
+  if (error?.message?.includes('new row violates row-level security policy')) {
+    toast({
+      title: "Permission Denied",
+      description: "You don't have permission to perform this action. This may be due to Row Level Security restrictions.",
+      variant: "destructive",
+    });
+    return true;
+  }
+  
+  toast({
+    title: "Operation Failed",
+    description: error?.message || "An unknown error occurred",
+    variant: "destructive",
+  });
+  return false;
+};
