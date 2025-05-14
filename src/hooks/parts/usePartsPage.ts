@@ -1,222 +1,74 @@
 
-import { useState, useEffect } from 'react';
-import { usePartsCatalog } from '@/hooks/parts/usePartsCatalog';
-import { usePartsCart } from '@/contexts/parts/PartsCartContext';
-import { useToast } from '@/hooks/use-toast';
-import { Part } from '@/types/parts';
-import { InventoryItem } from '@/pages/shop/inventory/types';
-import { useSpecialOrder } from '@/hooks/parts/useSpecialOrder';
-import { usePartsQuotation } from '@/hooks/parts/usePartsQuotation';
-import { useCoreReturns } from '@/hooks/parts/useCoreReturns';
+import { useEffect } from 'react';
+import { useCatalogViewer } from '@/hooks/parts/useCatalogViewer';
+import { useCartOperations } from '@/hooks/parts/useCartOperations';
+import { useQuotationHandler } from '@/hooks/parts/useQuotationHandler';
+import { useCoreReturnHandler } from '@/hooks/parts/useCoreReturnHandler';
+import { useSpecialOrderHandler } from '@/hooks/parts/useSpecialOrderHandler';
 
 export const usePartsPage = () => {
-  const { toast } = useToast();
-  const { 
-    parts, 
-    isLoading, 
-    searchFilters, 
-    setSearchFilters,
-    getCategories,
-    getSuppliers,
-    refreshCatalog,
-    addSamplePart,
-    testDirectFetch
-  } = usePartsCatalog();
-  
-  const { 
-    addToCart, 
-    getCartItemCount,
-    cart
-  } = usePartsCart();
-  
-  const { specialOrders, fetchSpecialOrders } = useSpecialOrder();
-  
-  // Quotation system
-  const {
-    quotationItems,
-    isDialogOpen: isQuotationDialogOpen,
-    setIsDialogOpen: setQuotationDialogOpen,
-    addToQuotation,
-    removeFromQuotation,
-    getQuotationItemCount,
-    getQuotationTotal
-  } = usePartsQuotation();
-  
-  // Core returns handling
-  const {
-    selectedPart: selectedPartForCoreReturn,
-    isDialogOpen: isCoreReturnDialogOpen,
-    setIsDialogOpen: setCoreReturnDialogOpen,
-    openCoreReturnDialog,
-    processCoreReturn
-  } = useCoreReturns();
-  
-  const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [suppliers, setSuppliers] = useState<string[]>([]);
+  // Use our more focused hooks
+  const catalog = useCatalogViewer();
+  const cart = useCartOperations();
+  const quotation = useQuotationHandler();
+  const coreReturn = useCoreReturnHandler();
+  const specialOrder = useSpecialOrderHandler();
   
   useEffect(() => {
-    const loadFilterOptions = async () => {
-      const categoriesList = await getCategories();
-      const suppliersList = await getSuppliers();
-      
-      setCategories(categoriesList as string[]);
-      setSuppliers(suppliersList as string[]);
-    };
-    
-    loadFilterOptions();
-    fetchSpecialOrders();
+    // Load filter options and special orders when component mounts
+    catalog.loadFilterOptions();
+    specialOrder.fetchSpecialOrders();
     
     // Log some debug information
     console.log('ShopParts component mounted', {
-      searchFilters,
-      isLoading,
-      partsCount: parts.length
+      searchFilters: catalog.searchFilters,
+      isLoading: catalog.isLoading,
+      partsCount: catalog.parts.length
     });
   }, []);
   
-  const handleViewDetails = (partId: string) => {
-    setSelectedPartId(partId);
-  };
-  
-  const handleCloseDetails = () => {
-    setSelectedPartId(null);
-  };
-  
-  // Modified to match the expected signature in PartDetailDialog
-  const handleAddToCartFromDialog = (part: Part, quantity: number) => {
-    addToCart(part, quantity);
-  };
-  
-  // Simple adapter function to handle single-parameter calls from PartCard
-  const handleAddToCart = (part: Part) => {
-    addToCart(part, 1);  // Default to quantity of 1
-  };
-
-  // Handle adding to quotation
-  const handleAddToQuotation = (part: Part) => {
-    addToQuotation(part, 1);
-  };
-  
-  // Handle adding to quotation from dialog
-  const handleAddToQuotationFromDialog = (part: Part, quantity: number) => {
-    addToQuotation(part, quantity);
-  };
-  
-  // Process a core return
-  const handleProcessCoreReturn = (refundAmount: number, condition: string) => {
-    if (selectedPartForCoreReturn) {
-      processCoreReturn(selectedPartForCoreReturn.id, {
-        reason: "Customer return",
-        condition: condition as any,
-        approved: true,
-        refund_amount: refundAmount,
-        processed_by: "Current User"
-      });
-    }
-  };
-  
-  // New handler for part selection from quick search
-  const handleQuickPartSelect = (item: InventoryItem) => {
-    // Convert the inventory item to a Part format
-    const part: Part = {
-      id: item.id,
-      sku: item.sku || '',
-      name: item.name,
-      description: item.description || '',
-      category: item.category || 'Uncategorized',
-      price: item.price || 0,
-      cost: item.cost || 0,
-      quantity: item.quantity || 0,
-      reorder_level: item.reorder_level || 10,
-      supplier: item.supplier || '',
-      location: '',
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-    };
-    
-    // Open the part details dialog
-    setSelectedPartId(item.id);
-    
-    toast({
-      title: "Part found",
-      description: `Found part: ${item.name}`,
-    });
-  };
-  
-  const handleProcessTransaction = () => {
-    // For Phase 1, show a success toast
-    toast({
-      title: "Transaction processed",
-      description: `Processed sale for ${getCartItemCount()} items.`,
-    });
-    
-    // Clear the cart
-    // In future phases, this would actually update inventory and create transaction records
-    setTimeout(() => {
-      // Give the user a moment to see the success message
-      setCartOpen(false);
-    }, 1500);
-    
-    // Refresh catalog to reflect inventory changes (simulated for now)
-    setTimeout(() => {
-      refreshCatalog();
-    }, 2000);
-  };
-
-  // Handle adding a sample part for testing
-  const handleAddSamplePart = async () => {
-    await addSamplePart();
-  };
-  
-  // Handle direct inventory check
-  const handleCheckInventory = async () => {
-    await testDirectFetch();
-  };
-
-  // Handle opening core return dialog
-  const handleOpenCoreReturnDialog = (part: Part) => {
-    openCoreReturnDialog(part);
-  };
-
   return {
-    // Original functionality
-    parts,
-    isLoading,
-    searchFilters,
-    setSearchFilters,
-    categories,
-    suppliers,
-    specialOrders,
-    selectedPartId,
-    cartOpen,
-    setCartOpen,
-    getCartItemCount,
-    handleViewDetails,
-    handleCloseDetails,
-    handleAddToCart,
-    handleAddToCartFromDialog,
-    handleProcessTransaction,
-    handleAddSamplePart,
-    handleCheckInventory,
-    handleQuickPartSelect,
+    // Catalog functionality
+    parts: catalog.parts,
+    isLoading: catalog.isLoading,
+    searchFilters: catalog.searchFilters,
+    setSearchFilters: catalog.setSearchFilters,
+    categories: catalog.categories,
+    suppliers: catalog.suppliers,
+    selectedPartId: catalog.selectedPartId,
+    handleViewDetails: catalog.handleViewDetails,
+    handleCloseDetails: catalog.handleCloseDetails,
+    handleQuickPartSelect: catalog.handleQuickPartSelect,
+    handleAddSamplePart: catalog.handleAddSamplePart,
+    handleCheckInventory: catalog.handleCheckInventory,
+    refreshCatalog: catalog.refreshCatalog,
+    
+    // Cart functionality
+    cartOpen: cart.cartOpen,
+    setCartOpen: cart.setCartOpen,
+    getCartItemCount: cart.getCartItemCount,
+    handleAddToCart: cart.handleAddToCart,
+    handleAddToCartFromDialog: cart.handleAddToCartFromDialog,
+    handleProcessTransaction: cart.handleProcessTransaction,
     
     // Quotation functionality
-    quotationItems,
-    isQuotationDialogOpen,
-    setQuotationDialogOpen,
-    handleAddToQuotation,
-    handleAddToQuotationFromDialog,
-    removeFromQuotation,
-    getQuotationItemCount,
-    getQuotationTotal,
+    quotationItems: quotation.quotationItems,
+    isQuotationDialogOpen: quotation.isQuotationDialogOpen,
+    setQuotationDialogOpen: quotation.setQuotationDialogOpen,
+    handleAddToQuotation: quotation.handleAddToQuotation,
+    handleAddToQuotationFromDialog: quotation.handleAddToQuotationFromDialog,
+    removeFromQuotation: quotation.removeFromQuotation,
+    getQuotationItemCount: quotation.getQuotationItemCount,
+    getQuotationTotal: quotation.getQuotationTotal,
     
     // Core returns functionality
-    selectedPartForCoreReturn,
-    isCoreReturnDialogOpen,
-    setCoreReturnDialogOpen,
-    handleOpenCoreReturnDialog,
-    handleProcessCoreReturn
+    selectedPartForCoreReturn: coreReturn.selectedPartForCoreReturn,
+    isCoreReturnDialogOpen: coreReturn.isCoreReturnDialogOpen,
+    setCoreReturnDialogOpen: coreReturn.setCoreReturnDialogOpen,
+    handleOpenCoreReturnDialog: coreReturn.handleOpenCoreReturnDialog,
+    handleProcessCoreReturn: coreReturn.handleProcessCoreReturn,
+    
+    // Special orders functionality
+    specialOrders: specialOrder.specialOrders
   };
 };
