@@ -1,18 +1,19 @@
+
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { ServiceUpdate } from '@/hooks/useServiceUpdates';
+import { ServiceUpdate } from '@/hooks/work-orders/useServiceUpdates';
 import { CheckCircle, Clock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface ServiceUpdatesListProps {
   updates: ServiceUpdate[];
-  loading: boolean; // We'll keep this prop name for backward compatibility
+  loading: boolean;
   isShopPortal?: boolean;
 }
 
 export const ServiceUpdatesList: React.FC<ServiceUpdatesListProps> = ({
   updates,
-  loading, // This now accepts the isLoading value from the hook
+  loading,
   isShopPortal = false
 }) => {
   if (loading) {
@@ -39,7 +40,7 @@ export const ServiceUpdatesList: React.FC<ServiceUpdatesListProps> = ({
   const groupedUpdates: { [date: string]: ServiceUpdate[] } = {};
   
   updates.forEach(update => {
-    const date = new Date(update.created_at).toLocaleDateString();
+    const date = new Date(update.date).toLocaleDateString();
     if (!groupedUpdates[date]) {
       groupedUpdates[date] = [];
     }
@@ -73,6 +74,7 @@ export const ServiceUpdatesList: React.FC<ServiceUpdatesListProps> = ({
                   
                   <p className="text-sm whitespace-pre-line">{update.content}</p>
                   
+                  {/* Only show images if they exist */}
                   {update.images && update.images.length > 0 && (
                     <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
                       {update.images.map((imageUrl, index) => (
@@ -94,7 +96,7 @@ export const ServiceUpdatesList: React.FC<ServiceUpdatesListProps> = ({
                   )}
                   
                   <div className="mt-3 text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(update.created_at), { addSuffix: true })}
+                    {formatDistanceToNow(new Date(update.date), { addSuffix: true })}
                   </div>
                 </CardContent>
               </Card>
