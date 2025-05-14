@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Package, Plus } from 'lucide-react';
+import { ShoppingCart, Package, Plus, Database } from 'lucide-react';
 import { PartsSearchFilters } from '@/components/shared/parts/PartsSearchFilters';
 import { PartsCatalogGrid } from '@/components/shared/parts/PartsCatalogGrid';
 import { PartDetailDialog } from '@/components/shared/parts/PartDetailDialog';
@@ -23,7 +23,8 @@ const ShopParts = () => {
     getCategories,
     getSuppliers,
     refreshCatalog,
-    addSamplePart
+    addSamplePart,
+    testDirectFetch
   } = usePartsCatalog();
   
   const { 
@@ -107,6 +108,11 @@ const ShopParts = () => {
     await addSamplePart();
   };
   
+  // Handle direct inventory check
+  const handleCheckInventory = async () => {
+    await testDirectFetch();
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -118,6 +124,15 @@ const ShopParts = () => {
         </div>
         
         <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            onClick={handleCheckInventory}
+            className="sm:self-end"
+          >
+            <Database className="mr-2 h-4 w-4" />
+            Check Inventory
+          </Button>
+
           <Button 
             variant="outline"
             onClick={handleAddSamplePart}

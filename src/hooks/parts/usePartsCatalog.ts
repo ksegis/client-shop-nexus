@@ -53,11 +53,20 @@ export const usePartsCatalog = () => {
           query = query.lte('price', searchFilters.maxPrice);
         }
         
+        // Log the final query for debugging
+        console.log('Final query built:', query);
+        
         const { data, error } = await query;
         
-        if (error) throw error;
+        if (error) {
+          console.error('Error from Supabase query:', error);
+          throw error;
+        }
         
+        // Log the raw response to see what we're getting
+        console.log('Raw inventory data from Supabase:', data);
         console.log('Parts data fetched:', data ? data.length : 0, 'items found');
+        
         if (data && data.length === 0) {
           // No results found, show a toast
           toast({
@@ -67,22 +76,27 @@ export const usePartsCatalog = () => {
         }
         
         // Map the inventory items to the Part interface
-        const partsData: Part[] = (data || []).map((item: any) => ({
-          id: item.id,
-          sku: item.sku || '',
-          name: item.name,
-          description: item.description || '',
-          category: item.category || 'Uncategorized',
-          price: item.price || 0,
-          cost: item.cost || 0,
-          quantity: item.quantity || 0,
-          reorder_level: item.reorder_level || 10,
-          supplier: item.supplier || '',
-          location: item.location || '',
-          is_special_order: false, // Default value since it's not in the current schema
-          created_at: item.created_at,
-          updated_at: item.updated_at,
-        }));
+        const partsData: Part[] = (data || []).map((item: any) => {
+          console.log('Processing inventory item:', item);
+          return {
+            id: item.id,
+            sku: item.sku || '',
+            name: item.name,
+            description: item.description || '',
+            category: item.category || 'Uncategorized',
+            price: item.price || 0,
+            cost: item.cost || 0,
+            quantity: item.quantity || 0,
+            reorder_level: item.reorder_level || 10,
+            supplier: item.supplier || '',
+            location: item.location || '',
+            is_special_order: false, // Default value since it's not in the current schema
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+          };
+        });
+        
+        console.log('Processed parts data:', partsData);
         
         return partsData;
       } catch (err) {
@@ -95,6 +109,7 @@ export const usePartsCatalog = () => {
         return [];
       }
     },
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
   // Debug effect to log state changes
@@ -201,6 +216,36 @@ export const usePartsCatalog = () => {
     }
   };
   
+  // Function to test direct fetch from inventory
+  const testDirectFetch = async () => {
+    try {
+      console.log('Testing direct fetch from inventory table...');
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*');
+      
+      if (error) throw error;
+      
+      console.log('Direct fetch result:', data);
+      console.log('Number of items in inventory:', data ? data.length : 0);
+      
+      toast({
+        title: "Inventory Check",
+        description: `Found ${data ? data.length : 0} items in inventory table.`,
+      });
+      
+      return data;
+    } catch (err) {
+      console.error('Error in direct fetch:', err);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to check inventory directly.",
+      });
+      return null;
+    }
+  };
+  
   return {
     parts: parts || [],
     isLoading,
@@ -210,6 +255,7 @@ export const usePartsCatalog = () => {
     getCategories,
     getSuppliers,
     refreshCatalog: refetch,
-    addSamplePart // Added for testing
+    addSamplePart, // Added for testing
+    testDirectFetch  // Added for direct table check
   };
 };
