@@ -355,6 +355,120 @@ export type Database = {
         }
         Relationships: []
       }
+      service_appointments: {
+        Row: {
+          appointment_date: string
+          appointment_time: string
+          created_at: string
+          customer_id: string
+          description: string | null
+          id: string
+          service_type: string
+          status: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          appointment_date: string
+          appointment_time: string
+          created_at?: string
+          customer_id: string
+          description?: string | null
+          id?: string
+          service_type: string
+          status?: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          appointment_date?: string
+          appointment_time?: string
+          created_at?: string
+          customer_id?: string
+          description?: string | null
+          id?: string
+          service_type?: string
+          status?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_appointments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_appointments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_history: {
+        Row: {
+          created_at: string
+          customer_id: string
+          description: string
+          id: string
+          labor_hours: number
+          parts_used: string[] | null
+          service_date: string
+          service_type: string
+          technician_notes: string | null
+          total_cost: number
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          description: string
+          id?: string
+          labor_hours?: number
+          parts_used?: string[] | null
+          service_date: string
+          service_type: string
+          technician_notes?: string | null
+          total_cost?: number
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          description?: string
+          id?: string
+          labor_hours?: number
+          parts_used?: string[] | null
+          service_date?: string
+          service_type?: string
+          technician_notes?: string | null
+          total_cost?: number
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_history_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_history: {
         Row: {
           id: string

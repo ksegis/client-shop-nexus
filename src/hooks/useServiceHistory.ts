@@ -4,21 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth';
+import { ExtendedDatabase } from '@/integrations/supabase/types-extensions';
 
-export interface ServiceHistoryEntry {
-  id: string;
-  customer_id: string;
-  vehicle_id: string;
-  service_date: string;
-  service_type: string;
-  description: string;
-  technician_notes: string;
-  parts_used: string[];
-  labor_hours: number;
-  total_cost: number;
-  created_at: string;
-  updated_at: string;
-}
+export type ServiceHistoryEntry = ExtendedDatabase['public']['Tables']['service_history']['Row'];
 
 export const useServiceHistory = (vehicleId?: string, customerId?: string) => {
   const { user } = useAuth();

@@ -20,6 +20,89 @@ export const mapExtendedRoleToDbRole = (role: ExtendedUserRole): DatabaseUserRol
 // Define extended database type as an interface extension rather than redefining Database
 export interface ExtendedDatabase {
   public: Database['public'] & {
-    // Add any extensions to public schema here
+    Tables: Database['public']['Tables'] & {
+      service_appointments: {
+        Row: {
+          id: string;
+          customer_id: string;
+          vehicle_id: string;
+          appointment_date: string;
+          appointment_time: string;
+          service_type: string;
+          description: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_id: string;
+          vehicle_id: string;
+          appointment_date: string;
+          appointment_time: string;
+          service_type: string;
+          description?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          customer_id?: string;
+          vehicle_id?: string;
+          appointment_date?: string;
+          appointment_time?: string;
+          service_type?: string;
+          description?: string | null;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      service_history: {
+        Row: {
+          id: string;
+          customer_id: string;
+          vehicle_id: string;
+          service_date: string;
+          service_type: string;
+          description: string;
+          technician_notes: string | null;
+          parts_used: string[] | null;
+          labor_hours: number;
+          total_cost: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_id: string;
+          vehicle_id: string;
+          service_date: string;
+          service_type: string;
+          description: string;
+          technician_notes?: string | null;
+          parts_used?: string[] | null;
+          labor_hours?: number;
+          total_cost?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          customer_id?: string;
+          vehicle_id?: string;
+          service_date?: string;
+          service_type?: string;
+          description?: string;
+          technician_notes?: string | null;
+          parts_used?: string[] | null;
+          labor_hours?: number;
+          total_cost?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+    }
   }
 }

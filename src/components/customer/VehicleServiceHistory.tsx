@@ -22,7 +22,7 @@ const VehicleServiceHistory = ({ vehicle }: VehicleServiceHistoryProps) => {
       setLoading(true);
       getVehicleServiceHistory(vehicle.id)
         .then(history => {
-          setServiceHistory(history);
+          setServiceHistory(history as ServiceHistoryEntry[]);
           setLoading(false);
         });
     }
