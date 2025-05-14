@@ -1,9 +1,10 @@
 
-import { Button } from '@/components/ui/button';
+import { useState } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { Vehicle } from '@/types/vehicle';
-import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import EditVehicleDialog from './EditVehicleDialog';
+import VehicleServiceHistory from './VehicleServiceHistory';
 
 interface VehiclesListProps {
   vehicles: Vehicle[];
@@ -14,6 +15,7 @@ interface VehiclesListProps {
 const VehiclesList = ({ vehicles, onRemoveVehicle, onUpdateVehicle }: VehiclesListProps) => {
   const { toast } = useToast();
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+  const [expandedVehicleId, setExpandedVehicleId] = useState<string | null>(null);
   
   if (vehicles.length === 0) {
     return (
@@ -26,38 +28,52 @@ const VehiclesList = ({ vehicles, onRemoveVehicle, onUpdateVehicle }: VehiclesLi
   return (
     <div className="space-y-4">
       {vehicles.map((vehicle) => (
-        <div 
-          key={vehicle.id} 
-          className="p-4 border rounded-lg flex justify-between items-center hover:bg-gray-50"
-        >
-          <div>
-            <h3 className="font-medium">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
-            <p className="text-sm text-gray-500">VIN: {vehicle.vin || 'Not provided'}</p>
-            {vehicle.license_plate && (
-              <p className="text-sm text-gray-500">License Plate: {vehicle.license_plate}</p>
-            )}
-            {vehicle.color && (
-              <p className="text-sm text-gray-500">Color: {vehicle.color}</p>
-            )}
+        <div key={vehicle.id}>
+          <div 
+            className="p-4 border rounded-lg flex justify-between items-center hover:bg-gray-50"
+          >
+            <div>
+              <h3 className="font-medium">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
+              <p className="text-sm text-gray-500">VIN: {vehicle.vin || 'Not provided'}</p>
+              {vehicle.license_plate && (
+                <p className="text-sm text-gray-500">License Plate: {vehicle.license_plate}</p>
+              )}
+              {vehicle.color && (
+                <p className="text-sm text-gray-500">Color: {vehicle.color}</p>
+              )}
+            </div>
+            
+            <div className="space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setEditingVehicle(vehicle)}
+              >
+                Edit
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setExpandedVehicleId(
+                  expandedVehicleId === vehicle.id ? null : vehicle.id
+                )}
+              >
+                Service History
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-red-500 hover:text-red-700"
+                onClick={() => onRemoveVehicle(vehicle.id)}
+              >
+                Remove
+              </Button>
+            </div>
           </div>
           
-          <div className="space-x-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setEditingVehicle(vehicle)}
-            >
-              Edit
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-red-500 hover:text-red-700"
-              onClick={() => onRemoveVehicle(vehicle.id)}
-            >
-              Remove
-            </Button>
-          </div>
+          {expandedVehicleId === vehicle.id && (
+            <VehicleServiceHistory vehicle={vehicle} />
+          )}
         </div>
       ))}
 

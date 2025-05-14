@@ -10,6 +10,7 @@ import CustomerTransactions from "@/pages/customer/Transactions";
 import CustomerSettings from "@/pages/customer/Settings";
 import CustomerParts from "@/pages/customer/Parts";
 import CustomerCheckout from "@/pages/customer/Checkout";
+import CustomerServiceAppointments from "@/pages/customer/ServiceAppointments"; // Add this import
 import NotFound from "@/pages/NotFound";
 import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
 import Layout from "@/components/layout/Layout";
@@ -67,6 +68,12 @@ const CustomerRoutes = () => {
           <Route path="checkout" element={
             <ProtectedRoute allowedRoles={customerRoles}>
               <CustomerCheckout />
+            </ProtectedRoute>
+          } />
+          {/* Add new route for Service Appointments */}
+          <Route path="service-appointments" element={
+            <ProtectedRoute allowedRoles={customerRoles}>
+              <CustomerServiceAppointments />
             </ProtectedRoute>
           } />
           
