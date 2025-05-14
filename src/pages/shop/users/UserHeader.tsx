@@ -2,7 +2,7 @@
 import { useUserManagement } from './UserManagementContext';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/auth';
 
 interface UserHeaderProps {
   onAddUser: () => void;
@@ -12,6 +12,7 @@ export const UserHeader = ({ onAddUser }: UserHeaderProps) => {
   const { users } = useUserManagement();
   const { user } = useAuth();
   
+  // Check if user has role admin - if user is null or role is undefined, default to false
   const isAdmin = user?.app_metadata?.role === 'admin';
   const userCount = users.length;
 

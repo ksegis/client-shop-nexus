@@ -1,6 +1,5 @@
-
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/components/ui/use-toast';
 
 export const useVehicleImages = () => {

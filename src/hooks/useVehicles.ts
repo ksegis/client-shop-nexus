@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/components/ui/use-toast';
 import { Database } from '@/integrations/supabase/types';
 

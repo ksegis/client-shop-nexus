@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,7 +8,7 @@ import { useProfileData } from '@/hooks/useProfileData';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Facebook, Twitter, Instagram, Linkedin, Camera } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/auth';
 
 interface PersonalInfoProps {
   profileData: {
@@ -76,10 +75,11 @@ const PersonalInfoCard = ({ profileData }: PersonalInfoProps) => {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0]) return;
+    if (!user) return; // Early return if user is null
     
     const file = e.target.files[0];
     const fileExt = file.name.split('.').pop();
-    const fileName = `${user?.id}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+    const fileName = `${user.id}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
     const filePath = `avatars/${fileName}`;
     
     try {

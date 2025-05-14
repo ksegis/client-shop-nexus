@@ -23,7 +23,7 @@ const Header = ({ portalType }: HeaderProps) => {
   
   // Debug logging
   console.log("Header - User object:", user);
-  console.log("Header - User metadata:", user?.app_metadata);
+  console.log("Header - User metadata:", user?.user_metadata);
   console.log("Header - Role value:", user?.app_metadata?.role);
   console.log("Header - Is admin check:", isAdmin);
 

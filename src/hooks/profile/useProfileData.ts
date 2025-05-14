@@ -59,13 +59,13 @@ export const useProfileData = () => {
         const defaultProfile = createProfileFromUserMetadata(
           user.id, 
           userEmail, 
-          user.user_metadata
+          user.user_metadata || {}
         );
         
         setProfileData(defaultProfile);
         
         // Create the missing profile in the database
-        await createNewProfile(user.id, userEmail, user.user_metadata);
+        await createNewProfile(user.id, userEmail, user.user_metadata || {});
       }
     } catch (err) {
       console.error('Error fetching profile data:', err);

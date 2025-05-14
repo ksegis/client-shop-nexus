@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Vehicle } from '@/types/vehicle';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/auth';
 import { useVehicleCrud } from './useVehicleCrud';
 import { useVehicleImages } from './useVehicleImages';
 

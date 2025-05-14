@@ -76,6 +76,7 @@ const navigationItems = [
 export const Sidebar = () => {
   const { user } = useAuth();
   
+  // If user is null or role is undefined, default to false
   const isAdmin = user?.app_metadata?.role === 'admin';
   const filteredNavigationItems = navigationItems.filter(item => !item.adminOnly || isAdmin);
 

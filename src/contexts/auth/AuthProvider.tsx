@@ -3,9 +3,24 @@ import React, { ReactNode } from 'react';
 import { AuthContext } from './AuthContext';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Simplified context with no authentication
+  // Mock user with all required properties
+  const mockUser = {
+    id: 'mock-user-id',
+    email: 'user@example.com',
+    app_metadata: {
+      role: 'customer' // Default role
+    },
+    user_metadata: {
+      first_name: 'Test',
+      last_name: 'User',
+      phone: '555-1234',
+      role: 'customer'
+    }
+  };
+
+  // Mock context with simplified authentication
   const value = {
-    user: null,
+    user: mockUser,
     session: null,
     signUp: async () => {},
     signIn: async () => {},
