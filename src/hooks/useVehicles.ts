@@ -1,135 +1,65 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/auth';
-import { useToast } from '@/components/ui/use-toast';
-import { Database } from '@/integrations/supabase/types';
 
-type Vehicle = Database['public']['Tables']['vehicles']['Row'];
+import { useState, useEffect } from 'react';
+import { Vehicle, NewVehicleData } from '@/types/vehicle';
+import { useAddVehicle } from './vehicles/useAddVehicle';
+import { useFetchVehicles } from './vehicles/useFetchVehicles';
+import { useUpdateVehicle } from './vehicles/useUpdateVehicle';
+import { useRemoveVehicle } from './vehicles/useRemoveVehicle';
+import { useAuth } from '@/contexts/auth';
 
 export const useVehicles = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const { user } = useAuth();
-  const { toast } = useToast();
-
-  useEffect(() => {
-    if (!user) return;
+  
+  const { fetchVehicles } = useFetchVehicles();
+  const { addVehicle: addVehicleToDb } = useAddVehicle();
+  const { updateVehicle: updateVehicleInDb } = useUpdateVehicle();
+  const { removeVehicle } = useRemoveVehicle();
+  
+  const loadVehicles = async () => {
+    if (!user?.id) return;
     
-    const fetchVehicles = async () => {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('vehicles')
-          .select('*')
-          .order('created_at', { ascending: false });
-          
-        if (error) throw error;
-        setVehicles(data || []);
-      } catch (error: any) {
-        toast({
-          title: 'Error fetching vehicles',
-          description: error.message,
-          variant: 'destructive',
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchVehicles();
-  }, [user, toast]);
-
-  const addVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>) => {
+    setLoading(true);
     try {
-      if (!user) throw new Error('User not authenticated');
-      
-      const { data, error } = await supabase
-        .from('vehicles')
-        .insert({
-          ...vehicleData,
-          owner_id: user.id,
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      setVehicles(prev => [data, ...prev]);
-      
-      toast({
-        title: 'Vehicle added',
-        description: `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} added successfully`,
-      });
-      
-      return data;
-    } catch (error: any) {
-      toast({
-        title: 'Error adding vehicle',
-        description: error.message,
-        variant: 'destructive',
-      });
-      throw error;
+      const fetchedVehicles = await fetchVehicles(user.id);
+      setVehicles(fetchedVehicles);
+    } catch (error) {
+      console.error('Error loading vehicles:', error);
+    } finally {
+      setLoading(false);
     }
   };
   
-  const updateVehicle = async (id: string, vehicleData: Partial<Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>>) => {
-    try {
-      const { data, error } = await supabase
-        .from('vehicles')
-        .update(vehicleData)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      setVehicles(prev => prev.map(vehicle => vehicle.id === id ? data : vehicle));
-      
-      toast({
-        title: 'Vehicle updated',
-        description: `Vehicle information updated successfully`,
-      });
-      
-      return data;
-    } catch (error: any) {
-      toast({
-        title: 'Error updating vehicle',
-        description: error.message,
-        variant: 'destructive',
-      });
-      throw error;
-    }
+  const addVehicle = async (vehicleData: NewVehicleData) => {
+    const newVehicle = await addVehicleToDb(vehicleData);
+    setVehicles(prevVehicles => [newVehicle, ...prevVehicles]);
+    return newVehicle;
+  };
+  
+  const updateVehicle = async (id: string, vehicleData: Partial<NewVehicleData>) => {
+    const updatedVehicle = await updateVehicleInDb(id, vehicleData);
+    setVehicles(prevVehicles => 
+      prevVehicles.map(vehicle => vehicle.id === id ? updatedVehicle : vehicle)
+    );
+    return updatedVehicle;
   };
   
   const deleteVehicle = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('vehicles')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      
-      setVehicles(prev => prev.filter(vehicle => vehicle.id !== id));
-      
-      toast({
-        title: 'Vehicle removed',
-        description: 'Vehicle has been removed from your account',
-      });
-    } catch (error: any) {
-      toast({
-        title: 'Error removing vehicle',
-        description: error.message,
-        variant: 'destructive',
-      });
-    }
+    await removeVehicle(id);
+    setVehicles(prevVehicles => prevVehicles.filter(vehicle => vehicle.id !== id));
   };
-
+  
+  useEffect(() => {
+    loadVehicles();
+  }, [user?.id]);
+  
   return {
     vehicles,
     loading,
     addVehicle,
     updateVehicle,
-    deleteVehicle
+    deleteVehicle,
+    refreshVehicles: loadVehicles
   };
 };

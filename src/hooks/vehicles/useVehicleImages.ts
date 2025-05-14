@@ -1,16 +1,12 @@
+
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/components/ui/use-toast';
 
 export const useVehicleImages = () => {
-  const { user } = useAuth();
   const { toast } = useToast();
 
   const uploadVehicleImage = async (vehicleId: string, file: File) => {
-    if (!user?.id) {
-      throw new Error('User not authenticated');
-    }
-
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${vehicleId}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
@@ -60,11 +56,6 @@ export const useVehicleImages = () => {
       
       if (updateError) throw updateError;
       
-      toast({
-        title: 'Image uploaded',
-        description: 'Vehicle image uploaded successfully',
-      });
-      
       return urlData.publicUrl;
     } catch (error: any) {
       toast({
@@ -96,13 +87,6 @@ export const useVehicleImages = () => {
         .eq('id', vehicleId);
       
       if (updateError) throw updateError;
-      
-      toast({
-        title: 'Image removed',
-        description: 'Vehicle image removed successfully',
-      });
-      
-      return true;
     } catch (error: any) {
       toast({
         title: 'Remove image failed',
