@@ -11,6 +11,8 @@ interface InventoryStatCardsProps {
 export const InventoryStatCards = ({ items }: InventoryStatCardsProps) => {
   // Calculate statistics from inventory items
   const stats = useMemo(() => {
+    console.log('Calculating stats for items:', items.length, items);
+    
     // Count items by category
     const categoriesMap = new Map<string, number>();
     // Count items by supplier/vendor
@@ -45,6 +47,8 @@ export const InventoryStatCards = ({ items }: InventoryStatCardsProps) => {
     };
   }, [items]);
 
+  console.log('Calculated stats:', stats);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <Card>
@@ -58,13 +62,15 @@ export const InventoryStatCards = ({ items }: InventoryStatCardsProps) => {
         </CardContent>
       </Card>
       
-      <Card>
+      <Card className={stats.lowStockItems > 0 ? "border-yellow-300" : ""}>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
           <Box className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{stats.lowStockItems}</div>
+          <div className={`text-2xl font-bold ${stats.lowStockItems > 0 ? "text-yellow-600" : ""}`}>
+            {stats.lowStockItems}
+          </div>
           <p className="text-xs text-muted-foreground">Items below reorder level</p>
         </CardContent>
       </Card>

@@ -11,12 +11,18 @@ export const useInventoryData = () => {
     queryKey: ['simple-inventory'],
     queryFn: async () => {
       try {
+        console.log('Fetching inventory data...');
         const { data, error } = await supabase
           .from('inventory')
           .select('*')
           .order('name');
         
-        if (error) throw error;
+        if (error) {
+          console.error('Error from Supabase:', error);
+          throw error;
+        }
+        
+        console.log('Fetched inventory data:', data);
         return data as InventoryItem[];
       } catch (error) {
         console.error('Error fetching inventory:', error);
@@ -27,7 +33,8 @@ export const useInventoryData = () => {
         });
         return [];
       }
-    }
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
   return {

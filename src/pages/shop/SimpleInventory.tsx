@@ -19,6 +19,9 @@ const SimpleInventory = () => {
     (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  // Debug log to check if inventory items are loaded
+  console.log('Inventory items loaded:', inventoryItems.length, inventoryItems);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -34,8 +37,8 @@ const SimpleInventory = () => {
         </Button>
       </div>
 
-      {/* Add the statistics cards component */}
-      {!isLoading && <InventoryStatCards items={inventoryItems} />}
+      {/* Add the statistics cards component only when data is loaded */}
+      {!isLoading && inventoryItems.length > 0 && <InventoryStatCards items={inventoryItems} />}
 
       <Card>
         <CardHeader>
