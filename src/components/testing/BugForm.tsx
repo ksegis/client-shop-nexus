@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -94,9 +93,14 @@ export const BugForm: React.FC<BugFormProps> = ({
           ...data,
         });
       } else {
-        // Create new bug
+        // Create new bug - ensure all required fields are present
         await addBug({
           ...data,
+          title: data.title,           // Explicitly include required fields
+          description: data.description,
+          feature_area: data.feature_area,
+          status: data.status,
+          severity: data.severity,
           reported_by: user?.id || '',
           test_result_id: testResultId,
         });

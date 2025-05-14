@@ -39,6 +39,60 @@ export type Database = {
         }
         Relationships: []
       }
+      bugs: {
+        Row: {
+          actual_result: string | null
+          assigned_to: string | null
+          attachments: string[] | null
+          created_at: string
+          description: string
+          expected_result: string | null
+          feature_area: string
+          id: string
+          reported_by: string
+          severity: string
+          status: string
+          steps_to_reproduce: string | null
+          test_result_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          actual_result?: string | null
+          assigned_to?: string | null
+          attachments?: string[] | null
+          created_at?: string
+          description: string
+          expected_result?: string | null
+          feature_area: string
+          id?: string
+          reported_by: string
+          severity: string
+          status: string
+          steps_to_reproduce?: string | null
+          test_result_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          actual_result?: string | null
+          assigned_to?: string | null
+          attachments?: string[] | null
+          created_at?: string
+          description?: string
+          expected_result?: string | null
+          feature_area?: string
+          id?: string
+          reported_by?: string
+          severity?: string
+          status?: string
+          steps_to_reproduce?: string | null
+          test_result_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       estimate_items: {
         Row: {
           created_at: string
@@ -595,6 +649,48 @@ export type Database = {
           service?: string
           status?: string
           timestamp?: string
+        }
+        Relationships: []
+      }
+      test_results: {
+        Row: {
+          created_at: string
+          description: string
+          environment: string
+          feature_area: string
+          id: string
+          priority: string
+          status: string
+          steps_to_reproduce: string | null
+          test_name: string
+          tester_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          environment: string
+          feature_area: string
+          id?: string
+          priority: string
+          status: string
+          steps_to_reproduce?: string | null
+          test_name: string
+          tester_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          environment?: string
+          feature_area?: string
+          id?: string
+          priority?: string
+          status?: string
+          steps_to_reproduce?: string | null
+          test_name?: string
+          tester_id?: string
+          updated_at?: string
         }
         Relationships: []
       }

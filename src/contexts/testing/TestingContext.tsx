@@ -64,7 +64,7 @@ export function TestingProvider({ children }: { children: ReactNode }) {
   };
 
   // Only provide the context value if testing is enabled
-  const value = {
+  const value: TestingContextType = {
     isTestingEnabled,
     enableTesting,
     disableTesting,

@@ -24,6 +24,7 @@ export const useTestResults = () => {
     setError('');
 
     try {
+      // Use the "test_results" table directly in TypeScript, after it's been created in SQL
       let query = supabase.from('test_results').select('*');
 
       // Apply filters if provided
@@ -43,7 +44,7 @@ export const useTestResults = () => {
         throw fetchError;
       }
 
-      setTestResults(data || []);
+      setTestResults(data as TestResult[] || []);
     } catch (err) {
       console.error('Error fetching test results:', err);
       setError('Failed to load test results');
@@ -78,7 +79,7 @@ export const useTestResults = () => {
 
       // Refresh the list
       await fetchTestResults();
-      return data?.[0];
+      return data?.[0] as TestResult;
     } catch (err) {
       console.error('Error adding test result:', err);
       toast({

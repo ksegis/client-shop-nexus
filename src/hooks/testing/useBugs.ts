@@ -25,6 +25,7 @@ export const useBugs = () => {
     setError('');
 
     try {
+      // Use the "bugs" table directly in TypeScript, after it's been created in SQL
       let query = supabase.from('bugs').select('*');
 
       // Apply filters if provided
@@ -45,7 +46,7 @@ export const useBugs = () => {
         throw fetchError;
       }
 
-      setBugs(data || []);
+      setBugs(data as Bug[] || []);
     } catch (err) {
       console.error('Error fetching bugs:', err);
       setError('Failed to load bugs');
@@ -80,7 +81,7 @@ export const useBugs = () => {
 
       // Refresh the list
       await fetchBugs();
-      return data?.[0];
+      return data?.[0] as Bug;
     } catch (err) {
       console.error('Error adding bug:', err);
       toast({

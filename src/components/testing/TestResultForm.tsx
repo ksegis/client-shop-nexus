@@ -86,9 +86,15 @@ export const TestResultForm: React.FC<TestResultFormProps> = ({
           ...data,
         });
       } else {
-        // Create new test
+        // Create new test - ensure all required fields are present
         await addTestResult({
           ...data,
+          test_name: data.test_name,    // Explicitly include required fields
+          description: data.description,
+          feature_area: data.feature_area,
+          status: data.status,
+          environment: data.environment,
+          priority: data.priority,
           tester_id: user?.id || '',
         });
       }
