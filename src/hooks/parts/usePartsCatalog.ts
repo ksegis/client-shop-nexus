@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { Part, PartSearchFilters } from '@/types/parts';
 import { fetchPartsCatalog } from './api/fetchPartsCatalog';
 import { fetchCategories } from './api/fetchCategories';

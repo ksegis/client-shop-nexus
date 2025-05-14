@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { usePartsCatalog } from '@/hooks/parts/usePartsCatalog';
 import { usePartsCart } from '@/contexts/parts/PartsCartContext';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { Part } from '@/types/parts';
 
 export const usePartsPage = () => {

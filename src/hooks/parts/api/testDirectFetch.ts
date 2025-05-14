@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 // Function to test direct fetching from inventory
 export const testDirectFetch = async (toast: ReturnType<typeof useToast>['toast']) => {
