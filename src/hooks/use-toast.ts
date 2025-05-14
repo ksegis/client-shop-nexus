@@ -4,7 +4,7 @@
 import { toast as sonnerToast, type ToastT } from "sonner";
 
 // Extended toast interface that includes variant
-export type ToastProps = ToastT & {
+export type ToastProps = Partial<ToastT> & {
   variant?: "default" | "destructive";
 };
 
@@ -17,7 +17,7 @@ const mapVariantToType = (variant: ToastProps['variant']) => {
 export function toast(props: ToastProps) {
   const { title, description, variant, ...rest } = props;
   
-  return sonnerToast(title, {
+  return sonnerToast(title as string, {
     description,
     // Map our variant to Sonner type
     type: variant ? mapVariantToType(variant) : undefined,
@@ -25,6 +25,7 @@ export function toast(props: ToastProps) {
   });
 }
 
-// Re-export useToast from components/ui/use-toast
-import { useToast } from "@/components/ui/use-toast";
-export { useToast };
+// Create a separate hook for useToast to avoid circular references
+export function useToast() {
+  return { toast };
+}

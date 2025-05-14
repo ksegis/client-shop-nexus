@@ -15,17 +15,17 @@ interface CartButtonProps {
   setIsCartOpen: (isOpen: boolean) => void;
 }
 
-interface CustomerShoppingCartProps {
-  isOpen?: boolean;
-  setIsOpen?: (isOpen: boolean) => void;
+interface CartDialogProps {
+  isOpen: boolean;
+  setIsOpen: (isOpen: boolean) => void;
   cartItems: CartItemType[];
-  updateCartQuantity?: (id: string, quantity: number) => void;
-  removeFromCart?: (id: string) => void;
-  cartTotal?: number;
+  updateCartQuantity: (id: string, quantity: number) => void;
+  removeFromCart: (id: string) => void;
+  cartTotal: number;
 }
 
 // Component that can render either just a button or the full cart dialog
-export const CustomerShoppingCart = (props: CartButtonProps | CustomerShoppingCartProps) => {
+export const CustomerShoppingCart = (props: CartButtonProps | CartDialogProps) => {
   // If this is just the button being rendered (in the header)
   if ('cartCount' in props && !('isOpen' in props)) {
     const { cartCount, setIsCartOpen } = props;
@@ -47,14 +47,16 @@ export const CustomerShoppingCart = (props: CartButtonProps | CustomerShoppingCa
   }
 
   // Full cart dialog component
+  // We need to cast props to CartDialogProps since we've already checked it has the required properties
+  const dialogProps = props as CartDialogProps;
   const { 
-    isOpen = false, 
-    setIsOpen = () => {}, 
-    cartItems = [],
-    updateCartQuantity = () => {}, 
-    removeFromCart = () => {}, 
-    cartTotal = 0 
-  } = props;
+    isOpen, 
+    setIsOpen, 
+    cartItems,
+    updateCartQuantity, 
+    removeFromCart, 
+    cartTotal 
+  } = dialogProps;
   
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
