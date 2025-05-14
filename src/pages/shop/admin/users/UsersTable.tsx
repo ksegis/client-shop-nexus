@@ -8,7 +8,7 @@ import { isRoleInactive } from '@/pages/shop/users/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge as UIBadge } from '@/components/ui/badge';
 
-interface UsersTableProps {
+export interface UsersTableProps {
   onResetPassword: (userId: string, email: string) => void;
   onEditProfile: (userId: string, email: string) => void;
 }

@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button';
 import { UserPlus, RefreshCw } from 'lucide-react';
 
 interface UserHeaderProps {
-  onInviteUser: () => void;
+  onAddUser: () => void;
 }
 
-export const UserHeader: React.FC<UserHeaderProps> = ({ onInviteUser }) => {
+export const UserHeader: React.FC<UserHeaderProps> = ({ onAddUser }) => {
   const { refetchUsers } = useUserManagement();
   
   return (
@@ -20,9 +20,9 @@ export const UserHeader: React.FC<UserHeaderProps> = ({ onInviteUser }) => {
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
-        <Button onClick={onInviteUser} size="sm">
+        <Button onClick={onAddUser} size="sm">
           <UserPlus className="h-4 w-4 mr-2" />
-          Invite User
+          Add User
         </Button>
       </div>
     </div>
