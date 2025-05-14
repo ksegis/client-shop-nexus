@@ -42,7 +42,7 @@ export const fetchPartsCatalog = async (searchFilters: PartSearchFilters, toast:
     }
     
     // Log the final query for debugging
-    console.log('Final query built:', query);
+    console.log('Final query built, executing...');
     
     const { data, error } = await query;
     
@@ -55,12 +55,30 @@ export const fetchPartsCatalog = async (searchFilters: PartSearchFilters, toast:
     console.log('Raw inventory data from Supabase:', data);
     console.log('Parts data fetched:', data ? data.length : 0, 'items found');
     
-    if (data && data.length === 0) {
-      // No results found, show a toast
-      toast({
-        title: "No parts found",
-        description: "Try adjusting your search filters or add items to inventory",
-      });
+    // If no items found, check directly with the table to see if there's any data at all
+    if (!data || data.length === 0) {
+      console.log('No items found with filters, checking if inventory table has any data at all');
+      const { count, error: countError } = await supabase
+        .from('inventory')
+        .select('*', { count: 'exact', head: true });
+        
+      console.log('Total inventory count:', count);
+      
+      if (countError) {
+        console.error('Error counting inventory items:', countError);
+      }
+      
+      if (count === 0) {
+        toast({
+          title: "Inventory is empty",
+          description: "There are no items in the inventory. Add items to get started.",
+        });
+      } else {
+        toast({
+          title: "No parts found",
+          description: "Try adjusting your search filters or add items to inventory",
+        });
+      }
     }
     
     // Map the inventory items to the Part interface

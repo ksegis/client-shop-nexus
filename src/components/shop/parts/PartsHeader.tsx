@@ -1,14 +1,12 @@
 
-import { Button } from '@/components/ui/button';
-import { ShoppingCart, Database, Plus } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { usePartsCart } from '@/contexts/parts/PartsCartContext';
+import { Button } from "@/components/ui/button";
+import { ShoppingCart, Package, BarChart, Plus } from "lucide-react";
 
 interface PartsHeaderProps {
   getCartItemCount: () => number;
   setCartOpen: (open: boolean) => void;
-  onCheckInventory: () => void;
-  onAddSamplePart: () => void;
+  onCheckInventory: () => Promise<void>;
+  onAddSamplePart: () => Promise<void>;
 }
 
 export const PartsHeader = ({
@@ -18,45 +16,44 @@ export const PartsHeader = ({
   onAddSamplePart
 }: PartsHeaderProps) => {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Parts Desk</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Parts Desk</h1>
         <p className="text-muted-foreground">
-          Manage inventory and process customer parts orders
+          Browse, search and order parts for your shop
         </p>
       </div>
       
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2 self-end sm:self-auto">
+        {getCartItemCount() > 0 ? (
+          <Button 
+            variant="outline" 
+            className="relative"
+            onClick={() => setCartOpen(true)}
+          >
+            <ShoppingCart className="h-5 w-5 mr-2" />
+            Cart
+            <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              {getCartItemCount()}
+            </span>
+          </Button>
+        ) : null}
+        
         <Button 
-          variant="outline"
-          onClick={onCheckInventory}
-          className="sm:self-end"
-        >
-          <Database className="mr-2 h-4 w-4" />
-          Check Inventory
-        </Button>
-
-        <Button 
-          variant="outline"
+          variant="default" 
           onClick={onAddSamplePart}
-          className="sm:self-end"
+          className="bg-green-600 hover:bg-green-700"
         >
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus className="h-5 w-5 mr-2" />
           Add Sample Part
         </Button>
-
+        
         <Button 
-          onClick={() => setCartOpen(true)} 
-          variant={getCartItemCount() > 0 ? "default" : "outline"}
-          className="sm:self-end"
+          variant="secondary" 
+          onClick={onCheckInventory}
         >
-          <ShoppingCart className="mr-2 h-4 w-4" />
-          Sale Cart
-          {getCartItemCount() > 0 && (
-            <Badge variant="secondary" className="ml-2">
-              {getCartItemCount()}
-            </Badge>
-          )}
+          <BarChart className="h-5 w-5 mr-2" />
+          Check Inventory
         </Button>
       </div>
     </div>

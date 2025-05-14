@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -36,7 +35,12 @@ export const usePartsCatalog = () => {
     refetch 
   } = useQuery({
     queryKey: ['parts-catalog', debouncedFilters],
-    queryFn: async () => fetchPartsCatalog(debouncedFilters, toast),
+    queryFn: async () => {
+      console.log('Executing fetchPartsCatalog with filters:', debouncedFilters);
+      const result = await fetchPartsCatalog(debouncedFilters, toast);
+      console.log('Fetch result:', result);
+      return result;
+    },
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
@@ -49,6 +53,12 @@ export const usePartsCatalog = () => {
       filters: debouncedFilters
     });
   }, [parts, isLoading, error, debouncedFilters]);
+  
+  // Force initial data fetch on component mount
+  useEffect(() => {
+    console.log('Forcing initial parts catalog refresh');
+    refetch();
+  }, [refetch]);
   
   const getCategories = async () => {
     return fetchCategories(toast);
