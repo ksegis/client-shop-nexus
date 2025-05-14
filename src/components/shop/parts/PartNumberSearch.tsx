@@ -9,16 +9,34 @@ import { InventoryItem } from '@/pages/shop/inventory/types';
 
 interface PartNumberSearchProps {
   onSelectPart: (part: InventoryItem) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export const PartNumberSearch = ({ onSelectPart }: PartNumberSearchProps) => {
+export const PartNumberSearch = ({ 
+  onSelectPart,
+  open,
+  onOpenChange
+}: PartNumberSearchProps) => {
   const { 
     partSearchTerm, 
     setPartSearchTerm, 
     partSearchResults, 
     isSearching 
   } = usePartNumberSearch();
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  
+  // Use internal state if open/onOpenChange are not provided
+  const [internalOpen, setInternalOpen] = useState(false);
+  
+  // Determine which state to use
+  const isPopoverOpen = open !== undefined ? open : internalOpen;
+  const setIsPopoverOpen = (value: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(value);
+    } else {
+      setInternalOpen(value);
+    }
+  };
   
   const handleSearchClick = () => {
     if (partSearchTerm.trim().length >= 2) {
