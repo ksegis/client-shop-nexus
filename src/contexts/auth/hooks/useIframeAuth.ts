@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { UserProfile } from '../types';
 import { toast } from '@/hooks/use-toast';
@@ -14,6 +14,24 @@ interface AuthMessage {
 }
 
 export function useIframeAuth() {
+  // Check if we're in an iframe first (synchronously)
+  const isInIframe = (() => {
+    try {
+      return window.self !== window.top;
+    } catch (e) {
+      return true; // If we can't access parent due to security, we're probably in an iframe
+    }
+  })();
+
+  // Define trusted origins
+  const trustedOrigins = [
+    'https://egisdynamics.com',
+    'https://app.egisdynamics.com',
+    'https://lovable.dev',  // Added to prevent warnings from development environment
+    window.location.origin  // Always trust messages from same origin
+  ];
+
+  // State for iframe auth
   const [iframeAuth, setIframeAuth] = useState<{
     enabled: boolean;
     user: User | null;
@@ -23,23 +41,6 @@ export function useIframeAuth() {
     user: null,
     profile: null
   });
-
-  // Check if we're in an iframe
-  const isInIframe = useMemo(() => {
-    try {
-      return window.self !== window.top;
-    } catch (e) {
-      return true; // If we can't access parent due to security, we're probably in an iframe
-    }
-  }, []);
-
-  // Trusted origins that can send messages to this iframe
-  const trustedOrigins = useMemo(() => [
-    'https://egisdynamics.com',
-    'https://app.egisdynamics.com',
-    'https://lovable.dev',  // Added to prevent warnings from development environment
-    window.location.origin  // Always trust messages from same origin
-  ], []);
 
   // Listen for authentication messages from parent frame
   useEffect(() => {
@@ -78,7 +79,7 @@ export function useIframeAuth() {
               },
               aud: 'authenticated',
               created_at: new Date().toISOString()
-            };
+            } as User;
 
             const parentProfile: UserProfile = {
               id: data.user.id,
@@ -131,7 +132,7 @@ export function useIframeAuth() {
     return () => {
       window.removeEventListener('message', handleAuthMessage);
     };
-  }, [isInIframe, trustedOrigins]);
+  }, [isInIframe]);
 
   return { iframeAuth, isInIframe };
 }

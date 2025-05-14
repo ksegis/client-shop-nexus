@@ -12,25 +12,28 @@ import { useAuthLogging } from './hooks/useAuthLogging';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
+  
+  // Core authentication state
   const { user: authUser, session, loading: authLoading } = useAuthStateListener();
   const { profile: authProfile, setProfile } = useProfileManagement(authUser);
-  const { iframeAuth, isInIframe } = useIframeAuth();
-  const { testMode, testUsers, testProfiles, impersonateTestUser, stopImpersonation, getTestUserByRole } = useTestUsers();
-  const { logAuthEvent } = useAuthLogging();
   
+  // First define all useState hooks to maintain consistent hook order
   const [loading, setLoading] = useState<boolean>(true);
-  
-  // Determine whether we're in dev mode
-  const isDevMode = useMemo(() => {
-    return process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
-  }, []);
-
-  // Select the appropriate user and profile based on various states
   const [testRole, setTestRole] = useState<UserRole | null>(() => {
     // Check for persisted test role
     const savedRole = localStorage.getItem('test-user-mode') as UserRole | null;
     return savedRole && isTestRole(savedRole) ? savedRole : null;
   });
+  
+  // Determine whether we're in dev mode
+  const isDevMode = useMemo(() => {
+    return process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
+  }, []);
+  
+  // All other hooks after useState hooks
+  const { logAuthEvent } = useAuthLogging();
+  const { testMode, testUsers, testProfiles, impersonateTestUser, stopImpersonation, getTestUserByRole } = useTestUsers();
+  const { iframeAuth, isInIframe } = useIframeAuth();
   
   // Generate actual user and profile based on auth state
   const { user, profile, portalType } = useMemo(() => {
@@ -61,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (authUser.user_metadata?.role?.includes('customer') ? 'customer' : 'shop') as 'shop' | 'customer' : 
         null
     };
-  }, [authUser, authProfile, testRole, isInIframe, iframeAuth]);
+  }, [authUser, authProfile, testRole, isInIframe, iframeAuth, getTestUserByRole]);
 
   // Determine if current user is a test user
   const isTestUser = useMemo(() => {

@@ -11,8 +11,15 @@ export function useTestUsers() {
     test_admin: '00000000-0000-0000-0000-000000000003',
   };
   
+  // Define all useState hooks first
   const [testMode, setTestMode] = useState<boolean>(false);
   const [activeTestRole, setActiveTestRole] = useState<UserRole | null>(null);
+  
+  // Store original user info when test mode is activated
+  const [originalUser, setOriginalUser] = useState<{
+    user: User | null;
+    profile: UserProfile | null;
+  } | null>(null);
 
   // Define test users before using them
   const testUsers: Record<UserRole, { user: User; profile: UserProfile }> = {
@@ -96,12 +103,6 @@ export function useTestUsers() {
     }
   };
   
-  // Store original user info when test mode is activated
-  const [originalUser, setOriginalUser] = useState<{
-    user: User | null;
-    profile: UserProfile | null;
-  } | null>(null);
-
   const impersonateTestUser = useCallback((
     role: UserRole, 
     currentUser?: User | null,
