@@ -1,4 +1,3 @@
-
 import { PartsSearchFilters } from '@/components/shared/parts/PartsSearchFilters';
 import { PartsCatalogGrid } from '@/components/shared/parts/PartsCatalogGrid';
 import { PartDetailDialog } from '@/components/shared/parts/PartDetailDialog';
@@ -11,6 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Part } from '@/types/parts';
 
 const ShopParts = () => {
   const {
@@ -45,6 +45,7 @@ const ShopParts = () => {
     selectedPartForCoreReturn,
     isCoreReturnDialogOpen,
     setCoreReturnDialogOpen,
+    handleOpenCoreReturnDialog,
     handleProcessCoreReturn
   } = usePartsPage();
   
@@ -72,7 +73,10 @@ const ShopParts = () => {
         onSelectPart={handleQuickPartSelect}
         selectedPartForCoreReturn={selectedPartForCoreReturn}
         isCoreReturnOpen={isCoreReturnDialogOpen}
-        setCoreReturnOpen={setCoreReturnDialogOpen}
+        setCoreReturnOpen={(part: Part) => {
+          // Properly handle the part parameter by calling the correct function
+          handleOpenCoreReturnDialog(part);
+        }}
         onProcessCoreReturn={handleProcessCoreReturn}
       />
       
@@ -108,7 +112,7 @@ const ShopParts = () => {
             onAddToCart={handleAddToCart}
             onAddToQuotation={handleAddToQuotation}
             onViewDetails={handleViewDetails}
-            onOpenCoreReturn={setCoreReturnDialogOpen}
+            onOpenCoreReturn={handleOpenCoreReturnDialog}
             showInventory={true}  // Show stock levels for shop staff
           />
         </TabsContent>

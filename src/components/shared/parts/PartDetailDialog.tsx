@@ -70,7 +70,7 @@ export function PartDetailDialog({
       
       if (error) throw error;
       
-      // Convert to Part type
+      // Convert to Part type with optional properties
       const partData: Part = {
         id: data.id,
         sku: data.sku || '',
@@ -82,8 +82,8 @@ export function PartDetailDialog({
         quantity: data.quantity || 0,
         reorder_level: data.reorder_level || 10,
         supplier: data.supplier || '',
-        core_charge: data.core_charge || 0,
-        location: data.location || '',
+        location: data.location || '', // Add default empty string
+        core_charge: data.core_charge || 0, // Add default 0
         created_at: data.created_at,
         updated_at: data.updated_at,
       };
