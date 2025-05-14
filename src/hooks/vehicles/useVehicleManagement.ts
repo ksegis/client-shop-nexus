@@ -72,12 +72,15 @@ export const useVehicleManagement = () => {
     }
     
     // Convert NewVehicleData to the format expected by addVehicleBase
-    // by adding required properties for Vehicle type
+    // by adding required properties for Vehicle type and ensuring vin is not optional
     const fullVehicleData = {
       ...vehicleData,
       owner_id: customerId || user?.id || '',
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      vin: vehicleData.vin || '', // Ensure vin is always a string, never undefined
+      license_plate: vehicleData.license_plate || '', // Same for license_plate
+      images: vehicleData.images || [] // Ensure images is always an array
     };
     
     const newVehicle = await addVehicleBase(fullVehicleData);
