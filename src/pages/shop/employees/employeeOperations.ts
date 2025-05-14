@@ -1,8 +1,7 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Employee, ExtendedRole } from './types';
 import { useToast } from '@/hooks/use-toast';
-import { ExtendedUserRole, DatabaseUserRole, mapExtendedRoleToDbRole } from '@/integrations/supabase/types-extensions';
+import { ExtendedUserRole, mapExtendedRoleToDbRole } from '@/integrations/supabase/types-extensions';
 
 export const useEmployeeOperations = (refetch: () => Promise<void>) => {
   const { toast } = useToast();
@@ -10,7 +9,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
   const createEmployee = async (employee: Partial<Employee>, password: string) => {
     try {
       // Map the ExtendedRole to a DatabaseUserRole
-      const dbRole = mapExtendedRoleToDbRole(employee.role as ExtendedRole);
+      const dbRole = mapExtendedRoleToDbRole(employee.role as ExtendedUserRole);
       
       // Sign up the employee with email and password
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
@@ -48,7 +47,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
         title: "Success",
         description: "Employee created successfully",
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -61,7 +60,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
   const updateEmployee = async (id: string, employee: Partial<Employee>, password?: string) => {
     try {
       // Map the ExtendedRole to a DatabaseUserRole
-      const dbRole = mapExtendedRoleToDbRole(employee.role as ExtendedRole);
+      const dbRole = mapExtendedRoleToDbRole(employee.role as ExtendedUserRole);
       
       // Update profile data
       const { error: updateError } = await supabase
@@ -89,7 +88,7 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
         title: "Success",
         description: "Employee updated successfully",
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -102,23 +101,27 @@ export const useEmployeeOperations = (refetch: () => Promise<void>) => {
   const toggleEmployeeActive = async (id: string, currentRole: ExtendedRole) => {
     try {
       // Map the ExtendedRole to a DatabaseUserRole based on active/inactive state
-      let dbRole: DatabaseUserRole;
+      let newRole: ExtendedUserRole;
       
       // Toggle between active and inactive states
       switch (currentRole) {
         case 'staff':
+          newRole = 'inactive_staff';
+          break;
         case 'admin':
-          // If currently active, we want to set as inactive in our UI but DB only accepts active roles
-          dbRole = mapExtendedRoleToDbRole(currentRole);
+          newRole = 'inactive_admin';
           break;
         case 'inactive_staff':
+          newRole = 'staff';
+          break;
         case 'inactive_admin':
-          // If currently inactive, we want to activate
-          dbRole = mapExtendedRoleToDbRole(currentRole);
+          newRole = 'admin';
           break;
         default:
-          dbRole = 'staff';
+          newRole = 'staff';
       }
+      
+      const dbRole = mapExtendedRoleToDbRole(newRole);
       
       const { error: updateError } = await supabase
         .from('profiles')

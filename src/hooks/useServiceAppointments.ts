@@ -4,22 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth';
-import { ExtendedDatabase } from '@/integrations/supabase/types-extensions';
+import { ServiceAppointment, NewAppointmentData } from '@/integrations/supabase/types-extensions';
 
-export type ServiceAppointment = ExtendedDatabase['public']['Tables']['service_appointments']['Row'] & {
-  vehicles?: {
-    make: string;
-    model: string;
-    year: number | string;
-  };
-  profiles?: {
-    first_name: string | null;
-    last_name: string | null;
-    email: string;
-  };
-};
-
-export type NewAppointmentData = Omit<ExtendedDatabase['public']['Tables']['service_appointments']['Insert'], 'id' | 'created_at' | 'updated_at'>;
+export type { ServiceAppointment, NewAppointmentData };
 
 export const useServiceAppointments = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -86,7 +73,15 @@ export const useServiceAppointments = () => {
     try {
       const { data, error } = await supabase
         .from('service_appointments')
-        .insert(appointmentData)
+        .insert({
+          customer_id: appointmentData.customer_id,
+          vehicle_id: appointmentData.vehicle_id,
+          appointment_date: appointmentData.appointment_date,
+          appointment_time: appointmentData.appointment_time,
+          service_type: appointmentData.service_type,
+          description: appointmentData.description,
+          status: appointmentData.status || 'scheduled'
+        })
         .select()
         .single();
 

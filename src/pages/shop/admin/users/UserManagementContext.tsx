@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { User, InviteUserFormValues } from './types';
+import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 
 interface UserManagementContextType {
   users: User[];
@@ -44,11 +45,13 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
     user.role === 'admin' || 
     user.role === 'staff' || 
     user.role === 'inactive_admin' || 
-    user.role === 'inactive_staff'
+    user.role === 'inactive_staff' ||
+    user.role === 'test_admin' ||
+    user.role === 'test_staff'
   );
   
   const customers = users.filter(user => 
-    user.role === 'customer'
+    user.role === 'customer' || user.role === 'test_customer'
   );
 
   const refetchUsers = async () => {

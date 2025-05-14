@@ -1,17 +1,19 @@
 
+import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
+
 export interface Employee {
   id: string;
   email: string;
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
-  role: ExtendedRole;
+  role: ExtendedUserRole;
   created_at: string;
   updated_at: string;
 }
 
-// Updated ExtendedRole to exclude 'customer' since it's invalid for employees
-export type ExtendedRole = 'staff' | 'admin' | 'inactive_staff' | 'inactive_admin';
+// ExtendedRole should be aligned with the ExtendedUserRole type
+export type ExtendedRole = ExtendedUserRole;
 
 // Define the base role types needed by EmployeesContext
 export type BaseRole = 'staff' | 'admin';

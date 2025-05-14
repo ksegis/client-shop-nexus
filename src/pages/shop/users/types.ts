@@ -29,11 +29,11 @@ export interface UserContextType {
 
 // Helper functions for role management
 export const getBaseRole = (role: ExtendedUserRole): FormRole => {
-  if (role === 'inactive_staff') return 'staff';
-  if (role === 'inactive_admin') return 'admin';
+  if (role === 'inactive_staff' || role === 'test_staff') return 'staff';
+  if (role === 'inactive_admin' || role === 'test_admin') return 'admin';
   return role === 'admin' ? 'admin' : role === 'staff' ? 'staff' : 'customer';
 };
 
 export const isRoleInactive = (role: ExtendedUserRole): boolean => {
-  return role.startsWith('inactive_');
+  return role === 'inactive_staff' || role === 'inactive_admin';
 };

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useUserManagement } from './UserManagementContext';
 import { User, getBaseRole, isRoleInactive } from './types';
+import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 
 // Form validation schema
 const createUserSchema = z.object({
@@ -67,14 +67,16 @@ export function UserForm({ userData, onCancel, onSuccess }: UserFormProps) {
     try {
       if (isEditing && userData) {
         // For update operations
+        const newRole: ExtendedUserRole = isRoleInactive(userData.role) ? 
+          (values.role === 'admin' ? 'inactive_admin' : 'inactive_staff') : 
+          values.role as ExtendedUserRole;
+          
         await updateUser(
           userData.id, 
           {
             ...values,
             // Preserve inactive status if user is currently inactive
-            role: isRoleInactive(userData.role) ? 
-              (values.role === 'admin' ? 'inactive_admin' : 'inactive_staff') : 
-              values.role 
+            role: newRole
           },
           (values as UpdateUserValues).password
         );
