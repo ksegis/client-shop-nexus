@@ -16,15 +16,7 @@ export const useInventory = () => {
         throw new Error("Name is required");
       }
       
-      // Check if user is authenticated
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) {
-        console.error('No authenticated session found');
-        throw new Error("Authentication required to add inventory items");
-      }
-      
-      console.log('User is authenticated, proceeding with insert');
-      
+      // Proceed with add operation
       const { data, error } = await supabase.from('inventory').insert({
         name: values.name,
         description: values.description,
