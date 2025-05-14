@@ -1,0 +1,182 @@
+
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { ShoppingCart, Package } from 'lucide-react';
+import { PartsSearchFilters } from '@/components/shared/parts/PartsSearchFilters';
+import { PartsCatalogGrid } from '@/components/shared/parts/PartsCatalogGrid';
+import { PartDetailDialog } from '@/components/shared/parts/PartDetailDialog';
+import { PartsCart } from '@/components/shared/parts/PartsCart';
+import { usePartsCatalog } from '@/hooks/parts/usePartsCatalog';
+import { usePartsCart } from '@/contexts/parts/PartsCartContext';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
+
+const ShopParts = () => {
+  const { toast } = useToast();
+  const { 
+    parts, 
+    isLoading, 
+    searchFilters, 
+    setSearchFilters,
+    getCategories,
+    getSuppliers,
+    refreshCatalog
+  } = usePartsCatalog();
+  
+  const { 
+    addToCart, 
+    getCartItemCount,
+    cart
+  } = usePartsCart();
+  
+  const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
+  
+  useEffect(() => {
+    const loadFilterOptions = async () => {
+      const categoriesList = await getCategories();
+      const suppliersList = await getSuppliers();
+      
+      setCategories(categoriesList as string[]);
+      setSuppliers(suppliersList as string[]);
+    };
+    
+    loadFilterOptions();
+  }, []);
+  
+  const handleViewDetails = (partId: string) => {
+    setSelectedPartId(partId);
+  };
+  
+  const handleCloseDetails = () => {
+    setSelectedPartId(null);
+  };
+  
+  const handleAddToCartFromDialog = (part: any, quantity: number) => {
+    addToCart(part, quantity);
+  };
+  
+  const handleProcessTransaction = () => {
+    // For Phase 1, show a success toast
+    toast({
+      title: "Transaction processed",
+      description: `Processed sale for ${getCartItemCount()} items.`,
+    });
+    
+    // Clear the cart
+    // In future phases, this would actually update inventory and create transaction records
+    setTimeout(() => {
+      // Give the user a moment to see the success message
+      setCartOpen(false);
+    }, 1500);
+    
+    // Refresh catalog to reflect inventory changes (simulated for now)
+    setTimeout(() => {
+      refreshCatalog();
+    }, 2000);
+  };
+  
+  // Calculate low stock items for dashboard
+  const lowStockCount = parts.filter(part => 
+    part.quantity > 0 && part.quantity <= (part.reorder_level || 10)
+  ).length;
+  
+  // Calculate out of stock items for dashboard
+  const outOfStockCount = parts.filter(part => part.quantity <= 0).length;
+  
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Parts Desk</h1>
+          <p className="text-muted-foreground">
+            Manage inventory and process customer parts orders
+          </p>
+        </div>
+        
+        <Button 
+          onClick={() => setCartOpen(true)} 
+          variant={getCartItemCount() > 0 ? "default" : "outline"}
+          className="sm:self-end"
+        >
+          <ShoppingCart className="mr-2 h-4 w-4" />
+          Sale Cart
+          {getCartItemCount() > 0 && (
+            <Badge variant="secondary" className="ml-2">
+              {getCartItemCount()}
+            </Badge>
+          )}
+        </Button>
+      </div>
+      
+      {/* Quick stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Total Parts</CardTitle>
+            <CardDescription>Currently in inventory</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{parts.length}</p>
+          </CardContent>
+        </Card>
+        
+        <Card className={lowStockCount > 0 ? "border-yellow-300" : ""}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Low Stock</CardTitle>
+            <CardDescription>Items that need reordering</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-3xl font-bold ${lowStockCount > 0 ? "text-yellow-600" : ""}`}>
+              {lowStockCount}
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card className={outOfStockCount > 0 ? "border-red-300" : ""}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Out of Stock</CardTitle>
+            <CardDescription>Items with zero inventory</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-3xl font-bold ${outOfStockCount > 0 ? "text-red-600" : ""}`}>
+              {outOfStockCount}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+      
+      <PartsSearchFilters
+        searchFilters={searchFilters}
+        setSearchFilters={setSearchFilters}
+        categories={categories}
+        suppliers={suppliers}
+      />
+      
+      <PartsCatalogGrid
+        parts={parts}
+        isLoading={isLoading}
+        onAddToCart={addToCart}
+        onViewDetails={handleViewDetails}
+        showInventory={true}  // Show stock levels for shop staff
+      />
+      
+      <PartDetailDialog
+        partId={selectedPartId}
+        onClose={handleCloseDetails}
+        onAddToCart={handleAddToCartFromDialog}
+      />
+      
+      <PartsCart
+        isOpen={cartOpen}
+        onClose={() => setCartOpen(false)}
+        onCheckout={handleProcessTransaction}
+      />
+    </div>
+  );
+};
+
+export default ShopParts;

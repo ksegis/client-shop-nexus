@@ -21,7 +21,9 @@ import {
   UserPlus, 
   Settings, 
   FileText, 
-  FileCheck
+  FileCheck,
+  Truck,
+  Package2
 } from "lucide-react";
 
 const navigationItems = [
@@ -49,6 +51,11 @@ const navigationItems = [
     title: "Work Orders",
     href: "/shop/work-orders",
     icon: ListChecks,
+  },
+  {
+    title: "Parts Desk",
+    href: "/shop/parts",
+    icon: Package2,
   },
   {
     title: "Customers",
@@ -105,7 +112,7 @@ export const Sidebar = () => {
         </SheetTrigger>
         <SheetContent side="left" className="w-80 p-0">
           <SheetHeader className="pl-6 pb-4">
-            <SheetTitle>Acme Co.</SheetTitle>
+            <SheetTitle>AutoCare Pro</SheetTitle>
             <SheetDescription>
               Manage your shop, view reports, and more.
             </SheetDescription>
