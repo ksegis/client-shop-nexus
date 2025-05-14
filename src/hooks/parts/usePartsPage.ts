@@ -4,6 +4,7 @@ import { usePartsCatalog } from '@/hooks/parts/usePartsCatalog';
 import { usePartsCart } from '@/contexts/parts/PartsCartContext';
 import { useToast } from '@/hooks/use-toast';
 import { Part } from '@/types/parts';
+import { InventoryItem } from '@/pages/shop/inventory/types';
 
 export const usePartsPage = () => {
   const { toast } = useToast();
@@ -67,6 +68,34 @@ export const usePartsPage = () => {
     addToCart(part, 1);  // Default to quantity of 1
   };
   
+  // New handler for part selection from quick search
+  const handleQuickPartSelect = (item: InventoryItem) => {
+    // Convert the inventory item to a Part format
+    const part: Part = {
+      id: item.id,
+      sku: item.sku || '',
+      name: item.name,
+      description: item.description || '',
+      category: item.category || 'Uncategorized',
+      price: item.price || 0,
+      cost: item.cost || 0,
+      quantity: item.quantity || 0,
+      reorder_level: item.reorder_level || 10,
+      supplier: item.supplier || '',
+      location: '',
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+    };
+    
+    // Open the part details dialog
+    setSelectedPartId(item.id);
+    
+    toast({
+      title: "Part found",
+      description: `Found part: ${item.name}`,
+    });
+  };
+  
   const handleProcessTransaction = () => {
     // For Phase 1, show a success toast
     toast({
@@ -114,6 +143,7 @@ export const usePartsPage = () => {
     handleAddToCartFromDialog,
     handleProcessTransaction,
     handleAddSamplePart,
-    handleCheckInventory
+    handleCheckInventory,
+    handleQuickPartSelect
   };
 };

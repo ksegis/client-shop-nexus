@@ -28,7 +28,8 @@ const ShopParts = () => {
     handleAddToCartFromDialog,
     handleProcessTransaction,
     handleAddSamplePart,
-    handleCheckInventory
+    handleCheckInventory,
+    handleQuickPartSelect
   } = usePartsPage();
   
   const [showDemo, setShowDemo] = useState(false);
@@ -48,6 +49,7 @@ const ShopParts = () => {
         setCartOpen={setCartOpen}
         onCheckInventory={handleCheckInventory}
         onAddSamplePart={handleAddSamplePart}
+        onSelectPart={handleQuickPartSelect}
       />
       
       {showDemo && parts.length === 0 && !isLoading && (
