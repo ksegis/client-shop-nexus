@@ -1,5 +1,5 @@
 
-import { toast as sonnerToast } from "sonner"
+import { toast as sonnerToast, type ToastT } from "sonner"
 
 type ToastProps = {
   title?: string;
@@ -25,4 +25,5 @@ export function toast({ variant = "default", ...props }: ToastProps) {
   })
 }
 
-export { useToast } from "sonner"
+// Re-export the Toaster's useToast hook with the same API
+export { toast as useToast } from "sonner"
