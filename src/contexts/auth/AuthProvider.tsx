@@ -56,13 +56,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
     }
     
-    // Regular authentication
+    // Regular authentication - determine portal type consistently from profile role if available
+    let derivedPortalType: 'shop' | 'customer' | null = null;
+    
+    if (authUser) {
+      // First try to get role from profile
+      if (authProfile?.role) {
+        derivedPortalType = authProfile.role.includes('customer') ? 'customer' : 'shop';
+      } 
+      // Fall back to user metadata if profile not available yet
+      else if (authUser.user_metadata?.role) {
+        derivedPortalType = authUser.user_metadata.role.includes('customer') ? 'customer' : 'shop';
+      }
+    }
+    
     return { 
       user: authUser, 
       profile: authProfile,
-      portalType: authUser ? 
-        (authUser.user_metadata?.role?.includes('customer') ? 'customer' : 'shop') as 'shop' | 'customer' : 
-        null
+      portalType: derivedPortalType
     };
   }, [authUser, authProfile, testRole, isInIframe, iframeAuth, getTestUserByRole]);
 
@@ -115,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return stopImpersonation();
   };
   
-  // Function to validate if user has access based on allowed roles
+  // Function to validate if user has access based on allowed roles - improved to handle test roles
   const validateAccess = (allowedRoles: UserRole[]) => {
     if (!profile || !profile.role) return false;
     

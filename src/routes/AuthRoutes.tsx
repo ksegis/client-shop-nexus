@@ -10,7 +10,7 @@ const AuthRoutes = () => {
     <>
       {process.env.NODE_ENV === 'development' && <AuthDebugger componentName="AuthRoutes" />}
       <Routes>
-        <Route path="/" element={<Auth />} />
+        <Route path="/" element={<Navigate to="/auth/login" replace />} />
         <Route path="/login" element={<Auth />} />
         <Route path="/shop/login" element={<ShopLogin />} />
         <Route path="*" element={<NotFound />} />

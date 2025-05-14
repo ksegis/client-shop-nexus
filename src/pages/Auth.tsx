@@ -1,43 +1,60 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShoppingBag, User, Users, FlaskConical } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AuthDebugger } from "@/components/debug/AuthDebugger";
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { impersonateTestUser, isAuthenticated, profile } = useAuth();
+  const location = useLocation();
+  const { impersonateTestUser, isAuthenticated, profile, portalType } = useAuth();
   const [isLoadingTest, setIsLoadingTest] = useState(false);
+  
+  // Get the "from" redirect parameter if it exists
+  const searchParams = new URLSearchParams(location.search);
+  const fromPath = searchParams.get('from');
   
   // Log initial authentication state
   useEffect(() => {
     console.log('Auth Page - Initial State:', { 
       isAuthenticated, 
       profileRole: profile?.role,
-      pathname: window.location.pathname
+      pathname: window.location.pathname,
+      fromPath
     });
-  }, []);
+  }, [isAuthenticated, profile, fromPath]);
   
-  // If already authenticated, redirect to the appropriate portal
+  // If already authenticated, redirect to the appropriate portal or the original "from" path
   useEffect(() => {
-    if (isAuthenticated && profile?.role) {
-      const path = profile.role.includes('customer') ? 
-        '/customer/profile' : 
-        '/shop';
-      console.log(`Auth Page - Redirecting to ${path} (already authenticated)`);
-      navigate(path, { replace: true });
+    if (isAuthenticated && portalType) {
+      // If we have a "from" path, redirect there if it's in the correct portal
+      let redirectPath = portalType === 'customer' ? '/customer' : '/shop';
+      
+      if (fromPath) {
+        const isFromPathForCorrectPortal = 
+          (portalType === 'customer' && fromPath.startsWith('/customer')) ||
+          (portalType === 'shop' && fromPath.startsWith('/shop'));
+          
+        if (isFromPathForCorrectPortal) {
+          redirectPath = fromPath;
+        }
+      }
+      
+      console.log(`Auth Page - Redirecting to ${redirectPath} (already authenticated)`);
+      navigate(redirectPath, { replace: true });
     }
-  }, [isAuthenticated, profile, navigate]);
+  }, [isAuthenticated, portalType, navigate, fromPath]);
   
   const goToCustomerLogin = () => {
     navigate("/customer");
   };
   
   const goToShopLogin = () => {
-    navigate("/shop");
+    navigate("/shop/login");
   };
 
   const switchToTestAccount = (role: 'test_customer' | 'test_staff' | 'test_admin') => {

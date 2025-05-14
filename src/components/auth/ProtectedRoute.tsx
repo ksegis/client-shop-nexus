@@ -2,7 +2,7 @@
 import { ReactNode, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth';
-import { UserRole } from '@/contexts/auth/types';
+import { UserRole, getBaseRole } from '@/contexts/auth/types';
 import { TestModeBanner } from './TestModeBanner';
 
 interface ProtectedRouteProps {
@@ -65,7 +65,7 @@ const ProtectedRoute = ({
     return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
   }
 
-  // Check if user has the correct role
+  // Check if user has the correct role - use validateAccess for consistent role checking
   const hasRole = allowedRoles.length === 0 || validateAccess(allowedRoles);
   
   // Check if user has access to the correct portal
@@ -74,12 +74,15 @@ const ProtectedRoute = ({
   // If user doesn't have the right role or portal access, redirect to an appropriate location
   if (!hasRole || !hasPortalAccess) {
     // Redirect to their default portal
-    const defaultPath = profile?.role ? 
-      (profile.role.includes('customer') ? '/customer' : '/shop') : 
-      '/auth';
+    const defaultPath = portalType === 'customer' ? '/customer' : '/shop';
     
     console.log(`🚫 Access denied: Role or portal mismatch, redirecting to ${defaultPath} from ${location.pathname}`);
-    console.log('Role check:', { hasRole, hasPortalAccess, userRole: profile?.role });
+    console.log('Role check:', { 
+      hasRole, 
+      hasPortalAccess, 
+      userRole: profile?.role,
+      allowedRoles: allowedRoles
+    });
       
     return <Navigate to={defaultPath} replace />;
   }
