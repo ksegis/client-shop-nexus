@@ -25,11 +25,11 @@ export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
     { name: 'Reports', path: '/shop/reports' },
     { name: 'Employees', path: '/shop/employees' },
     { name: 'Inventory', path: '/shop/inventory' },
+    { name: 'Parts Inventory', path: '/shop/parts-inventory' },
     { name: 'Work Orders', path: '/shop/work-orders' },
     { name: 'Customers', path: '/shop/customers' },
     { name: 'Estimates', path: '/shop/estimates' },
     { name: 'Invoices', path: '/shop/invoices' }
-    // Parts Desk link removed for shop portal
   ];
   
   // Admin links for shop portal
