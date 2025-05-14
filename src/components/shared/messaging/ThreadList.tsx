@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Thread } from '@/contexts/messaging/MessagingContext';
+import { MessageThread } from '@/contexts/messaging/types';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDistanceToNow } from 'date-fns';
@@ -9,9 +9,9 @@ import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 interface ThreadListProps {
-  threads: Thread[];
+  threads: MessageThread[];
   activeThreadId: string | null;
-  onSelectThread: (thread: Thread) => void;
+  onSelectThread: (thread: MessageThread) => void;
   onCreateNewThread?: () => void;
   isShopPortal?: boolean;
   searchQuery?: string;

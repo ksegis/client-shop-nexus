@@ -17,7 +17,7 @@ import NotFound from "@/pages/NotFound";
 import Layout from "@/components/layout/Layout";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
-import Messages from "@/pages/shop/Messages";
+import Messages from "@/pages/shop/messages";
 import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
 
 // Define which roles are allowed to access shop routes
