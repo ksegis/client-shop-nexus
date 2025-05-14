@@ -23,7 +23,8 @@ import {
   FileText, 
   FileCheck,
   Truck,
-  Package2
+  Package2,
+  ShoppingCart
 } from "lucide-react";
 
 const navigationItems = [
@@ -55,6 +56,11 @@ const navigationItems = [
   {
     title: "Parts Desk",
     href: "/shop/parts",
+    icon: ShoppingCart,
+  },
+  {
+    title: "Parts Inventory",
+    href: "/shop/parts-inventory",
     icon: Package2,
   },
   {

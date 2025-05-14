@@ -4,13 +4,17 @@ import { PartsCatalogGrid } from '@/components/shared/parts/PartsCatalogGrid';
 import { PartDetailDialog } from '@/components/shared/parts/PartDetailDialog';
 import { PartsCart } from '@/components/shared/parts/PartsCart';
 import { PartsHeader } from '@/components/shop/parts/PartsHeader';
-import { InventoryStatsCards } from '@/components/shop/parts/InventoryStatsCards';
+import { PartsInventorySummary } from '@/components/shop/parts/PartsInventorySummary';
 import { usePartsPage } from '@/hooks/parts/usePartsPage';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
+import { useEffect, useState } from 'react';
 
 const ShopParts = () => {
   const {
     parts,
     isLoading,
+    error,
     searchFilters,
     setSearchFilters,
     categories,
@@ -28,6 +32,16 @@ const ShopParts = () => {
     handleCheckInventory
   } = usePartsPage();
   
+  const [showDemo, setShowDemo] = useState(false);
+
+  // Check if we have any parts, if not, show the demo alert after a delay
+  useEffect(() => {
+    if (!isLoading && parts.length === 0) {
+      const timer = setTimeout(() => setShowDemo(true), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, parts]);
+  
   return (
     <div className="space-y-6">
       <PartsHeader 
@@ -37,7 +51,27 @@ const ShopParts = () => {
         onAddSamplePart={handleAddSamplePart}
       />
       
-      <InventoryStatsCards parts={parts} />
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            Failed to load parts catalog: {error.message || 'Unknown error'}
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {showDemo && parts.length === 0 && !isLoading && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Demo Mode</AlertTitle>
+          <AlertDescription>
+            No parts found in your inventory. Click "Add Sample Part" to add some demo data and see how the Parts Desk works.
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {parts.length > 0 && <PartsInventorySummary parts={parts} />}
       
       <PartsSearchFilters
         searchFilters={searchFilters}

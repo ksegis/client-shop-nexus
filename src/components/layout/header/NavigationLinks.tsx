@@ -16,8 +16,8 @@ export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
     { name: 'Profile', path: '/customer/profile' },
     { name: 'Estimates', path: '/customer/estimates' },
     { name: 'Invoices', path: '/customer/invoices' },
-    { name: 'Transaction History', path: '/customer/transactions' }
-    // Parts Catalog link removed for customer portal
+    { name: 'Transaction History', path: '/customer/transactions' },
+    { name: 'Parts Catalog', path: '/customer/parts' }
   ];
   
   const shopLinks: NavigationLink[] = [
@@ -26,6 +26,7 @@ export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
     { name: 'Employees', path: '/shop/employees' },
     { name: 'Inventory', path: '/shop/inventory' },
     { name: 'Parts Inventory', path: '/shop/parts-inventory' },
+    { name: 'Parts Desk', path: '/shop/parts' },
     { name: 'Work Orders', path: '/shop/work-orders' },
     { name: 'Customers', path: '/shop/customers' },
     { name: 'Estimates', path: '/shop/estimates' },

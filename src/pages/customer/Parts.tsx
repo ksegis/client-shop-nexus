@@ -1,40 +1,46 @@
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { ShoppingCart, Package } from 'lucide-react';
+import { useState } from 'react';
 import { PartsSearchFilters } from '@/components/shared/parts/PartsSearchFilters';
 import { PartsCatalogGrid } from '@/components/shared/parts/PartsCatalogGrid';
 import { PartDetailDialog } from '@/components/shared/parts/PartDetailDialog';
 import { PartsCart } from '@/components/shared/parts/PartsCart';
 import { usePartsCatalog } from '@/hooks/parts/usePartsCatalog';
 import { usePartsCart } from '@/contexts/parts/PartsCartContext';
-import { useNavigate } from 'react-router-dom';
-import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 import { Part } from '@/types/parts';
+import { ShoppingCart } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 const CustomerParts = () => {
+  const { toast } = useToast();
   const navigate = useNavigate();
-  const { 
-    parts, 
-    isLoading, 
-    searchFilters, 
+  
+  // Parts catalog state
+  const {
+    parts,
+    isLoading,
+    searchFilters,
     setSearchFilters,
     getCategories,
     getSuppliers
   } = usePartsCatalog();
   
-  const { 
-    addToCart, 
-    getCartItemCount 
+  // Parts cart state
+  const {
+    addToCart,
+    getCartItemCount
   } = usePartsCart();
   
+  // Local component state
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
   
-  useEffect(() => {
-    const loadFilterOptions = async () => {
+  // Load category and supplier filters
+  useState(() => {
+    const loadFilters = async () => {
       const categoriesList = await getCategories();
       const suppliersList = await getSuppliers();
       
@@ -42,8 +48,8 @@ const CustomerParts = () => {
       setSuppliers(suppliersList as string[]);
     };
     
-    loadFilterOptions();
-  }, []);
+    loadFilters();
+  });
   
   const handleViewDetails = (partId: string) => {
     setSelectedPartId(partId);
@@ -53,45 +59,49 @@ const CustomerParts = () => {
     setSelectedPartId(null);
   };
   
-  // Modified to match the expected signature in PartDetailDialog
+  const handleAddToCart = (part: Part) => {
+    addToCart(part, 1); // Default to quantity of 1
+    toast({
+      title: "Added to cart",
+      description: `${part.name} has been added to your cart.`,
+    });
+  };
+  
   const handleAddToCartFromDialog = (part: Part, quantity: number) => {
     addToCart(part, quantity);
+    toast({
+      title: "Added to cart",
+      description: `${part.name} has been added to your cart.`,
+    });
   };
   
-  // Simple adapter function to handle single-parameter calls from PartCard
-  const handleAddToCart = (part: Part) => {
-    addToCart(part, 1);  // Default to quantity of 1
-  };
-  
-  const handleCheckout = () => {
-    // For Phase 1, navigate to a placeholder page
+  const handleProceedToCheckout = () => {
     navigate('/customer/checkout');
-    // In future phases, this would be properly implemented
   };
   
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="container py-6 space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Parts Catalog</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Parts Catalog</h1>
           <p className="text-muted-foreground">
-            Browse our inventory of truck and automotive parts
+            Browse and order parts for your vehicle
           </p>
         </div>
         
-        <Button 
-          onClick={() => setCartOpen(true)} 
-          variant="outline"
-          className="sm:self-end"
-        >
-          <ShoppingCart className="mr-2 h-4 w-4" />
-          Cart
-          {getCartItemCount() > 0 && (
-            <Badge variant="secondary" className="ml-2">
+        {getCartItemCount() > 0 && (
+          <Button 
+            variant="outline" 
+            className="relative self-end sm:self-auto"
+            onClick={() => setCartOpen(true)}
+          >
+            <ShoppingCart className="h-5 w-5 mr-2" />
+            Cart
+            <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs rounded-full w-5 h-5 flex items-center justify-center">
               {getCartItemCount()}
-            </Badge>
-          )}
-        </Button>
+            </span>
+          </Button>
+        )}
       </div>
       
       <PartsSearchFilters
@@ -106,7 +116,7 @@ const CustomerParts = () => {
         isLoading={isLoading}
         onAddToCart={handleAddToCart}
         onViewDetails={handleViewDetails}
-        showInventory={false}  // Don't show stock levels for customers
+        showInventory={false} // Don't show stock levels for customers
       />
       
       <PartDetailDialog
@@ -118,7 +128,7 @@ const CustomerParts = () => {
       <PartsCart
         isOpen={cartOpen}
         onClose={() => setCartOpen(false)}
-        onCheckout={handleCheckout}
+        onCheckout={handleProceedToCheckout}
       />
     </div>
   );
