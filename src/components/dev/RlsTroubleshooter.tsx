@@ -28,13 +28,14 @@ const RlsTroubleshooter = () => {
       // Get list of tables with RLS enabled
       const tablesWithRls = rlsPolicies?.filter(table => table.row_security_active) || [];
       
-      // Get active policies
-      const { data: policies, error: policiesListError } = await supabase.rpc(
-        'test_rls_policies'
-      );
+      // Get active policies - using a custom query instead of RPC
+      const { data: policies, error: policiesListError } = await supabase
+        .from('pg_policies')
+        .select('tablename, policyname, cmd, qual')
+        .eq('schemaname', 'public');
       
       if (policiesListError) {
-        console.error('Error testing RLS policies:', policiesListError);
+        console.error('Error fetching RLS policies:', policiesListError);
       }
       
       return {
@@ -178,7 +179,9 @@ const RlsTroubleshooter = () => {
                           )}
                         </td>
                         <td className="py-2 px-3 text-center">
-                          {rlsStatus.policies.some(p => p.table_name === table.table_name) ? (
+                          {rlsStatus.policies && 
+                           Array.isArray(rlsStatus.policies) && 
+                           rlsStatus.policies.some(p => p.tablename === table.table_name) ? (
                             <Badge variant="default" className="bg-green-500">Yes</Badge>
                           ) : (
                             <Badge variant="destructive">No Policies</Badge>

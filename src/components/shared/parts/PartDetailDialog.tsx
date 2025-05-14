@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -59,7 +58,7 @@ export const PartDetailDialog = ({
             quantity: data.quantity || 0,
             reorder_level: data.reorder_level || 10,
             supplier: data.supplier || '',
-            location: data.location || '',
+            // Remove the location property since it doesn't exist
             is_special_order: false, // Default value since it's not in the current schema
             created_at: data.created_at,
             updated_at: data.updated_at,
@@ -90,7 +89,7 @@ export const PartDetailDialog = ({
   
   const getStockStatusColor = (quantity: number, reorderLevel: number = 10) => {
     if (quantity <= 0) return "destructive";
-    if (quantity <= reorderLevel) return "secondary"; // Changed from "warning" to "secondary"
+    if (quantity <= reorderLevel) return "secondary"; 
     return "default";
   };
   
@@ -218,4 +217,28 @@ export const PartDetailDialog = ({
       </DialogContent>
     </Dialog>
   );
+};
+
+const handleClose = () => {
+  setIsOpen(false);
+  onClose();
+};
+
+const handleAddToCart = () => {
+  if (part && onAddToCart) {
+    onAddToCart(part, quantity);
+    handleClose();
+  }
+};
+
+const getStockStatusColor = (quantity: number, reorderLevel: number = 10) => {
+  if (quantity <= 0) return "destructive";
+  if (quantity <= reorderLevel) return "secondary"; 
+  return "default";
+};
+
+const getStockStatusText = (quantity: number, reorderLevel: number = 10) => {
+  if (quantity <= 0) return "Out of Stock";
+  if (quantity <= reorderLevel) return "Low Stock";
+  return "In Stock";
 };

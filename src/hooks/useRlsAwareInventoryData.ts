@@ -186,13 +186,16 @@ export const useRlsAwareInventoryData = () => {
     }
   });
 
-  // Test RLS policies
+  // Test RLS policies - using a direct query rather than the RPC
   const testRlsPolicies = useMutation({
     mutationFn: async () => {
       try {
         console.log('Testing RLS policies...');
         
-        const { data, error } = await supabase.rpc('test_rls_policies');
+        const { data, error } = await supabase
+          .from('pg_policies')
+          .select('tablename, policyname, cmd, qual')
+          .eq('schemaname', 'public');
         
         if (error) throw error;
         
