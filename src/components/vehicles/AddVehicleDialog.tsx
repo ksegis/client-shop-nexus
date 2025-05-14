@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -32,8 +31,13 @@ export const AddVehicleDialog: React.FC<AddVehicleDialogProps> = ({
     try {
       setIsSubmitting(true);
       await onSubmit({
-        ...data,
+        make: data.make, // Ensure required fields are explicitly set
+        model: data.model,
         year: data.year,
+        vehicle_type: data.vehicle_type,
+        vin: data.vin || '',
+        color: data.color,
+        license_plate: data.license_plate,
         mileage: data.mileage ? Number(data.mileage) : undefined,
       });
       onOpenChange(false);

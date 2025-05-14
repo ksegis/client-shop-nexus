@@ -31,11 +31,11 @@ export const useFetchVehicles = () => {
 
       if (error) throw error;
       
-      // Ensure all data is properly typed
+      // Ensure all data is properly typed with explicit mileage handling
       const typedVehicles: Vehicle[] = data?.map(vehicle => ({
         ...vehicle,
-        year: vehicle.year.toString(), // Convert number to string to match our interface
-        mileage: vehicle.mileage // Include mileage if it exists
+        year: vehicle.year.toString(),
+        mileage: vehicle.mileage || undefined
       })) || [];
       
       return typedVehicles;

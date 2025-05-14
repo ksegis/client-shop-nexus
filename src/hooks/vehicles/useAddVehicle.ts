@@ -49,9 +49,9 @@ export const useAddVehicle = () => {
       // Convert year to number for database insertion
       const dbVehicleData = {
         ...vehicleData,
-        year: parseInt(vehicleData.year, 10), // Convert string to number explicitly
-        mileage: vehicleData.mileage, // Include mileage
-        owner_id: effectiveOwnerId // This is crucial for RLS - set owner_id to the customer's ID
+        year: parseInt(vehicleData.year, 10),
+        mileage: vehicleData.mileage,
+        owner_id: effectiveOwnerId
       };
 
       console.log('Vehicle data to insert:', dbVehicleData);
@@ -67,11 +67,11 @@ export const useAddVehicle = () => {
         throw error;
       }
       
-      // Convert back to our interface format
+      // Convert back to our interface format with explicit mileage handling
       const newVehicle: Vehicle = {
         ...data,
-        year: data.year.toString(), // Convert number back to string
-        mileage: data.mileage // Include mileage
+        year: data.year.toString(),
+        mileage: data.mileage || undefined
       };
       
       toast({

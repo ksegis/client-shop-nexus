@@ -12,7 +12,7 @@ export const useUpdateVehicle = () => {
       // Convert year to number if it's included in the update data
       const dbVehicleData: any = { ...vehicleData };
       if (vehicleData.year) {
-        dbVehicleData.year = Number(vehicleData.year); // Convert string to number explicitly
+        dbVehicleData.year = Number(vehicleData.year);
       }
 
       const { data, error } = await supabase
@@ -24,11 +24,11 @@ export const useUpdateVehicle = () => {
       
       if (error) throw error;
       
-      // Convert back to our interface format
+      // Convert back to our interface format with explicit mileage handling
       const updatedVehicle: Vehicle = {
         ...data,
-        year: data.year.toString(), // Convert number back to string
-        mileage: data.mileage // Include mileage
+        year: data.year.toString(),
+        mileage: data.mileage || undefined
       };
       
       toast({
