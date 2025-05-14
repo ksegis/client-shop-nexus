@@ -32,8 +32,8 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProviderWrapper>
         <HeaderProvider>
-          <Toaster />
           <AppRoutes />
+          <Toaster />
         </HeaderProvider>
       </TooltipProviderWrapper>
     </QueryClientProvider>

@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.tsx'
 import './index.css'
-import { AuthProvider } from './contexts/auth'
 import { Toaster } from '@/components/ui/toaster'
 
 // Handle hash redirects at the entry point
@@ -41,10 +40,7 @@ if (rootElement) {
   } else {
     createRoot(rootElement).render(
       <BrowserRouter>
-        <AuthProvider>
-          <App />
-          <Toaster />
-        </AuthProvider>
+        <App />
       </BrowserRouter>
     );
   }
