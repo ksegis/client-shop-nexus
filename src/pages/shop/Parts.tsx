@@ -1,3 +1,4 @@
+
 import { PartsSearchFilters } from '@/components/shared/parts/PartsSearchFilters';
 import { PartsCatalogGrid } from '@/components/shared/parts/PartsCatalogGrid';
 import { PartDetailDialog } from '@/components/shared/parts/PartDetailDialog';
@@ -73,10 +74,7 @@ const ShopParts = () => {
         onSelectPart={handleQuickPartSelect}
         selectedPartForCoreReturn={selectedPartForCoreReturn}
         isCoreReturnOpen={isCoreReturnDialogOpen}
-        setCoreReturnOpen={(part: Part) => {
-          // Properly handle the part parameter by calling the correct function
-          handleOpenCoreReturnDialog(part);
-        }}
+        setCoreReturnOpen={handleOpenCoreReturnDialog}
         onProcessCoreReturn={handleProcessCoreReturn}
       />
       

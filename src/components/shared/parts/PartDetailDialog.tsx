@@ -82,8 +82,9 @@ export function PartDetailDialog({
         quantity: data.quantity || 0,
         reorder_level: data.reorder_level || 10,
         supplier: data.supplier || '',
-        location: data.location || '', // Add default empty string
-        core_charge: data.core_charge || 0, // Add default 0
+        // These properties don't exist in the database schema yet, so we provide defaults
+        location: '', 
+        core_charge: 0,
         created_at: data.created_at,
         updated_at: data.updated_at,
       };
