@@ -2,7 +2,7 @@
 import { useMemo } from 'react';
 import { InventoryItem } from '../types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Box, Category, Store, ShoppingCart } from 'lucide-react';
+import { Box, ListChecks, Store, ShoppingCart } from 'lucide-react';
 
 interface InventoryStatCardsProps {
   items: InventoryItem[];
@@ -72,7 +72,7 @@ export const InventoryStatCards = ({ items }: InventoryStatCardsProps) => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Categories</CardTitle>
-          <Category className="h-4 w-4 text-muted-foreground" />
+          <ListChecks className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{stats.uniqueCategories}</div>
