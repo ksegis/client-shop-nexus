@@ -31,7 +31,21 @@ const ShopParts = () => {
     handleProcessTransaction,
     handleAddSamplePart,
     handleCheckInventory,
-    handleQuickPartSelect
+    handleQuickPartSelect,
+    
+    // Quotation functionality
+    quotationItems,
+    isQuotationDialogOpen,
+    setQuotationDialogOpen,
+    handleAddToQuotation,
+    removeFromQuotation,
+    getQuotationItemCount,
+    
+    // Core returns functionality
+    selectedPartForCoreReturn,
+    isCoreReturnDialogOpen,
+    setCoreReturnDialogOpen,
+    handleProcessCoreReturn
   } = usePartsPage();
   
   const [showDemo, setShowDemo] = useState(false);
@@ -48,10 +62,18 @@ const ShopParts = () => {
     <div className="space-y-6">
       <PartsHeader 
         getCartItemCount={getCartItemCount}
+        getQuotationItemCount={getQuotationItemCount}
         setCartOpen={setCartOpen}
+        quotationItems={quotationItems}
+        onRemoveQuotationItem={removeFromQuotation}
+        setQuotationOpen={setQuotationDialogOpen}
         onCheckInventory={handleCheckInventory}
         onAddSamplePart={handleAddSamplePart}
         onSelectPart={handleQuickPartSelect}
+        selectedPartForCoreReturn={selectedPartForCoreReturn}
+        isCoreReturnOpen={isCoreReturnDialogOpen}
+        setCoreReturnOpen={setCoreReturnDialogOpen}
+        onProcessCoreReturn={handleProcessCoreReturn}
       />
       
       {showDemo && parts.length === 0 && !isLoading && (
@@ -84,7 +106,9 @@ const ShopParts = () => {
             parts={parts}
             isLoading={isLoading}
             onAddToCart={handleAddToCart}
+            onAddToQuotation={handleAddToQuotation}
             onViewDetails={handleViewDetails}
+            onOpenCoreReturn={setCoreReturnDialogOpen}
             showInventory={true}  // Show stock levels for shop staff
           />
         </TabsContent>
@@ -107,6 +131,7 @@ const ShopParts = () => {
         partId={selectedPartId}
         onClose={handleCloseDetails}
         onAddToCart={handleAddToCartFromDialog}
+        onAddToQuotation={handleAddToQuotation}
       />
       
       <PartsCart

@@ -6,6 +6,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Part } from '@/types/parts';
 import { InventoryItem } from '@/pages/shop/inventory/types';
 import { useSpecialOrder } from '@/hooks/parts/useSpecialOrder';
+import { usePartsQuotation } from '@/hooks/parts/usePartsQuotation';
+import { useCoreReturns } from '@/hooks/parts/useCoreReturns';
 
 export const usePartsPage = () => {
   const { toast } = useToast();
@@ -28,6 +30,26 @@ export const usePartsPage = () => {
   } = usePartsCart();
   
   const { specialOrders, fetchSpecialOrders } = useSpecialOrder();
+  
+  // Quotation system
+  const {
+    quotationItems,
+    isDialogOpen: isQuotationDialogOpen,
+    setIsDialogOpen: setQuotationDialogOpen,
+    addToQuotation,
+    removeFromQuotation,
+    getQuotationItemCount,
+    getQuotationTotal
+  } = usePartsQuotation();
+  
+  // Core returns handling
+  const {
+    selectedPart: selectedPartForCoreReturn,
+    isDialogOpen: isCoreReturnDialogOpen,
+    setIsDialogOpen: setCoreReturnDialogOpen,
+    openCoreReturnDialog,
+    processCoreReturn
+  } = useCoreReturns();
   
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -70,6 +92,29 @@ export const usePartsPage = () => {
   // Simple adapter function to handle single-parameter calls from PartCard
   const handleAddToCart = (part: Part) => {
     addToCart(part, 1);  // Default to quantity of 1
+  };
+
+  // Handle adding to quotation
+  const handleAddToQuotation = (part: Part) => {
+    addToQuotation(part, 1);
+  };
+  
+  // Handle adding to quotation from dialog
+  const handleAddToQuotationFromDialog = (part: Part, quantity: number) => {
+    addToQuotation(part, quantity);
+  };
+  
+  // Process a core return
+  const handleProcessCoreReturn = (refundAmount: number, condition: string) => {
+    if (selectedPartForCoreReturn) {
+      processCoreReturn(selectedPartForCoreReturn.id, {
+        reason: "Customer return",
+        condition: condition as any,
+        approved: true,
+        refund_amount: refundAmount,
+        processed_by: "Current User"
+      });
+    }
   };
   
   // New handler for part selection from quick search
@@ -130,7 +175,13 @@ export const usePartsPage = () => {
     await testDirectFetch();
   };
 
+  // Handle opening core return dialog
+  const handleOpenCoreReturnDialog = (part: Part) => {
+    openCoreReturnDialog(part);
+  };
+
   return {
+    // Original functionality
     parts,
     isLoading,
     searchFilters,
@@ -149,6 +200,23 @@ export const usePartsPage = () => {
     handleProcessTransaction,
     handleAddSamplePart,
     handleCheckInventory,
-    handleQuickPartSelect
+    handleQuickPartSelect,
+    
+    // Quotation functionality
+    quotationItems,
+    isQuotationDialogOpen,
+    setQuotationDialogOpen,
+    handleAddToQuotation,
+    handleAddToQuotationFromDialog,
+    removeFromQuotation,
+    getQuotationItemCount,
+    getQuotationTotal,
+    
+    // Core returns functionality
+    selectedPartForCoreReturn,
+    isCoreReturnDialogOpen,
+    setCoreReturnDialogOpen,
+    handleOpenCoreReturnDialog,
+    handleProcessCoreReturn
   };
 };

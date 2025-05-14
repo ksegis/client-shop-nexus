@@ -85,3 +85,16 @@ export interface PartReturn {
   refund_amount: number;
   processed_by?: string;
 }
+
+export interface PartQuotation {
+  id: string;
+  customer_id?: string;
+  customer_name?: string;
+  items: PartOrderItem[];
+  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
+  total: number;
+  valid_until: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}

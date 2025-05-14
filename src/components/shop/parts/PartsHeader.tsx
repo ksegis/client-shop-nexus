@@ -6,6 +6,8 @@ import {
   ShoppingCart,
   FileText,
   ClipboardList,
+  ArrowLeftRight,
+  FileBarChart
 } from "lucide-react";
 import { useState } from "react";
 import { PartNumberSearch } from "./PartNumberSearch";
@@ -17,26 +19,45 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { PartQuotationDialog } from "@/components/shared/parts/PartQuotationDialog";
+import { CoreChargeHandler } from "@/components/shared/parts/CoreChargeHandler";
 
 interface PartsHeaderProps {
   getCartItemCount: () => number;
+  getQuotationItemCount: () => number;
   setCartOpen: (open: boolean) => void;
+  quotationItems: any[];
+  onRemoveQuotationItem: (partId: string) => void;
+  setQuotationOpen: (open: boolean) => void;
   onCheckInventory: () => Promise<void>;
   onAddSamplePart: () => Promise<void>;
   onSelectPart?: (item: any) => void;
+  selectedPartForCoreReturn: any;
+  isCoreReturnOpen: boolean;
+  setCoreReturnOpen: (open: boolean) => void;
+  onProcessCoreReturn?: (refundAmount: number, condition: string) => void;
 }
 
 export function PartsHeader({
   getCartItemCount,
+  getQuotationItemCount,
   setCartOpen,
+  quotationItems,
+  onRemoveQuotationItem,
+  setQuotationOpen,
   onCheckInventory,
   onAddSamplePart,
-  onSelectPart
+  onSelectPart,
+  selectedPartForCoreReturn,
+  isCoreReturnOpen,
+  setCoreReturnOpen,
+  onProcessCoreReturn
 }: PartsHeaderProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [specialOrderOpen, setSpecialOrderOpen] = useState(false);
   
   const cartCount = getCartItemCount();
+  const quotationCount = getQuotationItemCount();
   
   return (
     <div className="flex flex-col space-y-4">
@@ -58,6 +79,37 @@ export function PartsHeader({
               </TooltipTrigger>
               <TooltipContent>
                 <p>Special Order</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => setQuotationOpen(true)}>
+                  <FileBarChart className="h-4 w-4" />
+                  {quotationCount > 0 && (
+                    <Badge variant="secondary" className="absolute -top-2 -right-2 px-1 min-w-[1.1rem] h-[1.1rem] flex items-center justify-center text-xs">
+                      {quotationCount}
+                    </Badge>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Create Quotation</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => setCoreReturnOpen(true)}>
+                  <ArrowLeftRight className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Process Core Return</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -106,6 +158,20 @@ export function PartsHeader({
       <SpecialOrderDialog
         open={specialOrderOpen}
         onOpenChange={setSpecialOrderOpen}
+      />
+      
+      <PartQuotationDialog
+        open={quotationItems.length > 0 && setQuotationOpen !== undefined}
+        onOpenChange={setQuotationOpen}
+        items={quotationItems}
+        onRemoveItem={onRemoveQuotationItem}
+      />
+      
+      <CoreChargeHandler
+        part={selectedPartForCoreReturn}
+        open={isCoreReturnOpen}
+        onOpenChange={setCoreReturnOpen}
+        onProcessReturn={onProcessCoreReturn}
       />
     </div>
   );

@@ -12,7 +12,9 @@ interface PartsCatalogGridProps {
   parts: Part[];
   isLoading: boolean;
   onAddToCart?: (part: Part) => void;
+  onAddToQuotation?: (part: Part) => void;
   onViewDetails: (partId: string) => void;
+  onOpenCoreReturn?: (part: Part) => void;
   showInventory?: boolean;
 }
 
@@ -20,7 +22,9 @@ export const PartsCatalogGrid = ({
   parts,
   isLoading,
   onAddToCart,
+  onAddToQuotation,
   onViewDetails,
+  onOpenCoreReturn,
   showInventory = false
 }: PartsCatalogGridProps) => {
   const { toast } = useToast();
@@ -52,6 +56,22 @@ export const PartsCatalogGrid = ({
       });
     }
   };
+
+  const handleAddToQuotation = (part: Part) => {
+    if (onAddToQuotation) {
+      onAddToQuotation(part);
+      toast({
+        title: "Part added to quotation",
+        description: `${part.name} has been added to your quotation.`,
+      });
+    }
+  };
+
+  const handleOpenCoreReturn = (part: Part) => {
+    if (onOpenCoreReturn) {
+      onOpenCoreReturn(part);
+    }
+  };
   
   if (isLoading) {
     return <LoadingPartsGrid />;
@@ -74,6 +94,8 @@ export const PartsCatalogGrid = ({
       <PartsGrid
         parts={visibleParts}
         onAddToCart={onAddToCart ? handleAddToCart : undefined}
+        onAddToQuotation={onAddToQuotation ? handleAddToQuotation : undefined}
+        onOpenCoreReturn={onOpenCoreReturn ? handleOpenCoreReturn : undefined}
         onViewDetails={onViewDetails}
         showInventory={showInventory}
       />
