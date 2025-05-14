@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { 
   Package2, 
@@ -21,6 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import { PartQuotationDialog } from "@/components/shared/parts/PartQuotationDialog";
 import { CoreChargeHandler } from "@/components/shared/parts/CoreChargeHandler";
+import { Part } from "@/types/parts";
 
 interface PartsHeaderProps {
   getCartItemCount: () => number;
@@ -32,9 +32,9 @@ interface PartsHeaderProps {
   onCheckInventory: () => Promise<void>;
   onAddSamplePart: () => Promise<void>;
   onSelectPart?: (item: any) => void;
-  selectedPartForCoreReturn: any;
+  selectedPartForCoreReturn: Part | null;
   isCoreReturnOpen: boolean;
-  setCoreReturnOpen: (open: boolean) => void;
+  setCoreReturnOpen: (open: boolean) => void; // This now expects a boolean parameter
   onProcessCoreReturn?: (refundAmount: number, condition: string) => void;
 }
 
