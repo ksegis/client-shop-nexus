@@ -1,14 +1,19 @@
 
-import { toast as sonnerToast, useToast as useSonnerToast } from "sonner";
+import { toast as sonnerToast } from "sonner";
 
-type ToastProps = Parameters<typeof sonnerToast>[0] & {
+type ToastProps = {
   title?: string;
   description?: string;
   variant?: "default" | "destructive";
+  // Allow other props from sonner to be passed through
+  [key: string]: any;
 };
 
+// Create a hook to maintain API compatibility
 export const useToast = () => {
-  return useSonnerToast();
+  return {
+    toast: (props: ToastProps) => toast(props)
+  };
 };
 
 export const toast = ({ 

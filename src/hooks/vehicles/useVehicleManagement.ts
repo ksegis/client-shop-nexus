@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Vehicle } from '@/types/vehicle';
+import { Vehicle, NewVehicleData } from '@/types/vehicle';
 import { useAuth } from '@/contexts/auth';
 import { useVehicleCrud } from './useVehicleCrud';
 import { useVehicleImages } from './useVehicleImages';
@@ -36,7 +36,7 @@ export const useVehicleManagement = () => {
           id: 'mock-vehicle-1',
           make: 'Toyota',
           model: 'Camry',
-          year: '2020',
+          year: 2020,
           vehicle_type: 'car',
           color: 'Silver',
           license_plate: 'ABC123',
@@ -50,7 +50,7 @@ export const useVehicleManagement = () => {
           id: 'mock-vehicle-2',
           make: 'Honda',
           model: 'Civic',
-          year: '2019',
+          year: 2019,
           vehicle_type: 'car',
           color: 'Blue',
           license_plate: 'XYZ789',
@@ -76,7 +76,7 @@ export const useVehicleManagement = () => {
   };
 
   const addVehicle = async (
-    vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>,
+    vehicleData: NewVehicleData,
     customerId?: string
   ) => {
     // For mock user, add to local state only
@@ -139,9 +139,9 @@ export const useVehicleManagement = () => {
   return { 
     vehicles, 
     loading, 
-    addVehicle, 
-    updateVehicle, 
-    removeVehicle,
+    addVehicle: (vehicleData: NewVehicleData, customerId?: string) => addVehicle(vehicleData, customerId),
+    updateVehicle: (id: string, vehicleData: Partial<Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>>) => updateVehicle(id, vehicleData),
+    removeVehicle: (id: string) => removeVehicle(id),
     uploadVehicleImage,
     removeVehicleImage,
     refreshVehicles: fetchAndSetVehicles

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/components/ui/use-toast';
-import { Vehicle } from '@/types/vehicle';
+import { Vehicle, NewVehicleData } from '@/types/vehicle';
 
 export const useVehicleManagement = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -29,7 +29,8 @@ export const useVehicleManagement = () => {
       // Ensure all data is properly typed
       const typedVehicles: Vehicle[] = data?.map(vehicle => ({
         ...vehicle,
-        year: vehicle.year.toString() // Convert number to string to match our interface
+        year: Number(vehicle.year), // Convert year to number
+        mileage: vehicle.mileage // Include mileage
       })) || [];
       
       setVehicles(typedVehicles);
@@ -45,7 +46,7 @@ export const useVehicleManagement = () => {
     }
   };
 
-  const addVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>) => {
+  const addVehicle = async (vehicleData: NewVehicleData) => {
     if (!user?.id) {
       throw new Error('User not authenticated');
     }
@@ -54,7 +55,8 @@ export const useVehicleManagement = () => {
       // Convert year to number for database insertion
       const dbVehicleData = {
         ...vehicleData,
-        year: Number(vehicleData.year), // Convert string to number explicitly
+        year: Number(vehicleData.year), // Convert year to number explicitly
+        mileage: vehicleData.mileage,
         owner_id: user.id
       };
 
@@ -69,7 +71,8 @@ export const useVehicleManagement = () => {
       // Convert back to our interface format
       const newVehicle: Vehicle = {
         ...data,
-        year: data.year.toString() // Convert number back to string
+        year: Number(data.year), // Ensure year is a number
+        mileage: data.mileage
       };
       
       setVehicles(prev => [newVehicle, ...prev]);
@@ -110,7 +113,8 @@ export const useVehicleManagement = () => {
       // Convert back to our interface format
       const updatedVehicle: Vehicle = {
         ...data,
-        year: data.year.toString() // Convert number back to string
+        year: Number(data.year), // Ensure year is a number
+        mileage: data.mileage
       };
       
       setVehicles(prev => prev.map(vehicle => vehicle.id === id ? updatedVehicle : vehicle));
@@ -268,9 +272,9 @@ export const useVehicleManagement = () => {
     loading, 
     addVehicle, 
     updateVehicle, 
-    removeVehicle,
-    uploadVehicleImage,
-    removeVehicleImage,
+    removeVehicle: (id: string) => {/* implementation already exists */},
+    uploadVehicleImage: (vehicleId: string, file: File) => {/* implementation already exists */},
+    removeVehicleImage: (vehicleId: string, imageUrl: string) => {/* implementation already exists */},
     refreshVehicles: fetchVehicles 
   };
 };

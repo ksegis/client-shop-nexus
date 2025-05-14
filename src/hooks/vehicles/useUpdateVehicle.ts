@@ -27,7 +27,7 @@ export const useUpdateVehicle = () => {
       // Convert back to our interface format with explicit mileage handling
       const updatedVehicle: Vehicle = {
         ...data,
-        year: data.year.toString(),
+        year: Number(data.year),
         mileage: data.mileage || undefined
       };
       

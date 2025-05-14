@@ -3,14 +3,14 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/components/ui/use-toast';
-import { Vehicle } from '@/types/vehicle';
+import { Vehicle, NewVehicleData } from '@/types/vehicle';
 
 export const useAddVehicle = () => {
   const { user } = useAuth();
   const { toast } = useToast();
 
   const addVehicle = async (
-    vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'>, 
+    vehicleData: NewVehicleData, 
     ownerId?: string
   ) => {
     // Use provided ownerId or fall back to current user (for customer-facing scenario)
@@ -46,10 +46,10 @@ export const useAddVehicle = () => {
     try {
       console.log('Adding vehicle with owner ID:', effectiveOwnerId);
       
-      // Convert year to number for database insertion
+      // Ensure year is a number for database insertion
       const dbVehicleData = {
         ...vehicleData,
-        year: parseInt(vehicleData.year, 10),
+        year: Number(vehicleData.year), // Ensure year is a number
         mileage: vehicleData.mileage,
         owner_id: effectiveOwnerId
       };
@@ -67,10 +67,10 @@ export const useAddVehicle = () => {
         throw error;
       }
       
-      // Convert back to our interface format with explicit mileage handling
+      // Convert to our interface format with explicit mileage handling
       const newVehicle: Vehicle = {
         ...data,
-        year: data.year.toString(),
+        year: Number(data.year), // Ensure year is a number
         mileage: data.mileage || undefined
       };
       
