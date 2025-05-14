@@ -11,7 +11,7 @@ import { useNavigationLinks } from './header/NavigationLinks';
 import { useHeaderContext } from './HeaderContext';
 
 interface HeaderProps {
-  portalType: 'shop' | 'customer';
+  portalType: 'shop' | 'customer';  // Updated type definition to accept both values
 }
 
 const Header = ({ portalType }: HeaderProps) => {
