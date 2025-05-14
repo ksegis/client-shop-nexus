@@ -9,6 +9,8 @@ interface PartsGridProps {
   onViewDetails: (partId: string) => void;
   onOpenCoreReturn?: (part: Part) => void;
   showInventory?: boolean;
+  hideSupplier?: boolean;
+  hideSku?: boolean;
 }
 
 export const PartsGrid = ({ 
@@ -17,7 +19,9 @@ export const PartsGrid = ({
   onAddToQuotation,
   onViewDetails,
   onOpenCoreReturn,
-  showInventory = false
+  showInventory = false,
+  hideSupplier = false,
+  hideSku = false
 }: PartsGridProps) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -30,6 +34,8 @@ export const PartsGrid = ({
           onViewDetails={onViewDetails}
           onOpenCoreReturn={onOpenCoreReturn}
           showInventory={showInventory}
+          hideSupplier={hideSupplier}
+          hideSku={hideSku}
         />
       ))}
     </div>

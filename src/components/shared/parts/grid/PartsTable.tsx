@@ -14,6 +14,8 @@ interface PartsTableProps {
   onViewDetails: (partId: string) => void;
   onOpenCoreReturn?: (part: Part) => void;
   showInventory?: boolean;
+  hideSupplier?: boolean;
+  hideSku?: boolean;
 }
 
 export const PartsTable = ({
@@ -22,7 +24,9 @@ export const PartsTable = ({
   onAddToQuotation,
   onViewDetails,
   onOpenCoreReturn,
-  showInventory
+  showInventory,
+  hideSupplier = false,
+  hideSku = false
 }: PartsTableProps) => {
   const [selectedParts, setSelectedParts] = useState<string[]>([]);
 
@@ -54,9 +58,9 @@ export const PartsTable = ({
               />
             </TableHead>
             <TableHead>Part</TableHead>
-            <TableHead>SKU</TableHead>
+            {!hideSku && <TableHead>SKU</TableHead>}
             <TableHead>Category</TableHead>
-            <TableHead>Supplier</TableHead>
+            {!hideSupplier && <TableHead>Supplier</TableHead>}
             {showInventory && <TableHead>Inventory</TableHead>}
             <TableHead className="text-right">Price</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -75,11 +79,11 @@ export const PartsTable = ({
                 <div className="font-medium">{part.name}</div>
                 <div className="text-sm text-muted-foreground line-clamp-1">{part.description}</div>
               </TableCell>
-              <TableCell>{part.sku}</TableCell>
+              {!hideSku && <TableCell>{part.sku}</TableCell>}
               <TableCell>
                 <Badge variant="outline">{part.category}</Badge>
               </TableCell>
-              <TableCell>{part.supplier}</TableCell>
+              {!hideSupplier && <TableCell>{part.supplier}</TableCell>}
               {showInventory && (
                 <TableCell>
                   <div className="flex items-center">

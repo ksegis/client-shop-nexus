@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -239,7 +238,7 @@ const CustomerParts = () => {
             </div>
           </div>
           
-          {/* Use the PartsCatalogGrid component */}
+          {/* Use the PartsCatalogGrid component with hide flags */}
           <PartsCatalogGrid
             parts={parts}
             isLoading={isLoading}
@@ -248,11 +247,13 @@ const CustomerParts = () => {
             onAddToCart={addToCart}
             onViewDetails={openDetailDialog}
             showInventory={true}
+            hideSupplier={true}
+            hideSku={true}
           />
         </div>
       </div>
       
-      {/* Part Detail Dialog */}
+      {/* Part Detail Dialog with hide flags */}
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
         <DialogContent className="sm:max-w-[650px]">
           {selectedPart && (
@@ -260,7 +261,7 @@ const CustomerParts = () => {
               <DialogHeader>
                 <DialogTitle>{selectedPart.name}</DialogTitle>
                 <DialogDescription>
-                  Part #: {selectedPart.sku} | Brand: {selectedPart.supplier || 'Unknown'}
+                  {selectedPart.category || 'Uncategorized'}
                 </DialogDescription>
               </DialogHeader>
               
@@ -368,7 +369,6 @@ const CustomerParts = () => {
                     </div>
                     <div className="flex-grow">
                       <h4 className="font-medium">{item.name}</h4>
-                      <p className="text-sm text-gray-500">Part #: {item.sku}</p>
                       <div className="flex justify-between items-center mt-2">
                         <div className="flex items-center space-x-2">
                           <Button 

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Part } from '@/types/parts';
 import { useToast } from '@/components/ui/use-toast';
@@ -20,6 +19,8 @@ interface PartsCatalogGridProps {
   onViewDetails: (partId: string) => void;
   onOpenCoreReturn?: (part: Part) => void;
   showInventory?: boolean;
+  hideSupplier?: boolean;
+  hideSku?: boolean;
 }
 
 export const PartsCatalogGrid = ({
@@ -31,7 +32,9 @@ export const PartsCatalogGrid = ({
   onAddToQuotation,
   onViewDetails,
   onOpenCoreReturn,
-  showInventory = false
+  showInventory = false,
+  hideSupplier = false,
+  hideSku = false
 }: PartsCatalogGridProps) => {
   const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
@@ -114,6 +117,8 @@ export const PartsCatalogGrid = ({
           onOpenCoreReturn={onOpenCoreReturn ? handleOpenCoreReturn : undefined}
           onViewDetails={onViewDetails}
           showInventory={showInventory}
+          hideSupplier={hideSupplier}
+          hideSku={hideSku}
         />
       ) : (
         <PartsTable
@@ -123,6 +128,8 @@ export const PartsCatalogGrid = ({
           onOpenCoreReturn={onOpenCoreReturn ? handleOpenCoreReturn : undefined}
           onViewDetails={onViewDetails}
           showInventory={showInventory}
+          hideSupplier={hideSupplier}
+          hideSku={hideSku}
         />
       )}
       

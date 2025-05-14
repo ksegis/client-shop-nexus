@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -6,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,13 +28,17 @@ interface PartDetailDialogProps {
   onClose: () => void;
   onAddToCart?: (part: Part, quantity: number) => void;
   onAddToQuotation?: (part: Part, quantity: number) => void;
+  hideSupplier?: boolean;
+  hideSku?: boolean;
 }
 
 export function PartDetailDialog({ 
   partId, 
   onClose, 
   onAddToCart,
-  onAddToQuotation
+  onAddToQuotation,
+  hideSupplier = false,
+  hideSku = false
 }: PartDetailDialogProps) {
   const [quantity, setQuantity] = useState(1);
   const [isOpen, setIsOpen] = useState(false);
@@ -173,8 +177,9 @@ export function PartDetailDialog({
         <DialogHeader>
           <DialogTitle>{part.name}</DialogTitle>
           <DialogDescription>
-            {part.sku && `SKU: ${part.sku}`}
-            {part.category && ` • ${part.category}`}
+            {!hideSku && part.sku && `SKU: ${part.sku}`}
+            {!hideSku && part.sku && part.category && ` • `}
+            {part.category && part.category}
           </DialogDescription>
         </DialogHeader>
         
@@ -213,7 +218,7 @@ export function PartDetailDialog({
               </p>
             </div>
             
-            {part.supplier && (
+            {!hideSupplier && part.supplier && (
               <div>
                 <h3 className="font-medium mb-1">Supplier</h3>
                 <p className="text-sm">{part.supplier}</p>
