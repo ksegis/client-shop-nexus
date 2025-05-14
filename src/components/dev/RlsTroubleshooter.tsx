@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle, Check, Info, Shield, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { fetchRlsPolicies, fetchRlsStatus } from '@/integrations/supabase/rls-helpers';
 
 export const RlsTroubleshooter = () => {
   const [rlsStatus, setRlsStatus] = useState<{
@@ -24,22 +25,14 @@ export const RlsTroubleshooter = () => {
     try {
       setRlsStatus(prev => ({ ...prev, loading: true, error: undefined }));
       
-      // Get RLS status for each table
-      const { data: rlsPolicies, error: rlsError } = await supabase.from('rls_status').select('*');
-      
-      if (rlsError) {
-        throw new Error(`Error fetching RLS status: ${rlsError.message}`);
-      }
+      // Get RLS status for each table using our helper function
+      const rlsStatuses = await fetchRlsStatus();
       
       // Get list of tables with RLS enabled
-      const tablesWithRls = rlsPolicies?.filter(table => table.row_security_active) || [];
+      const tablesWithRls = rlsStatuses?.filter(table => table.row_security_active) || [];
       
-      // For getting policies, we need to use raw SQL through a function since pg_policies is not accessible directly
-      const { data: policies, error: policiesListError } = await supabase.rpc('list_policies');
-      
-      if (policiesListError) {
-        console.error('Error fetching RLS policies:', policiesListError);
-      }
+      // Fetch policies using our helper function
+      const policies = await fetchRlsPolicies();
       
       return {
         tablesWithRls,
@@ -93,7 +86,7 @@ export const RlsTroubleshooter = () => {
 
     // Check for tables with RLS enabled but no policies
     const tablesWithNoPolicy = tablesWithRls
-      .filter(table => !policies?.some((p: any) => p.table_name === table.table_name))
+      .filter(table => !policies.some((p: any) => p.table_name === table.table_name))
       .map(table => table.table_name);
     
     if (tablesWithNoPolicy.length > 0) {

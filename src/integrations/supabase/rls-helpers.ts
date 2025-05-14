@@ -4,7 +4,11 @@ import { supabase } from '@/integrations/supabase/client';
 // Function to list RLS policies
 export const fetchRlsPolicies = async () => {
   try {
-    const { data, error } = await supabase.rpc('list_policies');
+    // Use a direct query instead of the RPC call
+    const { data, error } = await supabase
+      .from('rls_status')
+      .select('*')
+      .eq('table_schema', 'public');
     
     if (error) throw error;
     
