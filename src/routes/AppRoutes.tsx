@@ -17,10 +17,10 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      {/* Root routes - render Index component that will redirect based on auth status */}
+      {/* Root routes - render Index component */}
       <Route index element={<Index />} />
       
-      {/* Shop Login Route - explicit route to ensure it's accessible */}
+      {/* Shop Login Route */}
       <Route path="/shop/login" element={<ShopLogin />} />
       
       {/* Auth Routes */}

@@ -3,13 +3,8 @@ import { Link } from 'react-router-dom';
 import { 
   User, 
   LogOut, 
-  Settings, 
-  Shield,
-  Key,
-  Activity,
-  Users
+  Settings
 } from 'lucide-react';
-import { useAuth } from '@/contexts/auth';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -27,10 +22,6 @@ interface UserProfileDropdownProps {
 }
 
 export const UserProfileDropdown = ({ portalType, onSignOut }: UserProfileDropdownProps) => {
-  const { user } = useAuth();
-  
-  const isAdmin = user?.app_metadata?.role === 'admin';
-  
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -58,37 +49,6 @@ export const UserProfileDropdown = ({ portalType, onSignOut }: UserProfileDropdo
             <span>Settings</span>
           </Link>
         </DropdownMenuItem>
-        
-        {isAdmin && portalType === 'shop' && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Administration</DropdownMenuLabel>
-            <DropdownMenuItem asChild>
-              <Link to="/shop/admin">
-                <Shield className="mr-2 h-4 w-4" />
-                <span>Admin Dashboard</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/shop/admin/api-keys">
-                <Key className="mr-2 h-4 w-4" />
-                <span>API Keys</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/shop/admin/staff">
-                <Users className="mr-2 h-4 w-4" />
-                <span>Staff Management</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/shop/admin/system">
-                <Activity className="mr-2 h-4 w-4" />
-                <span>System Health</span>
-              </Link>
-            </DropdownMenuItem>
-          </>
-        )}
         
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onSignOut}>

@@ -1,53 +1,27 @@
 
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/auth"; 
-import { Loader2, ShoppingBag } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, loading, getRedirectPathByRole } = useAuth();
 
-  // Handle hash fragment routing and authentication state
+  // Handle hash fragment routing
   useEffect(() => {
     // Force redirect to auth page if there's a hash in the URL
     if (window.location.hash) {
       window.history.replaceState(null, '', '/auth');
       navigate('/auth', { replace: true });
-      return;
     }
-    
-    // Redirect based on authentication state
-    if (!loading) {
-      if (user) {
-        const role = user.app_metadata?.role;
-        console.log("Index page: redirecting based on role:", role);
-        const redirectPath = getRedirectPathByRole(role);
-        navigate(redirectPath, { replace: true });
-      }
-    }
-  }, [user, loading, navigate, getRedirectPathByRole]);
+  }, [navigate]);
   
   const goToCustomerLogin = () => {
-    navigate("/customer/login");
+    navigate("/customer/profile");
   };
   
   const goToShopLogin = () => {
-    console.log("Shop login clicked, current user:", user?.email);
-    console.log("User metadata:", user?.app_metadata);
-    
-    if (user?.app_metadata?.role === 'customer') {
-      toast({
-        title: "Access Restricted",
-        description: "Customers can only access the Customer Portal",
-        variant: "destructive",
-      });
-      navigate("/customer/profile");
-    } else {
-      navigate("/shop/login");
-    }
+    navigate("/shop");
   };
 
   return (
@@ -59,31 +33,24 @@ const Index = () => {
           <p className="text-gray-600">Please select your portal</p>
         </div>
         
-        {loading ? (
-          <div className="flex flex-col items-center my-4">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p className="text-gray-500">Loading authentication state...</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <Button 
-              onClick={goToShopLogin} 
-              className="w-full py-6 text-lg"
-              size="lg"
-            >
-              Shop Portal
-            </Button>
-            
-            <Button 
-              onClick={goToCustomerLogin} 
-              className="w-full py-6 text-lg"
-              variant="outline"
-              size="lg"
-            >
-              Customer Portal
-            </Button>
-          </div>
-        )}
+        <div className="space-y-4">
+          <Button 
+            onClick={goToShopLogin} 
+            className="w-full py-6 text-lg"
+            size="lg"
+          >
+            Shop Portal
+          </Button>
+          
+          <Button 
+            onClick={goToCustomerLogin} 
+            className="w-full py-6 text-lg"
+            variant="outline"
+            size="lg"
+          >
+            Customer Portal
+          </Button>
+        </div>
       </div>
     </div>
   );
