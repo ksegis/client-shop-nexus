@@ -45,6 +45,7 @@ const pathIconMap = {
   "/shop/estimates": FileText,
   "/shop/invoices": FileCheck,
   "/shop/users": Shield,
+  "/shop/admin/users": Users,
   "/shop/admin/api-connections": Webhook
 };
 
@@ -80,7 +81,7 @@ export const Sidebar = () => {
         </SheetTrigger>
         <SheetContent side="left" className="w-80 p-0">
           <SheetHeader className="pl-6 pb-4">
-            <SheetTitle>Acme Co.</SheetTitle>
+            <SheetTitle>AutoCare Pro</SheetTitle>
             <SheetDescription>
               Manage your shop, view reports, and more.
             </SheetDescription>
