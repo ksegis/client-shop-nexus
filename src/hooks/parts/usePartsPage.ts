@@ -5,8 +5,11 @@ import { useCartOperations } from '@/hooks/parts/useCartOperations';
 import { useQuotationHandler } from '@/hooks/parts/useQuotationHandler';
 import { useCoreReturnHandler } from '@/hooks/parts/useCoreReturnHandler';
 import { useSpecialOrderHandler } from '@/hooks/parts/useSpecialOrderHandler';
+import { useToast } from '@/hooks/use-toast';
 
 export const usePartsPage = () => {
+  const { toast } = useToast();
+  
   // Use our more focused hooks
   const catalog = useCatalogViewer();
   const cart = useCartOperations();
@@ -19,11 +22,19 @@ export const usePartsPage = () => {
     catalog.loadFilterOptions();
     specialOrder.fetchSpecialOrders();
     
+    // Force initial catalog refresh
+    catalog.refreshCatalog();
+    
     // Log some debug information
-    console.log('ShopParts component mounted', {
+    console.log('usePartsPage hook initialized', {
       searchFilters: catalog.searchFilters,
       isLoading: catalog.isLoading,
       partsCount: catalog.parts.length
+    });
+    
+    toast({
+      title: "Parts Catalog",
+      description: "Loading available parts and inventory...",
     });
   }, []);
   

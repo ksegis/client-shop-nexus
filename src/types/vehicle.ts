@@ -1,22 +1,27 @@
 
 export interface Vehicle {
   id: string;
+  owner_id: string;
+  year: number;
   make: string;
   model: string;
-  year: string; // Keep this as string to match the interface used elsewhere
-  vin: string;
   color?: string;
+  vin?: string;
   license_plate?: string;
-  owner_id: string;
   vehicle_type: 'car' | 'truck' | 'motorcycle' | 'other';
+  images?: string[];
   created_at: string;
   updated_at: string;
-  images?: string[] | null; // Array of image URLs
-  mileage?: number; // Added mileage property
+  mileage?: number; // Add mileage property
 }
 
-export type NewVehicleData = Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id' | 'images'> & {
+export type VehicleFormData = {
+  year: number;
+  make: string;
+  model: string;
   color?: string;
+  vin?: string;
   license_plate?: string;
-  mileage?: number; // Also adding it here
+  vehicle_type: 'car' | 'truck' | 'motorcycle' | 'other';
+  mileage?: number; // Add mileage property
 };

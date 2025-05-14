@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Part } from '@/types/parts';
 import { useToast } from '@/components/ui/use-toast';
 import { LoadingPartsGrid } from './grid/LoadingPartsGrid';
@@ -36,6 +36,11 @@ export const PartsCatalogGrid = ({
   const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
+  
+  // Debug useEffect to log when this component renders
+  useEffect(() => {
+    console.log('PartsCatalogGrid rendered', { parts, isLoading, viewMode });
+  }, [parts, isLoading, viewMode]);
   
   const totalPages = Math.ceil(parts.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,6 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/components/ui/use-toast';
 import { Search, Filter, ShoppingCart, Clock, ArrowRight, Plus, Minus, ChevronRight } from 'lucide-react';
 import { useVehicles } from '@/hooks/useVehicles';
+import { PartsCatalogGrid } from '@/components/shared/parts/PartsCatalogGrid';
+import { usePartsPage } from '@/hooks/parts/usePartsPage';
 
 // Fake data for parts catalog
 const PARTS_CATEGORIES = [
@@ -156,46 +157,42 @@ const CustomerParts = () => {
   const [selectedPart, setSelectedPart] = useState<any>(null);
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [filteredParts, setFilteredParts] = useState(SAMPLE_PARTS);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   
-  // Update filtered parts when search query, category or vehicle changes
+  // Use the hooks/parts/usePartsPage hook
+  const partsPageHook = usePartsPage();
+  
+  // Log that we're loading the page
   useEffect(() => {
-    let filtered = SAMPLE_PARTS;
-    
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(part => 
-        part.name.toLowerCase().includes(query) || 
-        part.description.toLowerCase().includes(query) ||
-        part.partNumber.toLowerCase().includes(query) ||
-        part.brand.toLowerCase().includes(query)
-      );
+    console.log('CustomerParts component mounted');
+    toast({
+      title: "Loading Parts Catalog",
+      description: "Fetching parts from inventory...",
+    });
+  }, []);
+  
+  // Handle filtering parts based on search, category and vehicle
+  useEffect(() => {
+    if (partsPageHook.parts.length > 0) {
+      console.log('Parts loaded from hook:', partsPageHook.parts.length);
     }
     
-    // Filter by category
-    if (activeCategory !== 'All Parts') {
-      filtered = filtered.filter(part => part.category === activeCategory);
-    }
+    // Update search filters in the hook
+    partsPageHook.setSearchFilters({
+      ...partsPageHook.searchFilters,
+      query: searchQuery,
+      category: activeCategory !== 'All Parts' ? activeCategory : undefined
+    });
     
-    // Filter by vehicle (simplified for demo)
-    if (selectedVehicle && vehicles.length > 0) {
-      const vehicle = vehicles.find(v => v.id === selectedVehicle);
-      if (vehicle) {
-        const vehicleString = `${vehicle.make} ${vehicle.model}`;
-        filtered = filtered.filter(part => 
-          part.compatibility.some(c => c.includes(vehicleString))
-        );
-      }
-    }
-    
-    setFilteredParts(filtered);
-  }, [searchQuery, activeCategory, selectedVehicle, vehicles]);
+  }, [searchQuery, activeCategory, selectedVehicle]);
   
   // Open detail dialog for a part
-  const openDetailDialog = (part: any) => {
-    setSelectedPart(part);
-    setIsDetailDialogOpen(true);
+  const openDetailDialog = (partId: string) => {
+    const part = partsPageHook.parts.find(p => p.id === partId);
+    if (part) {
+      setSelectedPart(part);
+      setIsDetailDialogOpen(true);
+    }
   };
   
   // Add item to cart
@@ -247,6 +244,12 @@ const CustomerParts = () => {
   
   // Calculate cart total
   const cartTotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+  
+  // Create a list of part categories from the available parts
+  const PARTS_CATEGORIES = [
+    'All Parts',
+    ...Array.from(new Set(partsPageHook.parts.map(part => part.category || 'Uncategorized')))
+  ];
   
   return (
     <div className="container mx-auto p-4">
@@ -351,11 +354,9 @@ const CustomerParts = () => {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">
               {activeCategory}
-              {filteredParts.length > 0 && (
-                <span className="text-gray-500 text-sm ml-2">
-                  ({filteredParts.length} items)
-                </span>
-              )}
+              <span className="text-gray-500 text-sm ml-2">
+                ({partsPageHook.parts.length} items)
+              </span>
             </h2>
             
             <div className="flex items-center gap-2">
@@ -377,75 +378,16 @@ const CustomerParts = () => {
             </div>
           </div>
           
-          {filteredParts.length === 0 ? (
-            <div className="text-center py-12 border rounded-lg bg-gray-50">
-              <div className="mx-auto max-w-sm">
-                <h3 className="text-lg font-medium mb-2">No parts found</h3>
-                <p className="text-gray-500 mb-4">
-                  Try adjusting your search or filter criteria to find what you're looking for.
-                </p>
-                <Button onClick={() => {
-                  setSearchQuery('');
-                  setActiveCategory('All Parts');
-                  setSelectedVehicle(null);
-                }}>
-                  Clear filters
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredParts.map(part => (
-                <Card key={part.id} className="overflow-hidden">
-                  <div 
-                    className="h-48 overflow-hidden cursor-pointer"
-                    onClick={() => openDetailDialog(part)}
-                  >
-                    <img 
-                      src={part.image} 
-                      alt={part.name}
-                      className="w-full h-full object-cover transition-transform hover:scale-105"
-                    />
-                  </div>
-                  <CardContent className="p-4">
-                    <div className="mb-2">
-                      <Badge variant="outline" className="text-xs">
-                        {part.category}
-                      </Badge>
-                    </div>
-                    <CardTitle className="text-lg mb-1 cursor-pointer" onClick={() => openDetailDialog(part)}>
-                      {part.name}
-                    </CardTitle>
-                    <div className="flex justify-between items-center mt-2">
-                      <p className="font-bold text-lg">${part.price.toFixed(2)}</p>
-                      <p className={`text-sm ${part.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {part.stock > 0 ? `${part.stock} in stock` : 'Out of stock'}
-                      </p>
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      <span>Part #: {part.partNumber}</span>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="p-4 pt-0 flex justify-between">
-                    <Button 
-                      variant="outline" 
-                      className="w-full mr-2" 
-                      onClick={() => openDetailDialog(part)}
-                    >
-                      Details
-                    </Button>
-                    <Button 
-                      className="w-full" 
-                      onClick={() => addToCart(part)}
-                      disabled={part.stock <= 0}
-                    >
-                      Add to Cart
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
-          )}
+          {/* Use the PartsCatalogGrid component */}
+          <PartsCatalogGrid
+            parts={partsPageHook.parts}
+            isLoading={partsPageHook.isLoading}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onAddToCart={addToCart}
+            onViewDetails={openDetailDialog}
+            showInventory={true}
+          />
         </div>
       </div>
       
