@@ -8,7 +8,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
 import { CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/auth';
 
 // Updated to match the database structure
 interface Estimate {
@@ -35,6 +35,40 @@ const EstimatesPage = () => {
   useEffect(() => {
     const fetchEstimates = async () => {
       if (!user) return;
+      
+      // If using mock user, return mock data
+      if (user.id === 'mock-user-id') {
+        setEstimates([
+          {
+            id: 'mock-estimate-1',
+            title: 'Routine Maintenance',
+            created_at: new Date().toISOString(),
+            vehicle_id: 'mock-vehicle-1',
+            total_amount: 150.00,
+            status: 'pending',
+            vehicles: {
+              make: 'Toyota',
+              model: 'Camry',
+              year: 2020
+            }
+          },
+          {
+            id: 'mock-estimate-2',
+            title: 'Diagnostic Service',
+            created_at: new Date(Date.now() - 86400000).toISOString(),
+            vehicle_id: 'mock-vehicle-2',
+            total_amount: 75.00,
+            status: 'approved',
+            vehicles: {
+              make: 'Honda',
+              model: 'Civic',
+              year: 2019
+            }
+          }
+        ]);
+        setLoading(false);
+        return;
+      }
       
       try {
         setLoading(true);

@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/auth';
 import { Invoice, InvoiceStatus } from '@/pages/shop/invoices/types';
 
 interface CustomerInvoicesContextType {
@@ -24,6 +24,44 @@ export function CustomerInvoicesProvider({ children }: { children: ReactNode }) 
     queryFn: async () => {
       try {
         if (!user?.id) return [];
+        
+        // For mock user, return mock data
+        if (user.id === 'mock-user-id') {
+          return [
+            {
+              id: 'mock-invoice-1',
+              title: 'Oil Change Service',
+              description: 'Regular maintenance service',
+              total_amount: 89.99,
+              status: 'paid' as InvoiceStatus,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              customer_id: 'mock-user-id',
+              vehicle_id: 'mock-vehicle-1',
+              vehicles: {
+                make: 'Toyota',
+                model: 'Camry',
+                year: 2020
+              }
+            },
+            {
+              id: 'mock-invoice-2',
+              title: 'Brake Pad Replacement',
+              description: 'Front brake pads replacement',
+              total_amount: 249.99,
+              status: 'pending' as InvoiceStatus,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              customer_id: 'mock-user-id',
+              vehicle_id: 'mock-vehicle-2',
+              vehicles: {
+                make: 'Honda',
+                model: 'Civic',
+                year: 2019
+              }
+            }
+          ];
+        }
         
         const { data, error: queryError } = await supabase
           .from('invoices')
