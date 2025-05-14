@@ -93,65 +93,54 @@ export function PartsHeader({
             </div>
           )}
           
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={() => setSpecialOrderOpen(true)}>
-                  <ClipboardList className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Special Order</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button 
+            variant="outline" 
+            className="text-xs"
+            onClick={() => setSpecialOrderOpen(true)}
+          >
+            <ClipboardList className="h-4 w-4 mr-2" />
+            Special Order
+          </Button>
           
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={() => setQuotationOpen(true)}>
-                  <FileBarChart className="h-4 w-4" />
-                  {quotationCount > 0 && (
-                    <Badge variant="secondary" className="absolute -top-2 -right-2 px-1 min-w-[1.1rem] h-[1.1rem] flex items-center justify-center text-xs">
-                      {quotationCount}
-                    </Badge>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Create Quotation</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button 
+            variant="outline" 
+            className="text-xs relative"
+            onClick={() => setQuotationOpen(true)}
+          >
+            <FileBarChart className="h-4 w-4 mr-2" />
+            Quotation
+            {quotationCount > 0 && (
+              <Badge variant="secondary" className="absolute -top-2 -right-2 px-1 min-w-[1.1rem] h-[1.1rem] flex items-center justify-center text-xs">
+                {quotationCount}
+              </Badge>
+            )}
+          </Button>
           
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={() => setCoreReturnOpen(true)}>
-                  <ArrowLeftRight className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Process Core Return</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button 
+            variant="outline" 
+            className="text-xs"
+            onClick={() => setCoreReturnOpen(true)}
+          >
+            <ArrowLeftRight className="h-4 w-4 mr-2" />
+            Core Return
+          </Button>
           
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={() => setSearchOpen(true)}>
-                  <Search className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Search by Part #</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button 
+            variant="outline" 
+            className="text-xs"
+            onClick={() => setSearchOpen(true)}
+          >
+            <Search className="h-4 w-4 mr-2" />
+            Search
+          </Button>
           
-          <Button variant="outline" size="icon" onClick={() => setCartOpen(true)} className="relative">
-            <ShoppingCart className="h-4 w-4" />
+          <Button 
+            variant="outline" 
+            className="text-xs relative"
+            onClick={() => setCartOpen(true)}
+          >
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Cart
             {cartCount > 0 && (
               <Badge variant="destructive" className="absolute -top-2 -right-2 px-1 min-w-[1.1rem] h-[1.1rem] flex items-center justify-center text-xs">
                 {cartCount}
@@ -161,11 +150,21 @@ export function PartsHeader({
           
           {process.env.NODE_ENV !== 'production' && (
             <>
-              <Button variant="outline" size="icon" onClick={onCheckInventory}>
-                <FileText className="h-4 w-4" />
+              <Button 
+                variant="outline" 
+                className="text-xs"
+                onClick={onCheckInventory}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Check
               </Button>
-              <Button variant="outline" size="icon" onClick={onAddSamplePart}>
-                <Package2 className="h-4 w-4" />
+              <Button 
+                variant="outline" 
+                className="text-xs"
+                onClick={onAddSamplePart}
+              >
+                <Package2 className="h-4 w-4 mr-2" />
+                Add Sample
               </Button>
             </>
           )}

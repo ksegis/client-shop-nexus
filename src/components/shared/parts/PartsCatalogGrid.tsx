@@ -91,7 +91,9 @@ export const PartsCatalogGrid = ({
         startIndex={startIndex}
         endIndex={endIndex}
         pageSize={pageSize}
+        viewMode={viewMode}
         onPageSizeChange={handlePageSizeChange}
+        onViewModeChange={undefined}  // We'll manage viewMode at a higher level
       />
       
       {viewMode === 'grid' ? (
