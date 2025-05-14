@@ -1,7 +1,7 @@
 
 import { PartsSearchFilters } from '@/components/shared/parts/PartsSearchFilters';
 import { PartsCatalogGrid } from '@/components/shared/parts/PartsCatalogGrid';
-import { PartDetailDialog } from '@/components/shared/parts/PartDetailDialog';
+import { PartDetailDialog } from '@/components/shared/parts/detail';
 import { PartsCart } from '@/components/shared/parts/PartsCart';
 import { PartsHeader } from '@/components/shop/parts/PartsHeader';
 import { PartsInventorySummary } from '@/components/shop/parts/PartsInventorySummary';
