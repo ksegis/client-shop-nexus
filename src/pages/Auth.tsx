@@ -49,8 +49,11 @@ const Auth = () => {
     }
   }, [isAuthenticated, portalType, navigate, fromPath]);
   
+  // Updated to navigate to auth login instead of direct customer page
   const goToCustomerLogin = () => {
-    navigate("/customer");
+    // Instead of directly navigating to the customer page, switch to customer login
+    // This will now go through the authentication flow first
+    navigate("/auth/customer-login");
   };
   
   const goToShopLogin = () => {

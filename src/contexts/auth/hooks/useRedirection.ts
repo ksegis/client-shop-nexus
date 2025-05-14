@@ -1,3 +1,4 @@
+
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../useAuth';
@@ -18,6 +19,7 @@ export const useRedirection = () => {
     const isAuthPage = 
       location.pathname === '/auth' || 
       location.pathname === '/auth/login' ||
+      location.pathname === '/auth/customer-login' ||
       location.pathname.startsWith('/auth/') ||
       location.pathname === '/shop/login';
     
