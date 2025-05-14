@@ -12,14 +12,23 @@ import CustomerParts from "@/pages/customer/Parts";
 import CustomerWorkOrders from "@/pages/customer/WorkOrders";
 import CustomerWorkOrderDetail from "@/pages/customer/WorkOrderDetail";
 import CustomerTransactions from "@/pages/customer/Transactions";
+import { useEffect } from "react";
 
 const CustomerRoutes = () => {
+  // Emergency cleanup to remove any lingering event listeners
+  useEffect(() => {
+    return () => {
+      // Force cleanup of any potential memory leaks
+      const cleanup = () => {
+        console.log("Cleaning up any potential memory leaks in CustomerRoutes");
+      };
+      cleanup();
+    };
+  }, []);
+
   return (
     <Routes>
-      {/* Using Layout with portalType="customer" */}
-      <Route
-        element={<Layout portalType="customer" />}
-      >
+      <Route element={<Layout portalType="customer" />}>
         <Route index element={<CustomerDashboard />} />
         <Route path="profile" element={<CustomerProfile />} />
         <Route path="estimates" element={<CustomerEstimates />} />

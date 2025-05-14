@@ -24,9 +24,9 @@ const Header = ({ portalType }: HeaderProps) => {
   const { isHeaderMounted, setHeaderMounted } = useHeaderContext();
   
   useEffect(() => {
-    // If header is already mounted, log a warning
+    // Skip mounting if header is already mounted
     if (isHeaderMounted) {
-      console.warn('Multiple Header components detected. This may cause layout issues.');
+      console.log('Header already mounted, skipping render');
       return;
     }
     
@@ -39,7 +39,7 @@ const Header = ({ portalType }: HeaderProps) => {
   }, [isHeaderMounted, setHeaderMounted]);
   
   // If a header is already mounted, don't render another one
-  if (isHeaderMounted && location.pathname !== '/') {
+  if (isHeaderMounted && !document.querySelector('[data-header-id="' + portalType + '"]')) {
     return null;
   }
 
@@ -56,7 +56,7 @@ const Header = ({ portalType }: HeaderProps) => {
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200">
+    <header className="bg-white shadow-sm border-b border-gray-200" data-header-id={portalType}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-3">
           {/* Logo */}
@@ -68,7 +68,7 @@ const Header = ({ portalType }: HeaderProps) => {
           {/* User profile dropdown and mobile menu button */}
           <div className="flex items-center gap-4">
             <UserProfileDropdown 
-              portalType={portalType} 
+              portalType={portalType}
               onSignOut={handleSignOut} 
             />
             <MobileMenuButton 
