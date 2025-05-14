@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,7 @@ import { AlertTriangle, Check, Info, Shield, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { fetchRlsPolicies, fetchRlsStatus } from '@/integrations/supabase/rls-helpers';
 
-export const RlsTroubleshooter = () => {
+const RlsTroubleshooter = () => {
   const [rlsStatus, setRlsStatus] = useState<{
     loading: boolean;
     tablesWithRls: { table_name: string; row_security_active: boolean }[];
@@ -191,3 +190,5 @@ export const RlsTroubleshooter = () => {
     </Card>
   );
 };
+
+export default RlsTroubleshooter;
