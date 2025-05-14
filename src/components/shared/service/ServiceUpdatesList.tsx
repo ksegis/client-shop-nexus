@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ServiceUpdate } from '@/hooks/useServiceUpdates';
@@ -7,13 +6,13 @@ import { formatDistanceToNow } from 'date-fns';
 
 interface ServiceUpdatesListProps {
   updates: ServiceUpdate[];
-  loading: boolean;
+  loading: boolean; // We'll keep this prop name for backward compatibility
   isShopPortal?: boolean;
 }
 
 export const ServiceUpdatesList: React.FC<ServiceUpdatesListProps> = ({
   updates,
-  loading,
+  loading, // This now accepts the isLoading value from the hook
   isShopPortal = false
 }) => {
   if (loading) {

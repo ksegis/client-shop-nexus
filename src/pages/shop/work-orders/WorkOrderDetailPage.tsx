@@ -18,7 +18,7 @@ const WorkOrderDetailPage = () => {
   const [lineItems, setLineItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('details');
-  const { updates, loading: updatesLoading, addServiceUpdate } = useServiceUpdates(id);
+  const { updates, isLoading: updatesLoading, addUpdate } = useServiceUpdates(id);
   const [isSubmittingUpdate, setIsSubmittingUpdate] = useState(false);
 
   // Fetch work order data
@@ -54,9 +54,14 @@ const WorkOrderDetailPage = () => {
     milestone_completed?: boolean;
     images?: File[];
   }) => {
+    if (!id) return;
+    
     setIsSubmittingUpdate(true);
     try {
-      await addServiceUpdate(updateData);
+      await addUpdate({
+        work_order_id: id,
+        ...updateData
+      });
     } finally {
       setIsSubmittingUpdate(false);
     }

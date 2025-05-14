@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +18,7 @@ const CustomerWorkOrderDetail = () => {
   const [workOrder, setWorkOrder] = useState<any | null>(null);
   const [lineItems, setLineItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { updates, loading: updatesLoading } = useServiceUpdates(id);
+  const { updates, isLoading: updatesLoading } = useServiceUpdates(id);
   const [activeTab, setActiveTab] = useState('details');
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 
-import { toast as sonnerToast, type ToastOptions as SonnerToastOptions } from "sonner";
+import { toast as sonnerToast } from "sonner";
 
 export interface ToastProps {
   title?: string;
@@ -9,12 +9,22 @@ export interface ToastProps {
   id?: string;
 }
 
+// Define our own ToastOptions type instead of importing from sonner
+type ToastOptions = {
+  description?: string;
+  action?: React.ReactNode;
+  id?: string;
+  duration?: number;
+  className?: string;
+  [key: string]: any;
+};
+
 export function toast({
   title,
   description,
   variant,
   ...props
-}: ToastProps & Omit<SonnerToastOptions, "className">) {
+}: ToastProps & Omit<ToastOptions, "className">) {
   return sonnerToast(title, {
     description,
     className: variant === "destructive" ? "destructive" : undefined,

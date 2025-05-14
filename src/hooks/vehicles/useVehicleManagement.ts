@@ -58,6 +58,7 @@ export const useVehicleManagement = () => {
     }
   };
 
+  // Modified to handle the type conversion correctly
   const addVehicle = async (
     vehicleData: NewVehicleData,
     customerId?: string
@@ -70,7 +71,16 @@ export const useVehicleManagement = () => {
       return true;
     }
     
-    const newVehicle = await addVehicleBase(vehicleData);
+    // Convert NewVehicleData to the format expected by addVehicleBase
+    // by adding required properties for Vehicle type
+    const fullVehicleData = {
+      ...vehicleData,
+      owner_id: customerId || user?.id || '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    const newVehicle = await addVehicleBase(fullVehicleData);
     
     // If we're adding a vehicle for the current user or for the customer we're viewing,
     // add it to the state
