@@ -1,93 +1,102 @@
 
-import { useState } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import React, { useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, LogOut, Settings, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  User,
+  Settings,
+  LogOut,
+  ChevronDown,
+} from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 interface UserProfileDropdownProps {
-  portalType?: 'shop';
+  portalType?: 'shop' | 'customer';
   onSignOut?: () => Promise<void>;
 }
 
-const UserProfileDropdown = ({ portalType, onSignOut }: UserProfileDropdownProps) => {
-  const [open, setOpen] = useState(false);
+const UserProfileDropdown = ({ 
+  portalType = 'shop', 
+  onSignOut 
+}: UserProfileDropdownProps) => {
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
   
-  // Mock user data
-  const mockUser = {
-    firstName: "Dev",
-    lastName: "User",
-    email: "customer@example.com",
-    role: "customer"
+  // Mock user data for development
+  const user = {
+    firstName: portalType === 'customer' ? 'John' : 'Admin',
+    lastName: portalType === 'customer' ? 'Driver' : 'User',
+    email: portalType === 'customer' ? 'customer@example.com' : 'admin@example.com',
+    role: portalType === 'customer' ? 'customer' : 'admin'
   };
-  
-  const firstName = mockUser.firstName;
-  const lastName = mockUser.lastName;
-  const initials = firstName && lastName ? `${firstName[0]}${lastName[0]}` : "U";
-  const fullName = firstName && lastName ? `${firstName} ${lastName}` : mockUser.email || "User";
-  const role = mockUser.role;
-  const isDevMode = true;
-  
+
   const handleSignOut = async () => {
-    if (onSignOut) {
-      await onSignOut();
-    } else {
-      // Simply navigate without auth check
-      navigate("/auth");
+    try {
+      setIsLoading(true);
+      
+      if (onSignOut) {
+        await onSignOut();
+      } else {
+        // Default behavior - navigate to auth page
+        navigate('/auth');
+      }
+    } catch (error) {
+      console.error('Error signing out:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
-  
+
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          className="relative h-10 w-10 rounded-full flex items-center justify-center"
-        >
-          <Avatar className="h-8 w-8">
-            <AvatarImage src="" alt={fullName} />
-            <AvatarFallback className="bg-shop-primary text-white">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <ChevronDown className="ml-2 h-4 w-4" />
+        <Button variant="ghost" className="relative h-8 flex items-center space-x-2 px-2">
+          <div className="w-8 h-8 rounded-full bg-shop-primary flex items-center justify-center text-white">
+            <span className="text-sm font-medium">
+              {user.firstName?.[0]}{user.lastName?.[0]}
+            </span>
+          </div>
+          <div className="hidden md:flex flex-col items-start text-left">
+            <span className="text-sm font-medium">
+              {user.firstName} {user.lastName}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {user.role}
+            </span>
+          </div>
+          <ChevronDown className="h-4 w-4 ml-1 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56" sideOffset={8}>
-        <div className="flex items-center justify-start gap-2 p-2">
-          <div className="flex flex-col space-y-0.5">
-            <p className="text-sm font-medium">{fullName}</p>
-            <p className="text-xs text-muted-foreground">
-              {role.charAt(0).toUpperCase() + role.slice(1)}
-              {isDevMode && " (Dev Mode)"}
-            </p>
-          </div>
-        </div>
+      
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="flex flex-col gap-1">
+          <span className="font-medium">{user.firstName} {user.lastName}</span>
+          <span className="font-normal text-xs text-muted-foreground">{user.email}</span>
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to="/profile" className="cursor-pointer flex w-full items-center">
+          <Link to={portalType === 'customer' ? "/customer/profile" : "/shop/profile"} className="cursor-pointer flex w-full items-center">
             <User className="mr-2 h-4 w-4" />
             Profile
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/settings" className="cursor-pointer flex w-full items-center">
+          <Link to={portalType === 'customer' ? "/customer/profile" : "/shop/profile"} className="cursor-pointer flex w-full items-center">
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
+        <DropdownMenuItem disabled={isLoading} onSelect={handleSignOut}>
           <LogOut className="mr-2 h-4 w-4" />
-          Sign out
+          {isLoading ? 'Signing out...' : 'Sign out'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import NotFound from "@/pages/NotFound";
 import AuthRoutes from "./AuthRoutes";
 import ShopRoutes from "./ShopRoutes";
+import CustomerRoutes from "./CustomerRoutes";
 import Index from "@/pages/Index";
 import ShopLogin from "@/pages/shop/Login";
 import Auth from "@/pages/Auth";
@@ -25,6 +26,9 @@ const AppRoutes = () => {
       {/* Auth Routes */}
       <Route path="/auth/*" element={<AuthRoutes />} />
       <Route path="/#" element={<Auth />} />
+      
+      {/* Customer Routes */}
+      <Route path="/customer/*" element={<CustomerRoutes />} />
       
       {/* Shop Routes */}
       <Route path="/shop/*" element={<ShopRoutes />} />
