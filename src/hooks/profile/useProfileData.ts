@@ -9,6 +9,7 @@ import {
   updateUserProfile 
 } from './profileDbOperations';
 import { createProfileFromUserMetadata } from './profileUtils';
+import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 
 export const useProfileData = () => {
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
@@ -38,7 +39,7 @@ export const useProfileData = () => {
             if (first_name) updateData.first_name = first_name;
             if (last_name) updateData.last_name = last_name;
             if (phone) updateData.phone = phone;
-            if (role) updateData.role = role; // Make sure role is updated if present in metadata
+            if (role) updateData.role = role as ExtendedUserRole; // Cast the role to ExtendedUserRole
             
             const updated = await updateProfileMetadata(user.id, updateData);
             
@@ -47,7 +48,7 @@ export const useProfileData = () => {
               data.first_name = first_name || data.first_name;
               data.last_name = last_name || data.last_name;
               data.phone = phone || data.phone;
-              if (role) data.role = role;
+              if (role) data.role = role as ExtendedUserRole; // Cast the role to ExtendedUserRole
             }
           }
         }
