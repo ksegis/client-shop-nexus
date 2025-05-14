@@ -79,7 +79,7 @@ export const Sidebar = () => {
         </SheetTrigger>
         <SheetContent side="left" className="w-80 p-0">
           <SheetHeader className="pl-6 pb-4">
-            <SheetTitle>AutoCare Pro</SheetTitle>
+            <SheetTitle>Custom Truck Connections</SheetTitle>
             <SheetDescription>
               Manage your shop, view reports, and more.
             </SheetDescription>
