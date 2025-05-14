@@ -13,7 +13,7 @@ import { User, LogOut, Settings, ChevronDown } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 interface UserProfileDropdownProps {
-  portalType?: 'customer' | 'shop';
+  portalType?: 'shop';
   onSignOut?: () => Promise<void>;
 }
 
@@ -73,13 +73,13 @@ const UserProfileDropdown = ({ portalType, onSignOut }: UserProfileDropdownProps
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to={portalType === 'customer' ? "/customer/profile" : "/profile"} className="cursor-pointer flex w-full items-center">
+          <Link to="/profile" className="cursor-pointer flex w-full items-center">
             <User className="mr-2 h-4 w-4" />
             Profile
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to={portalType === 'customer' ? "/customer/settings" : "/settings"} className="cursor-pointer flex w-full items-center">
+          <Link to="/settings" className="cursor-pointer flex w-full items-center">
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </Link>

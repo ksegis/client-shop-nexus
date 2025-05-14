@@ -8,17 +8,9 @@ export interface NavigationLink {
   adminOnly?: boolean;
 }
 
-export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
+export const useNavigationLinks = (portalType: 'shop') => {
   const { user } = useAuth();
   const isAdmin = user?.app_metadata?.role === 'admin';
-  
-  const customerLinks: NavigationLink[] = [
-    { name: 'Profile', path: '/customer/profile' },
-    { name: 'Estimates', path: '/customer/estimates' },
-    { name: 'Invoices', path: '/customer/invoices' },
-    { name: 'Transaction History', path: '/customer/transactions' },
-    { name: 'Parts Catalog', path: '/customer/parts' }
-  ];
   
   // Reordered according to the specified sequence
   const shopLinks: NavigationLink[] = [
@@ -42,7 +34,7 @@ export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
   const allShopLinks = isAdmin ? [...shopLinks, ...adminLinks] : shopLinks;
   
   return {
-    links: portalType === 'customer' ? customerLinks : allShopLinks,
+    links: allShopLinks,
     isAdmin
   };
 };
