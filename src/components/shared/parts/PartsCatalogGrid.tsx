@@ -1,16 +1,18 @@
 
 import { useState } from 'react';
 import { Part } from '@/types/parts';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { LoadingPartsGrid } from './grid/LoadingPartsGrid';
 import { EmptyPartsGrid } from './grid/EmptyPartsGrid';
 import { PartsGrid } from './grid/PartsGrid';
 import { PartsGridHeader } from './grid/PartsGridHeader';
 import { CatalogPagination } from './grid/CatalogPagination';
+import { PartsTable } from './grid/PartsTable';
 
 interface PartsCatalogGridProps {
   parts: Part[];
   isLoading: boolean;
+  viewMode: 'grid' | 'table';
   onAddToCart?: (part: Part) => void;
   onAddToQuotation?: (part: Part) => void;
   onViewDetails: (partId: string) => void;
@@ -21,6 +23,7 @@ interface PartsCatalogGridProps {
 export const PartsCatalogGrid = ({
   parts,
   isLoading,
+  viewMode = 'grid',
   onAddToCart,
   onAddToQuotation,
   onViewDetails,
@@ -91,14 +94,25 @@ export const PartsCatalogGrid = ({
         onPageSizeChange={handlePageSizeChange}
       />
       
-      <PartsGrid
-        parts={visibleParts}
-        onAddToCart={onAddToCart ? handleAddToCart : undefined}
-        onAddToQuotation={onAddToQuotation ? handleAddToQuotation : undefined}
-        onOpenCoreReturn={onOpenCoreReturn ? handleOpenCoreReturn : undefined}
-        onViewDetails={onViewDetails}
-        showInventory={showInventory}
-      />
+      {viewMode === 'grid' ? (
+        <PartsGrid
+          parts={visibleParts}
+          onAddToCart={onAddToCart ? handleAddToCart : undefined}
+          onAddToQuotation={onAddToQuotation ? handleAddToQuotation : undefined}
+          onOpenCoreReturn={onOpenCoreReturn ? handleOpenCoreReturn : undefined}
+          onViewDetails={onViewDetails}
+          showInventory={showInventory}
+        />
+      ) : (
+        <PartsTable
+          parts={visibleParts}
+          onAddToCart={onAddToCart ? handleAddToCart : undefined}
+          onAddToQuotation={onAddToQuotation ? handleAddToQuotation : undefined}
+          onOpenCoreReturn={onOpenCoreReturn ? handleOpenCoreReturn : undefined}
+          onViewDetails={onViewDetails}
+          showInventory={showInventory}
+        />
+      )}
       
       <CatalogPagination
         currentPage={currentPage}

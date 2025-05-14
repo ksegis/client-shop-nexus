@@ -1,12 +1,15 @@
 
 import { PageSizeSelector } from './PageSizeSelector';
+import { ViewModeToggle } from './ViewModeToggle';
 
 interface PartsGridHeaderProps {
   totalItems: number;
   startIndex: number;
   endIndex: number;
   pageSize: number;
+  viewMode?: 'grid' | 'table';
   onPageSizeChange: (size: number) => void;
+  onViewModeChange?: (mode: 'grid' | 'table') => void;
 }
 
 export const PartsGridHeader = ({
@@ -14,18 +17,25 @@ export const PartsGridHeader = ({
   startIndex,
   endIndex,
   pageSize,
-  onPageSizeChange
+  viewMode = 'grid',
+  onPageSizeChange,
+  onViewModeChange
 }: PartsGridHeaderProps) => {
   return (
-    <div className="flex justify-between items-center">
+    <div className="flex flex-wrap justify-between items-center gap-4">
       <p className="text-sm text-muted-foreground">
         Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} parts
       </p>
       
-      <PageSizeSelector 
-        pageSize={pageSize} 
-        onPageSizeChange={onPageSizeChange} 
-      />
+      <div className="flex items-center gap-4">
+        {onViewModeChange && (
+          <ViewModeToggle viewMode={viewMode} onViewModeChange={onViewModeChange} />
+        )}
+        <PageSizeSelector 
+          pageSize={pageSize} 
+          onPageSizeChange={onPageSizeChange} 
+        />
+      </div>
     </div>
   );
 };

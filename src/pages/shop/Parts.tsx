@@ -26,6 +26,7 @@ const ShopParts = () => {
   const specialOrder = useSpecialOrderHandler();
   
   const [showDemo, setShowDemo] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   // Check if we have any parts, if not, show the demo alert after a delay
   useEffect(() => {
@@ -76,6 +77,8 @@ const ShopParts = () => {
         isCoreReturnOpen={coreReturn.isCoreReturnDialogOpen}
         setCoreReturnOpen={handleCoreReturnOpenChange}
         onProcessCoreReturn={coreReturn.handleProcessCoreReturn}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
       
       {showDemo && catalog.parts.length === 0 && !catalog.isLoading && (
@@ -107,6 +110,7 @@ const ShopParts = () => {
           <PartsCatalogGrid
             parts={catalog.parts}
             isLoading={catalog.isLoading}
+            viewMode={viewMode}
             onAddToCart={cart.handleAddToCart}
             onAddToQuotation={quotation.handleAddToQuotation}
             onViewDetails={catalog.handleViewDetails}

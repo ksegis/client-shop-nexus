@@ -6,7 +6,7 @@ import { PartDetailDialog } from '@/components/shared/parts/PartDetailDialog';
 import { PartsCart } from '@/components/shared/parts/PartsCart';
 import { usePartsCatalog } from '@/hooks/parts/usePartsCatalog';
 import { usePartsCart } from '@/contexts/parts/PartsCartContext';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { Part } from '@/types/parts';
 import { ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ const CustomerParts = () => {
   const [cartOpen, setCartOpen] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   
   // Load category and supplier filters
   useState(() => {
@@ -114,6 +115,7 @@ const CustomerParts = () => {
       <PartsCatalogGrid
         parts={parts}
         isLoading={isLoading}
+        viewMode={viewMode}
         onAddToCart={handleAddToCart}
         onViewDetails={handleViewDetails}
         showInventory={false} // Don't show stock levels for customers
