@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/auth';
 import { MessageList } from '@/components/shared/messaging/MessageList';
 import { MessageInput } from '@/components/shared/messaging/MessageInput';
 import { ThreadList } from '@/components/shared/messaging/ThreadList';
-import { MessagingProvider, useMessaging } from '@/contexts/messaging/MessagingContext';
+import { MessagingProvider, useMessaging } from '@/contexts/messaging';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 function MessagesContent() {
   const { threads, activeThread, messages, isLoading, setActiveThread, sendMessage, createThread } = useMessaging();
   const { customers, isLoading: isLoadingCustomers } = useCustomers();
-  const { vehicles, isLoading: isLoadingVehicles } = useVehicles();
+  const { vehicles, loading: isLoadingVehicles } = useVehicles();
   const { user } = useAuth();
   const { toast } = useToast();
   const [showNewThreadDialog, setShowNewThreadDialog] = useState(false);

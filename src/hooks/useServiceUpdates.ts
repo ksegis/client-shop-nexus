@@ -36,7 +36,7 @@ export const useServiceUpdates = (workOrderId?: string) => {
           
         if (error) throw error;
         
-        setUpdates(data || []);
+        setUpdates(data as ServiceUpdate[] || []);
       } catch (error: any) {
         console.error('Error fetching service updates:', error);
         toast({
@@ -113,7 +113,7 @@ export const useServiceUpdates = (workOrderId?: string) => {
           content: update.content,
           images: imageUrls.length > 0 ? imageUrls : undefined,
           milestone: update.milestone,
-          milestone_completed: update.milestone_completed
+          milestone_completed: update.milestone_completed ?? false
         });
         
       if (error) throw error;

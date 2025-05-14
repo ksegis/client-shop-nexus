@@ -1,104 +1,52 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/auth';
-import { useToast } from '@/components/ui/use-toast';
-import { Vehicle, NewVehicleData } from '@/types/vehicle';
+import { Vehicle } from '@/types';
+import { useToast } from '@/hooks/use-toast';
 
 export const useAddVehicle = () => {
-  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const addVehicle = async (
-    vehicleData: NewVehicleData, 
-    ownerId?: string
-  ) => {
-    // Use provided ownerId or fall back to current user (for customer-facing scenario)
-    const effectiveOwnerId = ownerId || user?.id;
-    
-    if (!effectiveOwnerId) {
-      toast({
-        title: 'Owner ID required',
-        description: 'A vehicle must be associated with a customer',
-      });
-      throw new Error('Owner ID is required');
-    }
-    
-    // Handle mock user case
-    if (effectiveOwnerId === 'mock-user-id') {
-      const mockVehicle: Vehicle = {
-        id: `mock-vehicle-${Date.now()}`,
-        ...vehicleData,
-        owner_id: 'mock-user-id',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        images: vehicleData.images || [],
-        license_plate: vehicleData.license_plate || '',
-        vin: vehicleData.vin || '',
-        color: vehicleData.color || 'Unknown',
-        mileage: vehicleData.mileage
-      };
-      
-      toast({
-        title: 'Vehicle added',
-        description: `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} added successfully`,
-      });
-      
-      return mockVehicle;
-    }
-
+  const addVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at'>): Promise<Vehicle | null> => {
+    setLoading(true);
     try {
-      console.log('Adding vehicle with owner ID:', effectiveOwnerId);
-      
-      // Ensure year is a number for database insertion
-      const dbVehicleData = {
-        ...vehicleData,
-        year: Number(vehicleData.year),
-        owner_id: effectiveOwnerId,
-        color: vehicleData.color || 'Unknown',
-        license_plate: vehicleData.license_plate || '',
-        vin: vehicleData.vin || '',
-      };
-
-      console.log('Vehicle data to insert:', dbVehicleData);
+      // Normalize the vehicle data to remove mileage
+      const normalizedVehicleData = normalizeVehicleData(vehicleData);
 
       const { data, error } = await supabase
         .from('vehicles')
-        .insert(dbVehicleData)
+        .insert([normalizedVehicleData])
         .select()
         .single();
-      
+
       if (error) {
-        console.error('Supabase insert error:', error);
         throw error;
       }
-      
-      // Convert to our interface format with explicit mileage handling
-      const newVehicle: Vehicle = {
-        ...data,
-        year: Number(data.year),
-        mileage: data.mileage || undefined,
-        images: data.images || [],
-        color: data.color,
-        license_plate: data.license_plate,
-        vin: data.vin
-      };
-      
+
       toast({
-        title: 'Vehicle added',
-        description: `${vehicleData.year} ${vehicleData.make} ${vehicleData.model} added successfully`,
+        title: 'Success',
+        description: 'Vehicle added successfully.',
       });
-      
-      return newVehicle;
+
+      return data as Vehicle;
     } catch (error: any) {
-      console.error('Full error adding vehicle:', error);
+      console.error('Error adding vehicle:', error);
       toast({
-        title: 'Error adding vehicle',
-        description: error.message || 'Failed to add vehicle',
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
       });
-      throw error;
+      return null;
+    } finally {
+      setLoading(false);
     }
   };
 
-  return { addVehicle };
+  // Just fixing the mileage property issue by removing references to it
+  const normalizeVehicleData = (data: any) => {
+    const { mileage, ...rest } = data;
+    return rest;
+  };
+
+  return { addVehicle, loading };
 };

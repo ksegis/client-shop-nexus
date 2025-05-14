@@ -1,82 +1,63 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Vehicle } from '@/types/vehicle';
-import { useToast } from '@/components/ui/use-toast';
+import { Vehicle } from '@/types';
+import { useAuth } from '@/contexts/auth';
+import { useToast } from '@/hooks/use-toast';
 
-export const useFetchVehicles = () => {
+export const useVehicles = () => {
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
   const { toast } = useToast();
-  
-  const fetchVehicles = async (ownerId: string): Promise<Vehicle[]> => {
-    // Mock user case
-    if (ownerId === 'mock-user-id') {
-      const mockVehicles: Vehicle[] = [
-        {
-          id: 'mock-vehicle-1',
-          owner_id: 'mock-user-id',
-          year: 2020,
-          make: 'Tesla',
-          model: 'Model 3',
-          color: 'Red',
-          vin: 'MOCK12345678901',
-          license_plate: 'MOCK123',
-          vehicle_type: 'car',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          images: [],
-          mileage: 12000
-        },
-        {
-          id: 'mock-vehicle-2',
-          owner_id: 'mock-user-id',
-          year: 2019,
-          make: 'Ford',
-          model: 'F-150',
-          color: 'Blue',
-          vin: 'MOCK98765432101',
-          license_plate: 'MOCK456',
-          vehicle_type: 'truck',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          images: [],
-          mileage: 25000
+
+  useEffect(() => {
+    const fetchVehicles = async () => {
+      try {
+        setLoading(true);
+        
+        let query = supabase
+          .from('vehicles')
+          .select('*')
+          .order('created_at', { ascending: false });
+          
+        // If the user is a customer, only fetch their vehicles
+        if (user && user.user_metadata.role === 'customer') {
+          query = query.eq('owner_id', user.id);
         }
-      ];
-      
-      return mockVehicles;
-    }
-    
-    try {
-      const { data, error } = await supabase
-        .from('vehicles')
-        .select('*')
-        .eq('owner_id', ownerId)
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        throw error;
+        
+        const { data, error } = await query;
+
+        if (error) {
+          throw error;
+        }
+        
+        // Normalize the data to remove the mileage property
+        const normalizedData = (data || []).map(normalizeVehicleData);
+        
+        setVehicles(normalizedData as Vehicle[]);
+      } catch (error: any) {
+        console.error('Error fetching vehicles:', error);
+        toast({
+          title: 'Error',
+          description: `Failed to fetch vehicles: ${error.message}`,
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
       }
-      
-      // Convert to our Vehicle interface
-      const vehicles: Vehicle[] = data.map(item => ({
-        ...item,
-        color: item.color || 'Unknown',
-        license_plate: item.license_plate || '',
-        vin: item.vin || '',
-        mileage: item.mileage || undefined,
-        images: item.images || []
-      }));
-      
-      return vehicles;
-    } catch (error: any) {
-      console.error('Error fetching vehicles:', error);
-      toast({
-        title: 'Error fetching vehicles',
-        description: error.message || 'Failed to fetch vehicles',
-      });
-      return [];
-    }
+    };
+
+    fetchVehicles();
+  }, [user, toast]);
+
+  // Just fixing the mileage property issue by removing references to it
+  const normalizeVehicleData = (data: any) => {
+    const { mileage, ...rest } = data;
+    return rest;
   };
-  
-  return { fetchVehicles };
+
+  return {
+    vehicles,
+    loading,
+  };
 };
