@@ -14,7 +14,11 @@ const Layout: React.FC<LayoutProps> = ({ portalType, children }) => {
   // Check if we're on a page that already includes its own header
   const isStandalonePage = location.pathname.includes('/customer/') && 
     (location.pathname.endsWith('/transactions') || 
-     location.pathname.endsWith('/checkout'));
+     location.pathname.endsWith('/checkout') ||
+     location.pathname.endsWith('/profile') ||
+     location.pathname.endsWith('/estimates') ||
+     location.pathname.endsWith('/invoices') ||
+     location.pathname.endsWith('/parts'));
   
   return (
     <div className="h-screen flex flex-col">
