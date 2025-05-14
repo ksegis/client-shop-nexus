@@ -10,12 +10,34 @@ import { InventoryStatCards } from './inventory/components/InventoryStatCards';
 import { InventoryDialog } from './inventory/InventoryDialog';
 import { InventoryFormValues } from './inventory/types';
 import { useInventory } from './inventory/useInventory';
+import { supabase } from '@/integrations/supabase/client';
+import { useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
 const SimpleInventory = () => {
   const { inventoryItems, isLoading, refetch } = useInventoryData();
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const { addItemMutation } = useInventory();
+  const { toast } = useToast();
+  
+  // Check auth state on component load
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: session } = await supabase.auth.getSession();
+      console.log("Auth check - User is", session?.session ? "authenticated" : "not authenticated");
+      
+      if (!session?.session) {
+        toast({
+          variant: "destructive",
+          title: "Authentication Required",
+          description: "You need to log in to access inventory management."
+        });
+      }
+    };
+    
+    checkAuth();
+  }, []);
   
   // Filter items based on search term
   const filteredItems = inventoryItems.filter(item => 
@@ -36,11 +58,31 @@ const SimpleInventory = () => {
     }
   );
 
-  const handleAddItem = (values: InventoryFormValues) => {
+  const handleAddItem = async (values: InventoryFormValues) => {
+    console.log('Adding inventory item with values:', values);
+    
+    // First check if authenticated
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session) {
+      console.error('User is not authenticated');
+      toast({
+        variant: "destructive",
+        title: "Authentication Required",
+        description: "You need to be logged in to add inventory items."
+      });
+      return;
+    }
+    
+    // Proceed with adding the item
+    console.log('User is authenticated, proceeding with addItemMutation');
     addItemMutation.mutate(values, {
       onSuccess: () => {
+        console.log('Item added successfully');
         setDialogOpen(false);
         refetch();
+      },
+      onError: (error) => {
+        console.error('Error adding item:', error);
       }
     });
   };

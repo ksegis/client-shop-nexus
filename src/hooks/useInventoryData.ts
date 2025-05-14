@@ -11,6 +11,10 @@ export const useInventoryData = () => {
     queryKey: ['simple-inventory'],
     queryFn: async () => {
       try {
+        // Check if user is authenticated
+        const { data: session } = await supabase.auth.getSession();
+        console.log('Current session:', session ? 'Authenticated' : 'Not authenticated');
+        
         // Test connection first
         console.log('Testing Supabase connection...');
         const { error: connectionError } = await supabase.from('inventory').select('count').limit(1);
