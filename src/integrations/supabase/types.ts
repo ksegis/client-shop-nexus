@@ -551,10 +551,33 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      rls_status: {
+        Row: {
+          row_security_active: boolean | null
+          table_name: unknown | null
+          table_schema: unknown | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      add_public_read_policy: {
+        Args: { target_table: string }
+        Returns: undefined
+      }
+      add_standard_policies: {
+        Args: { target_table: string }
+        Returns: undefined
+      }
+      disable_all_rls: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_authenticated: {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
