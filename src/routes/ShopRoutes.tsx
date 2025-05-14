@@ -14,7 +14,7 @@ import Invoices from "@/pages/shop/invoices";
 import Reports from "@/pages/shop/Reports";
 import ApiConnectionsManager from "@/pages/shop/admin/ApiConnectionsManager";
 import UserManagement from "@/pages/shop/UserManagement";
-import { RlsTroubleshooter } from "@/components/dev/RlsTroubleshooter";
+import RlsTroubleshooter from "@/components/dev/RlsTroubleshooter";
 import NotFound from "@/pages/NotFound";
 import Layout from "@/components/layout/Layout";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
