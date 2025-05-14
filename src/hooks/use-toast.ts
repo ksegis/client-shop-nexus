@@ -25,5 +25,9 @@ export function toast({ variant = "default", ...props }: ToastProps) {
   })
 }
 
-// Re-export the Toaster's useToast hook with the same API
-export { toast as useToast } from "sonner"
+// Create a proper useToast hook that returns the toast function
+export function useToast() {
+  return {
+    toast,
+  }
+}
