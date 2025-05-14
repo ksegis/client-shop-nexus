@@ -50,6 +50,9 @@ export const useUpdateVehicle = () => {
       
       const updatedVehicle: Vehicle = {
         ...data,
+        color: data.color || 'Unknown',
+        license_plate: data.license_plate || '',
+        vin: data.vin || '',
         mileage: data.mileage || undefined,
         images: data.images || []
       };
@@ -65,7 +68,6 @@ export const useUpdateVehicle = () => {
       toast({
         title: 'Error updating vehicle',
         description: error.message || 'Failed to update vehicle',
-        variant: 'destructive',
       });
       throw error;
     }

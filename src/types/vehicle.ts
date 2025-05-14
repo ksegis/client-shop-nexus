@@ -19,7 +19,7 @@ export interface NewVehicleData {
   make: string;
   model: string;
   year: number;
-  color?: string;
+  color: string;
   license_plate?: string;
   vin?: string;
   vehicle_type: 'car' | 'truck' | 'motorcycle' | 'other';

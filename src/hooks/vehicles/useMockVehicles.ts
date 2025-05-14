@@ -44,7 +44,10 @@ export const useMockVehicles = () => {
       owner_id: ownerId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      images: vehicleData.images || []
+      images: vehicleData.images || [],
+      color: vehicleData.color,
+      license_plate: vehicleData.license_plate || '',
+      vin: vehicleData.vin || ''
     };
   };
 

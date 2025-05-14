@@ -60,7 +60,10 @@ export const useFetchVehicles = () => {
       // Convert to our Vehicle interface
       const vehicles: Vehicle[] = data.map(item => ({
         ...item,
-        mileage: item.mileage || undefined, // Ensure mileage is properly included
+        color: item.color || 'Unknown',
+        license_plate: item.license_plate || '',
+        vin: item.vin || '',
+        mileage: item.mileage || undefined,
         images: item.images || []
       }));
       
@@ -70,7 +73,6 @@ export const useFetchVehicles = () => {
       toast({
         title: 'Error fetching vehicles',
         description: error.message || 'Failed to fetch vehicles',
-        variant: 'destructive',
       });
       return [];
     }

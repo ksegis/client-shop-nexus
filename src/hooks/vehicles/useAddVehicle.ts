@@ -20,7 +20,6 @@ export const useAddVehicle = () => {
       toast({
         title: 'Owner ID required',
         description: 'A vehicle must be associated with a customer',
-        variant: 'destructive',
       });
       throw new Error('Owner ID is required');
     }
@@ -33,7 +32,10 @@ export const useAddVehicle = () => {
         owner_id: 'mock-user-id',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        images: [],
+        images: vehicleData.images || [],
+        license_plate: vehicleData.license_plate || '',
+        vin: vehicleData.vin || '',
+        color: vehicleData.color || 'Unknown',
         mileage: vehicleData.mileage
       };
       
@@ -52,7 +54,10 @@ export const useAddVehicle = () => {
       const dbVehicleData = {
         ...vehicleData,
         year: Number(vehicleData.year),
-        owner_id: effectiveOwnerId
+        owner_id: effectiveOwnerId,
+        color: vehicleData.color || 'Unknown',
+        license_plate: vehicleData.license_plate || '',
+        vin: vehicleData.vin || '',
       };
 
       console.log('Vehicle data to insert:', dbVehicleData);
@@ -73,7 +78,10 @@ export const useAddVehicle = () => {
         ...data,
         year: Number(data.year),
         mileage: data.mileage || undefined,
-        images: data.images || []
+        images: data.images || [],
+        color: data.color,
+        license_plate: data.license_plate,
+        vin: data.vin
       };
       
       toast({
@@ -87,7 +95,6 @@ export const useAddVehicle = () => {
       toast({
         title: 'Error adding vehicle',
         description: error.message || 'Failed to add vehicle',
-        variant: 'destructive',
       });
       throw error;
     }
