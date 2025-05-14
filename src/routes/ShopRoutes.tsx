@@ -80,6 +80,11 @@ const ShopRoutes = () => {
             <WorkOrders />
           </ProtectedRoute>
         } />
+        <Route path="service-appointments" element={
+          <ProtectedRoute allowedRoles={staffAndAdmin}>
+            <ServiceAppointments />
+          </ProtectedRoute>
+        } />
         <Route path="invoices" element={
           <ProtectedRoute allowedRoles={staffAndAdmin}>
             <Invoices />
@@ -88,11 +93,6 @@ const ShopRoutes = () => {
         <Route path="reports" element={
           <ProtectedRoute allowedRoles={staffAndAdmin}>
             <Reports />
-          </ProtectedRoute>
-        } />
-        <Route path="service-appointments" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <ServiceAppointments />
           </ProtectedRoute>
         } />
         <Route path="admin/api-connections" element={
