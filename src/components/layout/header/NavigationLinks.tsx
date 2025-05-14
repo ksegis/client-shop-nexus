@@ -16,9 +16,8 @@ export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
     { name: 'Profile', path: '/customer/profile' },
     { name: 'Estimates', path: '/customer/estimates' },
     { name: 'Invoices', path: '/customer/invoices' },
-    { name: 'Transaction History', path: '/customer/transactions' },
-    // Add Parts Desk link for customer portal
-    { name: 'Parts Catalog', path: '/customer/parts' }
+    { name: 'Transaction History', path: '/customer/transactions' }
+    // Parts Catalog link removed for customer portal
   ];
   
   const shopLinks: NavigationLink[] = [
@@ -29,9 +28,8 @@ export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
     { name: 'Work Orders', path: '/shop/work-orders' },
     { name: 'Customers', path: '/shop/customers' },
     { name: 'Estimates', path: '/shop/estimates' },
-    { name: 'Invoices', path: '/shop/invoices' },
-    // Add Parts Desk link for shop portal
-    { name: 'Parts Desk', path: '/shop/parts' }
+    { name: 'Invoices', path: '/shop/invoices' }
+    // Parts Desk link removed for shop portal
   ];
   
   // Admin links for shop portal

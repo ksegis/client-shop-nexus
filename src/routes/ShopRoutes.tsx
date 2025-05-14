@@ -16,8 +16,6 @@ import AdminUserManagement from "@/pages/shop/admin/UserManagement";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import Layout from "@/components/layout/Layout";
 import NotFound from "@/pages/NotFound";
-import ShopParts from "@/pages/shop/Parts";
-import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
 
 // Define which roles are allowed to access shop routes
 const shopStaffRoles = ['staff', 'admin'];
@@ -89,16 +87,6 @@ const ShopRoutes = () => {
           element={
             <ProtectedRoute allowedRoles={shopStaffRoles}>
               <Inventory />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/parts"
-          element={
-            <ProtectedRoute allowedRoles={shopStaffRoles}>
-              <PartsCartProvider>
-                <ShopParts />
-              </PartsCartProvider>
             </ProtectedRoute>
           }
         />
