@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth';
 import { Logo } from './header/Logo';
@@ -9,6 +9,7 @@ import UserProfileDropdown from './header/UserProfileDropdown';
 import { MobileMenuButton } from './header/MobileMenuButton';
 import { PortalIndicator } from './header/PortalIndicator';
 import { useNavigationLinks } from './header/NavigationLinks';
+import { useHeaderContext } from './HeaderContext';
 
 interface HeaderProps {
   portalType: 'customer' | 'shop';
@@ -20,6 +21,29 @@ const Header = ({ portalType }: HeaderProps) => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { links, isAdmin } = useNavigationLinks(portalType);
+  
+  // Use header context to prevent duplicate headers
+  const { isHeaderMounted, setHeaderMounted } = useHeaderContext();
+  
+  useEffect(() => {
+    // If header is already mounted, log a warning
+    if (isHeaderMounted) {
+      console.warn('Multiple Header components detected. This may cause layout issues.');
+      return;
+    }
+    
+    setHeaderMounted(true);
+    
+    // Cleanup when component unmounts
+    return () => {
+      setHeaderMounted(false);
+    };
+  }, [isHeaderMounted, setHeaderMounted]);
+  
+  // If a header is already mounted, don't render another one
+  if (isHeaderMounted) {
+    return null;
+  }
   
   // Debug logging
   console.log("Header - User object:", user);

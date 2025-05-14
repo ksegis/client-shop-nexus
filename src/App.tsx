@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AppRoutes from "./routes/AppRoutes";
 import { useEffect } from "react";
 import { setupAudioCleanupOnNavigation } from "@/utils/audioUtils";
+import { HeaderProvider } from "./components/layout/HeaderContext";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -30,8 +31,10 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProviderWrapper>
-        <Toaster position="top-right" />
-        <AppRoutes />
+        <HeaderProvider>
+          <Toaster position="top-right" />
+          <AppRoutes />
+        </HeaderProvider>
       </TooltipProviderWrapper>
     </QueryClientProvider>
   );
