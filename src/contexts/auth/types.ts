@@ -13,7 +13,7 @@ export interface AuthContextType {
       role?: string;
     };
   };
-  session: null;
+  session: any;
   signUp: (email: string, password: string, firstName?: string, lastName?: string) => Promise<{ 
     success: boolean;
     data?: any;
