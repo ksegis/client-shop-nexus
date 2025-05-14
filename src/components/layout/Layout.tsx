@@ -11,14 +11,15 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ portalType, children }) => {
   const location = useLocation();
   
-  // Check if we're on a page that already includes its own header
-  const isStandalonePage = location.pathname.includes('/customer/') && 
-    (location.pathname.endsWith('/transactions') || 
-     location.pathname.endsWith('/checkout') ||
-     location.pathname.endsWith('/profile') ||
-     location.pathname.endsWith('/estimates') ||
-     location.pathname.endsWith('/invoices') ||
-     location.pathname.endsWith('/parts'));
+  // Debug the current path
+  console.log('Current path:', location.pathname);
+  
+  // We should only hide the header on very specific standalone pages
+  // The previous logic was incorrectly hiding the header on all customer pages
+  const isStandalonePage = 
+    (location.pathname === '/auth') || 
+    (location.pathname === '/customer/login') ||
+    (location.pathname === '/shop/login');
   
   return (
     <div className="h-screen flex flex-col">
