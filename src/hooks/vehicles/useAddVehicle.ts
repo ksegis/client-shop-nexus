@@ -32,7 +32,9 @@ export const useAddVehicle = () => {
         ...vehicleData,
         owner_id: 'mock-user-id',
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        images: [],
+        mileage: vehicleData.mileage
       };
       
       toast({
@@ -70,7 +72,8 @@ export const useAddVehicle = () => {
       const newVehicle: Vehicle = {
         ...data,
         year: Number(data.year),
-        mileage: data.mileage
+        mileage: data.mileage,
+        images: data.images || []
       };
       
       toast({

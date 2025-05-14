@@ -1,51 +1,75 @@
 
-import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 import { Vehicle } from '@/types/vehicle';
 
 export const useUpdateVehicle = () => {
   const { toast } = useToast();
-
-  const updateVehicle = async (id: string, vehicleData: Partial<Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>>) => {
-    try {
-      // Convert year to number if it's included in the update data
-      const dbVehicleData: any = { ...vehicleData };
-      if (vehicleData.year) {
-        dbVehicleData.year = Number(vehicleData.year);
-      }
-
-      const { data, error } = await supabase
-        .from('vehicles')
-        .update(dbVehicleData)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Convert back to our interface format
-      const updatedVehicle: Vehicle = {
-        ...data,
-        year: Number(data.year),
-        mileage: data.mileage
+  
+  const updateVehicle = async (
+    id: string, 
+    vehicleData: Partial<Omit<Vehicle, 'id' | 'created_at' | 'updated_at' | 'owner_id'>>,
+  ): Promise<Vehicle> => {
+    // Handle mock vehicle case
+    if (id.startsWith('mock-vehicle')) {
+      const mockUpdatedVehicle: Vehicle = {
+        id,
+        owner_id: 'mock-user-id',
+        year: vehicleData.year || 2020,
+        make: vehicleData.make || 'Mock Make',
+        model: vehicleData.model || 'Mock Model',
+        color: vehicleData.color || 'Silver',
+        vin: vehicleData.vin || 'MOCK123456789',
+        license_plate: vehicleData.license_plate || 'MOCK123',
+        vehicle_type: vehicleData.vehicle_type || 'car',
+        images: vehicleData.images || [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        mileage: vehicleData.mileage
       };
       
       toast({
         title: 'Vehicle updated',
-        description: `Vehicle information updated successfully`,
+        description: `${mockUpdatedVehicle.year} ${mockUpdatedVehicle.make} ${mockUpdatedVehicle.model} updated successfully`,
+      });
+      
+      return mockUpdatedVehicle;
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .update(vehicleData)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        throw error;
+      }
+      
+      const updatedVehicle: Vehicle = {
+        ...data,
+        mileage: data.mileage,
+        images: data.images || []
+      };
+      
+      toast({
+        title: 'Vehicle updated',
+        description: `${updatedVehicle.year} ${updatedVehicle.make} ${updatedVehicle.model} updated successfully`,
       });
       
       return updatedVehicle;
     } catch (error: any) {
+      console.error('Error updating vehicle:', error);
       toast({
         title: 'Error updating vehicle',
-        description: error.message,
+        description: error.message || 'Failed to update vehicle',
         variant: 'destructive',
       });
       throw error;
     }
   };
-
+  
   return { updateVehicle };
 };

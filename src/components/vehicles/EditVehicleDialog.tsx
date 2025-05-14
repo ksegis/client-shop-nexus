@@ -1,36 +1,39 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Car } from 'lucide-react';
+import { Form } from '@/components/ui/form';
 import { vehicleSchema, VehicleFormValues } from './VehicleFormSchema';
-import { Vehicle, NewVehicleData } from '@/types/vehicle';
+import { Vehicle } from '@/types/vehicle';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Upload, Camera, Trash2 } from 'lucide-react';
+import { VehicleForm } from './form/VehicleForm';
 
 interface EditVehicleDialogProps {
-  vehicle: Vehicle | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (id: string, data: Partial<NewVehicleData>) => Promise<void>;
+  vehicle: Vehicle | null;
+  onSubmit: (id: string, data: Partial<Vehicle>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onImageUpload: (e: React.ChangeEvent<HTMLInputElement>, vehicleId: string) => Promise<void>;
   uploadingImage: boolean;
 }
 
-export const EditVehicleDialog: React.FC<EditVehicleDialogProps> = ({
-  vehicle,
-  open,
-  onOpenChange,
-  onSubmit,
+export const EditVehicleDialog: React.FC<EditVehicleDialogProps> = ({ 
+  open, 
+  onOpenChange, 
+  vehicle, 
+  onSubmit, 
   onDelete,
   onImageUpload,
-  uploadingImage,
+  uploadingImage
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const form = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
@@ -46,30 +49,34 @@ export const EditVehicleDialog: React.FC<EditVehicleDialogProps> = ({
     }
   });
   
-  // When vehicle changes, reset form with vehicle data
-  React.useEffect(() => {
+  useEffect(() => {
     if (vehicle) {
       form.reset({
         make: vehicle.make,
         model: vehicle.model,
-        year: String(vehicle.year),
-        vehicle_type: vehicle.vehicle_type || 'car',
+        year: vehicle.year.toString(),
+        vehicle_type: vehicle.vehicle_type,
         vin: vehicle.vin || '',
         license_plate: vehicle.license_plate || '',
         color: vehicle.color || '',
-        mileage: vehicle.mileage ? String(vehicle.mileage) : '',
+        mileage: vehicle.mileage ? vehicle.mileage.toString() : '',
       });
     }
   }, [vehicle, form]);
-
+  
   const handleSubmit = async (data: VehicleFormValues) => {
     if (!vehicle) return;
     
     try {
       setIsSubmitting(true);
       await onSubmit(vehicle.id, {
-        ...data,
+        make: data.make,
+        model: data.model,
         year: Number(data.year),
+        vehicle_type: data.vehicle_type,
+        vin: data.vin || undefined,
+        color: data.color || undefined,
+        license_plate: data.license_plate || undefined,
         mileage: data.mileage ? Number(data.mileage) : undefined,
       });
       onOpenChange(false);
@@ -80,194 +87,140 @@ export const EditVehicleDialog: React.FC<EditVehicleDialogProps> = ({
   
   const handleDelete = async () => {
     if (!vehicle) return;
-    await onDelete(vehicle.id);
+    
+    try {
+      setIsDeleting(true);
+      await onDelete(vehicle.id);
+      onOpenChange(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+  
+  const handleCancel = () => {
     onOpenChange(false);
   };
-
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (vehicle) {
+      onImageUpload(e, vehicle.id);
+    }
+  };
+  
   if (!vehicle) return null;
-
+  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Edit Vehicle</DialogTitle>
           <DialogDescription>
-            Update your vehicle details or upload an image.
+            Update your vehicle details below.
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="make"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Make*</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="model"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Model*</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+        
+        <Tabs defaultValue="details" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="images">Images</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="details" className="space-y-4">
+            <VehicleForm 
+              form={form}
+              onSubmit={handleSubmit}
+              onCancel={handleCancel}
+              isSubmitting={isSubmitting}
+              submitButtonText="Update Vehicle"
+            />
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="year"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Year*</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="vehicle_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Type*</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="car">Car</SelectItem>
-                        <SelectItem value="truck">Truck</SelectItem>
-                        <SelectItem value="motorcycle">Motorcycle</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <div className="flex justify-start mt-4">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive">Delete Vehicle</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete your vehicle and all associated data.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction 
+                      onClick={handleDelete} 
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? 'Deleting...' : 'Delete'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="color"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Color</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="mileage"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Mileage</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="vin"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>VIN</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="license_plate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>License Plate</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            {/* Vehicle Image Upload */}
-            <div>
-              <FormLabel>Vehicle Image</FormLabel>
-              <div className="mt-1 flex items-center gap-4">
-                <div className="h-16 w-16 rounded overflow-hidden bg-gray-100 flex items-center justify-center">
-                  {vehicle.images && vehicle.images[0] ? (
+          </TabsContent>
+          
+          <TabsContent value="images" className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              {vehicle.images && vehicle.images.length > 0 ? (
+                vehicle.images.map((image, index) => (
+                  <div key={index} className="relative border rounded-md overflow-hidden">
                     <img 
-                      src={vehicle.images[0]} 
-                      alt={`${vehicle.make} ${vehicle.model}`}
-                      className="h-full w-full object-cover"
+                      src={image} 
+                      alt={`Vehicle image ${index + 1}`} 
+                      className="w-full h-32 object-cover"
                     />
-                  ) : (
-                    <Car className="h-8 w-8 text-gray-400" />
-                  )}
+                    <Button 
+                      variant="destructive" 
+                      size="icon" 
+                      className="absolute top-2 right-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-2 p-8 text-center border rounded-md">
+                  <Camera className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <p className="mt-2 text-sm text-muted-foreground">No images yet</p>
                 </div>
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => onImageUpload(e, vehicle.id)}
-                  disabled={uploadingImage}
-                  className="max-w-sm"
-                />
-              </div>
+              )}
             </div>
             
-            <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
-              <Button 
-                type="button" 
-                variant="destructive" 
-                onClick={handleDelete}
-                className="sm:mr-auto"
-              >
-                <Trash2 className="h-4 w-4 mr-2" /> Delete Vehicle
-              </Button>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
-            </DialogFooter>
-          </form>
-        </Form>
+            <Form {...form}>
+              <form className="space-y-4">
+                <div className="flex items-center justify-center w-full">
+                  <label 
+                    htmlFor="vehicle-image" 
+                    className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-background hover:bg-accent/50"
+                  >
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <Upload className="w-8 h-8 mb-3 text-muted-foreground" />
+                      <p className="mb-2 text-sm text-muted-foreground">
+                        <span className="font-semibold">Click to upload</span> or drag and drop
+                      </p>
+                      <p className="text-xs text-muted-foreground">PNG, JPG, GIF (MAX. 5MB)</p>
+                    </div>
+                    <Input 
+                      id="vehicle-image" 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={handleFileChange}
+                      disabled={uploadingImage}
+                    />
+                  </label>
+                </div>
+                {uploadingImage && (
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground animate-pulse">Uploading image...</p>
+                  </div>
+                )}
+              </form>
+            </Form>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
