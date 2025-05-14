@@ -1,113 +1,66 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, FileText, History, InfoIcon, MessageSquare } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/auth';
-import { useToast } from '@/hooks/use-toast';
-import { ServiceUpdatesList } from '@/components/shared/service/ServiceUpdatesList';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, FileText, MessageSquare, History, Car, InfoIcon } from 'lucide-react';
+import { useWorkOrders } from '../work-orders/WorkOrdersContext';
 import { useServiceUpdates } from '@/hooks/useServiceUpdates';
+import { ServiceUpdatesList } from '@/components/shared/service/ServiceUpdatesList';
+import { ServiceUpdateForm } from '@/components/shop/service/ServiceUpdateForm';
 
-const CustomerWorkOrderDetail = () => {
+const WorkOrderDetailPage = () => {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [workOrder, setWorkOrder] = useState<any | null>(null);
+  const { workOrders, getWorkOrderLineItems } = useWorkOrders();
+  const [workOrder, setWorkOrder] = useState<any>(null);
   const [lineItems, setLineItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { updates, loading: updatesLoading } = useServiceUpdates(id);
   const [activeTab, setActiveTab] = useState('details');
+  const { updates, loading: updatesLoading, addServiceUpdate } = useServiceUpdates(id);
+  const [isSubmittingUpdate, setIsSubmittingUpdate] = useState(false);
 
+  // Fetch work order data
   useEffect(() => {
-    if (!id || !user) return;
-
-    const fetchWorkOrder = async () => {
-      try {
-        setLoading(true);
-        
-        // Fetch work order details
-        const { data: workOrderData, error: workOrderError } = await supabase
-          .from('work_orders')
-          .select(`
-            *,
-            vehicles (
-              make,
-              model,
-              year,
-              vin,
-              license_plate,
-              color
-            )
-          `)
-          .eq('id', id)
-          .eq('customer_id', user.id)
-          .single();
-          
-        if (workOrderError) throw workOrderError;
-        
-        // Fetch work order line items
-        const { data: lineItemsData, error: lineItemsError } = await supabase
-          .from('work_order_line_items')
-          .select('*')
-          .eq('work_order_id', id);
-          
-        if (lineItemsError) throw lineItemsError;
-        
-        setWorkOrder(workOrderData);
-        setLineItems(lineItemsData || []);
-      } catch (error: any) {
-        console.error('Error fetching work order:', error);
-        toast({
-          title: 'Error',
-          description: `Could not load work order: ${error.message}`,
-          variant: 'destructive',
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!id) return;
     
-    fetchWorkOrder();
-    
-    // Set up real-time subscription for work order updates
-    const workOrderChannel = supabase
-      .channel('single-work-order')
-      .on('postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'work_orders',
-          filter: `id=eq.${id}`
-        },
-        (payload) => {
-          // Update work order when it changes
-          if (payload.eventType === 'UPDATE') {
-            const updatedWorkOrder = payload.new as any;
-            setWorkOrder(prevWorkOrder => ({ ...prevWorkOrder, ...updatedWorkOrder }));
-            
-            // Show notification for status changes
-            const oldStatus = (payload.old as any).status;
-            const newStatus = updatedWorkOrder.status;
-            
-            if (oldStatus !== newStatus) {
-              toast({
-                title: 'Work Order Updated',
-                description: `Status changed to: ${newStatus.replace('_', ' ')}`,
-              });
-            }
-          }
-        }
-      )
-      .subscribe();
+    const foundWorkOrder = workOrders.find(wo => wo.id === id);
+    if (foundWorkOrder) {
+      setWorkOrder(foundWorkOrder);
       
-    return () => {
-      supabase.removeChannel(workOrderChannel);
-    };
-  }, [id, user, toast]);
+      // Fetch line items
+      const fetchLineItems = async () => {
+        try {
+          const items = await getWorkOrderLineItems(id);
+          setLineItems(items);
+        } catch (error) {
+          console.error('Error fetching line items:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      fetchLineItems();
+    } else {
+      setLoading(false);
+    }
+  }, [id, workOrders, getWorkOrderLineItems]);
+
+  // Handle service update submission
+  const handleAddServiceUpdate = async (updateData: {
+    content: string;
+    milestone?: string;
+    milestone_completed?: boolean;
+    images?: File[];
+  }) => {
+    setIsSubmittingUpdate(true);
+    try {
+      await addServiceUpdate(updateData);
+    } finally {
+      setIsSubmittingUpdate(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -122,9 +75,9 @@ const CustomerWorkOrderDetail = () => {
       <div className="container mx-auto p-4 flex justify-center items-center h-64">
         <div className="text-center">
           <h2 className="text-lg font-medium mb-2">Work Order Not Found</h2>
-          <p className="text-muted-foreground mb-4">The requested work order could not be found or you don't have permission to view it.</p>
+          <p className="text-muted-foreground mb-4">The requested work order could not be found.</p>
           <Button asChild variant="outline">
-            <Link to="/customer/work-orders">Back to Work Orders</Link>
+            <Link to="/shop/work-orders">Back to Work Orders</Link>
           </Button>
         </div>
       </div>
@@ -148,15 +101,11 @@ const CustomerWorkOrderDetail = () => {
     }
   };
 
-  const getStatusDisplay = (status: string) => {
-    return status.replace('_', ' ').charAt(0).toUpperCase() + status.replace('_', ' ').slice(1);
-  };
-
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <Button variant="ghost" size="sm" asChild className="w-fit">
-          <Link to="/customer/work-orders">
+          <Link to="/shop/work-orders">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Work Orders
           </Link>
@@ -167,12 +116,12 @@ const CustomerWorkOrderDetail = () => {
         <h1 className="text-2xl md:text-3xl font-bold">Work Order #{id?.substring(0, 8)}</h1>
         
         <Badge className={getStatusColor(workOrder.status)}>
-          {getStatusDisplay(workOrder.status)}
+          {workOrder.status.replace('_', ' ').charAt(0).toUpperCase() + workOrder.status.replace('_', ' ').slice(1)}
         </Badge>
       </div>
       
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full md:w-auto grid-cols-3">
+        <TabsList className="grid w-full md:w-auto grid-cols-4">
           <TabsTrigger value="details" className="flex items-center">
             <InfoIcon className="h-4 w-4 mr-2 md:mr-1" />
             <span className="hidden md:inline">Details</span>
@@ -181,9 +130,13 @@ const CustomerWorkOrderDetail = () => {
             <History className="h-4 w-4 mr-2 md:mr-1" />
             <span className="hidden md:inline">Updates</span>
           </TabsTrigger>
-          <TabsTrigger value="contact" className="flex items-center">
+          <TabsTrigger value="customer" className="flex items-center">
             <MessageSquare className="h-4 w-4 mr-2 md:mr-1" />
-            <span className="hidden md:inline">Contact Shop</span>
+            <span className="hidden md:inline">Customer</span>
+          </TabsTrigger>
+          <TabsTrigger value="vehicle" className="flex items-center">
+            <Car className="h-4 w-4 mr-2 md:mr-1" />
+            <span className="hidden md:inline">Vehicle</span>
           </TabsTrigger>
         </TabsList>
         
@@ -193,14 +146,14 @@ const CustomerWorkOrderDetail = () => {
               <Card>
                 <CardHeader>
                   <CardTitle>Work Order Details</CardTitle>
-                  <CardDescription>Service and repair information</CardDescription>
+                  <CardDescription>Service and parts breakdown</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
                       <h3 className="text-sm font-medium text-gray-500 mb-1">Status</h3>
                       <Badge className={getStatusColor(workOrder.status)}>
-                        {getStatusDisplay(workOrder.status)}
+                        {workOrder.status.replace('_', ' ').charAt(0).toUpperCase() + workOrder.status.replace('_', ' ').slice(1)}
                       </Badge>
                     </div>
                     <div>
@@ -208,21 +161,15 @@ const CustomerWorkOrderDetail = () => {
                       <p>{new Date(workOrder.created_at).toLocaleDateString()}</p>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1">Vehicle</h3>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Priority</h3>
                       <p>
-                        {workOrder.vehicles 
-                          ? `${workOrder.vehicles.year} ${workOrder.vehicles.make} ${workOrder.vehicles.model}`
-                          : 'Not specified'}
+                        {workOrder.priority === 3 ? 'High' : 
+                         workOrder.priority === 2 ? 'Medium' : 'Low'}
                       </p>
-                      {workOrder.vehicles?.license_plate && (
-                        <p className="text-sm text-muted-foreground">
-                          License: {workOrder.vehicles.license_plate}
-                        </p>
-                      )}
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1">Estimated Completion</h3>
-                      <p>Not specified</p>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Estimated Hours</h3>
+                      <p>{workOrder.estimated_hours || 'Not specified'}</p>
                     </div>
                   </div>
                   
@@ -231,7 +178,7 @@ const CustomerWorkOrderDetail = () => {
                     <p className="text-sm whitespace-pre-line mb-6">{workOrder.description || 'No description provided'}</p>
                   </div>
                   
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">Service Items</h3>
+                  <h3 className="text-sm font-medium text-gray-500 mb-2">Line Items</h3>
                   <div className="border rounded-lg overflow-hidden">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
@@ -290,36 +237,44 @@ const CustomerWorkOrderDetail = () => {
             <div>
               <Card>
                 <CardHeader>
-                  <CardTitle>Summary</CardTitle>
+                  <CardTitle>Actions</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <Button className="w-full">
+                    Mark as In Progress
+                  </Button>
+                  <Button variant="outline" className="w-full">
+                    <FileText className="mr-2 h-4 w-4" />
+                    Generate Invoice
+                  </Button>
+                  <Button variant="outline" className="w-full">
+                    Edit Work Order
+                  </Button>
+                </CardContent>
+              </Card>
+              
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Costs</CardTitle>
+                </CardHeader>
+                <CardContent>
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-500">Estimated Cost</span>
                       <span>${workOrder.estimated_cost?.toFixed(2) || '0.00'}</span>
                     </div>
-                    {workOrder.status === 'completed' && (
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-500">Final Cost</span>
-                        <span>${workOrder.actual_cost?.toFixed(2) || '0.00'}</span>
-                      </div>
-                    )}
-                    <div className="pt-2 border-t mt-2">
-                      <Button variant="outline" asChild className="w-full">
-                        <Link to={`/customer/messages`}>
-                          <MessageSquare className="mr-2 h-4 w-4" />
-                          Contact Shop
-                        </Link>
-                      </Button>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Actual Cost</span>
+                      <span>${workOrder.actual_cost?.toFixed(2) || '0.00'}</span>
                     </div>
-                    {workOrder.status === 'completed' && (
-                      <Button variant="outline" asChild className="w-full">
-                        <Link to={`/customer/invoices`}>
-                          <FileText className="mr-2 h-4 w-4" />
-                          View Invoice
-                        </Link>
-                      </Button>
-                    )}
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Estimated Hours</span>
+                      <span>{workOrder.estimated_hours || '0'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Actual Hours</span>
+                      <span>{workOrder.actual_hours || '0'}</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -328,40 +283,90 @@ const CustomerWorkOrderDetail = () => {
         </TabsContent>
         
         <TabsContent value="updates" className="mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Service Updates</CardTitle>
+                  <CardDescription>Progress updates shared with the customer</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ServiceUpdatesList
+                    updates={updates}
+                    loading={updatesLoading}
+                    isShopPortal={true}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+            
+            <div>
+              <ServiceUpdateForm
+                onSubmit={handleAddServiceUpdate}
+                isSubmitting={isSubmittingUpdate}
+              />
+            </div>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="customer" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Service Updates</CardTitle>
-              <CardDescription>Latest updates on your service</CardDescription>
+              <CardTitle>Customer Information</CardTitle>
             </CardHeader>
             <CardContent>
-              <ServiceUpdatesList
-                updates={updates}
-                loading={updatesLoading}
-                isShopPortal={false}
-              />
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">Customer</h3>
+                  <p>John Doe</p>
+                  <p className="text-sm text-muted-foreground">john.doe@example.com</p>
+                  <p className="text-sm text-muted-foreground">(555) 123-4567</p>
+                </div>
+                
+                <div className="flex justify-between">
+                  <Button variant="outline">
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Send Message
+                  </Button>
+                  
+                  <Button variant="outline" asChild>
+                    <Link to={`/shop/customers/details/${workOrder.customer_id}`}>
+                      View Customer Details
+                    </Link>
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
         
-        <TabsContent value="contact" className="mt-6">
+        <TabsContent value="vehicle" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Contact the Shop</CardTitle>
-              <CardDescription>Have questions about your service?</CardDescription>
+              <CardTitle>Vehicle Information</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <p>If you have questions about your service or need to provide additional information, you can contact the shop directly.</p>
-              
-              <div className="flex flex-col space-y-2">
-                <Button asChild>
-                  <Link to="/customer/messages">
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Send Message
-                  </Link>
-                </Button>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-1">Vehicle</h3>
+                    <p>2019 Honda Accord</p>
+                    <p className="text-sm text-muted-foreground">VIN: 1HGCV1F34MA000000</p>
+                    <p className="text-sm text-muted-foreground">License: ABC123</p>
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-1">Details</h3>
+                    <p>Color: White</p>
+                    <p className="text-sm text-muted-foreground">Mileage: 45,000 mi</p>
+                    <p className="text-sm text-muted-foreground">Last Service: 03/15/2023</p>
+                  </div>
+                </div>
                 
-                <Button variant="outline">
-                  Call Shop: (555) 123-4567
+                <Button variant="outline" asChild>
+                  <Link to={`/shop/vehicles/details/${workOrder.vehicle_id}`}>
+                    View Vehicle History
+                  </Link>
                 </Button>
               </div>
             </CardContent>
@@ -372,4 +377,4 @@ const CustomerWorkOrderDetail = () => {
   );
 };
 
-export default CustomerWorkOrderDetail;
+export default WorkOrderDetailPage;

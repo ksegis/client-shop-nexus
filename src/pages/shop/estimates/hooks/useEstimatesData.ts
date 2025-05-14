@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -51,6 +51,48 @@ export function useEstimatesData() {
     queryKey: ['estimates'],
     queryFn: fetchEstimates
   });
+
+  // Set up realtime subscription for estimate updates
+  useEffect(() => {
+    const estimatesChannel = supabase
+      .channel('shop-estimates')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'estimates'
+        }, 
+        (payload) => {
+          console.log('Realtime estimate update:', payload);
+          
+          // Show notification for customer responses
+          if (payload.eventType === 'UPDATE') {
+            const newData = payload.new as any;
+            const oldData = payload.old as any;
+            
+            // If status changed from pending to approved or declined
+            if (oldData.status === 'pending' && 
+                (newData.status === 'approved' || newData.status === 'declined')) {
+                
+              // Show toast notification
+              toast({
+                title: `Estimate ${newData.status === 'approved' ? 'Approved' : 'Declined'}`,
+                description: `Customer has ${newData.status === 'approved' ? 'approved' : 'declined'} estimate #${newData.id.substring(0, 8)}`,
+                variant: newData.status === 'approved' ? 'default' : 'destructive',
+              });
+              
+              // Refresh data
+              queryClient.invalidateQueries({ queryKey: ['estimates'] });
+            }
+          }
+        }
+      )
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(estimatesChannel);
+    };
+  }, [queryClient, toast]);
 
   // Calculate stats from the estimates
   const calculateStats = useCallback(() => {

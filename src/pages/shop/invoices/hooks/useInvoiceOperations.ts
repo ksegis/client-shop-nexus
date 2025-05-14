@@ -1,11 +1,45 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { Invoice, InvoiceStatus, InvoiceLineItem } from '../types';
 
 export function useInvoiceOperations() {
   const [error, setError] = useState<Error | null>(null);
+
+  // Set up subscription for invoice updates
+  useEffect(() => {
+    const invoicesChannel = supabase
+      .channel('shop-invoices')
+      .on('postgres_changes', 
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'invoices'
+        }, 
+        (payload) => {
+          const newData = payload.new as any;
+          const oldData = payload.old as any;
+          
+          // If status changed from unpaid to paid
+          if ((oldData.status === 'draft' || oldData.status === 'sent' || oldData.status === 'pending') && 
+              newData.status === 'paid') {
+            
+            // Show toast notification for payment received
+            toast({
+              title: 'Payment Received',
+              description: `Invoice #${newData.id.substring(0, 8)} has been paid`,
+              variant: 'default',
+            });
+          }
+        }
+      )
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(invoicesChannel);
+    };
+  }, []);
 
   // Helper function to map application status to database status
   const mapStatusToDbStatus = (status?: InvoiceStatus): 'draft' | 'pending' | 'paid' | 'overdue' => {

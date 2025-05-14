@@ -12,6 +12,7 @@ import CustomerParts from "@/pages/customer/Parts";
 import CustomerWorkOrders from "@/pages/customer/WorkOrders";
 import CustomerWorkOrderDetail from "@/pages/customer/WorkOrderDetail";
 import CustomerTransactions from "@/pages/customer/Transactions";
+import CustomerMessages from "@/pages/customer/Messages";
 import { useEffect } from "react";
 
 const CustomerRoutes = () => {
@@ -40,6 +41,7 @@ const CustomerRoutes = () => {
         <Route path="work-orders" element={<CustomerWorkOrders />} />
         <Route path="work-orders/:id" element={<CustomerWorkOrderDetail />} />
         <Route path="transactions" element={<CustomerTransactions />} />
+        <Route path="messages" element={<CustomerMessages />} />
         <Route path="*" element={<Navigate to="/customer" replace />} />
       </Route>
     </Routes>
