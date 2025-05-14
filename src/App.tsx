@@ -1,12 +1,20 @@
 
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AppRoutes from "./routes/AppRoutes";
 import { useEffect } from "react";
 import { setupAudioCleanupOnNavigation } from "@/utils/audioUtils";
 
-const queryClient = new QueryClient();
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000, // 1 minute
+      retry: 1,
+    },
+  },
+});
 
 // Wrap TooltipProvider in a functional component to fix the useState hook error
 const TooltipProviderWrapper = ({ children }: { children: React.ReactNode }) => {
@@ -22,7 +30,7 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProviderWrapper>
-        <Toaster />
+        <Toaster position="top-right" />
         <AppRoutes />
       </TooltipProviderWrapper>
     </QueryClientProvider>
