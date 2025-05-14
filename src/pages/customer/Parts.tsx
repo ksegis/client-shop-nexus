@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { useVehicles } from '@/hooks/useVehicles';
 import { usePartsCatalog } from '@/hooks/parts/usePartsCatalog';
 import { CustomerPartsCatalog } from '@/components/customer/parts/CustomerPartsCatalog';
