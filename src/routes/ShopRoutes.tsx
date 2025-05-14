@@ -8,8 +8,7 @@ import Profile from "@/pages/shop/Profile";
 import Employees from "@/pages/shop/Employees";
 import Customers from "@/pages/shop/Customers";
 import Estimates from "@/pages/shop/Estimates";
-import ServiceAppointments from "@/pages/shop/ServiceAppointments";
-import WorkOrders from "@/pages/shop/WorkOrders";
+import ServiceDesk from "@/pages/shop/ServiceDesk";
 import Invoices from "@/pages/shop/invoices";
 import Reports from "@/pages/shop/Reports";
 import ApiConnectionsManager from "@/pages/shop/admin/ApiConnectionsManager";
@@ -19,7 +18,6 @@ import NotFound from "@/pages/NotFound";
 import Layout from "@/components/layout/Layout";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
-import ServiceDesk from "@/pages/shop/ServiceDesk";
 
 // Define which roles are allowed to access shop routes
 const staffAndAdmin = ['staff', 'admin'];
@@ -79,16 +77,6 @@ const ShopRoutes = () => {
         <Route path="estimates" element={
           <ProtectedRoute allowedRoles={staffAndAdmin}>
             <Estimates />
-          </ProtectedRoute>
-        } />
-        <Route path="work-orders" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <WorkOrders />
-          </ProtectedRoute>
-        } />
-        <Route path="service-appointments" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <ServiceAppointments />
           </ProtectedRoute>
         } />
         <Route path="invoices" element={

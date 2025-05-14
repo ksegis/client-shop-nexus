@@ -17,7 +17,6 @@ import {
   Users, 
   BarChart, 
   Package, 
-  ListChecks, 
   UserPlus, 
   Settings, 
   FileText, 
@@ -55,19 +54,9 @@ const navigationItems = [
     icon: Package,
   },
   {
-    title: "Work Orders",
-    href: "/shop/work-orders",
-    icon: ListChecks,
-  },
-  {
     title: "Parts Desk",
     href: "/shop/parts",
     icon: ShoppingCart,
-  },
-  {
-    title: "Service Appointments",
-    href: "/shop/service-appointments",
-    icon: Calendar,
   },
   {
     title: "Customers",
