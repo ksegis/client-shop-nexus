@@ -1,4 +1,3 @@
-
 import { Routes, Route } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import Dashboard from "@/pages/customer/Dashboard";
@@ -35,6 +34,16 @@ const CustomerRoutes = () => {
           <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
             <Layout portalType="customer">
               <Profile />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="vehicles" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <Vehicles />
             </Layout>
           </ProtectedRoute>
         } 
@@ -95,16 +104,6 @@ const CustomerRoutes = () => {
           <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
             <Layout portalType="customer">
               <WorkOrderDetail />
-            </Layout>
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="vehicles" 
-        element={
-          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
-            <Layout portalType="customer">
-              <Vehicles />
             </Layout>
           </ProtectedRoute>
         } 

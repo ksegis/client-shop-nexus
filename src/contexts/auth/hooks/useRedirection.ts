@@ -14,13 +14,18 @@ export const useRedirection = () => {
     const isAuthPage = 
       location.pathname === '/auth' || 
       location.pathname === '/shop/login';
-
+    
+    // Only redirect if on auth pages and authenticated, or if not authenticated and not on auth pages
     if (!user && !isAuthPage) {
       // Redirect to login if not authenticated
       navigate('/shop/login', { replace: true });
     } else if (user && isAuthPage) {
       // Redirect to shop dashboard if already authenticated
-      navigate('/shop', { replace: true });
+      const redirectPath = user?.user_metadata?.role?.includes('customer') ? 
+        '/customer' : '/shop';
+      navigate(redirectPath, { replace: true });
     }
+    
+    // Do not redirect between different authenticated pages (e.g. profile to vehicles)
   }, [user, isLoading, navigate, location.pathname]);
 };

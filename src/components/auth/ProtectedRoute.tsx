@@ -50,7 +50,7 @@ const ProtectedRoute = ({
   if (!hasRole || !hasPortalAccess) {
     // Redirect to their default portal
     const defaultPath = profile?.role ? 
-      (profile.role.includes('customer') ? '/customer/profile' : '/shop') : 
+      (profile.role.includes('customer') ? '/customer' : '/shop') : 
       '/auth';
       
     return <Navigate to={defaultPath} replace />;
