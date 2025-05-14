@@ -44,9 +44,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [authLoading, authUser, toast]);
 
+  // Create a properly typed user object
+  const userValue = authUser ? {
+    id: authUser.id,
+    email: authUser.email, // This might be null but our type now allows it
+    app_metadata: authUser.app_metadata,
+    user_metadata: authUser.user_metadata
+  } : mockUser;
+
   // Context value that matches AuthContextType
   const value: AuthContextType = {
-    user: authUser || mockUser,
+    user: userValue,
     session: session,
     signUp: async (email: string, password: string, firstName = '', lastName = '') => {
       try {
