@@ -1,49 +1,145 @@
 
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
-import CustomerDashboard from "@/pages/customer/Dashboard";
-import CustomerProfile from "@/pages/customer/Profile";
-import CustomerEstimates from "@/pages/customer/Estimates";
-import CustomerEstimateDetail from "@/pages/customer/EstimateDetail";
-import CustomerInvoices from "@/pages/customer/Invoices";
-import CustomerInvoiceDetail from "@/pages/customer/InvoiceDetail";
-import CustomerVehicles from "@/pages/customer/Vehicles";
-import CustomerParts from "@/pages/customer/Parts";
-import CustomerWorkOrders from "@/pages/customer/WorkOrders";
-import CustomerWorkOrderDetail from "@/pages/customer/WorkOrderDetail";
-import CustomerTransactions from "@/pages/customer/Transactions";
-import CustomerMessages from "@/pages/customer/Messages";
-import { useEffect } from "react";
+import Dashboard from "@/pages/customer/Dashboard";
+import Invoices from "@/pages/customer/Invoices";
+import InvoiceDetail from "@/pages/customer/InvoiceDetail";
+import Estimates from "@/pages/customer/Estimates";
+import EstimateDetail from "@/pages/customer/EstimateDetail";
+import WorkOrders from "@/pages/customer/WorkOrders";
+import WorkOrderDetail from "@/pages/customer/WorkOrderDetail";
+import Vehicles from "@/pages/customer/Vehicles";
+import Parts from "@/pages/customer/Parts";
+import Transactions from "@/pages/customer/Transactions";
+import Messages from "@/pages/customer/Messages";
+import Profile from "@/pages/customer/Profile";
+import NotFound from "@/pages/NotFound";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 const CustomerRoutes = () => {
-  // Emergency cleanup to remove any lingering event listeners
-  useEffect(() => {
-    return () => {
-      // Force cleanup of any potential memory leaks
-      const cleanup = () => {
-        console.log("Cleaning up any potential memory leaks in CustomerRoutes");
-      };
-      cleanup();
-    };
-  }, []);
-
   return (
     <Routes>
-      <Route element={<Layout portalType="customer" />}>
-        <Route index element={<CustomerDashboard />} />
-        <Route path="profile" element={<CustomerProfile />} />
-        <Route path="estimates" element={<CustomerEstimates />} />
-        <Route path="estimates/:id" element={<CustomerEstimateDetail />} />
-        <Route path="invoices" element={<CustomerInvoices />} />
-        <Route path="invoices/:id" element={<CustomerInvoiceDetail />} />
-        <Route path="vehicles" element={<CustomerVehicles />} />
-        <Route path="parts" element={<CustomerParts />} />
-        <Route path="work-orders" element={<CustomerWorkOrders />} />
-        <Route path="work-orders/:id" element={<CustomerWorkOrderDetail />} />
-        <Route path="transactions" element={<CustomerTransactions />} />
-        <Route path="messages" element={<CustomerMessages />} />
-        <Route path="*" element={<Navigate to="/customer" replace />} />
-      </Route>
+      <Route 
+        path="" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <Dashboard />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="profile" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <Profile />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="invoices" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <Invoices />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="invoices/:id" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <InvoiceDetail />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="estimates" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <Estimates />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="estimates/:id" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <EstimateDetail />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="work-orders" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <WorkOrders />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="work-orders/:id" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <WorkOrderDetail />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="vehicles" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <Vehicles />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="parts" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <Parts />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="transactions" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <Transactions />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="messages" 
+        element={
+          <ProtectedRoute allowedRoles={['customer', 'test_customer']} requiredPortal="customer">
+            <Layout portalType="customer">
+              <Messages />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };

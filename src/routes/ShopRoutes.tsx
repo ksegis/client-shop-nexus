@@ -1,114 +1,213 @@
 
 import { Routes, Route } from "react-router-dom";
+import Layout from "@/components/layout/Layout";
+import ShopLogin from "@/pages/shop/Login";
 import Dashboard from "@/pages/shop/Dashboard";
-import Parts from "@/pages/shop/Parts";
-import SimpleInventory from "@/pages/shop/SimpleInventory";
-import Inventory from "@/pages/shop/Inventory";
-import Profile from "@/pages/shop/Profile";
-import Employees from "@/pages/shop/Employees";
 import Customers from "@/pages/shop/Customers";
+import WorkOrders from "@/pages/shop/WorkOrders";
+import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
+import Inventory from "@/pages/shop/Inventory";
+import Parts from "@/pages/shop/Parts";
+import Profile from "@/pages/shop/Profile";
+import NotFound from "@/pages/NotFound";
 import Estimates from "@/pages/shop/Estimates";
-import ServiceDesk from "@/pages/shop/ServiceDesk";
 import Invoices from "@/pages/shop/invoices";
 import Reports from "@/pages/shop/Reports";
+import ServiceAppointments from "@/pages/shop/ServiceAppointments";
+import ServiceDesk from "@/pages/shop/ServiceDesk";
+import SimpleInventory from "@/pages/shop/SimpleInventory";
+import Employees from "@/pages/shop/Employees";
 import AdminPage from "@/pages/shop/admin/AdminPage";
-import RlsTroubleshooter from "@/components/dev/RlsTroubleshooter";
-import NotFound from "@/pages/NotFound";
-import Layout from "@/components/layout/Layout";
+import UserManagement from "@/pages/shop/admin/UserManagement";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
-import Messages from "@/pages/shop/messages";
-import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
-
-// Define which roles are allowed to access shop routes
-const staffAndAdmin = ['staff', 'admin'];
-const adminOnly = ['admin'];
+import TestUsers from "@/pages/shop/admin/TestUsers";
+import AuthLogs from "@/pages/shop/admin/AuthLogs";
 
 const ShopRoutes = () => {
   return (
     <Routes>
-      <Route element={<Layout portalType="shop" />}>
-        <Route index element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <Dashboard />
+      <Route path="login" element={<ShopLogin />} />
+      <Route 
+        path="" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <Dashboard />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="dashboard" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <Dashboard />
+        } 
+      />
+      <Route 
+        path="customers" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <Customers />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="service-desk" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <ServiceDesk />
+        } 
+      />
+      <Route 
+        path="work-orders" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <WorkOrders />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="parts" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <PartsCartProvider>
+        } 
+      />
+      <Route 
+        path="work-orders/:id" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <WorkOrderDetailPage />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="inventory" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <Inventory />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="parts" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
               <Parts />
-            </PartsCartProvider>
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="inventory/simple" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <SimpleInventory />
+        } 
+      />
+      <Route 
+        path="profile" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <Profile />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="inventory" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <Inventory />
+        } 
+      />
+      <Route 
+        path="estimates" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <Estimates />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="profile" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <Profile />
+        } 
+      />
+      <Route 
+        path="invoices" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <Invoices />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="employees" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <Employees />
+        } 
+      />
+      <Route 
+        path="reports" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <Reports />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="customers" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <Customers />
+        } 
+      />
+      <Route 
+        path="appointments" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <ServiceAppointments />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="estimates" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <Estimates />
+        } 
+      />
+      <Route 
+        path="service" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <ServiceDesk />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="invoices" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <Invoices />
+        } 
+      />
+      <Route 
+        path="simple-inventory" 
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <SimpleInventory />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="messages" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <Messages />
+        } 
+      />
+      <Route 
+        path="employees" 
+        element={
+          <ProtectedRoute allowedRoles={['admin', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <Employees />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="work-orders/:id" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <WorkOrderDetailPage />
+        } 
+      />
+      <Route 
+        path="admin" 
+        element={
+          <ProtectedRoute allowedRoles={['admin', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <AdminPage />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="reports" element={
-          <ProtectedRoute allowedRoles={staffAndAdmin}>
-            <Reports />
+        } 
+      />
+      <Route 
+        path="admin/users" 
+        element={
+          <ProtectedRoute allowedRoles={['admin', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <UserManagement />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="admin/*" element={
-          <ProtectedRoute allowedRoles={adminOnly}>
-            <AdminPage />
+        } 
+      />
+      <Route 
+        path="admin/test-users" 
+        element={
+          <ProtectedRoute allowedRoles={['admin', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <TestUsers />
+            </Layout>
           </ProtectedRoute>
-        } />
-        <Route path="dev/rls" element={<RlsTroubleshooter />} />
-        
-        <Route path="*" element={<NotFound />} />
-      </Route>
+        } 
+      />
+      <Route 
+        path="admin/auth-logs" 
+        element={
+          <ProtectedRoute allowedRoles={['admin', 'test_admin']} requiredPortal="shop">
+            <Layout portalType="shop">
+              <AuthLogs />
+            </Layout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };
