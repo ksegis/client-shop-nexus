@@ -71,6 +71,30 @@
 /* hide lovable edit icon */
 .lovable-icon,
 .lovable-editor-button,
-.lovable-badge {
+.lovable-badge,
+#lovable-badge,
+a[id="lovable-badge"],
+a[href*="lovable.dev"],
+a[href*="gpteng.co"],
+a[target="_blank"][href*="lovable"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  pointer-events: none !important;
+  z-index: -9999 !important;
+  clip: rect(0, 0, 0, 0) !important;
+  overflow: hidden !important;
+}
+
+/* Hide specific SVG paths in the badge */
+svg[viewBox="0 0 116 22"] {
+  display: none !important;
+}
+
+/* Hide the close button */
+#lovable-badge-close {
   display: none !important;
 }
