@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.tsx'
 import './index.css'
-import { Toaster } from '@/components/ui/toaster'
 
 // Handle hash redirects at the entry point
 if (window.location.hash && window.location.pathname === '/') {
