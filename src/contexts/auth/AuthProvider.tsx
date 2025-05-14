@@ -13,81 +13,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { user: authUser, session, loading: authLoading } = useAuthStateListener();
   const [loading, setLoading] = useState<boolean>(true);
   
-  // Set up auto-authentication with a development admin user
-  useEffect(() => {
-    const autoSignIn = async () => {
-      if (!authUser) {
-        console.log('No active session found, performing automatic authentication...');
-        
-        try {
-          // First check if the development user exists
-          const { data: existingUser, error: checkError } = await supabase.auth.signInWithPassword({
-            email: 'dev@example.com',
-            password: 'devpassword123'
-          });
-          
-          if (checkError) {
-            console.log('Development user does not exist, creating one...');
-            
-            // Create the development user
-            const { data, error: signUpError } = await supabase.auth.signUp({
-              email: 'dev@example.com',
-              password: 'devpassword123',
-              options: {
-                data: {
-                  first_name: 'Dev',
-                  last_name: 'User',
-                  role: 'admin'
-                }
-              }
-            });
-            
-            if (signUpError) {
-              console.error('Error creating development user:', signUpError);
-              toast({
-                title: "Development Mode",
-                description: "Could not create development user. Check console for details.",
-                variant: "destructive"
-              });
-            } else {
-              console.log('Development user created:', data.user?.email);
-              toast({
-                title: "Development Mode",
-                description: "Created development user: dev@example.com / devpassword123",
-              });
-              
-              // Sign in with the new user
-              await supabase.auth.signInWithPassword({
-                email: 'dev@example.com',
-                password: 'devpassword123'
-              });
-            }
-          } else {
-            console.log('Signed in with development user:', existingUser.user?.email);
-            toast({
-              title: "Development Mode",
-              description: "Auto-signed in as development user",
-            });
-          }
-        } catch (error) {
-          console.error('Auto-authentication error:', error);
-        }
-      } else {
-        console.log('User already authenticated:', authUser.email);
-      }
-      
-      setLoading(false);
-    };
-    
-    // Only attempt auto-authentication when auth state is loaded
-    if (!authLoading) {
-      autoSignIn();
-    }
-  }, [authLoading, authUser, toast]);
-
-  // Define fallback user for when authentication is still loading
-  const devUser = {
-    id: 'dev-user-id',
+  // Define static mock user for development
+  const mockUser = {
+    id: 'mock-user-id',  // Using a string format that's for display only, not for DB queries
     email: 'dev@example.com',
     app_metadata: {
       role: 'admin'
@@ -99,10 +27,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: 'admin'
     }
   };
+  
+  // Set up automatic authentication for development
+  useEffect(() => {
+    setLoading(false);
+    
+    // For development, just log that we're using mock auth
+    if (!authUser) {
+      console.log('Development mode: Using mock authentication');
+      toast({
+        title: "Development Mode",
+        description: "Using mock authentication credentials",
+      });
+    } else {
+      console.log('User already authenticated:', authUser.email);
+    }
+  }, [authLoading, authUser, toast]);
 
   // Context value that matches AuthContextType
   const value: AuthContextType = {
-    user: authUser || devUser,
+    user: authUser || mockUser,
     session: session,
     signUp: async (email: string, password: string, firstName = '', lastName = '') => {
       try {

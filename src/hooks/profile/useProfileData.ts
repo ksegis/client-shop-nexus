@@ -27,6 +27,26 @@ export const useProfileData = () => {
       setIsLoading(true);
       setError(null); // Reset any previous errors
       
+      // Check if this is our mock user, if so, create a profile locally without DB access
+      if (user.id === 'mock-user-id') {
+        console.log('Using mock user profile');
+        const mockProfile: ProfileData = {
+          id: 'mock-user-id',
+          email: user.email || 'dev@example.com',
+          first_name: user.user_metadata?.first_name || 'Dev',
+          last_name: user.user_metadata?.last_name || 'User',
+          phone: user.user_metadata?.phone || '555-1234',
+          role: (user.user_metadata?.role || 'admin') as ExtendedUserRole,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        setProfileData(mockProfile);
+        setIsLoading(false);
+        return;
+      }
+
+      // Regular flow for real users
       const data = await fetchProfile(user.id);
       
       if (data) {
@@ -81,6 +101,18 @@ export const useProfileData = () => {
       throw new Error('User not authenticated');
     }
 
+    // Skip DB operations for mock user
+    if (user.id === 'mock-user-id') {
+      // Just update the local state for development use
+      const updatedProfile = { ...profileData, ...updateData };
+      setProfileData(updatedProfile as ProfileData);
+      toast({
+        title: "Profile updated (development mode)",
+        description: "Profile updated successfully in mock mode",
+      });
+      return;
+    }
+
     try {
       await updateUserProfile(user.id, updateData);
       // Refresh profile data after update
@@ -97,3 +129,6 @@ export const useProfileData = () => {
 
   return { profileData, isLoading, error, updateProfileData, refreshProfile: fetchProfileData };
 };
+
+// Add missing toast import
+import { toast } from "@/hooks/use-toast";
