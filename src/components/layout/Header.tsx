@@ -67,10 +67,7 @@ const Header = ({ portalType }: HeaderProps) => {
           
           {/* User profile dropdown and mobile menu button */}
           <div className="flex items-center gap-4">
-            <UserProfileDropdown 
-              portalType={portalType}
-              onSignOut={handleSignOut} 
-            />
+            <UserProfileDropdown />
             <MobileMenuButton 
               isOpen={mobileMenuOpen} 
               toggleMenu={toggleMobileMenu} 

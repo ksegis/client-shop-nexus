@@ -22,7 +22,8 @@ import { TestResultForm } from '@/components/testing/TestResultForm';
 import { BugForm } from '@/components/testing/BugForm';
 import { TestResultDetail } from '@/components/testing/TestResultDetail';
 import { BugDetail } from '@/components/testing/BugDetail';
-import { TestResult, Bug } from '@/types/testing';
+import { TestResult } from '@/types/testing';
+import { Bug as BugType } from '@/types/testing';
 import { useToast } from '@/hooks/use-toast';
 
 const TestingDashboard: React.FC = () => {
@@ -55,7 +56,7 @@ const TestingDashboard: React.FC = () => {
 
   // Edit states
   const [testToEdit, setTestToEdit] = useState<TestResult | null>(null);
-  const [bugToEdit, setBugToEdit] = useState<Bug | null>(null);
+  const [bugToEdit, setBugToEdit] = useState<BugType | null>(null);
 
   // Report bug from test
   const [testIdForBug, setTestIdForBug] = useState<string | null>(null);
@@ -91,7 +92,7 @@ const TestingDashboard: React.FC = () => {
     setIsEditTestDialogOpen(true);
   };
 
-  const handleEditBug = (bug: Bug) => {
+  const handleEditBug = (bug: BugType) => {
     setBugToEdit(bug);
     setIsEditBugDialogOpen(true);
   };
@@ -144,7 +145,7 @@ const TestingDashboard: React.FC = () => {
   // If testing is not enabled, show a message
   if (!isTestingEnabled) {
     return (
-      <Layout>
+      <Layout portalType="shop">
         <div className="container mx-auto p-4">
           <div className="flex flex-col items-center justify-center p-8 border rounded-md">
             <h1 className="text-2xl font-bold mb-4">Testing Dashboard</h1>
@@ -161,7 +162,7 @@ const TestingDashboard: React.FC = () => {
   }
 
   return (
-    <Layout>
+    <Layout portalType="shop">
       <div className="container mx-auto p-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <h1 className="text-2xl font-bold">Testing Dashboard</h1>
