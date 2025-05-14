@@ -6,7 +6,8 @@ import {
   fetchProfile, 
   updateProfileMetadata, 
   createNewProfile, 
-  updateUserProfile 
+  updateUserProfile,
+  isTestUser 
 } from './profileDbOperations';
 import { createProfileFromUserMetadata } from './profileUtils';
 import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
@@ -28,12 +29,8 @@ export const useProfileData = () => {
       setIsLoading(true);
       setError(null); // Reset any previous errors
       
-      // Check if this is a mock or test user by looking at the ID format
-      // UUID format validation check - mock and test users have string IDs, not UUIDs
-      const isValidUuid = 
-        user.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) !== null;
-      
-      if (!isValidUuid || user.id.includes('mock') || user.id.includes('test')) {
+      // Check if this is a mock or test user
+      if (isTestUser(user.id)) {
         console.log('Using mock or test user profile, skipping database fetch');
         const mockProfile: ProfileData = {
           id: user.id,
@@ -107,10 +104,7 @@ export const useProfileData = () => {
     }
 
     // Check if this is a mock or test user
-    const isValidUuid = 
-      user.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) !== null;
-    
-    if (!isValidUuid || user.id.includes('mock') || user.id.includes('test')) {
+    if (isTestUser(user.id)) {
       // Just update the local state for development use
       const updatedProfile = { ...profileData, ...updateData, updated_at: new Date().toISOString() };
       setProfileData(updatedProfile as ProfileData);

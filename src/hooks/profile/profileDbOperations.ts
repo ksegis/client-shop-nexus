@@ -9,10 +9,15 @@ const isValidUuid = (id: string): boolean => {
   return id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) !== null;
 };
 
+// Helper function to check if a user is a test/mock user
+export const isTestUser = (userId: string): boolean => {
+  return !isValidUuid(userId) || userId.includes('mock') || userId.includes('test');
+};
+
 export const fetchProfile = async (userId: string): Promise<ProfileData | null> => {
-  // Skip database operations for non-UUID values to prevent 400 errors
-  if (!isValidUuid(userId)) {
-    console.log(`Skipping database fetch for non-UUID user ID: ${userId}`);
+  // Skip database operations for test/mock users
+  if (isTestUser(userId)) {
+    console.log(`Using mock/test user: ${userId}, skipping database fetch`);
     return null;
   }
 
@@ -33,9 +38,9 @@ export const fetchProfile = async (userId: string): Promise<ProfileData | null> 
 };
 
 export const updateProfileMetadata = async (userId: string, updateData: Record<string, any>) => {
-  // Skip database operations for non-UUID values
-  if (!isValidUuid(userId)) {
-    console.log(`Skipping database update for non-UUID user ID: ${userId}`);
+  // Skip database operations for test/mock users
+  if (isTestUser(userId)) {
+    console.log(`Using mock/test user: ${userId}, skipping database update`);
     return true; // Pretend success for mock/test users
   }
 
@@ -56,9 +61,9 @@ export const updateProfileMetadata = async (userId: string, updateData: Record<s
 };
 
 export const createNewProfile = async (userId: string, email: string, metadata: any) => {
-  // Skip database operations for non-UUID values
-  if (!isValidUuid(userId)) {
-    console.log(`Skipping database create for non-UUID user ID: ${userId}`);
+  // Skip database operations for test/mock users
+  if (isTestUser(userId)) {
+    console.log(`Using mock/test user: ${userId}, skipping database create`);
     return true; // Pretend success for mock/test users
   }
 
@@ -89,9 +94,9 @@ export const createNewProfile = async (userId: string, email: string, metadata: 
 };
 
 export const updateUserProfile = async (userId: string, updateData: ProfileUpdateData) => {
-  // Skip database operations for non-UUID values
-  if (!isValidUuid(userId)) {
-    console.log(`Skipping database update for non-UUID user ID: ${userId}`);
+  // Skip database operations for test/mock users
+  if (isTestUser(userId)) {
+    console.log(`Using mock/test user: ${userId}, skipping database update`);
     return true; // Pretend success for mock/test users
   }
 
