@@ -22,6 +22,7 @@ export const useNavigationLinks = (portalType: 'customer' | 'shop') => {
   
   const shopLinks: NavigationLink[] = [
     { name: 'Dashboard', path: '/shop' },
+    { name: 'Service Desk', path: '/shop/service-desk' },
     { name: 'Reports', path: '/shop/reports' },
     { name: 'Employees', path: '/shop/employees' },
     { name: 'Inventory', path: '/shop/inventory' },

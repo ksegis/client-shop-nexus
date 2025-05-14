@@ -24,7 +24,8 @@ import {
   FileCheck,
   Truck,
   ShoppingCart,
-  Calendar
+  Calendar,
+  Wrench
 } from "lucide-react";
 
 const navigationItems = [
@@ -32,6 +33,11 @@ const navigationItems = [
     title: "Dashboard",
     href: "/shop",
     icon: BarChart,
+  },
+  {
+    title: "Service Desk",
+    href: "/shop/service-desk",
+    icon: Wrench,
   },
   {
     title: "Reports",
