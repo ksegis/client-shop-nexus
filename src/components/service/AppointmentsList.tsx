@@ -1,6 +1,6 @@
 
 import { ServiceAppointment, useServiceAppointments } from '@/hooks/useServiceAppointments';
-import AppointmentCard from './AppointmentCard';
+import { AppointmentCard } from './appointment-card';
 
 interface AppointmentsListProps {
   appointments: ServiceAppointment[];

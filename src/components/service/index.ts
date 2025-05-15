@@ -1,6 +1,6 @@
 
 export { default as AppointmentDialog } from './AppointmentDialog';
-export { default as AppointmentCard } from './AppointmentCard';
+export { AppointmentCard } from './appointment-card';
 export { default as AppointmentsList } from './AppointmentsList';
 export { default as ServiceDetailsView } from './ServiceDetailsView';
 export { default as ServiceHistoryCard } from './ServiceHistoryCard';
