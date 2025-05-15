@@ -18,26 +18,41 @@ const ShopRoutes = () => {
     <Routes>
       <Route path="login" element={<ShopLogin />} />
       
-      {/* Core dashboard route */}
-      <MainRoutes />
+      {/* Core dashboard routes */}
+      {/* Wrap the components with Fragment to include their routes */}
+      <Route path="">
+        <MainRoutes />
+      </Route>
       
       {/* Customer management routes */}
-      <CustomerRoutes />
+      <Route path="">
+        <CustomerRoutes />
+      </Route>
       
       {/* Work order routes */}
-      <WorkOrderRoutes />
+      <Route path="">
+        <WorkOrderRoutes />
+      </Route>
       
       {/* Inventory and parts routes */}
-      <InventoryRoutes />
+      <Route path="">
+        <InventoryRoutes />
+      </Route>
       
       {/* Financial routes - estimates and invoices */}
-      <FinancialRoutes />
+      <Route path="">
+        <FinancialRoutes />
+      </Route>
       
       {/* Service desk and appointments routes */}
-      <ServiceRoutes />
+      <Route path="">
+        <ServiceRoutes />
+      </Route>
       
       {/* Admin routes */}
-      <AdminRoutes />
+      <Route path="">
+        <AdminRoutes />
+      </Route>
       
       {/* Catch all unmatched routes */}
       <Route path="*" element={<NotFound />} />
