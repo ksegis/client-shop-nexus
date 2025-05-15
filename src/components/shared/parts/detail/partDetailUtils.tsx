@@ -1,25 +1,37 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Part } from "@/types/parts";
-import React from "react";
+import { cn } from "@/lib/utils";
 
-// Determine stock status
-export const getStockStatus = (part: Part) => {
-  if (part.quantity <= 0) return 'out-of-stock';
-  if (part.quantity <= (part.reorder_level || 5)) return 'low-stock';
-  return 'in-stock';
+export const getStockStatus = (quantity: number): string => {
+  if (quantity <= 0) {
+    return "Out of stock";
+  } else if (quantity < 5) {
+    return "Low stock";
+  } else {
+    return "In stock";
+  }
 };
 
-// Get stock badge based on status
-export const getStockBadge = (part: Part): React.ReactNode => {
-  const status = getStockStatus(part);
+export const getStockBadge = (part: Part) => {
+  let variant: "default" | "secondary" | "destructive" | "outline" = "default";
+  let text = "In stock";
   
-  switch (status) {
-    case 'out-of-stock':
-      return <Badge variant="destructive">Out of stock</Badge>;
-    case 'low-stock':
-      return <Badge variant="outline" className="border-amber-500 text-amber-500">Low stock: {part.quantity}</Badge>;
-    default:
-      return <Badge variant="outline" className="border-green-500 text-green-500">In stock: {part.quantity}</Badge>;
+  if (part.quantity <= 0) {
+    variant = "destructive";
+    text = "Out of stock";
+  } else if (part.quantity < 5) {
+    variant = "secondary";
+    text = "Low stock";
   }
+  
+  return (
+    <Badge variant={variant} className={cn("capitalize", {
+      "bg-red-500 hover:bg-red-500": part.quantity <= 0,
+      "bg-amber-500 hover:bg-amber-500": part.quantity > 0 && part.quantity < 5,
+      "bg-green-500 hover:bg-green-500": part.quantity >= 5,
+    })}>
+      {text}
+    </Badge>
+  );
 };

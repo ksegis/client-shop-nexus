@@ -41,7 +41,8 @@ export function CustomerPartDetail({
     onAddToCart(selectedPart, quantity);
   };
 
-  const { stockStatusText, stockColor } = getStockStatus(selectedPart.quantity);
+  // Get stock status details for the current part
+  const stockStatus = getStockStatus(selectedPart.quantity);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -58,7 +59,7 @@ export function CustomerPartDetail({
           </Button>
           <DialogTitle className="text-center pt-8">{selectedPart.name}</DialogTitle>
           <DialogDescription className="text-center">
-            Part Number: {selectedPart.part_number}
+            Part Number: {selectedPart.sku}
           </DialogDescription>
         </DialogHeader>
 
@@ -86,7 +87,7 @@ export function CustomerPartDetail({
                 <div className="font-medium">Category:</div>
                 <div>{selectedPart.category}</div>
                 <div className="font-medium">Brand:</div>
-                <div>{selectedPart.brand || "Generic"}</div>
+                <div>{selectedPart.supplier || "Generic"}</div>
                 <div className="font-medium">Location:</div>
                 <div>{selectedPart.location || "Main Warehouse"}</div>
               </div>
@@ -102,8 +103,8 @@ export function CustomerPartDetail({
             <div>
               <h3 className="font-medium text-lg mb-1">Availability</h3>
               <div className="flex items-center">
-                {getStockBadge(selectedPart.quantity)}
-                <span className="ml-2 text-sm">{stockStatusText}</span>
+                {getStockBadge(selectedPart)}
+                <span className="ml-2 text-sm">{stockStatus}</span>
               </div>
             </div>
 
