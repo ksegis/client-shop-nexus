@@ -50,9 +50,10 @@ const ProtectedRoute = ({
     }
   }, [location.pathname, isLoading, isAuthenticated, profile, portalType, requiredPortal, allowedRoles, validateAccess]);
 
-  // Handle routing based on authentication state
-  if (isLoading) {
-    // Show loading state while checking authentication
+  // IMPROVED LOADING STATE: Handle loading state OR when profile data isn't loaded yet
+  // This prevents premature redirects when we have a user but profile data isn't ready
+  if (isLoading || (isAuthenticated && (!profile || !portalType))) {
+    // Show loading state while checking authentication or waiting for profile
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -64,6 +65,17 @@ const ProtectedRoute = ({
   if (!isAuthenticated) {
     console.log(`🚫 Access denied: Not authenticated, redirecting to /auth from ${location.pathname}`);
     return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
+  }
+
+  // CRITICAL: Only proceed with role and portal checks when we have complete profile data
+  if (!profile || !portalType) {
+    // This is a fallback safety check - we should never reach here
+    // due to the loading check above, but just in case
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
   }
 
   // Check if user has the correct role - use validateAccess for consistent role checking

@@ -1,16 +1,26 @@
+
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../useAuth';
 
 export const useRedirection = () => {
-  const { user, isLoading, portalType, profile } = useAuth();
+  const { 
+    user, 
+    isLoading, 
+    profile, 
+    portalType,
+    validateAccess 
+  } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    // Skip redirection logic entirely when still loading
-    if (isLoading) {
-      console.log('🔄 Redirection: Loading auth state, skipping redirects');
+    // Track if the redirection logic is currently executing to prevent double redirects
+    let isRedirecting = false;
+    
+    // CRITICAL: Skip redirection logic entirely when still loading OR when profile/portalType isn't determined yet
+    if (isLoading || (user && (!profile || !portalType))) {
+      console.log('🔄 Redirection: Loading auth state or waiting for profile data, skipping redirects');
       return;
     }
 
@@ -34,7 +44,8 @@ export const useRedirection = () => {
     console.log('Profile:', profile);
     
     // Case 1: Not authenticated trying to access protected page
-    if (!user && !isAuthPage) {
+    if (!user && !isAuthPage && !isRedirecting) {
+      isRedirecting = true;
       console.log('➡️ Redirecting to /auth (not authenticated on protected page)');
       navigate('/auth', { 
         replace: true,
@@ -45,8 +56,9 @@ export const useRedirection = () => {
     } 
     
     // Case 2: Authenticated on auth page - redirect to appropriate portal 
-    // ONLY if we have determined the portalType - this is critical to prevent loops
-    if (user && isAuthPage && portalType && profile) {
+    // ONLY if we have determined the portalType AND profile - this is critical to prevent loops
+    if (user && isAuthPage && portalType && profile && !isRedirecting) {
+      isRedirecting = true;
       const redirectPath = portalType === 'customer' ? '/customer' : '/shop';
       console.log(`➡️ Redirecting to ${redirectPath} (authenticated on auth page, portalType: ${portalType})`);
       
