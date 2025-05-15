@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/auth';
@@ -6,7 +5,7 @@ import { MessagingProvider } from '@/contexts/messaging';
 import { TestingProvider } from '@/contexts/testing';
 import AuthRoutes from './AuthRoutes';
 import CustomerRoutes from './CustomerRoutes';
-import ShopRoutes from './ShopRoutes';
+import ShopRoutes from './shop/ShopRoutes';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Index from '@/pages/Index';
 import Auth from '@/pages/Auth';
