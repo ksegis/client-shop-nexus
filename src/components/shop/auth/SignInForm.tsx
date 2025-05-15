@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,6 +54,7 @@ const SignInForm = () => {
         });
         
         // Force immediate redirect to shop dashboard
+        // The explicit navigation here helps ensure the user sees progress
         navigate('/shop', { replace: true });
       } else {
         throw new Error(result.error?.message || "Failed to sign in");

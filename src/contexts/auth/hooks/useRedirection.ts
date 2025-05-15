@@ -44,7 +44,7 @@ export const useRedirection = (authState: {
     
     // Prevent redirect loops with minimum time between redirects
     const currentTime = Date.now();
-    if (currentTime - lastRedirectTime.current < 500) { // Even shorter time to make login faster
+    if (currentTime - lastRedirectTime.current < 250) { // Even shorter time to make login faster
       console.log('🛑 Too many redirects in a short period, preventing redirect loop');
       return;
     }
@@ -67,6 +67,7 @@ export const useRedirection = (authState: {
       console.log('Is auth page:', isAuthPage);
       console.log('User authenticated:', !!user);
       console.log('Portal type:', portalType);
+      console.log('Profile role:', profile?.role);
       
       // PRIORITY: If user is authenticated on an auth page, redirect to proper portal
       if (user && isAuthPage) {
@@ -85,6 +86,7 @@ export const useRedirection = (authState: {
         
         lastRedirectTime.current = Date.now();
         navigate(redirectPath, { replace: true });
+        logAuthFlowEvent('redirect', { from: location.pathname, to: redirectPath, reason: 'auth_page_authenticated' });
         console.groupEnd();
         return;
       }
@@ -96,8 +98,24 @@ export const useRedirection = (authState: {
         
         lastRedirectTime.current = Date.now();
         navigate(redirectPath, { replace: true });
+        logAuthFlowEvent('redirect', { from: '/', to: redirectPath, reason: 'authenticated_on_index' });
         console.groupEnd();
         return;
+      }
+      
+      // Check if authenticated user is accessing the wrong portal
+      if (user && profile?.role && portalType) {
+        const expectedPath = profile.role === 'customer' ? '/customer' : '/shop';
+        const otherPortalPath = profile.role === 'customer' ? '/shop' : '/customer';
+        
+        if (location.pathname.startsWith(otherPortalPath)) {
+          console.log(`➡️ Redirecting to ${expectedPath} (authenticated user in wrong portal)`);
+          lastRedirectTime.current = Date.now();
+          navigate(expectedPath, { replace: true });
+          logAuthFlowEvent('redirect', { from: location.pathname, to: expectedPath, reason: 'wrong_portal_access' });
+          console.groupEnd();
+          return;
+        }
       }
       
       // Handle unauthenticated users trying to access protected areas
@@ -107,6 +125,7 @@ export const useRedirection = (authState: {
           console.log('➡️ Redirecting to /shop-login (unauthenticated on shop page)');
           lastRedirectTime.current = Date.now();
           navigate('/shop-login', { replace: true });
+          logAuthFlowEvent('redirect', { from: location.pathname, to: '/shop-login', reason: 'unauthenticated_shop_access' });
           console.groupEnd();
           return;
         }
@@ -116,6 +135,7 @@ export const useRedirection = (authState: {
           console.log('➡️ Redirecting to /customer-login (unauthenticated on customer page)');
           lastRedirectTime.current = Date.now();
           navigate('/customer-login', { replace: true });
+          logAuthFlowEvent('redirect', { from: location.pathname, to: '/customer-login', reason: 'unauthenticated_customer_access' });
           console.groupEnd();
           return;
         }
@@ -124,6 +144,7 @@ export const useRedirection = (authState: {
         console.log('➡️ Redirecting to / (unauthenticated on protected page)');
         lastRedirectTime.current = Date.now();
         navigate('/', { replace: true });
+        logAuthFlowEvent('redirect', { from: location.pathname, to: '/', reason: 'unauthenticated_protected_access' });
         console.groupEnd();
         return;
       }
@@ -134,7 +155,7 @@ export const useRedirection = (authState: {
       // Reset the redirection flag after a shorter delay
       setTimeout(() => {
         redirectionInProgress.current = false;
-      }, 50); // Even shorter delay
+      }, 20); // Even shorter delay
     }
-  }, [user, isLoading, navigate, location.pathname, portalType, profile]);
+  }, [user, isLoading, navigate, location.pathname, portalType, profile, logAuthFlowEvent]);
 };

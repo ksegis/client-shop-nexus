@@ -140,7 +140,6 @@ export function useAuthActions() {
       case 'customer':
         return '/customer';
       case 'admin':
-        return '/shop';
       case 'staff':
         return '/shop';
       default:
