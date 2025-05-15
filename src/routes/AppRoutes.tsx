@@ -31,6 +31,9 @@ const AppRoutes: React.FC = () => {
             <Route path="/auth" element={<Navigate to="/" replace />} />
             <Route path="/auth/*" element={<Navigate to="/" replace />} />
             
+            {/* Catch all route for any direct /dashboard attempts */}
+            <Route path="/dashboard" element={<Navigate to="/customer/dashboard" replace />} />
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </PartsCartProvider>

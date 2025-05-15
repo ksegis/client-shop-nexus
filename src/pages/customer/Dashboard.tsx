@@ -24,7 +24,7 @@ const CustomerDashboard = () => {
   
   // If not authenticated and not currently loading auth status, redirect to login
   if (!isAuthenticated && !authLoading) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/customer-login" replace />;
   }
   
   return (
