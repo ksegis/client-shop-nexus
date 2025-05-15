@@ -52,30 +52,9 @@ export const useProfileData = () => {
       const data = await fetchProfile(user.id);
       
       if (data) {
-        // If profile exists but first_name/last_name are null, try to update from user metadata
-        if (!data.first_name || !data.last_name || !data.phone) {
-          const { first_name, last_name, phone, role } = user.user_metadata || {};
-          
-          if (first_name || last_name || phone || role) {
-            const updateData: Record<string, any> = {};
-            if (first_name) updateData.first_name = first_name;
-            if (last_name) updateData.last_name = last_name;
-            if (phone) updateData.phone = phone;
-            if (role) updateData.role = role as ExtendedUserRole;
-            
-            const updated = await updateProfileMetadata(user.id, updateData);
-            
-            if (updated) {
-              // Update the local data with the metadata
-              data.first_name = first_name || data.first_name;
-              data.last_name = last_name || data.last_name;
-              data.phone = phone || data.phone;
-              if (role) data.role = role as ExtendedUserRole;
-            }
-          }
-        }
-        
+        // Profile exists
         setProfileData(data);
+        console.log(`Profile loaded for user ${user.id}:`, data.role);
       } else {
         // If no profile exists, create default profile data from user info
         const userEmail = user.email || '';
@@ -86,6 +65,7 @@ export const useProfileData = () => {
         );
         
         setProfileData(defaultProfile);
+        console.log(`Creating new profile for user ${user.id}`);
         
         // Create the missing profile in the database
         await createNewProfile(user.id, userEmail, user.user_metadata || {});
@@ -126,7 +106,9 @@ export const useProfileData = () => {
   };
 
   useEffect(() => {
-    fetchProfileData();
+    if (user?.id) {
+      fetchProfileData();
+    }
   }, [user?.id]);
 
   return { profileData, isLoading, error, updateProfileData, refreshProfile: fetchProfileData };

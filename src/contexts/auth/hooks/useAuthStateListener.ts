@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
-import { toast } from '@/hooks/use-toast';
 
 export function useAuthStateListener() {
   const [user, setUser] = useState<User | null>(null);
@@ -12,6 +11,9 @@ export function useAuthStateListener() {
   
   // Listen for authentication state changes
   useEffect(() => {
+    // Track if component is mounted to prevent state updates after unmount
+    let isMounted = true;
+    
     // Only log once
     if (!hasLogged) {
       console.log('Setting up auth state listener...');
@@ -21,18 +23,28 @@ export function useAuthStateListener() {
     // First set up the auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
+        if (!isMounted) return;
+        
         if (!hasLogged) {
           console.log('Auth state change:', event);
         }
         
         // Only synchronously update state in the callback
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
+        if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUser(null);
+        } else if (currentSession) {
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+        }
+        
         setLoading(false);
         
         // Use setTimeout to defer any complex operations
         if (currentSession?.user) {
           setTimeout(async () => {
+            if (!isMounted) return;
+            
             try {
               // Check if user has a profile
               const { data: profileData, error: profileError } = await supabase
@@ -58,6 +70,8 @@ export function useAuthStateListener() {
     
     // Then check for existing session (always after setting up the listener)
     const initSession = async () => {
+      if (!isMounted) return;
+      
       try {
         const { data } = await supabase.auth.getSession();
         if (!hasLogged && data.session?.user?.email) {
@@ -71,7 +85,9 @@ export function useAuthStateListener() {
       } catch (error) {
         console.error('Error getting session:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
     
@@ -79,6 +95,7 @@ export function useAuthStateListener() {
     
     // Cleanup subscription on unmount
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, [hasLogged]);

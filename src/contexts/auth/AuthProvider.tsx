@@ -1,182 +1,218 @@
-
-import React, { ReactNode, useState, useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AuthContext } from './AuthContext';
-import { AuthContextType, UserRole, isTestRole, getBaseRole, UserProfile, getPortalByRole } from './types';
+import { AuthContextType, UserProfile, UserRole } from './types';
 import { useAuthStateListener } from './hooks/useAuthStateListener';
-import { useProfileManagement } from './hooks/useProfileManagement';
-import { useTestUsers } from './hooks/useTestUsers';
-import { useIframeAuth } from './hooks/useIframeAuth';
 import { useAuthActions } from './hooks/useAuthActions';
 import { useAuthLogging } from './hooks/useAuthLogging';
+import { getPortalByRole, isTestRole } from './types';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const location = useLocation();
-  
-  // Core authentication state
-  const { user: authUser, session, loading: authLoading } = useAuthStateListener();
-  
-  // Define all useState hooks first to maintain consistent hook order
-  const [loading, setLoading] = useState<boolean>(true);
-  const [testRole, setTestRole] = useState<UserRole | null>(() => {
-    // Check for persisted test role
-    const savedRole = localStorage.getItem('test-user-mode') as UserRole | null;
-    return savedRole && isTestRole(savedRole) ? savedRole : null;
-  });
-  
-  // All other hooks after useState hooks
-  const { logAuthEvent } = useAuthLogging();
-  const { profile: authProfile, setProfile } = useProfileManagement(authUser);
-  const { testMode, testUsers, testProfiles, impersonateTestUser, stopImpersonation, getTestUserByRole } = useTestUsers();
-  const { iframeAuth, isInIframe } = useIframeAuth();
-  
-  // Determine whether we're in dev mode
-  const isDevMode = useMemo(() => {
-    return process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
-  }, []);
-  
-  // Generate actual user and profile based on auth state
-  const { user, profile, portalType } = useMemo(() => {
-    // If we're in test mode
-    if (testRole) {
-      const testData = getTestUserByRole(testRole);
-      return { 
-        user: testData.user, 
-        profile: testData.profile,
-        portalType: getPortalByRole(testRole)
-      };
-    }
-    
-    // If we're authenticated via iframe
-    if (isInIframe && iframeAuth.enabled && iframeAuth.user) {
-      return { 
-        user: iframeAuth.user, 
-        profile: iframeAuth.profile,
-        portalType: 'shop' as 'shop' | 'customer' // Explicitly type as 'shop'
-      };
-    }
-    
-    // Regular authentication - determine portal type consistently from profile role if available
-    let derivedPortalType: 'shop' | 'customer' | null = null;
-    
-    if (authUser) {
-      // First try to get role from profile
-      if (authProfile?.role) {
-        derivedPortalType = authProfile.role.includes('customer') ? 'customer' : 'shop';
-      } 
-      // Fall back to user metadata if profile not available yet
-      else if (authUser.user_metadata?.role) {
-        derivedPortalType = authUser.user_metadata.role.includes('customer') ? 'customer' : 'shop';
-      }
-    }
-    
-    return { 
-      user: authUser, 
-      profile: authProfile,
-      portalType: derivedPortalType
-    };
-  }, [authUser, authProfile, testRole, isInIframe, iframeAuth, getTestUserByRole]);
+interface AuthProviderProps {
+  children: React.ReactNode;
+}
 
-  // Determine if current user is a test user
-  const isTestUser = useMemo(() => {
-    if (!user || !profile) return false;
-    return isTestRole(profile.role as UserRole) || !!profile.is_test_account;
-  }, [user, profile]);
-  
-  const {
-    signUp,
-    signIn,
-    signOut,
-    resetPassword,
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const { user, session, loading } = useAuthStateListener();
+  const { 
+    signUp, 
+    signIn, 
+    signOut, 
+    resetPassword, 
     updatePassword,
-    getRedirectPathByRole,
+    getRedirectPathByRole
   } = useAuthActions();
+  const { logAuthEvent } = useAuthLogging();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isTestUser, setIsTestUser] = useState<boolean>(false);
+  const [portalType, setPortalType] = useState<'shop' | 'customer' | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  const isDevMode = process.env.NODE_ENV === 'development';
 
-  // Handle test user impersonation
-  const handleImpersonateTestUser = (role: UserRole) => {
-    if (!isTestRole(role)) {
-      console.error('Not a valid test role:', role);
+  // Load profile data
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) {
+        setProfile(null);
+        return;
+      }
+      
+      // Check if we're in test user mode
+      const testUserMode = localStorage.getItem('test-user-mode');
+      if (testUserMode) {
+        try {
+          const testUser = JSON.parse(testUserMode);
+          console.log('Test user mode active:', testUser.email);
+          
+          setProfile({
+            id: testUser.id,
+            email: testUser.email,
+            first_name: testUser.user_metadata?.first_name || 'Test',
+            last_name: testUser.user_metadata?.last_name || 'User',
+            role: testUser.user_metadata?.role || 'customer',
+            avatar_url: testUser.user_metadata?.avatar_url,
+            is_test_account: true
+          });
+          setIsAuthenticated(true);
+          setIsTestUser(true);
+          setPortalType(getPortalByRole(testUser.user_metadata?.role || 'customer'));
+          return;
+        } catch (err) {
+          console.error('Error parsing test user data:', err);
+          localStorage.removeItem('test-user-mode');
+          window.location.reload();
+          return;
+        }
+      }
+
+      // Fetch profile from database
+      try {
+        console.log('Checking profile for user:', user.id);
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+          // Handle error appropriately, maybe set a default profile or display an error message
+        }
+
+        if (profileData) {
+          const userProfile: UserProfile = {
+            id: profileData.id,
+            email: profileData.email,
+            first_name: profileData.first_name || '',
+            last_name: profileData.last_name || '',
+            role: profileData.role || 'customer',
+            avatar_url: profileData.avatar_url,
+            is_test_account: false
+          };
+          
+          setProfile(userProfile);
+          setIsAuthenticated(true);
+          setIsTestUser(isTestRole(profileData.role));
+          setPortalType(getPortalByRole(profileData.role));
+        } else {
+          // If no profile exists, create a default one
+          const newUserProfile: UserProfile = {
+            id: user.id,
+            email: user.email || '',
+            first_name: user.user_metadata?.first_name || '',
+            last_name: user.user_metadata?.last_name || '',
+            role: (user.user_metadata?.role as UserRole) || 'customer',
+            is_test_account: false
+          };
+          
+          setProfile(newUserProfile);
+          setIsAuthenticated(true);
+          setIsTestUser(false);
+          setPortalType('customer'); // Default to customer portal
+          
+          console.warn('No profile found, consider creating a default profile.');
+        }
+      } catch (error) {
+        console.error('Error processing profile data:', error);
+      }
+    };
+
+    fetchProfile();
+  }, [user, session, location.pathname, navigate, toast]);
+
+  // Update auth state
+  useEffect(() => {
+    setIsAuthenticated(!!user);
+    
+    if (!user) {
+      setProfile(null);
+      setPortalType(null);
+      setIsTestUser(false);
+    }
+  }, [user]);
+  
+  // Test user mode functions
+  const impersonateTestUser = (role: UserRole) => {
+    if (!isDevMode) {
+      console.warn('Impersonating test users is only allowed in development mode.');
       return;
     }
     
-    // Log impersonation start
-    if (authUser) {
-      logAuthEvent('impersonation_start', authUser, {
-        impersonated_role: role
-      });
-    }
-    
-    // Switch to test user
-    setTestRole(role);
-    const testData = impersonateTestUser(role, authUser, authProfile);
-    
-    return testData;
-  };
-  
-  // Handle ending test user impersonation
-  const handleStopImpersonation = () => {
-    // Log impersonation end
-    if (authUser && testRole) {
-      logAuthEvent('impersonation_end', authUser, {
-        impersonated_role: testRole
-      });
-    }
-    
-    setTestRole(null);
-    return stopImpersonation();
-  };
-  
-  // Function to validate if user has access based on allowed roles - improved to handle test roles
-  const validateAccess = (allowedRoles: UserRole[]) => {
-    if (!profile || !profile.role) return false;
-    
-    // Convert role to proper format
-    const userRole = profile.role as UserRole;
-    
-    // Check direct role match
-    if (allowedRoles.includes(userRole)) return true;
-    
-    // Check base role match (ignoring test_ prefix)
-    const baseRole = getBaseRole(userRole);
-    return allowedRoles.includes(baseRole as UserRole);
-  };
-
-  // Set up automatic authentication for development
-  useEffect(() => {
-    const initializeAuth = async () => {
-      // Initialize auth state
-      if (!authUser && !iframeAuth.user && !testRole) {
-        console.log('No authenticated user found');
-      }
-      
-      setLoading(false);
+    const mockUser = {
+      id: `00000000-0000-0000-0000-000000000001-${role}`,
+      email: `${role}@example.com`,
+      app_metadata: { role },
+      user_metadata: {
+        first_name: 'Test',
+        last_name: role,
+        role
+      },
+      aud: 'authenticated',
+      created_at: new Date().toISOString()
     };
     
-    if (!authLoading) {
-      initializeAuth();
-    }
-  }, [authLoading, authUser, iframeAuth, testRole]);
+    console.log(`Switching to test user mode: ${role}`);
+    localStorage.setItem('test-user-mode', JSON.stringify(mockUser));
+    setIsTestUser(true);
+    setPortalType(getPortalByRole(role));
+    
+    logAuthEvent('impersonate_test_user', mockUser as any, { role });
+    window.location.reload();
+  };
+  
+  const stopImpersonation = () => {
+    console.log('Stopping test user mode');
+    localStorage.removeItem('test-user-mode');
+    setIsTestUser(false);
+    setPortalType(null);
+    logAuthEvent('stop_impersonation', user as any);
+    window.location.reload();
+  };
 
-  // Context value that matches AuthContextType
-  const value: AuthContextType = {
+  const validateAccess = useCallback((allowedRoles: UserRole[]): boolean => {
+    if (!profile?.role) {
+      console.warn('validateAccess: User has no role.');
+      return false;
+    }
+
+    const userRole = profile.role;
+    const hasAccess = allowedRoles.includes(userRole);
+    
+    if (!hasAccess) {
+      console.warn(`validateAccess: User role ${userRole} does not have access. Allowed roles: ${allowedRoles.join(', ')}`);
+    }
+    
+    return hasAccess;
+  }, [profile?.role]);
+
+  const contextValue: AuthContextType = {
     user,
     profile,
     session,
-    isLoading: loading || authLoading,
-    isAuthenticated: !!user,
+    isLoading: loading,
+    isAuthenticated,
     isTestUser,
     portalType,
-    isDevMode,
-    signUp,
     signIn,
     signOut,
+    signUp,
     resetPassword,
     updatePassword,
     getRedirectPathByRole,
-    impersonateTestUser: handleImpersonateTestUser,
-    stopImpersonation: handleStopImpersonation,
-    validateAccess
+    impersonateTestUser,
+    stopImpersonation,
+    validateAccess,
+    isDevMode
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
+};

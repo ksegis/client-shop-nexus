@@ -73,18 +73,28 @@ const ProtectedRoute = ({
 
   // If user doesn't have the right role or portal access, redirect to an appropriate location
   if (!hasRole || !hasPortalAccess) {
-    // Redirect to their default portal
-    const defaultPath = portalType === 'customer' ? '/customer' : '/shop';
-    
-    console.log(`🚫 Access denied: Role or portal mismatch, redirecting to ${defaultPath} from ${location.pathname}`);
-    console.log('Role check:', { 
-      hasRole, 
-      hasPortalAccess, 
-      userRole: profile?.role,
-      allowedRoles: allowedRoles
-    });
+    // Only redirect if we have determined the portalType
+    if (portalType) {
+      // Redirect to their default portal
+      const defaultPath = portalType === 'customer' ? '/customer' : '/shop';
       
-    return <Navigate to={defaultPath} replace />;
+      console.log(`🚫 Access denied: Role or portal mismatch, redirecting to ${defaultPath} from ${location.pathname}`);
+      console.log('Role check:', { 
+        hasRole, 
+        hasPortalAccess, 
+        userRole: profile?.role,
+        allowedRoles: allowedRoles
+      });
+        
+      return <Navigate to={defaultPath} replace />;
+    } else {
+      // If portal type is not determined yet, show loading
+      return (
+        <div className="flex items-center justify-center h-screen">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      );
+    }
   }
 
   // User has required role and portal access

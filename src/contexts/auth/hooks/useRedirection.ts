@@ -23,9 +23,8 @@ export const useRedirection = () => {
       location.pathname === '/shop/login' ||
       location.pathname === '/customer/login';
     
-    // Keep a state parameter to remember where we came from
+    // Keep track of the current path
     const currentPath = location.pathname;
-    const fromParam = location.state?.from ? `?from=${encodeURIComponent(location.state.from)}` : '';
     
     console.group('🔀 Redirection Logic');
     console.log('Current path:', currentPath);
@@ -50,20 +49,23 @@ export const useRedirection = () => {
     } 
     // Case 2: Authenticated on auth page - redirect to appropriate portal 
     // with a deliberate timeout to ensure other auth state processing is complete
-    else if (user && isAuthPage) {
-      // Determine redirect based on portalType rather than parsing user metadata again
+    else if (user && isAuthPage && portalType) {
+      // Only redirect if we have determined the portalType
+      // This prevents redirect loops where portalType is null
       const redirectPath = portalType === 'customer' ? '/customer' : '/shop';
-      console.log(`➡️ Redirecting to ${redirectPath} (authenticated on auth page)`);
+      console.log(`➡️ Redirecting to ${redirectPath} (authenticated on auth page, portalType: ${portalType})`);
       
       // Add a slight delay to ensure other auth state processing completes
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         navigate(redirectPath, { replace: true });
       }, 200);
+      
+      return () => clearTimeout(timer);
     } 
     else {
       console.log('✅ No redirection needed');
     }
     
     console.groupEnd();
-  }, [user, isLoading, navigate, location, portalType]);
+  }, [user, isLoading, navigate, location.pathname, portalType]);
 };
