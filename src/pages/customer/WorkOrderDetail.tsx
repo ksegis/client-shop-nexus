@@ -15,9 +15,9 @@ import {
   WorkOrderVehicleTab
 } from '@/components/customer/work-order/tabs';
 import {
-  useWorkOrder,
   useServiceUpdates
 } from '@/hooks/work-orders';
+import { useCustomerWorkOrderDetail } from '@/hooks/customer';
 
 const CustomerWorkOrderDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,7 +26,7 @@ const CustomerWorkOrderDetail = () => {
   // Handle possible undefined id
   const workOrderId = id || '';
   
-  const { workOrder, loading: workOrderLoading } = useWorkOrder(workOrderId);
+  const { workOrder, loading: workOrderLoading } = useCustomerWorkOrderDetail(workOrderId);
   const { updates, loading: updatesLoading } = useServiceUpdates(workOrderId);
 
   if (workOrderLoading) {
