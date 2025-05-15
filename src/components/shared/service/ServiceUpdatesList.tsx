@@ -40,7 +40,7 @@ export const ServiceUpdatesList: React.FC<ServiceUpdatesListProps> = ({
   const groupedUpdates: { [date: string]: ServiceUpdate[] } = {};
   
   updates.forEach(update => {
-    const date = new Date(update.date).toLocaleDateString();
+    const date = new Date(update.timestamp || update.created_at).toLocaleDateString();
     if (!groupedUpdates[date]) {
       groupedUpdates[date] = [];
     }
@@ -59,13 +59,13 @@ export const ServiceUpdatesList: React.FC<ServiceUpdatesListProps> = ({
                 <CardContent className="p-4">
                   {update.milestone && (
                     <div className="flex items-center mb-2">
-                      {update.milestone_completed ? (
+                      {update.milestoneCompleted || update.milestone_completed ? (
                         <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
                       ) : (
                         <Clock className="h-4 w-4 text-blue-500 mr-2" />
                       )}
                       <span className={`text-sm font-medium ${
-                        update.milestone_completed ? 'text-green-700' : 'text-blue-700'
+                        update.milestoneCompleted || update.milestone_completed ? 'text-green-700' : 'text-blue-700'
                       }`}>
                         {update.milestone}
                       </span>
@@ -96,7 +96,7 @@ export const ServiceUpdatesList: React.FC<ServiceUpdatesListProps> = ({
                   )}
                   
                   <div className="mt-3 text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(update.date), { addSuffix: true })}
+                    {formatDistanceToNow(new Date(update.timestamp || update.created_at), { addSuffix: true })}
                   </div>
                 </CardContent>
               </Card>

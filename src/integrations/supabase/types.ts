@@ -676,6 +676,47 @@ export type Database = {
           },
         ]
       }
+      service_updates: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          images: string[] | null
+          milestone: string | null
+          milestone_completed: boolean | null
+          updated_at: string
+          work_order_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          images?: string[] | null
+          milestone?: string | null
+          milestone_completed?: boolean | null
+          updated_at?: string
+          work_order_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          images?: string[] | null
+          milestone?: string | null
+          milestone_completed?: boolean | null
+          updated_at?: string
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_updates_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_history: {
         Row: {
           id: string

@@ -6,10 +6,13 @@ import { useAuth } from '@/contexts/auth';
 export interface ServiceUpdate {
   id: string;
   content: string;
-  timestamp: string;
+  timestamp?: string;
+  created_at: string;
   images?: string[];
   milestone?: string;
   milestoneCompleted?: boolean;
+  milestone_completed?: boolean;
+  work_order_id: string;
 }
 
 interface ServiceUpdatesHook {
@@ -40,26 +43,32 @@ export const useServiceUpdates = (workOrderId: string): ServiceUpdatesHook => {
           const mockUpdates = [
             {
               id: '1',
+              work_order_id: workOrderId,
               content: 'Initial inspection complete. Found worn brake pads and recommended replacement.',
               timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+              created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
               milestone: 'Inspection',
               milestoneCompleted: true
             },
             {
               id: '2',
+              work_order_id: workOrderId,
               content: 'Parts ordered and received. Scheduling service for tomorrow.',
               timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+              created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
               milestone: 'Parts Procurement',
               milestoneCompleted: true
             },
             {
               id: '3',
+              work_order_id: workOrderId,
               content: 'Brake service in progress. Front pads replaced, working on rear brakes.',
               timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+              created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
               milestone: 'Service',
               milestoneCompleted: false
             }
-          ];
+          ] as ServiceUpdate[];
           
           setUpdates(mockUpdates);
           setLoading(false);
@@ -82,25 +91,28 @@ export const useServiceUpdates = (workOrderId: string): ServiceUpdatesHook => {
           setLoading(false);
           return;
         }
-        
-        // Fetch updates from the database
+
+        // Fetch updates from the service_updates table
         const { data, error } = await supabase
           .from('service_updates')
           .select('*')
           .eq('work_order_id', workOrderId)
           .order('created_at', { ascending: true });
-        
+          
         if (error) throw error;
-        
+
         // Transform to match expected format
         const formattedUpdates = data.map(update => ({
           id: update.id,
+          work_order_id: update.work_order_id,
           content: update.content,
           timestamp: update.created_at,
+          created_at: update.created_at,
           images: update.images,
           milestone: update.milestone,
-          milestoneCompleted: update.milestone_completed
-        }));
+          milestoneCompleted: update.milestone_completed,
+          milestone_completed: update.milestone_completed
+        })) as ServiceUpdate[];
         
         setUpdates(formattedUpdates);
       } catch (error) {

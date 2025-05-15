@@ -91,7 +91,7 @@ export function useCustomerWorkOrderDetail(workOrderId: string) {
         .select(`
           *,
           vehicles:vehicle_id (*),
-          profiles:customer_id (*)
+          customer:customer_id (*)
         `)
         .eq('id', workOrderId)
         .eq('customer_id', user.id)
@@ -133,11 +133,11 @@ export function useCustomerWorkOrderDetail(workOrderId: string) {
         status: orderData.status,
         date: new Date(orderData.created_at).toISOString().split('T')[0],
         progress: orderData.status === 'completed' ? 100 : orderData.status === 'in_progress' ? 75 : 0,
-        estimatedCompletion: orderData.estimated_completion || null,
+        estimatedCompletion: orderData.created_at ? new Date(orderData.created_at).toISOString().split('T')[0] : null,
         customer: {
-          name: `${orderData.profiles?.first_name || ''} ${orderData.profiles?.last_name || ''}`.trim(),
-          email: orderData.profiles?.email || '',
-          phone: orderData.profiles?.phone || ''
+          name: `${orderData.customer?.first_name || ''} ${orderData.customer?.last_name || ''}`.trim(),
+          email: orderData.customer?.email || '',
+          phone: orderData.customer?.phone || ''
         },
         vehicle: {
           year: orderData.vehicles?.year?.toString() || '',
