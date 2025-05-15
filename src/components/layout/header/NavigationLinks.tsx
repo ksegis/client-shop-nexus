@@ -5,6 +5,7 @@ export interface NavigationLink {
   name: string;
   path: string;
   adminOnly?: boolean;
+  children?: NavigationLink[];
 }
 
 export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
@@ -22,22 +23,49 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
     { name: 'Profile', path: '/customer/profile' }
   ];
   
-  // Reordered according to the specified sequence
+  // Group shop links into categories with dropdowns
   const shopLinks: NavigationLink[] = [
     { name: 'Dashboard', path: '/shop' },
-    { name: 'Customers', path: '/shop/customers' },
-    { name: 'Estimates', path: '/shop/estimates' },
-    { name: 'Work Orders', path: '/shop/work-orders' },
-    { name: 'Invoices', path: '/shop/invoices' },
-    { name: 'Parts', path: '/shop/parts' },
-    { name: 'Inventory', path: '/shop/inventory' },
+    { 
+      name: 'Customers', 
+      path: '/shop/customers',
+      children: [
+        { name: 'Service Desk', path: '/shop/service-desk' },
+        { name: 'Service Appointments', path: '/shop/service-appointments' },
+      ] 
+    },
+    { 
+      name: 'Documents', 
+      path: '#', 
+      children: [
+        { name: 'Estimates', path: '/shop/estimates' },
+        { name: 'Work Orders', path: '/shop/work-orders' },
+        { name: 'Invoices', path: '/shop/invoices' },
+      ]
+    },
+    { 
+      name: 'Inventory', 
+      path: '#', 
+      children: [
+        { name: 'Parts', path: '/shop/parts' },
+        { name: 'Inventory', path: '/shop/inventory' },
+        { name: 'Simple Inventory', path: '/shop/inventory/simple' }
+      ]
+    },
     { name: 'Reports', path: '/shop/reports' }
   ];
   
   // Admin-only links
   const adminLinks: NavigationLink[] = [
-    { name: 'Employees', path: '/shop/employees', adminOnly: true },
-    { name: 'Admin', path: '/shop/admin', adminOnly: true }
+    { 
+      name: 'Admin', 
+      path: '#', 
+      adminOnly: true,
+      children: [
+        { name: 'Employees', path: '/shop/employees', adminOnly: true },
+        { name: 'Settings', path: '/shop/admin', adminOnly: true }
+      ]
+    }
   ];
   
   const allShopLinks = isAdmin ? [...shopLinks, ...adminLinks] : shopLinks;

@@ -1,168 +1,157 @@
 
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/components/ui/use-toast';
-import { handleRlsError } from '@/integrations/supabase/client';
 
-export interface DashboardMetrics {
-  totalEstimates: number;
-  pendingApproval: number;
-  approved: number;
-  rejected: number;
-  recentEstimates: {
-    id: string;
-    title: string;
-    vehicle: string;
-    amount: number;
-  }[];
-  activeWorkOrders: {
-    id: string;
-    title: string;
-    vehicle: string;
-    status: string;
-  }[];
-  inventoryAlerts: {
-    type: 'low_stock' | 'order_reminder';
-    message: string;
+export interface DashboardSummary {
+  estimates: {
     count: number;
-  }[];
+    pending: number;
+    approved: number;
+    recent: {
+      id: string;
+      title: string;
+      customer_name: string;
+      created_at: string;
+      total_amount: number;
+    }[];
+  };
+  workOrders: {
+    count: number;
+    inProgress: number;
+    completed: number;
+    recent: {
+      id: string;
+      title: string;
+      customer_name: string;
+      status: string;
+      created_at: string;
+    }[];
+  };
+  inventory: {
+    lowStock: number;
+    totalParts: number;
+    alerts: {
+      id: string;
+      part_name: string;
+      current_stock: number;
+      min_stock: number;
+      alert_type: 'low_stock' | 'overstock' | 'order_needed';
+    }[];
+  };
+  customerCount: number;
+  loading: boolean;
+  error: Error | null;
 }
 
-export const useDashboardData = () => {
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    async function fetchDashboardData() {
-      try {
-        setLoading(true);
-
-        // Fetch estimates metrics
-        const { data: estimatesData, error: estimatesError } = await supabase
-          .from('estimates')
-          .select('id, status')
-          .order('created_at', { ascending: false });
-
-        if (estimatesError) {
-          if (handleRlsError(estimatesError, toast)) return;
-          throw new Error(`Error fetching estimates: ${estimatesError.message}`);
-        }
-
-        // Fetch recent estimates with vehicle and customer info
-        const { data: recentEstimates, error: recentEstimatesError } = await supabase
-          .from('estimates')
-          .select(`
-            id, 
-            title, 
-            total_amount,
-            vehicles:vehicle_id (make, model, year)
-          `)
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        if (recentEstimatesError) {
-          if (handleRlsError(recentEstimatesError, toast)) return;
-          throw new Error(`Error fetching recent estimates: ${recentEstimatesError.message}`);
-        }
-
-        // Fetch active work orders
-        const { data: workOrdersData, error: workOrdersError } = await supabase
-          .from('work_orders')
-          .select(`
-            id, 
-            title, 
-            status,
-            vehicles:vehicle_id (make, model, year)
-          `)
-          .eq('status', 'in_progress')
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        if (workOrdersError) {
-          if (handleRlsError(workOrdersError, toast)) return;
-          throw new Error(`Error fetching work orders: ${workOrdersError.message}`);
-        }
-
-        // Fetch inventory alerts (items below reorder level)
-        const { data: inventoryData, error: inventoryError } = await supabase
-          .from('inventory')
-          .select('*')
-          .lt('quantity', 10)
-          .order('quantity', { ascending: true });
-
-        if (inventoryError) {
-          if (handleRlsError(inventoryError, toast)) return;
-          throw new Error(`Error fetching inventory: ${inventoryError.message}`);
-        }
-
-        // Process data for dashboard metrics
-        const totalEstimates = estimatesData.length;
-        const pendingApproval = estimatesData.filter(est => est.status === 'pending').length;
-        const approved = estimatesData.filter(est => est.status === 'approved').length;
-        const rejected = estimatesData.filter(est => est.status === 'declined').length;
-
-        const formattedRecentEstimates = recentEstimates.map(est => ({
-          id: est.id,
-          title: est.title,
-          vehicle: est.vehicles ? `${est.vehicles.make} ${est.vehicles.model} (${est.vehicles.year})` : 'Unknown vehicle',
-          amount: est.total_amount
-        }));
-
-        const formattedWorkOrders = workOrdersData.map(wo => ({
-          id: wo.id,
-          title: wo.title,
-          vehicle: wo.vehicles ? `${wo.vehicles.make} ${wo.vehicles.model} (${wo.vehicles.year})` : 'Unknown vehicle',
-          status: wo.status
-        }));
-
-        // Inventory alerts
-        const lowStockItems = inventoryData.filter(item => item.quantity < item.reorder_level);
-        const pendingOrderItems = inventoryData.filter(item => item.quantity === 0);
-        
-        const inventoryAlerts = [
-          {
-            type: 'low_stock' as const,
-            message: 'Low Stock Alert',
-            count: lowStockItems.length
-          }
-        ];
-
-        if (pendingOrderItems.length > 0) {
-          inventoryAlerts.push({
-            type: 'order_reminder' as const,
-            message: 'Order Reminder',
-            count: pendingOrderItems.length
-          });
-        }
-
-        setMetrics({
-          totalEstimates,
-          pendingApproval,
-          approved,
-          rejected,
-          recentEstimates: formattedRecentEstimates,
-          activeWorkOrders: formattedWorkOrders,
-          inventoryAlerts
-        });
-        
-        setError(null);
-      } catch (err) {
-        console.error('Dashboard data fetch error:', err);
-        setError(err instanceof Error ? err : new Error('Unknown error fetching dashboard data'));
-        toast({
-          title: "Error loading dashboard data",
-          description: err instanceof Error ? err.message : "Failed to load dashboard data",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
+export const useDashboardData = (): DashboardSummary => {
+  const { data: estimatesData, isLoading: isEstimatesLoading, error: estimatesError } = useQuery({
+    queryKey: ['dashboard', 'estimates'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('estimates')
+        .select('id, title, total_amount, status, created_at, customers(name)')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      if (error) throw error;
+      return data;
     }
+  });
 
-    fetchDashboardData();
-  }, [toast]);
+  const { data: workOrdersData, isLoading: isWorkOrdersLoading, error: workOrdersError } = useQuery({
+    queryKey: ['dashboard', 'workOrders'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('work_orders')
+        .select('id, title, status, created_at, customers(name)')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      if (error) throw error;
+      return data;
+    }
+  });
 
-  return { metrics, loading, error };
+  const { data: inventoryData, isLoading: isInventoryLoading, error: inventoryError } = useQuery({
+    queryKey: ['dashboard', 'inventory'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('parts')
+        .select('*')
+        .order('current_stock', { ascending: true })
+        .limit(20);
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const { data: customerData, isLoading: isCustomerLoading, error: customerError } = useQuery({
+    queryKey: ['dashboard', 'customers'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('customers')
+        .select('*', { count: 'exact', head: true });
+      
+      if (error) throw error;
+      return count || 0;
+    }
+  });
+
+  const isLoading = isEstimatesLoading || isWorkOrdersLoading || isInventoryLoading || isCustomerLoading;
+  const error = estimatesError || workOrdersError || inventoryError || customerError || null;
+
+  // Process estimates data
+  const estimates = {
+    count: estimatesData?.length || 0,
+    pending: estimatesData?.filter(e => e.status === 'pending').length || 0,
+    approved: estimatesData?.filter(e => e.status === 'approved').length || 0,
+    recent: estimatesData?.map(e => ({
+      id: e.id,
+      title: e.title,
+      customer_name: e.customers?.name || 'Unknown Customer',
+      created_at: e.created_at,
+      total_amount: e.total_amount
+    })) || []
+  };
+
+  // Process work orders data
+  const workOrders = {
+    count: workOrdersData?.length || 0,
+    inProgress: workOrdersData?.filter(w => w.status === 'in_progress').length || 0,
+    completed: workOrdersData?.filter(w => w.status === 'completed').length || 0,
+    recent: workOrdersData?.map(w => ({
+      id: w.id,
+      title: w.title,
+      customer_name: w.customers?.name || 'Unknown Customer',
+      status: w.status,
+      created_at: w.created_at
+    })) || []
+  };
+
+  // Process inventory data
+  const lowStockItems = inventoryData?.filter(p => p.current_stock <= p.min_stock) || [];
+  
+  const inventoryAlerts = lowStockItems.map(item => ({
+    id: item.id,
+    part_name: item.name,
+    current_stock: item.current_stock,
+    min_stock: item.min_stock,
+    alert_type: 'low_stock' as const  // Fix for the TypeScript error
+  }));
+
+  const inventory = {
+    lowStock: lowStockItems.length,
+    totalParts: inventoryData?.length || 0,
+    alerts: inventoryAlerts
+  };
+
+  return {
+    estimates,
+    workOrders,
+    inventory,
+    customerCount: customerData || 0,
+    loading: isLoading,
+    error
+  };
 };
