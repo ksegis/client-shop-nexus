@@ -27,7 +27,7 @@ const CustomerSignInForm = () => {
         title: "Access granted",
         description: "No authentication required"
       });
-      navigate('/customer');
+      navigate('/customer/dashboard');
     }, 500);
   };
 
@@ -90,7 +90,7 @@ const CustomerSignInForm = () => {
             type="button"
             className="text-primary hover:underline"
             disabled={loading}
-            onClick={() => navigate('/customer')}
+            onClick={() => navigate('/customer/dashboard')}
           >
             Skip sign in & go to dashboard
           </button>
