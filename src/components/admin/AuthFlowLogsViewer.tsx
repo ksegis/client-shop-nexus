@@ -91,16 +91,16 @@ export function AuthFlowLogsViewer() {
   };
   
   // Get badge color based on event type
-  const getBadgeVariant = (event: string) => {
+  const getBadgeVariant = (event: string): "default" | "destructive" | "outline" | "secondary" => {
     switch (true) {
       case event.includes('success'):
-        return 'success';
+        return 'default';
       case event.includes('error') || event.includes('denied'):
         return 'destructive';
       case event.includes('auth'):
         return 'default';
       case event.includes('redirect'):
-        return 'warning';
+        return 'secondary';
       case event.includes('check'):
         return 'secondary';
       default:
@@ -231,7 +231,7 @@ export function AuthFlowLogsViewer() {
                         </TableCell>
                         <TableCell>
                           {log.access_granted !== undefined && (
-                            <Badge variant={log.access_granted ? "success" : "destructive"}>
+                            <Badge variant={log.access_granted ? "default" : "destructive"}>
                               {log.access_granted ? 'Granted' : 'Denied'}
                             </Badge>
                           )}

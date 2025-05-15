@@ -39,6 +39,54 @@ export type Database = {
         }
         Relationships: []
       }
+      auth_flow_logs: {
+        Row: {
+          access_granted: boolean | null
+          client_timestamp: string
+          details: Json | null
+          email: string | null
+          event_type: string
+          id: string
+          portal_type: string | null
+          required_roles: string[] | null
+          route_path: string | null
+          server_timestamp: string
+          session_id: string | null
+          user_id: string | null
+          user_role: string | null
+        }
+        Insert: {
+          access_granted?: boolean | null
+          client_timestamp: string
+          details?: Json | null
+          email?: string | null
+          event_type: string
+          id?: string
+          portal_type?: string | null
+          required_roles?: string[] | null
+          route_path?: string | null
+          server_timestamp?: string
+          session_id?: string | null
+          user_id?: string | null
+          user_role?: string | null
+        }
+        Update: {
+          access_granted?: boolean | null
+          client_timestamp?: string
+          details?: Json | null
+          email?: string | null
+          event_type?: string
+          id?: string
+          portal_type?: string | null
+          required_roles?: string[] | null
+          route_path?: string | null
+          server_timestamp?: string
+          session_id?: string | null
+          user_id?: string | null
+          user_role?: string | null
+        }
+        Relationships: []
+      }
       bugs: {
         Row: {
           actual_result: string | null
