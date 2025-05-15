@@ -3,12 +3,10 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/auth';
 import { MessagingProvider } from '@/contexts/messaging';
-import AuthRoutes from './AuthRoutes';
 import CustomerRoutes from './CustomerRoutes';
 import ShopRoutes from './shop/ShopRoutes';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Index from '@/pages/Index';
-import Auth from '@/pages/Auth';
 import ShopLogin from '@/pages/shop/Login';
 import CustomerLogin from '@/pages/customer/Login';
 import NotFound from '@/pages/NotFound';
@@ -20,10 +18,7 @@ const AppRoutes: React.FC = () => {
         <Routes>
           <Route path="/" element={<Index />} />
           
-          {/* Main auth selection page */}
-          <Route path="/auth" element={<Auth />} />
-          
-          {/* Completely separate login paths */}
+          {/* Separate login paths */}
           <Route path="/shop-login" element={<ShopLogin />} />
           <Route path="/customer-login" element={<CustomerLogin />} />
 
@@ -43,6 +38,10 @@ const AppRoutes: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          
+          {/* Redirect /auth to the main index page */}
+          <Route path="/auth" element={<Navigate to="/" replace />} />
+          
           <Route path="*" element={<NotFound />} />
         </Routes>
       </MessagingProvider>

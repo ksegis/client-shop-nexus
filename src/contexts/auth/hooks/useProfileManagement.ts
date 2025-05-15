@@ -1,126 +1,153 @@
 
-import { useState, useEffect } from 'react';
-import { User } from '@supabase/supabase-js';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile } from '../types';
+import { User } from '@supabase/supabase-js';
 
-export function useProfileManagement(authUser: User | null) {
+export function useProfileManagement(user: User | null) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [profileLoading, setProfileLoading] = useState<boolean>(true);
-  const [portalType, setPortalType] = useState<'shop' | 'customer' | null>(null);
-  
-  // Load profile data
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<Error | null>(null);
+
+  // Clear profile when user changes
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (!authUser) {
-        setProfile(null);
-        setProfileLoading(false);
-        setPortalType(null);
-        return;
-      }
-
-      // Fetch profile from database
-      try {
-        console.log('Checking profile for user:', authUser.id);
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', authUser.id)
-          .maybeSingle();
-
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
-          // If there's a network error, don't clear the profile - this might cause redirect loops
-          if (profileError.code === 'PGRST116') {
-            console.log('Network error when fetching profile - keeping current auth state');
-            setProfileLoading(false);
-            return;
-          }
-        }
-
-        if (profileData) {
-          const userProfile: UserProfile = {
-            id: profileData.id,
-            email: profileData.email,
-            first_name: profileData.first_name || '',
-            last_name: profileData.last_name || '',
-            role: profileData.role || 'customer',
-            avatar_url: profileData.avatar_url
-          };
-          
-          setProfile(userProfile);
-          setPortalType(getPortalByRole(userProfile.role));
-          console.log('Profile loaded:', userProfile.role, 'Portal type:', getPortalByRole(userProfile.role));
-        } else if (authUser) {
-          // If no profile exists but we have a user, create a default one
-          console.log('No profile found, creating default profile with user metadata');
-          const role = (authUser.user_metadata?.role as UserRole) || 'customer';
-          
-          const newUserProfile: UserProfile = {
-            id: authUser.id,
-            email: authUser.email || '',
-            first_name: authUser.user_metadata?.first_name || '',
-            last_name: authUser.user_metadata?.last_name || '',
-            role: role
-          };
-          
-          setProfile(newUserProfile);
-          setPortalType(getPortalByRole(role));
-          
-          console.warn('Created default profile for authenticated user');
-          
-          // Also create the profile in the database
-          try {
-            // Map the role to a database-compatible role
-            const dbRole = mapRoleToDbRole(role);
-            
-            const { error: insertError } = await supabase
-              .from('profiles')
-              .insert({
-                id: authUser.id,
-                email: authUser.email,
-                first_name: authUser.user_metadata?.first_name || '',
-                last_name: authUser.user_metadata?.last_name || '',
-                role: dbRole
-              });
-              
-            if (insertError) {
-              console.error('Failed to create profile in database:', insertError);
-            } else {
-              console.log('Created profile in database');
-            }
-          } catch (insertErr) {
-            console.error('Error creating profile:', insertErr);
-          }
-        }
-      } catch (error) {
-        console.error('Error processing profile data:', error);
-      } finally {
-        setProfileLoading(false);
-      }
-    };
-
-    if (authUser) {
-      fetchProfile();
-    } else {
+    if (!user) {
       setProfile(null);
-      setPortalType(null);
-      setProfileLoading(false);
     }
-  }, [authUser]);
+  }, [user]);
 
-  const getPortalByRole = (role: UserRole): 'shop' | 'customer' => {
-    // Admin users should always be directed to the shop portal
-    if (role === 'admin') return 'shop';
+  // Fetch the user's profile from the database
+  const fetchProfile = useCallback(async (userId: string) => {
+    if (!userId) return null;
+
+    setIsLoadingProfile(true);
+    setProfileError(null);
     
-    // For all other roles, check if they're customer or shop staff
-    return role === 'customer' ? 'customer' : 'shop';
-  };
+    try {
+      console.log("Checking profile for user:", userId);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        setProfileError(error);
+        return null;
+      }
+
+      if (!data) {
+        console.warn(`No profile found for user: ${userId}`);
+        return null;
+      }
+
+      // Save to state
+      const userProfile = data as UserProfile;
+      setProfile(userProfile);
+      
+      console.info(`Profile loaded: ${userProfile.role} Portal type: ${
+        userProfile.role === 'customer' ? 'customer' : 'shop'
+      }`);
+      
+      return userProfile;
+    } catch (err) {
+      console.error('Error in fetchProfile:', err);
+      setProfileError(err as Error);
+      return null;
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  }, []);
+
+  // Create a profile for a new user
+  const createProfile = useCallback(async (userId: string, profileData: Partial<UserProfile>) => {
+    if (!userId) return null;
+
+    try {
+      const defaultProfile: UserProfile = {
+        id: userId,
+        email: profileData.email || '',
+        role: profileData.role || 'customer',
+        first_name: profileData.first_name || '',
+        last_name: profileData.last_name || '',
+        avatar_url: profileData.avatar_url || '',
+      };
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert([defaultProfile])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating profile:', error);
+        return null;
+      }
+
+      const userProfile = data as UserProfile;
+      setProfile(userProfile);
+      
+      return userProfile;
+    } catch (err) {
+      console.error('Error in createProfile:', err);
+      return null;
+    }
+  }, []);
+
+  // Update a user's profile
+  const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
+    if (!user?.id || !profile) {
+      return { success: false, error: new Error('No authenticated user or profile') };
+    }
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error updating profile:', error);
+        return { success: false, error };
+      }
+
+      // Update the local profile state with the changes
+      setProfile(prevProfile => {
+        if (!prevProfile) return null;
+        return { ...prevProfile, ...updates };
+      });
+
+      return { success: true };
+    } catch (err) {
+      console.error('Error in updateProfile:', err);
+      return { success: false, error: err };
+    }
+  }, [user, profile]);
+
+  // Get the portal type based on the user's role
+  const getPortalType = useCallback((userProfile: UserProfile | null) => {
+    if (!userProfile) return null;
+    
+    const role = userProfile.role;
+    
+    if (role === 'customer') {
+      return 'customer';
+    } else if (role === 'admin' || role === 'staff') {
+      return 'shop';
+    }
+    
+    return null;
+  }, []);
   
-  return { 
-    profile, 
-    setProfile, 
-    profileLoading, 
-    portalType 
+  return {
+    profile,
+    isLoadingProfile,
+    profileError,
+    fetchProfile,
+    createProfile,
+    updateProfile,
+    getPortalType,
   };
 }

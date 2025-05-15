@@ -1,70 +1,49 @@
 
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Wrench, User, ArrowRight } from 'lucide-react';
+import React from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ShoppingBag, User } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
+  const navigate = useNavigate();
+  
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex flex-col">
-      <header className="container mx-auto py-6 px-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Wrench className="h-6 w-6 text-shop-primary" />
-            <span className="font-bold text-xl text-shop-primary">Custom Truck Connections</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1 container mx-auto px-4 py-12 flex flex-col justify-center">
-        <div className="max-w-3xl mx-auto text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">Your Truck Service Management Portal</h1>
-          <p className="text-xl text-gray-600 mb-8">Complete maintenance solutions for your commercial truck fleet</p>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+      <div className="w-full max-w-md p-6">
+        <Card>
+          <CardHeader className="text-center">
+            <div className="mb-6">
+              <ShoppingBag className="h-16 w-16 mx-auto text-shop-primary" />
+              <CardTitle className="text-3xl font-bold mt-4 mb-2">Custom Trick Connections</CardTitle>
+              <CardDescription className="text-gray-600 mb-8">Choose your portal</CardDescription>
+            </div>
+          </CardHeader>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-            <Card>
-              <CardContent className="p-6 flex flex-col items-center text-center">
-                <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-                  <User className="h-6 w-6 text-blue-600" />
-                </div>
-                <h2 className="text-xl font-bold mb-2">Customer Portal</h2>
-                <p className="text-gray-600 mb-6">Track your service history, approve estimates, and manage your vehicles</p>
-                <Button asChild className="w-full">
-                  <Link to="/customer">
-                    Access Customer Portal
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6 flex flex-col items-center text-center">
-                <div className="h-12 w-12 rounded-full bg-shop-light flex items-center justify-center mb-4">
-                  <Wrench className="h-6 w-6 text-shop-primary" />
-                </div>
-                <h2 className="text-xl font-bold mb-2">Shop Portal</h2>
-                <p className="text-gray-600 mb-6">For shop staff only. Manage operations, inventory, and customer services</p>
-                <Button asChild variant="outline" className="w-full">
-                  <Link to="/shop">
-                    Access Shop Portal
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </main>
-
-      <footer className="py-6 border-t bg-gray-50">
-        <div className="container mx-auto px-4">
-          <p className="text-center text-gray-500 text-sm">
-            &copy; {new Date().getFullYear()} Custom Truck Connections. All rights reserved.
-          </p>
-        </div>
-      </footer>
+          <CardContent className="space-y-4">
+            <div className="space-y-4">
+              <Button 
+                onClick={() => navigate('/shop-login')} 
+                className="w-full py-6 text-lg"
+                size="lg"
+              >
+                <ShoppingBag className="mr-2 h-5 w-5" />
+                Shop Portal
+              </Button>
+              
+              <Button 
+                onClick={() => navigate('/customer-login')} 
+                className="w-full py-6 text-lg"
+                variant="outline"
+                size="lg"
+              >
+                <User className="mr-2 h-5 w-5" />
+                Customer Portal
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

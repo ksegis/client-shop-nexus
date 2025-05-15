@@ -1,7 +1,7 @@
 
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { AuthResult, UserRole, mapRoleToDbRole } from '../types';
+import { AuthResult, UserRole } from '../types';
 import { useAuthMethods } from './useAuthMethods';
 import { useAuthLogging } from './useAuthLogging';
 
@@ -33,8 +33,7 @@ export function useAuthActions() {
           email,
           role: 'customer',
           first_name: firstName,
-          last_name: lastName,
-          is_test_account: false
+          last_name: lastName
         });
         
         // Log the signup event
@@ -59,14 +58,7 @@ export function useAuthActions() {
     return result;
   };
   
-  const signOut = async (isTestUser = false): Promise<AuthResult> => {
-    // If in test user mode, just clear the localStorage
-    if (isTestUser) {
-      localStorage.removeItem('test-user-mode');
-      window.location.reload();
-      return { success: true };
-    }
-    
+  const signOut = async (): Promise<AuthResult> => {
     try {
       // Get the current user before signing out
       const { data: { user } } = await supabase.auth.getUser();
@@ -79,7 +71,7 @@ export function useAuthActions() {
           await logAuthEvent('sign_out', user);
         }
         
-        navigate('/auth');
+        navigate('/');
       }
       
       return result;
@@ -124,12 +116,7 @@ export function useAuthActions() {
   };
 
   const getRedirectPathByRole = (role: UserRole) => {
-    // For test roles, look at the base role
-    const baseRole = role.startsWith('test_') ? 
-      role.replace('test_', '') as UserRole : 
-      role;
-    
-    switch (baseRole) {
+    switch (role) {
       case 'customer':
         return '/customer/profile';
       case 'admin':
@@ -137,7 +124,7 @@ export function useAuthActions() {
       case 'staff':
         return '/shop';
       default:
-        return '/auth';
+        return '/';
     }
   };
 

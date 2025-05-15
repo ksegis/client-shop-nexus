@@ -1,379 +1,124 @@
 
-import React from "react";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-  SheetOverlay,
-  SheetPortal,
-  SheetClose
-} from "@/components/ui/sheet";
-import { Menu, X } from "lucide-react";
+import React, { useContext, createContext, useState } from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarItem } from "./sidebar-item";
-import { useAuth } from '@/contexts/auth'; 
-import { 
-  Shield, 
-  Users, 
-  BarChart, 
-  Package, 
-  ListChecks, 
-  UserPlus, 
-  Settings, 
-  FileText, 
-  FileCheck,
-  Calendar,
-  ShoppingCart,
-  Activity,
-  Wrench,
-  Truck
-} from "lucide-react";
-import { NavigationItem, NavigationGroup } from "./types";
+import { SidebarSection, SidebarItemType } from "./types";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
-// Group navigation items according to route structure
-const navigationGroups: NavigationGroup = {
-  main: [
-    {
-      title: "Dashboard",
-      href: "/shop",
-      icon: BarChart,
-    },
-    {
-      title: "Profile",
-      href: "/shop/profile",
-      icon: Settings,
-    }
-  ],
-  customer: [
-    {
-      title: "Customers",
-      href: "/shop/customers",
-      icon: UserPlus,
-    },
-    {
-      title: "Employees",
-      href: "/shop/employees",
-      icon: Users,
-      adminOnly: true
-    }
-  ],
-  workOrders: [
-    {
-      title: "Work Orders",
-      href: "/shop/work-orders",
-      icon: Wrench,
-    }
-  ],
-  financial: [
-    {
-      title: "Estimates",
-      href: "/shop/estimates",
-      icon: FileText,
-    },
-    {
-      title: "Invoices",
-      href: "/shop/invoices",
-      icon: FileCheck,
-    },
-    {
-      title: "Reports",
-      href: "/shop/reports",
-      icon: Activity,
-    }
-  ],
-  inventory: [
-    {
-      title: "Parts Desk",
-      href: "/shop/parts",
-      icon: ShoppingCart,
-    },
-    {
-      title: "Inventory",
-      href: "/shop/inventory",
-      icon: Package,
-    }
-  ],
-  service: [
-    {
-      title: "Service Desk",
-      href: "/shop/service-desk",
-      icon: Truck,
-    },
-    {
-      title: "Appointments",
-      href: "/shop/appointments",
-      icon: Calendar,
-    }
-  ],
-  admin: [
-    {
-      title: "Admin",
-      href: "/shop/admin",
-      icon: Shield,
-      adminOnly: true
-    }
-  ]
+// Context for sidebar state
+type SidebarContextType = {
+  isCollapsed: boolean;
+  setIsCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
-export const Sidebar = () => {
-  const { user, profile } = useAuth();
-  
-  // Check if user is admin
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'test_admin';
-  
-  // Create a flattened array of all navigation items for simplified rendering
-  const allNavigationItems = Object.values(navigationGroups).flat();
-  
-  // Filter admin-only items based on user role
-  const filteredNavigationItems = allNavigationItems.filter(item => !item.adminOnly || isAdmin);
+const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
+
+export function useSidebarContext() {
+  const context = useContext(SidebarContext);
+  if (!context) {
+    throw new Error("useSidebarContext must be used within a SidebarProvider");
+  }
+  return context;
+}
+
+interface SidebarProps {
+  sections: SidebarSection[];
+  collapsed?: boolean;
+  className?: string;
+  icon?: React.ReactNode;
+  onItemClick?: (item: SidebarItemType) => void;
+  footer?: React.ReactNode;
+  defaultCollapsed?: boolean;
+  activeItemId?: string;
+  showToggle?: boolean;
+  role?: "admin" | "staff" | "customer";
+}
+
+export function Sidebar({
+  sections,
+  className,
+  icon,
+  onItemClick,
+  footer,
+  defaultCollapsed = false,
+  activeItemId,
+  showToggle = true,
+  role = "staff",
+}: SidebarProps) {
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(defaultCollapsed);
+
+  const filteredSections = sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => {
+        if (!item.roles) return true;
+        
+        if (role === "admin") return true;
+        
+        return item.roles.includes(role);
+      }),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
-    <>
-      {/* Desktop Sidebar */}
-      <div className="h-full border-r bg-background w-full">
-        <div className="py-4 space-y-4">
-          {/* Main Group */}
-          <div className="px-3 py-2">
-            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Main</h2>
-            <div className="space-y-1">
-              {navigationGroups.main.map((item) => (
-                <SidebarItem 
-                  key={item.href}
-                  href={item.href}
-                  title={item.title}
-                  icon={item.icon}
-                />
-              ))}
-            </div>
+    <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed }}>
+      <aside
+        data-collapsed={isCollapsed}
+        className={cn(
+          "group flex flex-col gap-4 border-r border-border px-2 pt-2 pb-4 transition-all duration-200 ease-in-out data-[collapsed=true]:px-2",
+          className
+        )}
+      >
+        {showToggle && (
+          <div className="flex h-12 w-full items-center justify-end px-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+            >
+              {isCollapsed ? (
+                <ChevronRightIcon className="h-4 w-4" />
+              ) : (
+                <ChevronLeftIcon className="h-4 w-4" />
+              )}
+              <span className="sr-only">Toggle sidebar</span>
+            </Button>
           </div>
-          
-          {/* Customers Group */}
-          <div className="px-3 py-2">
-            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Customers</h2>
-            <div className="space-y-1">
-              {navigationGroups.customer
-                .filter(item => !item.adminOnly || isAdmin)
-                .map((item) => (
-                  <SidebarItem 
-                    key={item.href}
-                    href={item.href}
-                    title={item.title}
-                    icon={item.icon}
-                  />
-              ))}
-            </div>
-          </div>
-          
-          {/* Work Orders */}
-          <div className="px-3 py-2">
-            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Work Orders</h2>
-            <div className="space-y-1">
-              {navigationGroups.workOrders.map((item) => (
-                <SidebarItem 
-                  key={item.href}
-                  href={item.href}
-                  title={item.title}
-                  icon={item.icon}
-                />
-              ))}
-            </div>
-          </div>
-          
-          {/* Financial */}
-          <div className="px-3 py-2">
-            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Financial</h2>
-            <div className="space-y-1">
-              {navigationGroups.financial.map((item) => (
-                <SidebarItem 
-                  key={item.href}
-                  href={item.href}
-                  title={item.title}
-                  icon={item.icon}
-                />
-              ))}
-            </div>
-          </div>
-          
-          {/* Inventory */}
-          <div className="px-3 py-2">
-            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Inventory</h2>
-            <div className="space-y-1">
-              {navigationGroups.inventory.map((item) => (
-                <SidebarItem 
-                  key={item.href}
-                  href={item.href}
-                  title={item.title}
-                  icon={item.icon}
-                />
-              ))}
-            </div>
-          </div>
-          
-          {/* Service */}
-          <div className="px-3 py-2">
-            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Service</h2>
-            <div className="space-y-1">
-              {navigationGroups.service.map((item) => (
-                <SidebarItem 
-                  key={item.href}
-                  href={item.href}
-                  title={item.title}
-                  icon={item.icon}
-                />
-              ))}
-            </div>
-          </div>
-          
-          {/* Admin - Only shown if user is admin */}
-          {isAdmin && (
-            <div className="px-3 py-2">
-              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Admin</h2>
-              <div className="space-y-1">
-                {navigationGroups.admin.map((item) => (
-                  <SidebarItem 
-                    key={item.href}
-                    href={item.href}
-                    title={item.title}
-                    icon={item.icon}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Mobile Sheet/Drawer - Only shown on mobile */}
-      <Sheet>
-        <SheetTrigger asChild className="absolute left-4 top-4 md:hidden">
-          <Button variant="ghost" size="icon">
-            <Menu />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-80 p-0 overflow-y-auto">
-          <SheetHeader className="pl-6 py-4">
-            <SheetTitle>Custom Truck Connections</SheetTitle>
-            <SheetDescription>
-              Manage your shop, view reports, and more.
-            </SheetDescription>
-          </SheetHeader>
-          
-          <div className="py-4 space-y-4">
-            {/* Main Group */}
-            <div className="px-3 py-2">
-              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Main</h2>
-              <div className="space-y-1">
-                {navigationGroups.main.map((item) => (
-                  <SidebarItem 
-                    key={item.href}
-                    href={item.href}
-                    title={item.title}
-                    icon={item.icon}
-                  />
-                ))}
-              </div>
-            </div>
-            
-            {/* Customers Group */}
-            <div className="px-3 py-2">
-              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Customers</h2>
-              <div className="space-y-1">
-                {navigationGroups.customer
-                  .filter(item => !item.adminOnly || isAdmin)
-                  .map((item) => (
-                    <SidebarItem 
-                      key={item.href}
-                      href={item.href}
-                      title={item.title}
-                      icon={item.icon}
-                    />
-                ))}
-              </div>
-            </div>
-            
-            {/* Additional groups - similar structure for mobile */}
-            {/* Work Orders */}
-            <div className="px-3 py-2">
-              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Work Orders</h2>
-              <div className="space-y-1">
-                {navigationGroups.workOrders.map((item) => (
-                  <SidebarItem 
-                    key={item.href}
-                    href={item.href}
-                    title={item.title}
-                    icon={item.icon}
-                  />
-                ))}
-              </div>
-            </div>
-            
-            {/* Financial */}
-            <div className="px-3 py-2">
-              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Financial</h2>
-              <div className="space-y-1">
-                {navigationGroups.financial.map((item) => (
-                  <SidebarItem 
-                    key={item.href}
-                    href={item.href}
-                    title={item.title}
-                    icon={item.icon}
-                  />
-                ))}
-              </div>
-            </div>
-            
-            {/* Inventory */}
-            <div className="px-3 py-2">
-              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Inventory</h2>
-              <div className="space-y-1">
-                {navigationGroups.inventory.map((item) => (
-                  <SidebarItem 
-                    key={item.href}
-                    href={item.href}
-                    title={item.title}
-                    icon={item.icon}
-                  />
-                ))}
-              </div>
-            </div>
-            
-            {/* Service */}
-            <div className="px-3 py-2">
-              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Service</h2>
-              <div className="space-y-1">
-                {navigationGroups.service.map((item) => (
-                  <SidebarItem 
-                    key={item.href}
-                    href={item.href}
-                    title={item.title}
-                    icon={item.icon}
-                  />
-                ))}
-              </div>
-            </div>
-            
-            {/* Admin - Only shown if user is admin */}
-            {isAdmin && (
-              <div className="px-3 py-2">
-                <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Admin</h2>
-                <div className="space-y-1">
-                  {navigationGroups.admin.map((item) => (
-                    <SidebarItem 
-                      key={item.href}
-                      href={item.href}
-                      title={item.title}
-                      icon={item.icon}
-                    />
-                  ))}
+        )}
+
+        <ScrollArea className="flex-1 overflow-auto py-2">
+          <nav className="grid gap-2 px-2 group-[[data-collapsed=true]]:justify-center group-[[data-collapsed=true]]:px-0">
+            {filteredSections.map((section, index) => {
+              return (
+                <div key={index} className="grid gap-1">
+                  {section.title && !isCollapsed && (
+                    <h3 className="mb-1 text-xs uppercase text-muted-foreground pl-4">
+                      {section.title}
+                    </h3>
+                  )}
+                  {section.items.map((item) => {
+                    const isActive = activeItemId === item.id;
+                    return (
+                      <SidebarItem
+                        key={item.id}
+                        item={item}
+                        isActive={isActive}
+                        isCollapsed={isCollapsed}
+                        icon={item.icon ?? icon}
+                        onClick={() => onItemClick?.(item)}
+                      />
+                    );
+                  })}
                 </div>
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-    </>
+              );
+            })}
+          </nav>
+        </ScrollArea>
+        {footer && <div className="mt-auto">{footer}</div>}
+      </aside>
+    </SidebarContext.Provider>
   );
-};
+}
