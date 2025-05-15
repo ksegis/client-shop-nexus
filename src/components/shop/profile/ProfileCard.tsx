@@ -17,11 +17,12 @@ type ProfileCardProps = {
     last_name: string | null;
     phone: string | null;
     role: string;
+    avatar_url?: string | null;
   };
 };
 
 const ProfileCard = ({ profileData }: ProfileCardProps) => {
-  const { updateProfileData } = useProfileData();
+  const { updateProfileData, updateProfileAvatar } = useProfileData();
   const { toast } = useToast();
   
   const form = useForm<ProfileFormValues>({
@@ -56,6 +57,19 @@ const ProfileCard = ({ profileData }: ProfileCardProps) => {
     }
   };
 
+  const handleAvatarUpdate = async (url: string) => {
+    try {
+      await updateProfileAvatar(url);
+    } catch (error) {
+      console.error('Error updating avatar:', error);
+      toast({
+        variant: "destructive",
+        title: "Avatar update failed",
+        description: "There was a problem updating your profile picture",
+      });
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -64,6 +78,9 @@ const ProfileCard = ({ profileData }: ProfileCardProps) => {
           lastName={profileData.last_name}
           email={profileData.email}
           role={profileData.role}
+          userId={profileData.id}
+          avatarUrl={profileData.avatar_url}
+          onAvatarUpdate={handleAvatarUpdate}
         />
       </CardHeader>
       <CardContent>

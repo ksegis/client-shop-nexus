@@ -40,7 +40,8 @@ export const useProfileData = () => {
           phone: user.user_metadata?.phone || '555-1234',
           role: (user.user_metadata?.role || 'customer') as ExtendedUserRole,
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          avatar_url: user.user_metadata?.avatar_url || null
         };
         
         setProfileData(mockProfile);
@@ -105,11 +106,22 @@ export const useProfileData = () => {
     }
   };
 
+  const updateProfileAvatar = async (avatarUrl: string) => {
+    return updateProfileData({ avatar_url: avatarUrl });
+  };
+
   useEffect(() => {
     if (user?.id) {
       fetchProfileData();
     }
   }, [user?.id]);
 
-  return { profileData, isLoading, error, updateProfileData, refreshProfile: fetchProfileData };
+  return { 
+    profileData, 
+    isLoading, 
+    error, 
+    updateProfileData, 
+    updateProfileAvatar, 
+    refreshProfile: fetchProfileData 
+  };
 };

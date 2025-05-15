@@ -9,18 +9,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { LogOut, User, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { UserAvatar } from '@/components/shared/profile/UserAvatar';
 
 export function UserProfileDropdown() {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
 
   if (!user) return null;
-
-  const userInitials = user.email ? user.email.substring(0, 2).toUpperCase() : 'U';
 
   // Check if user is staff or admin
   const isStaffOrAdmin = profile?.role === 'admin' || profile?.role === 'staff';
@@ -30,11 +28,11 @@ export function UserProfileDropdown() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-            <Avatar>
-              <AvatarFallback className="bg-muted">
-                {userInitials}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar 
+              avatarUrl={profile?.avatar_url} 
+              firstName={profile?.first_name} 
+              lastName={profile?.last_name}
+            />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56" align="end" forceMount>

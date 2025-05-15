@@ -9,10 +9,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from '@/components/
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { User, Phone, Mail, Truck as TruckIcon } from 'lucide-react';
+import { Phone, Mail, Truck as TruckIcon } from 'lucide-react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useProfileData } from '@/hooks/profile';
 import { useAuth } from '@/contexts/auth';
+import { ProfilePicture } from '@/components/shared/profile/ProfilePicture';
 
 const profileFormSchema = z.object({
   firstName: z.string().min(2, { message: "First name must be at least 2 characters." }),
@@ -26,7 +27,7 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 const CustomerProfile = () => {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { profileData, updateProfileData } = useProfileData();
+  const { profileData, updateProfileData, updateProfileAvatar } = useProfileData();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Initialize the form with user data
@@ -65,6 +66,27 @@ const CustomerProfile = () => {
     }
   };
 
+  const handleAvatarUpdate = async (url: string) => {
+    try {
+      await updateProfileAvatar(url);
+      toast({
+        title: "Profile picture updated",
+        description: "Your profile picture has been successfully updated.",
+      });
+    } catch (error) {
+      console.error("Error updating profile picture:", error);
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description: "There was a problem updating your profile picture.",
+      });
+    }
+  };
+
+  if (!user || !profileData) {
+    return <div className="flex justify-center p-6">Loading profile...</div>;
+  }
+
   return (
     <div className="container mx-auto max-w-4xl p-4">
       <h1 className="text-3xl font-bold mb-6">My Profile</h1>
@@ -72,9 +94,19 @@ const CustomerProfile = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2">
           <Card>
-            <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
-              <CardDescription>Update your account details and contact information</CardDescription>
+            <CardHeader className="flex flex-row items-center gap-4">
+              <ProfilePicture 
+                userId={user.id}
+                avatarUrl={profileData.avatar_url || null}
+                firstName={profileData.first_name}
+                lastName={profileData.last_name}
+                onUploadComplete={handleAvatarUpdate}
+                size="lg"
+              />
+              <div>
+                <CardTitle>Personal Information</CardTitle>
+                <CardDescription>Update your account details and contact information</CardDescription>
+              </div>
             </CardHeader>
             <CardContent>
               <Form {...form}>
@@ -87,12 +119,12 @@ const CustomerProfile = () => {
                         <FormItem>
                           <FormLabel>First Name</FormLabel>
                           <div className="relative">
-                            <span className="absolute left-3 top-3 text-gray-400">
-                              <User size={18} />
-                            </span>
                             <FormControl>
                               <Input className="pl-10" {...field} />
                             </FormControl>
+                            <span className="absolute left-3 top-3 text-gray-400">
+                              <span className="sr-only">First Name</span>
+                            </span>
                           </div>
                         </FormItem>
                       )}
@@ -105,12 +137,12 @@ const CustomerProfile = () => {
                         <FormItem>
                           <FormLabel>Last Name</FormLabel>
                           <div className="relative">
-                            <span className="absolute left-3 top-3 text-gray-400">
-                              <User size={18} />
-                            </span>
                             <FormControl>
                               <Input className="pl-10" {...field} />
                             </FormControl>
+                            <span className="absolute left-3 top-3 text-gray-400">
+                              <span className="sr-only">Last Name</span>
+                            </span>
                           </div>
                         </FormItem>
                       )}

@@ -1,21 +1,50 @@
 
 import React from 'react';
-import { User } from 'lucide-react';
 import { CardTitle, CardDescription } from '@/components/ui/card';
+import { ProfilePicture } from '@/components/shared/profile/ProfilePicture';
 
 type ProfileHeaderProps = {
   firstName: string | null;
   lastName: string | null;
   email: string;
   role: string;
+  userId?: string;
+  avatarUrl?: string | null;
+  onAvatarUpdate?: (url: string) => void;
 };
 
-const ProfileHeader = ({ firstName, lastName, email, role }: ProfileHeaderProps) => {
+const ProfileHeader = ({ 
+  firstName, 
+  lastName, 
+  email, 
+  role,
+  userId,
+  avatarUrl,
+  onAvatarUpdate 
+}: ProfileHeaderProps) => {
   return (
     <div className="flex items-center gap-4">
-      <div className="h-16 w-16 rounded-full bg-shop-light flex items-center justify-center">
-        <User className="h-8 w-8 text-shop-primary" />
-      </div>
+      {userId && onAvatarUpdate ? (
+        <ProfilePicture 
+          userId={userId}
+          avatarUrl={avatarUrl || null}
+          firstName={firstName}
+          lastName={lastName}
+          onUploadComplete={onAvatarUpdate}
+          size="lg"
+        />
+      ) : (
+        <div className="h-16 w-16 rounded-full bg-shop-light flex items-center justify-center">
+          <ProfilePicture
+            userId=""
+            avatarUrl={avatarUrl || null}
+            firstName={firstName}
+            lastName={lastName}
+            onUploadComplete={() => {}}
+            size="sm"
+          />
+        </div>
+      )}
       <div>
         <CardTitle>
           {firstName || ''} {lastName || ''}
