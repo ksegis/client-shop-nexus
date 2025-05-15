@@ -1,160 +1,166 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { UserProfile } from '@/contexts/auth/types';
+import { User } from '@supabase/supabase-js';
 
-export interface ProfileManagement {
-  profile: UserProfile | null;
-  isLoadingProfile: boolean;
-  profileError: Error | null;
-  portalType: 'customer' | 'shop' | null;
-  fetchProfile: (userId: string) => Promise<UserProfile | null>;
-  createProfile: (userId: string, profileData: Partial<UserProfile>) => Promise<UserProfile | null>;
-  updateProfile: (updates: Partial<UserProfile>) => Promise<{ success: boolean; error?: any }>;
-  getPortalType: (userProfile: UserProfile | null) => 'customer' | 'shop' | null;
-}
-
-export const useProfileManagement = (): ProfileManagement => {
+export function useProfileManagement() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [profileError, setProfileError] = useState<Error | null>(null);
-  const [portalType, setPortalType] = useState<'customer' | 'shop' | null>(null);
+  const [portalType, setPortalType] = useState<'shop' | 'customer' | null>(null);
 
-  const getPortalType = useCallback((userProfile: UserProfile | null): 'customer' | 'shop' | null => {
-    if (!userProfile) return null;
-    
-    const role = userProfile.role;
-    if (role === 'customer') return 'customer';
-    if (role === 'staff' || role === 'admin') return 'shop';
-    
-    return null;
-  }, []);
+  // Fetch the user's profile from the database
+  const fetchProfile = useCallback(async (userId: string) => {
+    if (!userId) return null;
 
-  const fetchProfile = useCallback(async (userId: string): Promise<UserProfile | null> => {
-    if (!userId) {
-      setProfile(null);
-      setPortalType(null);
-      setIsLoadingProfile(false);
-      return null;
-    }
-    
     setIsLoadingProfile(true);
     setProfileError(null);
     
     try {
+      console.log("Checking profile for user:", userId);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
-        
-      if (error) throw error;
-      
-      if (data) {
-        const userProfile = data as UserProfile;
-        setProfile(userProfile);
-        const detectedPortalType = getPortalType(userProfile);
-        setPortalType(detectedPortalType);
-        return userProfile;
-      } else {
-        setProfile(null);
-        setPortalType(null);
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        setProfileError(error);
         return null;
       }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      setProfileError(error as Error);
+
+      if (!data) {
+        console.warn(`No profile found for user: ${userId}`);
+        return null;
+      }
+
+      // Save to state
+      const userProfile = data as UserProfile;
+      setProfile(userProfile);
+      
+      // Set portal type based on role
+      const newPortalType = getPortalType(userProfile);
+      setPortalType(newPortalType);
+      
+      console.info(`Profile loaded: ${userProfile.role} Portal type: ${newPortalType}`);
+      
+      return userProfile;
+    } catch (err) {
+      console.error('Error in fetchProfile:', err);
+      setProfileError(err as Error);
       return null;
     } finally {
       setIsLoadingProfile(false);
     }
-  }, [getPortalType]);
+  }, []);
 
-  const createProfile = async (userId: string, profileData: Partial<UserProfile>): Promise<UserProfile | null> => {
+  // Create a profile for a new user
+  const createProfile = useCallback(async (userId: string, profileData: Partial<UserProfile>) => {
+    if (!userId) return null;
+
     try {
-      // Ensure email is provided as it's required by the database
+      // Make sure email is provided as it's required by the database
       if (!profileData.email) {
-        throw new Error("Email is required to create a profile");
+        console.error('Email is required when creating a profile');
+        return null;
       }
-
-      const profileToInsert = {
+      
+      const defaultProfile: UserProfile = {
         id: userId,
         email: profileData.email,
         role: profileData.role || 'customer',
         first_name: profileData.first_name || '',
         last_name: profileData.last_name || '',
         avatar_url: profileData.avatar_url || '',
-        phone: profileData.phone || ''
       };
-
+      
       const { data, error } = await supabase
         .from('profiles')
-        .insert(profileToInsert)
+        .insert([defaultProfile])
         .select()
         .single();
-        
-      if (error) throw error;
-      
-      if (data) {
-        const newProfile = data as UserProfile;
-        setProfile(newProfile);
-        const detectedPortalType = getPortalType(newProfile);
-        setPortalType(detectedPortalType);
-        return newProfile;
-      } else {
+
+      if (error) {
+        console.error('Error creating profile:', error);
         return null;
       }
-    } catch (error) {
-      console.error('Error creating profile:', error);
+
+      const userProfile = data as UserProfile;
+      setProfile(userProfile);
+      
+      // Set portal type based on role
+      const newPortalType = getPortalType(userProfile);
+      setPortalType(newPortalType);
+      
+      return userProfile;
+    } catch (err) {
+      console.error('Error in createProfile:', err);
       return null;
     }
-  };
+  }, []);
 
-  const updateProfile = async (updates: Partial<UserProfile>): Promise<{ success: boolean; error?: any }> => {
-    if (!profile?.id) {
-      return { success: false, error: 'No profile to update' };
-    }
+  // Update a user's profile
+  const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
+    // Get the current user
+    const { data: { user } } = await supabase.auth.getUser();
     
-    try {
-      // Make a copy of updates without modifying the original object
-      const updateData = { ...updates };
-      
-      // Delete email from updates if it exists, since we shouldn't update it
-      if ('email' in updateData) {
-        delete updateData.email;
-      }
+    if (!user?.id || !profile) {
+      return { success: false, error: new Error('No authenticated user or profile') };
+    }
 
+    try {
+      // Don't allow email to be updated as it's managed by auth
+      const { email, ...validUpdates } = updates;
+      
       const { error } = await supabase
         .from('profiles')
-        .update(updateData)
-        .eq('id', profile.id);
-        
-      if (error) throw error;
-      
-      // Update the local state
-      setProfile((prev) => {
-        if (!prev) return null;
-        const updated = { ...prev, ...updateData };
-        const detectedPortalType = getPortalType(updated);
-        setPortalType(detectedPortalType);
-        return updated;
-      });
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      return { success: false, error };
-    }
-  };
+        .update(validUpdates)
+        .eq('id', user.id);
 
+      if (error) {
+        console.error('Error updating profile:', error);
+        return { success: false, error };
+      }
+
+      // Update the local profile state with the changes
+      setProfile(prevProfile => {
+        if (!prevProfile) return null;
+        return { ...prevProfile, ...validUpdates };
+      });
+
+      return { success: true };
+    } catch (err) {
+      console.error('Error in updateProfile:', err);
+      return { success: false, error: err };
+    }
+  }, [profile]);
+
+  // Get the portal type based on the user's role
+  const getPortalType = useCallback((userProfile: UserProfile | null) => {
+    if (!userProfile) return null;
+    
+    const role = userProfile.role;
+    
+    if (role === 'customer') {
+      return 'customer';
+    } else if (role === 'admin' || role === 'staff') {
+      return 'shop';
+    }
+    
+    return null;
+  }, []);
+  
   return {
     profile,
+    portalType,
     isLoadingProfile,
     profileError,
-    portalType,
     fetchProfile,
     createProfile,
     updateProfile,
     getPortalType,
   };
-};
+}
