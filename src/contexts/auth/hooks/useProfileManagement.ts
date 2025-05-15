@@ -4,17 +4,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { UserProfile } from '../types';
 import { User } from '@supabase/supabase-js';
 
-export function useProfileManagement(user: User | null) {
+export function useProfileManagement() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [profileError, setProfileError] = useState<Error | null>(null);
-
-  // Clear profile when user changes
-  useEffect(() => {
-    if (!user) {
-      setProfile(null);
-    }
-  }, [user]);
+  const [portalType, setPortalType] = useState<'shop' | 'customer' | null>(null);
 
   // Fetch the user's profile from the database
   const fetchProfile = useCallback(async (userId: string) => {
@@ -47,9 +41,11 @@ export function useProfileManagement(user: User | null) {
       const userProfile = data as UserProfile;
       setProfile(userProfile);
       
-      console.info(`Profile loaded: ${userProfile.role} Portal type: ${
-        userProfile.role === 'customer' ? 'customer' : 'shop'
-      }`);
+      // Set portal type based on role
+      const newPortalType = getPortalType(userProfile);
+      setPortalType(newPortalType);
+      
+      console.info(`Profile loaded: ${userProfile.role} Portal type: ${newPortalType}`);
       
       return userProfile;
     } catch (err) {
@@ -89,6 +85,10 @@ export function useProfileManagement(user: User | null) {
       const userProfile = data as UserProfile;
       setProfile(userProfile);
       
+      // Set portal type based on role
+      const newPortalType = getPortalType(userProfile);
+      setPortalType(newPortalType);
+      
       return userProfile;
     } catch (err) {
       console.error('Error in createProfile:', err);
@@ -98,6 +98,8 @@ export function useProfileManagement(user: User | null) {
 
   // Update a user's profile
   const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
     if (!user?.id || !profile) {
       return { success: false, error: new Error('No authenticated user or profile') };
     }
@@ -124,7 +126,7 @@ export function useProfileManagement(user: User | null) {
       console.error('Error in updateProfile:', err);
       return { success: false, error: err };
     }
-  }, [user, profile]);
+  }, [profile]);
 
   // Get the portal type based on the user's role
   const getPortalType = useCallback((userProfile: UserProfile | null) => {
@@ -143,6 +145,7 @@ export function useProfileManagement(user: User | null) {
   
   return {
     profile,
+    portalType,
     isLoadingProfile,
     profileError,
     fetchProfile,

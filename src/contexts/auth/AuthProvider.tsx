@@ -6,7 +6,7 @@ import { AuthContext } from './AuthContext';
 import { UserProfile, UserRole, AuthResult } from './types';
 import { useAuthStateListener } from './hooks';
 import { useRedirection } from './hooks/useRedirection';
-import { useProfileManagement } from '@/hooks/profile/useProfileManagement';
+import { useProfileManagement } from './hooks/useProfileManagement';
 import { useAuthActions } from './hooks/useAuthActions';
 
 interface AuthProviderProps {
