@@ -31,9 +31,10 @@ import {
   Wrench,
   Truck
 } from "lucide-react";
+import { NavigationItem, NavigationGroup } from "./types";
 
 // Group navigation items according to route structure
-const navigationGroups = {
+const navigationGroups: NavigationGroup = {
   main: [
     {
       title: "Dashboard",

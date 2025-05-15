@@ -27,9 +27,10 @@ import {
   Settings,
   Activity
 } from "lucide-react";
+import { NavigationItem, NavigationGroup } from "./sidebar/types";
 
 // Group navigation items according to route structure
-const navigationGroups = {
+const navigationGroups: NavigationGroup = {
   main: [
     {
       title: "Dashboard",
@@ -114,10 +115,10 @@ const navigationGroups = {
 };
 
 export const Sidebar = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   
   // If user is null or role is undefined, default to false
-  const isAdmin = user?.app_metadata?.role === 'admin' || user?.profile?.role === 'admin';
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'test_admin';
   
   // Create a flattened array of all navigation items
   const allNavigationItems = Object.values(navigationGroups).flat();
