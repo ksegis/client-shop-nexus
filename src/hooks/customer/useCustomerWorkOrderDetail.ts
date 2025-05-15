@@ -133,9 +133,9 @@ export function useCustomerWorkOrderDetail(workOrderId: string) {
         status: orderData.status,
         date: new Date(orderData.created_at).toISOString().split('T')[0],
         progress: orderData.status === 'completed' ? 100 : orderData.status === 'in_progress' ? 75 : 0,
-        estimatedCompletion: orderData.created_at ? new Date(orderData.created_at).toISOString().split('T')[0] : null,
+        estimatedCompletion: orderData.estimated_cost ? new Date(orderData.created_at).toISOString().split('T')[0] : null,
         customer: {
-          name: `${orderData.customer?.first_name || ''} ${orderData.customer?.last_name || ''}`.trim(),
+          name: orderData.customer ? `${orderData.customer.first_name || ''} ${orderData.customer.last_name || ''}`.trim() : 'Unknown',
           email: orderData.customer?.email || '',
           phone: orderData.customer?.phone || ''
         },

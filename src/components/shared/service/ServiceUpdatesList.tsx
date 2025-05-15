@@ -1,9 +1,11 @@
 
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { ServiceUpdate } from '@/hooks/work-orders/useServiceUpdates';
-import { CheckCircle, Clock } from 'lucide-react';
+import { MessageSquare, Calendar, CheckCircle2, Circle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
+import { ServiceUpdate } from '@/hooks/work-orders/useServiceUpdates';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ServiceUpdatesListProps {
   updates: ServiceUpdate[];
@@ -11,15 +13,42 @@ interface ServiceUpdatesListProps {
   isShopPortal?: boolean;
 }
 
-export const ServiceUpdatesList: React.FC<ServiceUpdatesListProps> = ({
+export const ServiceUpdatesList: React.FC<ServiceUpdatesListProps> = ({ 
   updates,
   loading,
-  isShopPortal = false
+  isShopPortal = true
 }) => {
+  // Format the date using date-fns
+  const formatUpdateDate = (dateString: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch (error) {
+      console.error('Invalid date format:', dateString, error);
+      return 'Unknown date';
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-8">
-        <p className="text-muted-foreground">Loading service updates...</p>
+      <div className="space-y-4">
+        {[1, 2, 3].map(i => (
+          <Card key={i} className="bg-slate-50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <Skeleton className="h-6 w-6 rounded-full" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+                <Skeleton className="h-4 w-16" />
+              </div>
+              <Skeleton className="h-4 w-full mb-2" />
+              <Skeleton className="h-4 w-3/4" />
+              <div className="mt-3">
+                <Skeleton className="h-5 w-20" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     );
   }
@@ -27,82 +56,69 @@ export const ServiceUpdatesList: React.FC<ServiceUpdatesListProps> = ({
   if (updates.length === 0) {
     return (
       <div className="text-center py-8">
-        <p className="text-muted-foreground">
-          {isShopPortal
-            ? 'No updates have been posted yet. Add the first update about this service.'
-            : 'No updates have been posted yet about your service.'}
+        <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-2 text-sm font-medium text-gray-900">No Updates Yet</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          There are no service updates for this work order yet.
         </p>
+        {isShopPortal && (
+          <div className="mt-6">
+            <button
+              type="button"
+              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Add Update
+              <MessageSquare className="ml-2 -mr-1 h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        )}
       </div>
     );
   }
 
-  // Group updates by date
-  const groupedUpdates: { [date: string]: ServiceUpdate[] } = {};
-  
-  updates.forEach(update => {
-    const date = new Date(update.timestamp || update.created_at).toLocaleDateString();
-    if (!groupedUpdates[date]) {
-      groupedUpdates[date] = [];
-    }
-    groupedUpdates[date].push(update);
-  });
-
   return (
-    <div className="space-y-6">
-      {Object.entries(groupedUpdates).map(([date, dateUpdates]) => (
-        <div key={date}>
-          <h3 className="text-sm font-medium text-muted-foreground mb-3">{date}</h3>
-          
-          <div className="space-y-4">
-            {dateUpdates.map((update) => (
-              <Card key={update.id}>
-                <CardContent className="p-4">
-                  {update.milestone && (
-                    <div className="flex items-center mb-2">
-                      {update.milestoneCompleted || update.milestone_completed ? (
-                        <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                      ) : (
-                        <Clock className="h-4 w-4 text-blue-500 mr-2" />
-                      )}
-                      <span className={`text-sm font-medium ${
-                        update.milestoneCompleted || update.milestone_completed ? 'text-green-700' : 'text-blue-700'
-                      }`}>
-                        {update.milestone}
-                      </span>
-                    </div>
-                  )}
-                  
-                  <p className="text-sm whitespace-pre-line">{update.content}</p>
-                  
-                  {/* Only show images if they exist */}
-                  {update.images && update.images.length > 0 && (
-                    <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {update.images.map((imageUrl, index) => (
-                        <a 
-                          key={index} 
-                          href={imageUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="block overflow-hidden rounded-md border"
-                        >
-                          <img 
-                            src={imageUrl} 
-                            alt={`Service update ${index + 1}`} 
-                            className="h-24 w-full object-cover"
-                          />
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                  
-                  <div className="mt-3 text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(update.timestamp || update.created_at), { addSuffix: true })}
+    <div className="space-y-4">
+      {updates.map((update, index) => (
+        <Card key={update.id || index} className="bg-slate-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2">
+                {update.milestone && (
+                  <>
+                    {update.milestone_completed ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <Circle className="h-5 w-5 text-blue-500" />
+                    )}
+                    <span className="font-medium">
+                      {update.milestone}
+                    </span>
+                  </>
+                )}
+              </div>
+              <span className="text-xs text-gray-500 flex items-center">
+                <Calendar className="h-3 w-3 mr-1" />
+                {formatUpdateDate(update.date || update.created_at)}
+              </span>
+            </div>
+            
+            <p className="text-sm text-gray-600 whitespace-pre-line">{update.content}</p>
+            
+            {update.images && update.images.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {update.images.map((image, i) => (
+                  <div key={i} className="h-16 w-16 rounded overflow-hidden bg-gray-100">
+                    <img 
+                      src={image} 
+                      alt={`Update image ${i+1}`}
+                      className="h-full w-full object-cover"
+                    />
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       ))}
     </div>
   );

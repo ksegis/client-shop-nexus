@@ -136,7 +136,7 @@ export function useCustomerWorkOrders() {
         .select(`
           *,
           vehicles:vehicle_id (make, model, year, license_plate, vin),
-          customer:customer_id (first_name, last_name, email, phone)
+          customer_profile:customer_id (first_name, last_name, email, phone)
         `)
         .eq('customer_id', user.id)
         .order('created_at', { ascending: false });
@@ -161,11 +161,11 @@ export function useCustomerWorkOrders() {
           status: order.status,
           date: new Date(order.created_at).toISOString().split('T')[0],
           progress: progress,
-          estimatedCompletion: order.created_at ? new Date(order.created_at).toISOString().split('T')[0] : null,
+          estimatedCompletion: order.estimated_cost ? new Date(order.created_at).toISOString().split('T')[0] : null,
           customer: {
-            name: order.customer ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim() : 'Unknown',
-            email: order.customer?.email || '',
-            phone: order.customer?.phone || ''
+            name: order.customer_profile ? `${order.customer_profile.first_name || ''} ${order.customer_profile.last_name || ''}`.trim() : 'Unknown',
+            email: order.customer_profile?.email || '',
+            phone: order.customer_profile?.phone || ''
           },
           vehicle: {
             year: order.vehicles?.year?.toString() || '',
