@@ -10,7 +10,7 @@ const CustomerAuthHeader = () => {
           <User className="h-6 w-6 text-primary" />
         </div>
       </div>
-      <CardTitle className="text-2xl">Customer Portal</CardTitle>
+      <CardTitle className="text-2xl">Custom Trick Connections</CardTitle>
       <CardDescription>
         Sign in to access your customer account
       </CardDescription>

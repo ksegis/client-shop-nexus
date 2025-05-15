@@ -15,7 +15,7 @@ export const Logo = ({ portalType }: LogoProps) => {
           <div className="flex items-center space-x-2">
             <Wrench className="h-6 w-6 text-shop-primary" />
             <span className="font-bold text-lg text-shop-primary">
-              {portalType === 'customer' ? 'Custom Truck Connections' : 'Custom Truck Connections'}
+              Custom Trick Connections
             </span>
           </div>
         </div>

@@ -8,7 +8,7 @@ const AuthHeader = () => {
       <div className="flex justify-center mb-2">
         <ShieldCheck className="h-12 w-12 text-primary" />
       </div>
-      <CardTitle className="text-2xl">Shop Management Login</CardTitle>
+      <CardTitle className="text-2xl">Custom Trick Connections</CardTitle>
       <CardDescription>Sign in to your shop account or create a new one</CardDescription>
     </CardHeader>
   );

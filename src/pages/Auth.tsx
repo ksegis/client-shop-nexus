@@ -76,7 +76,7 @@ const Auth = () => {
           <CardHeader className="text-center">
             <div className="mb-6">
               <ShoppingBag className="h-16 w-16 mx-auto text-shop-primary" />
-              <CardTitle className="text-3xl font-bold mt-4 mb-2">Custom Truck Connection</CardTitle>
+              <CardTitle className="text-3xl font-bold mt-4 mb-2">Custom Trick Connections</CardTitle>
               <CardDescription className="text-gray-600 mb-8">Access your portal</CardDescription>
             </div>
           </CardHeader>
