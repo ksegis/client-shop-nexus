@@ -47,28 +47,72 @@ export const useDashboardData = (): DashboardSummary => {
   const { data: estimatesData, isLoading: isEstimatesLoading, error: estimatesError } = useQuery({
     queryKey: ['dashboard', 'estimates'],
     queryFn: async () => {
+      // Instead of joining with customers which might not exist, fetch estimates and handle customer names separately
       const { data, error } = await supabase
         .from('estimates')
-        .select('id, title, total_amount, status, created_at, customers(name)')
+        .select('id, title, total_amount, status, created_at, customer_id')
         .order('created_at', { ascending: false })
         .limit(5);
       
       if (error) throw error;
-      return data;
+      
+      // For each estimate, fetch the customer profile
+      const estimatesWithCustomers = await Promise.all(
+        data.map(async (estimate) => {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('first_name, last_name')
+            .eq('id', estimate.customer_id)
+            .single();
+          
+          const customerName = profileData 
+            ? `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() || 'Unknown Customer'
+            : 'Unknown Customer';
+            
+          return {
+            ...estimate,
+            customer_name: customerName
+          };
+        })
+      );
+      
+      return estimatesWithCustomers;
     }
   });
 
   const { data: workOrdersData, isLoading: isWorkOrdersLoading, error: workOrdersError } = useQuery({
     queryKey: ['dashboard', 'workOrders'],
     queryFn: async () => {
+      // Similarly for work orders, fetch separately and handle customer names manually
       const { data, error } = await supabase
         .from('work_orders')
-        .select('id, title, status, created_at, customers(name)')
+        .select('id, title, status, created_at, customer_id')
         .order('created_at', { ascending: false })
         .limit(5);
       
       if (error) throw error;
-      return data;
+      
+      // For each work order, fetch the customer profile
+      const workOrdersWithCustomers = await Promise.all(
+        data.map(async (workOrder) => {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('first_name, last_name')
+            .eq('id', workOrder.customer_id)
+            .single();
+          
+          const customerName = profileData 
+            ? `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() || 'Unknown Customer'
+            : 'Unknown Customer';
+            
+          return {
+            ...workOrder,
+            customer_name: customerName
+          };
+        })
+      );
+      
+      return workOrdersWithCustomers;
     }
   });
 
@@ -110,7 +154,7 @@ export const useDashboardData = (): DashboardSummary => {
     recent: estimatesData?.map(e => ({
       id: e.id,
       title: e.title,
-      customer_name: e.customers?.name || 'Unknown Customer',
+      customer_name: e.customer_name,
       created_at: e.created_at,
       total_amount: e.total_amount
     })) || []
@@ -124,7 +168,7 @@ export const useDashboardData = (): DashboardSummary => {
     recent: workOrdersData?.map(w => ({
       id: w.id,
       title: w.title,
-      customer_name: w.customers?.name || 'Unknown Customer',
+      customer_name: w.customer_name,
       status: w.status,
       created_at: w.created_at
     })) || []
