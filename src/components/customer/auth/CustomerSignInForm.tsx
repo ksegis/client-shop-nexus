@@ -1,6 +1,5 @@
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,7 +17,6 @@ const CustomerSignInForm = () => {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const { signIn } = useAuth();
-  const navigate = useNavigate();
 
   // Clear error when inputs change
   const handleInputChange = () => {
@@ -48,13 +46,12 @@ const CustomerSignInForm = () => {
       
       if (result.success) {
         console.log("CustomerSignIn: Sign-in successful");
-        // Auth Provider's redirection logic will handle the redirect automatically
-        // No need to navigate here as the useRedirection hook will take care of it
-        // Just a small delay to ensure the auth state updates
         toast({
           title: "Login successful",
           description: "Redirecting to customer portal..."
         });
+        // The redirection will be handled by the useRedirection hook
+        // No need to explicitly navigate here
       }
       
     } catch (error: any) {
@@ -144,7 +141,7 @@ const CustomerSignInForm = () => {
             type="button"
             className="text-primary hover:underline"
             disabled={loading}
-            onClick={() => navigate('/customer/reset-password')}
+            onClick={() => window.location.href = '/customer/reset-password'}
           >
             Forgot password?
           </button>

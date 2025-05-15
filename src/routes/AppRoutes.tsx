@@ -39,8 +39,9 @@ const AppRoutes: React.FC = () => {
             }
           />
           
-          {/* Redirect /auth to the main index page */}
+          {/* Redirect legacy auth paths */}
           <Route path="/auth" element={<Navigate to="/" replace />} />
+          <Route path="/auth/*" element={<Navigate to="/" replace />} />
           
           <Route path="*" element={<NotFound />} />
         </Routes>

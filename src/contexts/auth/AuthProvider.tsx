@@ -1,71 +1,93 @@
 
-import React, { useCallback } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 import { AuthContext } from './AuthContext';
-import { AuthContextType, UserRole } from './types';
-import { useAuthStateListener } from './hooks/useAuthStateListener';
+import { UserProfile, UserRole, AuthResult } from './types';
+import { useAuthStateListener, useRedirection } from './hooks';
+import { useProfileManagement } from '@/hooks/profile/useProfileManagement';
 import { useAuthActions } from './hooks/useAuthActions';
-import { useProfileManagement } from './hooks/useProfileManagement';
 
 interface AuthProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const { user, session, loading: authLoading } = useAuthStateListener();
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
+  const { 
+    profile, 
+    portalType, 
+    isLoadingProfile, 
+    fetchProfile, 
+    updateProfile, 
+    getPortalType 
+  } = useProfileManagement();
   const { 
     signUp, 
     signIn, 
     signOut, 
     resetPassword, 
-    updatePassword,
-    getRedirectPathByRole
+    updatePassword 
   } = useAuthActions();
   
-  const { 
-    profile, 
-    isLoadingProfile, 
-    profileError, 
-    updateProfile,
-    getPortalType 
-  } = useProfileManagement(user);
-
-  const portalType = profile ? getPortalType(profile) : null;
-  const isDevMode = process.env.NODE_ENV === 'development';
-
-  // Helper function for validating user access
-  const validateAccess = useCallback((allowedRoles: UserRole[]): boolean => {
-    if (!profile?.role) {
-      return false;
-    }
-
-    const userRole = profile.role;
+  // Setup auth listener
+  useAuthStateListener({
+    setUser,
+    setSession,
+    setIsLoading,
+    fetchProfile
+  });
+  
+  // Setup redirects
+  useRedirection();
+  
+  // Function to validate if user has the required role
+  const validateAccess = (allowedRoles?: UserRole[]): boolean => {
+    if (!user || !profile) return false;
+    if (!allowedRoles || allowedRoles.length === 0) return true;
     
-    // For admin users, grant access to staff resources too
-    if (userRole === 'admin' && allowedRoles.includes('staff')) {
-      return true;
-    }
-    
-    return allowedRoles.includes(userRole);
-  }, [profile?.role]);
-
-  const contextValue: AuthContextType = {
+    return profile.role ? allowedRoles.includes(profile.role as UserRole) : false;
+  };
+  
+  // Combined loading state
+  const combinedIsLoading = isLoading || isLoadingProfile;
+  
+  // Auth is initialized and user data is available
+  const isAuthenticated = !combinedIsLoading && !!user && !!profile;
+  
+  // Create auth context value
+  const value = {
     user,
     profile,
-    isLoading: authLoading || isLoadingProfile,
-    isAuthenticated: !!user,
     portalType,
+    session,
+    isLoading: combinedIsLoading,
+    isAuthenticated,
+    signUp,
     signIn,
     signOut,
-    signUp,
     resetPassword,
     updatePassword,
     updateProfile,
     validateAccess
   };
 
+  useEffect(() => {
+    // Log the current auth state when it changes
+    console.log('AuthProvider: Auth state changed', {
+      isLoading: combinedIsLoading,
+      isAuthenticated,
+      user: user?.id,
+      profile: profile?.id,
+      portalType
+    });
+  }, [combinedIsLoading, isAuthenticated, user, profile, portalType]);
+  
   return (
-    <AuthContext.Provider value={contextValue}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
-};
+}
