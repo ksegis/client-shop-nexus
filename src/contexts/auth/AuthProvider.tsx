@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { AuthContext } from './AuthContext';
 import { AuthContextType, UserProfile, UserRole } from './types';
@@ -80,7 +81,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           .from('profiles')
           .select('*')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
         if (profileError) {
           console.error('Error fetching profile:', profileError);
@@ -132,11 +133,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           // Also create the profile in the database - but convert test roles to base roles for DB compatibility
           try {
-            let dbRole = role;
-            // Convert test roles to their base roles for database compatibility
-            if (role.startsWith('test_')) {
-              dbRole = role.replace('test_', '') as 'admin' | 'staff' | 'customer';
-            }
+            // Map test roles to their base roles for database compatibility
+            const dbRole = role.startsWith('test_') 
+              ? role.replace('test_', '') as 'admin' | 'staff' | 'customer' 
+              : role;
+
+            // Ensure dbRole is one of the allowed values
+            const validRole = ['admin', 'staff', 'customer'].includes(dbRole) 
+              ? dbRole 
+              : 'customer';
             
             const { error: insertError } = await supabase
               .from('profiles')
@@ -145,7 +150,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 email: user.email,
                 first_name: user.user_metadata?.first_name || '',
                 last_name: user.user_metadata?.last_name || '',
-                role: dbRole
+                role: validRole
               });
               
             if (insertError) {

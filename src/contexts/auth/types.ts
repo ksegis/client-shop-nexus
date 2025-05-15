@@ -65,3 +65,19 @@ export const getPortalByRole = (role: UserRole): 'shop' | 'customer' => {
   // For all other roles, check if they're customer or shop staff
   return role.includes('customer') ? 'customer' : 'shop';
 };
+
+// Helper function to ensure role is compatible with database schema
+export const mapRoleToDbRole = (role: UserRole): 'customer' | 'staff' | 'admin' => {
+  // Convert test roles to their base roles for database compatibility
+  if (role.startsWith('test_')) {
+    return role.replace('test_', '') as 'admin' | 'staff' | 'customer';
+  }
+  
+  // Non-test roles are already compatible, but ensure they're valid
+  if (['admin', 'staff', 'customer'].includes(role)) {
+    return role as 'admin' | 'staff' | 'customer';
+  }
+  
+  // Default fallback
+  return 'customer';
+};
