@@ -23,6 +23,48 @@ export const AuthorizationDebugger: React.FC = () => {
   const location = useLocation();
   const [steps, setSteps] = useState<AuthStep[]>([]);
   const [expanded, setExpanded] = useState(true);
+  const [isVisible, setIsVisible] = useState(true);
+  
+  // Use localStorage to persist debug steps across refreshes
+  useEffect(() => {
+    const savedSteps = localStorage.getItem('authDebuggerSteps');
+    if (savedSteps) {
+      try {
+        setSteps(JSON.parse(savedSteps));
+      } catch (e) {
+        console.error('Failed to parse saved debug steps', e);
+      }
+    }
+    
+    // Set visibility from localStorage if available
+    const savedVisibility = localStorage.getItem('authDebuggerVisible');
+    if (savedVisibility !== null) {
+      setIsVisible(savedVisibility === 'true');
+    }
+    
+    // Set expanded state from localStorage if available
+    const savedExpanded = localStorage.getItem('authDebuggerExpanded');
+    if (savedExpanded !== null) {
+      setExpanded(savedExpanded === 'true');
+    }
+  }, []);
+  
+  // Save steps to localStorage when they change
+  useEffect(() => {
+    if (steps.length > 0) {
+      localStorage.setItem('authDebuggerSteps', JSON.stringify(steps.slice(-50))); // Keep last 50 steps
+    }
+  }, [steps]);
+  
+  // Save visibility to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('authDebuggerVisible', String(isVisible));
+  }, [isVisible]);
+  
+  // Save expanded state to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('authDebuggerExpanded', String(expanded));
+  }, [expanded]);
   
   // Format time for readability
   const getTime = () => {
@@ -110,8 +152,18 @@ export const AuthorizationDebugger: React.FC = () => {
     }
   }, [location.pathname, profile?.role, isLoading]);
   
-  if (steps.length === 0) {
-    return null;
+  // Don't return null, always render something even if hidden
+  if (!isVisible) {
+    return (
+      <div className="fixed bottom-4 right-4 z-50">
+        <button 
+          onClick={() => setIsVisible(true)} 
+          className="bg-blue-500 text-white px-3 py-1 rounded-full shadow-lg text-xs"
+        >
+          Show Auth Debugger
+        </button>
+      </div>
+    );
   }
   
   return (
@@ -130,6 +182,12 @@ export const AuthorizationDebugger: React.FC = () => {
             className="px-2 py-1 bg-slate-600 hover:bg-slate-500 rounded text-xs"
           >
             Clear
+          </button>
+          <button 
+            onClick={() => setIsVisible(false)} 
+            className="px-2 py-1 bg-slate-600 hover:bg-slate-500 rounded text-xs"
+          >
+            Hide
           </button>
         </div>
       </div>
