@@ -43,7 +43,7 @@ const ShopRoutes = () => {
   }, []);
 
   return (
-    <Layout>
+    <Layout portalType="shop">
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />

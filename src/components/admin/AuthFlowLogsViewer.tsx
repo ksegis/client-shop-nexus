@@ -61,7 +61,13 @@ export function AuthFlowLogsViewer() {
         throw error;
       }
       
-      setLogs(data || []);
+      // Convert the data to the correct type
+      const typedLogs: AuthFlowLog[] = data?.map(log => ({
+        ...log,
+        details: log.details as Record<string, any> || null
+      })) || [];
+      
+      setLogs(typedLogs);
     } catch (error) {
       console.error('Error fetching auth logs:', error);
       toast({

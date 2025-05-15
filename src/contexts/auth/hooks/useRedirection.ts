@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../useAuth';
+import { useAuthFlowLogs } from '@/hooks/useAuthFlowLogs';
 
 export const useRedirection = () => {
   const { 
@@ -15,11 +16,32 @@ export const useRedirection = () => {
   const location = useLocation();
   const redirectionInProgress = useRef(false);
   const lastRedirectTime = useRef(0);
+  const lastPath = useRef<string | null>(null);
+  const { logAuthFlowEvent } = useAuthFlowLogs();
 
   useEffect(() => {
+    // Skip redirection if no path change has occurred
+    if (location.pathname === lastPath.current) {
+      return;
+    }
+    
+    // Update the last path reference
+    lastPath.current = location.pathname;
+    
     // Prevent redirect loops by enforcing minimum time between redirects
     const currentTime = Date.now();
     if (currentTime - lastRedirectTime.current < 3000) {
+      logAuthFlowEvent({
+        event_type: 'redirect_prevented_throttle',
+        user_id: user?.id,
+        email: user?.email,
+        user_role: profile?.role,
+        route_path: location.pathname,
+        details: {
+          timeSinceLastRedirect: currentTime - lastRedirectTime.current,
+          threshold: 3000
+        }
+      });
       console.log('🛑 Too many redirects in a short period, preventing redirect loop');
       return;
     }
@@ -31,6 +53,19 @@ export const useRedirection = () => {
     
     // CRITICAL: Skip redirection logic entirely when still loading OR when profile/portalType isn't determined yet
     if (isLoading || (user && (!profile || !portalType))) {
+      logAuthFlowEvent({
+        event_type: 'redirection_skipped_loading',
+        user_id: user?.id,
+        email: user?.email,
+        route_path: location.pathname,
+        details: {
+          isLoading,
+          hasUser: !!user,
+          hasProfile: !!profile,
+          hasPortalType: !!portalType,
+          currentPath: location.pathname
+        }
+      });
       console.log('🔄 Redirection: Loading auth state or waiting for profile data, skipping redirects');
       return;
     }
@@ -59,6 +94,16 @@ export const useRedirection = () => {
       
       // Case 1: Not authenticated trying to access protected page
       if (!user && !isAuthPage) {
+        logAuthFlowEvent({
+          event_type: 'redirect_unauthenticated',
+          route_path: currentPath,
+          details: {
+            redirectTo: "/auth",
+            from: currentPath,
+            isAuthPage 
+          }
+        });
+        
         console.log('➡️ Redirecting to /auth (not authenticated on protected page)');
         lastRedirectTime.current = Date.now();
         navigate('/auth', { 
@@ -73,6 +118,22 @@ export const useRedirection = () => {
       // ONLY if we have determined the portalType AND profile - this is critical to prevent loops
       if (user && isAuthPage && portalType && profile) {
         const redirectPath = portalType === 'customer' ? '/customer' : '/shop';
+        
+        logAuthFlowEvent({
+          event_type: 'redirect_authenticated_from_auth',
+          user_id: user?.id,
+          email: user?.email, 
+          user_role: profile?.role,
+          route_path: currentPath,
+          portal_type: portalType,
+          details: {
+            redirectTo: redirectPath,
+            isAuthPage,
+            hasProfile: !!profile,
+            hasPortalType: !!portalType
+          }
+        });
+        
         console.log(`➡️ Redirecting to ${redirectPath} (authenticated on auth page, portalType: ${portalType})`);
         
         // Add a slight delay to ensure other auth state processing completes
@@ -85,6 +146,22 @@ export const useRedirection = () => {
         console.groupEnd();
         return;
       } 
+      
+      // No redirection needed
+      logAuthFlowEvent({
+        event_type: 'no_redirection_needed',
+        user_id: user?.id,
+        email: user?.email,
+        user_role: profile?.role,
+        route_path: currentPath,
+        portal_type: portalType,
+        details: {
+          isAuthPage,
+          hasUser: !!user,
+          hasProfile: !!profile,
+          hasPortalType: !!portalType
+        }
+      });
       
       console.log('✅ No redirection needed');
     } finally {
