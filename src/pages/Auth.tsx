@@ -72,7 +72,11 @@ const Auth = () => {
       });
       
       console.log(`Auth Page - Redirecting to ${redirectPath} (already authenticated)`);
-      navigate(redirectPath, { replace: true });
+      
+      // Increased timeout for more stability - from no delay to 800ms
+      setTimeout(() => {
+        navigate(redirectPath, { replace: true });
+      }, 800);
     }
   }, [isAuthenticated, portalType, navigate, fromPath]);
   

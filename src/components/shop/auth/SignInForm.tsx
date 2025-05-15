@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -61,10 +60,10 @@ const SignInForm = () => {
           user_role: role
         });
         
-        // Allow a small delay to ensure all state is synchronized
+        // Increased timeout from 100ms to 800ms
         const timer = setTimeout(() => {
           navigate('/shop', { replace: true });
-        }, 100);
+        }, 800);
         
         return () => clearTimeout(timer);
       } else if (role === 'customer') {
@@ -130,11 +129,10 @@ const SignInForm = () => {
         
         console.log("SignIn: Sign-in successful, redirecting...");
         
-        // Explicitly navigate to shop dashboard after successful login
-        // Add a short delay to ensure auth state is fully updated
+        // Increased timeout from 300ms to 1000ms
         setTimeout(() => {
           navigate('/shop', { replace: true });
-        }, 300);
+        }, 1000);
       }
       
     } catch (error: any) {

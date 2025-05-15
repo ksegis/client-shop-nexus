@@ -1,4 +1,3 @@
-
 import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../useAuth';
@@ -29,8 +28,9 @@ export const useRedirection = () => {
     lastPath.current = location.pathname;
     
     // Prevent redirect loops by enforcing minimum time between redirects
+    // Increased from 3000ms to 5000ms
     const currentTime = Date.now();
-    if (currentTime - lastRedirectTime.current < 3000) {
+    if (currentTime - lastRedirectTime.current < 5000) {
       logAuthFlowEvent({
         event_type: 'redirect_prevented_throttle',
         user_id: user?.id,
@@ -39,7 +39,7 @@ export const useRedirection = () => {
         route_path: location.pathname,
         details: {
           timeSinceLastRedirect: currentTime - lastRedirectTime.current,
-          threshold: 3000
+          threshold: 5000
         }
       });
       console.log('🛑 Too many redirects in a short period, preventing redirect loop');
@@ -136,12 +136,12 @@ export const useRedirection = () => {
         
         console.log(`➡️ Redirecting to ${redirectPath} (authenticated on auth page, portalType: ${portalType})`);
         
-        // Add a slight delay to ensure other auth state processing completes
+        // Increased delay from 300ms to 1200ms
         setTimeout(() => {
           lastRedirectTime.current = Date.now();
           navigate(redirectPath, { replace: true });
           redirectionInProgress.current = false;
-        }, 300); // Increased delay for more reliability
+        }, 1200);
         
         console.groupEnd();
         return;

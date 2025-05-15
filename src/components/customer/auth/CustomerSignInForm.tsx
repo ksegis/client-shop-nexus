@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -60,10 +59,10 @@ const CustomerSignInForm = () => {
           user_role: role
         });
         
-        // Allow a small delay to ensure all state is synchronized
+        // Increased timeout from 100ms to 800ms
         const timer = setTimeout(() => {
           navigate('/customer', { replace: true });
-        }, 100);
+        }, 800);
         
         return () => clearTimeout(timer);
       } else if (role === 'admin' || role === 'staff') {
@@ -129,11 +128,10 @@ const CustomerSignInForm = () => {
         
         console.log("CustomerSignIn: Sign-in successful, redirecting to customer portal");
         
-        // Explicitly navigate to customer dashboard after successful login
-        // Add a short delay to ensure auth state is fully updated
+        // Increased timeout from 300ms to 1000ms
         setTimeout(() => {
           navigate('/customer', { replace: true });
-        }, 300);
+        }, 1000);
       }
       
     } catch (error: any) {
