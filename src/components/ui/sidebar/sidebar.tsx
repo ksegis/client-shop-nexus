@@ -15,7 +15,6 @@ import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarItem } from "./sidebar-item";
 import { useAuth } from '@/contexts/auth'; 
-import { useNavigationLinks } from '@/components/layout/header/NavigationLinks';
 import { 
   Shield, 
   Users, 
@@ -26,47 +25,223 @@ import {
   Settings, 
   FileText, 
   FileCheck,
-  Key,
-  Activity,
-  Webhook,
   Calendar,
-  ShoppingCart
+  ShoppingCart,
+  Activity,
+  Wrench,
+  Truck
 } from "lucide-react";
 
-// Map paths to icons
-const pathIconMap = {
-  "/shop": BarChart,
-  "/shop/service-desk": ListChecks,
-  "/shop/customers": UserPlus,
-  "/shop/estimates": FileText,
-  "/shop/invoices": FileCheck,
-  "/shop/parts": ShoppingCart,
-  "/shop/inventory": Package,
-  "/shop/reports": BarChart,
-  "/shop/employees": Users,
-  "/shop/admin": Shield,
+// Group navigation items according to route structure
+const navigationGroups = {
+  main: [
+    {
+      title: "Dashboard",
+      href: "/shop",
+      icon: BarChart,
+    },
+    {
+      title: "Profile",
+      href: "/shop/profile",
+      icon: Settings,
+    }
+  ],
+  customer: [
+    {
+      title: "Customers",
+      href: "/shop/customers",
+      icon: UserPlus,
+    },
+    {
+      title: "Employees",
+      href: "/shop/employees",
+      icon: Users,
+      adminOnly: true
+    }
+  ],
+  workOrders: [
+    {
+      title: "Work Orders",
+      href: "/shop/work-orders",
+      icon: Wrench,
+    }
+  ],
+  financial: [
+    {
+      title: "Estimates",
+      href: "/shop/estimates",
+      icon: FileText,
+    },
+    {
+      title: "Invoices",
+      href: "/shop/invoices",
+      icon: FileCheck,
+    },
+    {
+      title: "Reports",
+      href: "/shop/reports",
+      icon: Activity,
+    }
+  ],
+  inventory: [
+    {
+      title: "Parts Desk",
+      href: "/shop/parts",
+      icon: ShoppingCart,
+    },
+    {
+      title: "Inventory",
+      href: "/shop/inventory",
+      icon: Package,
+    }
+  ],
+  service: [
+    {
+      title: "Service Desk",
+      href: "/shop/service-desk",
+      icon: Truck,
+    },
+    {
+      title: "Appointments",
+      href: "/shop/appointments",
+      icon: Calendar,
+    }
+  ],
+  admin: [
+    {
+      title: "Admin",
+      href: "/shop/admin",
+      icon: Shield,
+      adminOnly: true
+    }
+  ]
 };
 
 export const Sidebar = () => {
-  const { user } = useAuth();
-  const { links, isAdmin } = useNavigationLinks('shop');
+  const { user, profile } = useAuth();
   
-  console.log("Sidebar - Links available:", links);
-  console.log("Sidebar - isAdmin check result:", isAdmin);
+  // Check if user is admin
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'test_admin';
+  
+  // Create a flattened array of all navigation items for simplified rendering
+  const allNavigationItems = Object.values(navigationGroups).flat();
+  
+  // Filter admin-only items based on user role
+  const filteredNavigationItems = allNavigationItems.filter(item => !item.adminOnly || isAdmin);
 
   return (
     <>
       {/* Desktop Sidebar */}
       <div className="h-full border-r bg-background w-full">
-        <div className="py-4">
-          {links.map((item) => (
-            <SidebarItem 
-              key={item.path}
-              href={item.path}
-              title={item.name}
-              icon={pathIconMap[item.path] || BarChart}
-            />
-          ))}
+        <div className="py-4 space-y-4">
+          {/* Main Group */}
+          <div className="px-3 py-2">
+            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Main</h2>
+            <div className="space-y-1">
+              {navigationGroups.main.map((item) => (
+                <SidebarItem 
+                  key={item.href}
+                  href={item.href}
+                  title={item.title}
+                  icon={item.icon}
+                />
+              ))}
+            </div>
+          </div>
+          
+          {/* Customers Group */}
+          <div className="px-3 py-2">
+            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Customers</h2>
+            <div className="space-y-1">
+              {navigationGroups.customer
+                .filter(item => !item.adminOnly || isAdmin)
+                .map((item) => (
+                  <SidebarItem 
+                    key={item.href}
+                    href={item.href}
+                    title={item.title}
+                    icon={item.icon}
+                  />
+              ))}
+            </div>
+          </div>
+          
+          {/* Work Orders */}
+          <div className="px-3 py-2">
+            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Work Orders</h2>
+            <div className="space-y-1">
+              {navigationGroups.workOrders.map((item) => (
+                <SidebarItem 
+                  key={item.href}
+                  href={item.href}
+                  title={item.title}
+                  icon={item.icon}
+                />
+              ))}
+            </div>
+          </div>
+          
+          {/* Financial */}
+          <div className="px-3 py-2">
+            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Financial</h2>
+            <div className="space-y-1">
+              {navigationGroups.financial.map((item) => (
+                <SidebarItem 
+                  key={item.href}
+                  href={item.href}
+                  title={item.title}
+                  icon={item.icon}
+                />
+              ))}
+            </div>
+          </div>
+          
+          {/* Inventory */}
+          <div className="px-3 py-2">
+            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Inventory</h2>
+            <div className="space-y-1">
+              {navigationGroups.inventory.map((item) => (
+                <SidebarItem 
+                  key={item.href}
+                  href={item.href}
+                  title={item.title}
+                  icon={item.icon}
+                />
+              ))}
+            </div>
+          </div>
+          
+          {/* Service */}
+          <div className="px-3 py-2">
+            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Service</h2>
+            <div className="space-y-1">
+              {navigationGroups.service.map((item) => (
+                <SidebarItem 
+                  key={item.href}
+                  href={item.href}
+                  title={item.title}
+                  icon={item.icon}
+                />
+              ))}
+            </div>
+          </div>
+          
+          {/* Admin - Only shown if user is admin */}
+          {isAdmin && (
+            <div className="px-3 py-2">
+              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Admin</h2>
+              <div className="space-y-1">
+                {navigationGroups.admin.map((item) => (
+                  <SidebarItem 
+                    key={item.href}
+                    href={item.href}
+                    title={item.title}
+                    icon={item.icon}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       
@@ -77,22 +252,124 @@ export const Sidebar = () => {
             <Menu />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-80 p-0">
-          <SheetHeader className="pl-6 pb-4">
+        <SheetContent side="left" className="w-80 p-0 overflow-y-auto">
+          <SheetHeader className="pl-6 py-4">
             <SheetTitle>Custom Truck Connections</SheetTitle>
             <SheetDescription>
               Manage your shop, view reports, and more.
             </SheetDescription>
           </SheetHeader>
-          <div className="py-4">
-            {links.map((item) => (
-              <SidebarItem 
-                key={item.path}
-                href={item.path}
-                title={item.name}
-                icon={pathIconMap[item.path] || BarChart}
-              />
-            ))}
+          
+          <div className="py-4 space-y-4">
+            {/* Main Group */}
+            <div className="px-3 py-2">
+              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Main</h2>
+              <div className="space-y-1">
+                {navigationGroups.main.map((item) => (
+                  <SidebarItem 
+                    key={item.href}
+                    href={item.href}
+                    title={item.title}
+                    icon={item.icon}
+                  />
+                ))}
+              </div>
+            </div>
+            
+            {/* Customers Group */}
+            <div className="px-3 py-2">
+              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Customers</h2>
+              <div className="space-y-1">
+                {navigationGroups.customer
+                  .filter(item => !item.adminOnly || isAdmin)
+                  .map((item) => (
+                    <SidebarItem 
+                      key={item.href}
+                      href={item.href}
+                      title={item.title}
+                      icon={item.icon}
+                    />
+                ))}
+              </div>
+            </div>
+            
+            {/* Additional groups - similar structure for mobile */}
+            {/* Work Orders */}
+            <div className="px-3 py-2">
+              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Work Orders</h2>
+              <div className="space-y-1">
+                {navigationGroups.workOrders.map((item) => (
+                  <SidebarItem 
+                    key={item.href}
+                    href={item.href}
+                    title={item.title}
+                    icon={item.icon}
+                  />
+                ))}
+              </div>
+            </div>
+            
+            {/* Financial */}
+            <div className="px-3 py-2">
+              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Financial</h2>
+              <div className="space-y-1">
+                {navigationGroups.financial.map((item) => (
+                  <SidebarItem 
+                    key={item.href}
+                    href={item.href}
+                    title={item.title}
+                    icon={item.icon}
+                  />
+                ))}
+              </div>
+            </div>
+            
+            {/* Inventory */}
+            <div className="px-3 py-2">
+              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Inventory</h2>
+              <div className="space-y-1">
+                {navigationGroups.inventory.map((item) => (
+                  <SidebarItem 
+                    key={item.href}
+                    href={item.href}
+                    title={item.title}
+                    icon={item.icon}
+                  />
+                ))}
+              </div>
+            </div>
+            
+            {/* Service */}
+            <div className="px-3 py-2">
+              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Service</h2>
+              <div className="space-y-1">
+                {navigationGroups.service.map((item) => (
+                  <SidebarItem 
+                    key={item.href}
+                    href={item.href}
+                    title={item.title}
+                    icon={item.icon}
+                  />
+                ))}
+              </div>
+            </div>
+            
+            {/* Admin - Only shown if user is admin */}
+            {isAdmin && (
+              <div className="px-3 py-2">
+                <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Admin</h2>
+                <div className="space-y-1">
+                  {navigationGroups.admin.map((item) => (
+                    <SidebarItem 
+                      key={item.href}
+                      href={item.href}
+                      title={item.title}
+                      icon={item.icon}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>
