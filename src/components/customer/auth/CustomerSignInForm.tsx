@@ -68,12 +68,17 @@ const CustomerSignInForm = () => {
       console.log("CustomerSignIn: Attempting to sign in with email:", email);
       
       // Sign in using auth context - now using rememberMe as a boolean
-      await signIn(email, password, rememberMe);
+      const result = await signIn(email, password, rememberMe);
       
-      // Small delay to ensure role is fetched
-      setTimeout(() => {
+      if (result.success) {
         console.log("CustomerSignIn: Sign-in successful, redirecting to customer portal");
-      }, 100);
+        
+        // Explicitly navigate to customer dashboard after successful login
+        // Add a short delay to ensure auth state is fully updated
+        setTimeout(() => {
+          navigate('/customer', { replace: true });
+        }, 300);
+      }
       
     } catch (error: any) {
       console.error("CustomerSignIn error:", error);

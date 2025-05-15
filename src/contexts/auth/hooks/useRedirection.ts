@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../useAuth';
@@ -21,7 +20,8 @@ export const useRedirection = () => {
       location.pathname === '/auth/login' ||
       location.pathname === '/auth/customer-login' ||
       location.pathname.startsWith('/auth/') ||
-      location.pathname === '/shop/login';
+      location.pathname === '/shop/login' ||
+      location.pathname === '/customer/login';
     
     // Keep a state parameter to remember where we came from
     const currentPath = location.pathname;
@@ -48,12 +48,17 @@ export const useRedirection = () => {
         state: { from: currentPath } 
       });
     } 
-    // Case 2: Authenticated on auth page - redirect to appropriate portal
+    // Case 2: Authenticated on auth page - redirect to appropriate portal 
+    // with a deliberate timeout to ensure other auth state processing is complete
     else if (user && isAuthPage) {
       // Determine redirect based on portalType rather than parsing user metadata again
       const redirectPath = portalType === 'customer' ? '/customer' : '/shop';
       console.log(`➡️ Redirecting to ${redirectPath} (authenticated on auth page)`);
-      navigate(redirectPath, { replace: true });
+      
+      // Add a slight delay to ensure other auth state processing completes
+      setTimeout(() => {
+        navigate(redirectPath, { replace: true });
+      }, 200);
     } 
     else {
       console.log('✅ No redirection needed');

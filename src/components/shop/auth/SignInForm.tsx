@@ -17,7 +17,7 @@ const SignInForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const { signIn, user } = useAuth();
+  const { signIn, user, portalType } = useAuth();
   const navigate = useNavigate();
   
   // Check if user is already authenticated and has appropriate role
@@ -68,12 +68,17 @@ const SignInForm = () => {
       console.log("SignIn: Attempting to sign in with email:", email);
       
       // Sign in using auth context - now using rememberMe as a boolean
-      await signIn(email, password, rememberMe);
+      const result = await signIn(email, password, rememberMe);
       
-      // Small delay to ensure role is fetched
-      setTimeout(() => {
+      if (result.success) {
         console.log("SignIn: Sign-in successful, redirecting...");
-      }, 100);
+        
+        // Explicitly navigate to shop dashboard after successful login
+        // Add a short delay to ensure auth state is fully updated
+        setTimeout(() => {
+          navigate('/shop', { replace: true });
+        }, 300);
+      }
       
     } catch (error: any) {
       console.error("SignIn error:", error);
