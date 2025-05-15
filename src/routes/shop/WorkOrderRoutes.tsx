@@ -1,40 +1,12 @@
 
 import React from "react";
-import { Route } from "react-router-dom";
-import Layout from "@/components/layout/Layout";
-import WorkOrders from "@/pages/shop/WorkOrders";
-import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
-import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 /**
- * Work order related routes
+ * This file is deprecated - all routes have been consolidated to ShopRoutes.tsx
+ * Exporting an empty fragment to maintain compatibility with imports.
  */
 const WorkOrderRoutes = () => {
-  return (
-    <>
-      <Route 
-        path="work-orders" 
-        element={
-          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
-            <Layout portalType="shop">
-              <WorkOrders />
-            </Layout>
-          </ProtectedRoute>
-        } 
-      />
-      
-      <Route 
-        path="work-orders/:id" 
-        element={
-          <ProtectedRoute allowedRoles={['staff', 'admin', 'test_staff', 'test_admin']} requiredPortal="shop">
-            <Layout portalType="shop">
-              <WorkOrderDetailPage />
-            </Layout>
-          </ProtectedRoute>
-        } 
-      />
-    </>
-  );
+  return <></>;
 };
 
 export default WorkOrderRoutes;
