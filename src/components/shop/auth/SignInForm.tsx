@@ -48,6 +48,7 @@ const SignInForm = () => {
       
       if (result.success) {
         console.log("SignIn: Sign-in successful, redirecting...");
+        // Always redirect to /shop directly as this is the shop sign-in form
         navigate('/shop', { replace: true });
       }
       

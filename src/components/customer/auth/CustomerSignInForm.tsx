@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from "@/components/ui/checkbox";
 import { CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/auth'; 
+import { useAuth } from '@/contexts/auth';
 import { Loader2 } from 'lucide-react';
 
 const CustomerSignInForm = () => {
@@ -47,12 +47,13 @@ const CustomerSignInForm = () => {
       const result = await signIn(email, password, rememberMe);
       
       if (result.success) {
-        console.log("CustomerSignIn: Sign-in successful, redirecting to customer portal");
+        console.log("CustomerSignIn: Sign-in successful, redirecting...");
+        // Always redirect to customer portal after successful login
         navigate('/customer', { replace: true });
       }
       
     } catch (error: any) {
-      console.error("CustomerSignIn error:", error);
+      console.error("SignIn error:", error);
       setError(error.message || "An unexpected error occurred");
       toast({
         title: "Login failed",

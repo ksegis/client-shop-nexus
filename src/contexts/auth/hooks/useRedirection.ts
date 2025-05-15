@@ -1,4 +1,3 @@
-
 import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../useAuth';
@@ -71,21 +70,19 @@ export const useRedirection = () => {
       return;
     }
 
-    // Check if we're on any auth-related pages - be more comprehensive about paths
-    const isAuthPage = 
+    // Check if we're on the index page or any auth-related pages
+    const isAuthOrIndexPage = 
+      location.pathname === '/' ||
       location.pathname === '/auth' || 
-      location.pathname === '/auth/login' ||
-      location.pathname === '/auth/customer-login' ||
-      location.pathname.startsWith('/auth/') ||
-      location.pathname === '/shop/login' ||
-      location.pathname === '/customer/login';
+      location.pathname === '/shop-login' ||
+      location.pathname === '/customer-login';
     
     // Keep track of the current path
     const currentPath = location.pathname;
     
     console.group('🔀 Redirection Logic');
     console.log('Current path:', currentPath);
-    console.log('Is auth page:', isAuthPage);
+    console.log('Is auth or index page:', isAuthOrIndexPage);
     console.log('User authenticated:', !!user);
     console.log('Portal type:', portalType);
     console.log('Profile:', profile);
@@ -93,21 +90,21 @@ export const useRedirection = () => {
     try {
       redirectionInProgress.current = true;
       
-      // Case 1: Not authenticated trying to access protected page
-      if (!user && !isAuthPage) {
+      // Case 1: Not authenticated trying to access protected page (not auth/login pages)
+      if (!user && !isAuthOrIndexPage) {
         logAuthFlowEvent({
           event_type: 'redirect_unauthenticated',
           route_path: currentPath,
           details: {
-            redirectTo: "/auth",
+            redirectTo: "/",
             from: currentPath,
-            isAuthPage 
+            isAuthOrIndexPage
           }
         });
         
-        console.log('➡️ Redirecting to /auth (not authenticated on protected page)');
+        console.log('➡️ Redirecting to / (not authenticated on protected page)');
         lastRedirectTime.current = Date.now();
-        navigate('/auth', { 
+        navigate('/', { 
           replace: true,
           state: { from: currentPath } 
         });
@@ -115,9 +112,9 @@ export const useRedirection = () => {
         return;
       } 
       
-      // Case 2: Authenticated on auth page - redirect to appropriate portal 
-      // ONLY if we have determined the portalType AND profile - this is critical to prevent loops
-      if (user && isAuthPage && portalType && profile) {
+      // Case 2: Authenticated on auth page or index page - redirect to appropriate portal 
+      // ONLY if we have determined the portalType AND profile
+      if (user && isAuthOrIndexPage && portalType && profile) {
         const redirectPath = portalType === 'customer' ? '/customer' : '/shop';
         
         logAuthFlowEvent({
@@ -129,20 +126,20 @@ export const useRedirection = () => {
           portal_type: portalType,
           details: {
             redirectTo: redirectPath,
-            isAuthPage,
+            isAuthOrIndexPage,
             hasProfile: !!profile,
             hasPortalType: !!portalType
           }
         });
         
-        console.log(`➡️ Redirecting to ${redirectPath} (authenticated on auth page, portalType: ${portalType})`);
+        console.log(`➡️ Redirecting to ${redirectPath} (authenticated on auth/index page, portalType: ${portalType})`);
         
-        // Increased delay from 1200ms to 2400ms
+        // We don't need a long delay here as we're not changing auth state
         setTimeout(() => {
           lastRedirectTime.current = Date.now();
           navigate(redirectPath, { replace: true });
           redirectionInProgress.current = false;
-        }, 2400);
+        }, 100);
         
         console.groupEnd();
         return;
@@ -157,7 +154,7 @@ export const useRedirection = () => {
         route_path: currentPath,
         portal_type: portalType,
         details: {
-          isAuthPage,
+          isAuthOrIndexPage,
           hasUser: !!user,
           hasProfile: !!profile,
           hasPortalType: !!portalType
@@ -169,7 +166,7 @@ export const useRedirection = () => {
       console.groupEnd();
       setTimeout(() => {
         redirectionInProgress.current = false;
-      }, 1000); // Doubled from 500ms
+      }, 1000);
     }
   }, [user, isLoading, navigate, location.pathname, portalType, profile]);
 };
