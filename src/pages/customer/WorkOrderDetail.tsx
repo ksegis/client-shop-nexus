@@ -27,7 +27,7 @@ const CustomerWorkOrderDetail = () => {
   const workOrderId = id || '';
   
   const { workOrder, loading: workOrderLoading } = useCustomerWorkOrderDetail(workOrderId);
-  const { updates, loading: updatesLoading } = useServiceUpdates(workOrderId);
+  const { updates, isLoading: updatesLoading } = useServiceUpdates(workOrderId);
 
   if (workOrderLoading) {
     return <WorkOrderSkeleton />;

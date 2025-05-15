@@ -84,14 +84,13 @@ export function useCustomerWorkOrderDetail(workOrderId: string) {
         return;
       }
       
-      // For real users, fetch from database
-      // First, fetch the work order with related data
+      // For real users, fetch from database with explicit customer join
+      // First, fetch the work order with related vehicle data
       const { data: orderData, error: orderError } = await supabase
         .from('work_orders')
         .select(`
           *,
-          vehicles:vehicle_id (*),
-          customer:customer_id (*)
+          vehicles:vehicle_id (*)
         `)
         .eq('id', workOrderId)
         .eq('customer_id', user.id)
@@ -104,6 +103,15 @@ export function useCustomerWorkOrderDetail(workOrderId: string) {
         setLoading(false);
         return;
       }
+      
+      // Next, fetch customer data separately to avoid join issues
+      const { data: customerData, error: customerError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', orderData.customer_id)
+        .single();
+        
+      if (customerError) throw customerError;
       
       // Next, fetch line items
       const { data: lineItemsData, error: lineItemsError } = await supabase
@@ -135,9 +143,9 @@ export function useCustomerWorkOrderDetail(workOrderId: string) {
         progress: orderData.status === 'completed' ? 100 : orderData.status === 'in_progress' ? 75 : 0,
         estimatedCompletion: orderData.estimated_cost ? new Date(orderData.created_at).toISOString().split('T')[0] : null,
         customer: {
-          name: orderData.customer ? `${orderData.customer.first_name || ''} ${orderData.customer.last_name || ''}`.trim() : 'Unknown',
-          email: orderData.customer?.email || '',
-          phone: orderData.customer?.phone || ''
+          name: customerData ? `${customerData.first_name || ''} ${customerData.last_name || ''}`.trim() : 'Unknown',
+          email: customerData?.email || '',
+          phone: customerData?.phone || ''
         },
         vehicle: {
           year: orderData.vehicles?.year?.toString() || '',

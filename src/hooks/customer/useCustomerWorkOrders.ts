@@ -130,13 +130,12 @@ export function useCustomerWorkOrders() {
         return;
       }
       
-      // For real users, fetch from database
-      const { data, error: fetchError } = await supabase
+      // For real users, fetch from database with separate query for customer profile
+      const { data: ordersData, error: fetchError } = await supabase
         .from('work_orders')
         .select(`
           *,
-          vehicles:vehicle_id (make, model, year, license_plate, vin),
-          customer_profile:customer_id (first_name, last_name, email, phone)
+          vehicles:vehicle_id (make, model, year, license_plate, vin)
         `)
         .eq('customer_id', user.id)
         .order('created_at', { ascending: false });
@@ -144,7 +143,7 @@ export function useCustomerWorkOrders() {
       if (fetchError) throw fetchError;
       
       // Transform the data to match the expected format
-      const transformedData = data?.map(order => {
+      const transformedData = await Promise.all(ordersData?.map(async (order) => {
         // Calculate progress based on status
         let progress = 0;
         switch(order.status) {
@@ -153,6 +152,13 @@ export function useCustomerWorkOrders() {
           case 'completed': progress = 100; break;
           default: progress = 25;
         }
+        
+        // Get customer data separately
+        const { data: customerData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', order.customer_id)
+          .single();
         
         return {
           id: order.id,
@@ -163,9 +169,9 @@ export function useCustomerWorkOrders() {
           progress: progress,
           estimatedCompletion: order.estimated_cost ? new Date(order.created_at).toISOString().split('T')[0] : null,
           customer: {
-            name: order.customer_profile ? `${order.customer_profile.first_name || ''} ${order.customer_profile.last_name || ''}`.trim() : 'Unknown',
-            email: order.customer_profile?.email || '',
-            phone: order.customer_profile?.phone || ''
+            name: customerData ? `${customerData.first_name || ''} ${customerData.last_name || ''}`.trim() : 'Unknown',
+            email: customerData?.email || '',
+            phone: customerData?.phone || ''
           },
           vehicle: {
             year: order.vehicles?.year?.toString() || '',
@@ -177,7 +183,7 @@ export function useCustomerWorkOrders() {
           lineItems: [], // These will be fetched separately if needed
           total: 0 // This would be calculated from line items
         };
-      }) || [];
+      }) || []);
       
       setWorkOrders(transformedData as WorkOrder[]);
       
