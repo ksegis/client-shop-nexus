@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Calendar } from 'lucide-react';
-import AppointmentForm from './AppointmentForm';
+import { AppointmentForm } from './appointment';
 import { NewAppointmentData, useServiceAppointments } from '@/hooks/useServiceAppointments';
 
 interface AppointmentDialogProps {
