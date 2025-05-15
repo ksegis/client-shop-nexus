@@ -28,7 +28,7 @@ interface WorkOrder {
   vehicle?: {
     make: string;
     model: string;
-    year: string;
+    year: string;  // Changed from number to string to match the expected type
   };
 }
 
@@ -124,7 +124,11 @@ const CustomerDashboard = () => {
             status: wo.status,
             progress: 75, // Hard-coded for now, could be calculated
             estimated_completion: new Date(new Date().getTime() + 2 * 24 * 60 * 60 * 1000).toLocaleDateString(), // 2 days from now
-            vehicle: wo.vehicles
+            vehicle: {
+              make: wo.vehicles.make,
+              model: wo.vehicles.model,
+              year: String(wo.vehicles.year) // Convert number to string to match the expected type
+            }
           });
         }
         
@@ -133,7 +137,7 @@ const CustomerDashboard = () => {
           .from('invoices')
           .select('id, total_amount, updated_at')
           .eq('customer_id', user.id)
-          .eq('status', 'unpaid')
+          .eq('status', 'draft') // Changed from 'unpaid' to 'draft' which is a valid status
           .order('updated_at', { ascending: false })
           .limit(1);
           
