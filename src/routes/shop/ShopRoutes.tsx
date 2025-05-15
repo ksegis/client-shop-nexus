@@ -7,6 +7,7 @@ import Customers from "@/pages/shop/Customers";
 import Estimates from "@/pages/shop/Estimates";
 import Inventory from "@/pages/shop/Inventory";
 import Parts from "@/pages/shop/Parts";
+import Reports from "@/pages/shop/Reports";
 import ServiceDesk from "@/pages/shop/ServiceDesk";
 import ServiceAppointments from "@/pages/shop/ServiceAppointments";
 import SimpleInventory from "@/pages/shop/SimpleInventory";
@@ -27,7 +28,7 @@ const ShopRoutes = () => {
         <Route path="/work-orders" element={<WorkOrders />} />
         <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
         <Route path="/invoices" element={<Navigate to="/shop" replace />} />
-        <Route path="/reports" element={<Navigate to="/shop" replace />} />
+        <Route path="/reports" element={<Reports />} />
         <Route path="/parts" element={<Parts />} />
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/inventory/simple" element={<SimpleInventory />} />
