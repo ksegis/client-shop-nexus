@@ -59,5 +59,9 @@ export const getBaseRole = (role: UserRole): 'customer' | 'staff' | 'admin' => {
 };
 
 export const getPortalByRole = (role: UserRole): 'shop' | 'customer' => {
+  // Admin users should always be directed to the shop portal
+  if (role === 'admin' || role === 'test_admin') return 'shop';
+  
+  // For all other roles, check if they're customer or shop staff
   return role.includes('customer') ? 'customer' : 'shop';
 };

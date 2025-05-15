@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { AuthContext } from './AuthContext';
 import { AuthContextType, UserProfile, UserRole } from './types';
@@ -131,8 +130,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           console.warn('Created default profile for authenticated user');
           
-          // Also create the profile in the database
+          // Also create the profile in the database - but convert test roles to base roles for DB compatibility
           try {
+            let dbRole = role;
+            // Convert test roles to their base roles for database compatibility
+            if (role.startsWith('test_')) {
+              dbRole = role.replace('test_', '') as 'admin' | 'staff' | 'customer';
+            }
+            
             const { error: insertError } = await supabase
               .from('profiles')
               .insert({
@@ -140,7 +145,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 email: user.email,
                 first_name: user.user_metadata?.first_name || '',
                 last_name: user.user_metadata?.last_name || '',
-                role: role
+                role: dbRole
               });
               
             if (insertError) {
@@ -228,6 +233,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     const userRole = profile.role;
+    
+    // For admin users, grant access to staff resources too
+    if ((userRole === 'admin' || userRole === 'test_admin') && 
+        (allowedRoles.includes('staff') || allowedRoles.includes('test_staff'))) {
+      return true;
+    }
+    
     const hasAccess = allowedRoles.includes(userRole);
     
     if (!hasAccess) {

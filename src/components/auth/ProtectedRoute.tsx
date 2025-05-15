@@ -38,7 +38,8 @@ const ProtectedRoute = ({
       console.log('User portal type:', portalType);
       
       if (profile?.role && allowedRoles.length > 0) {
-        console.log('Has required role:', validateAccess(allowedRoles));
+        const hasRole = validateAccess(allowedRoles);
+        console.log('Has required role:', hasRole);
       }
       
       if (requiredPortal) {

@@ -8,8 +8,8 @@ export interface NavigationLink {
 }
 
 export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
-  const { user } = useAuth();
-  const isAdmin = user?.app_metadata?.role === 'admin';
+  const { user, profile } = useAuth();
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'test_admin';
   
   const customerLinks: NavigationLink[] = [
     { name: 'Dashboard', path: '/customer' },
