@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/auth';
@@ -10,6 +11,7 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Index from '@/pages/Index';
 import Auth from '@/pages/Auth';
 import ShopLogin from '@/pages/shop/Login';
+import CustomerLogin from '@/pages/customer/Login';
 import NotFound from '@/pages/NotFound';
 import TestingDashboard from '@/pages/TestingDashboard';
 
@@ -24,7 +26,10 @@ const AppRoutes: React.FC = () => {
             {/* Auth routes */}
             <Route path="/auth/*" element={<AuthRoutes />} />
             <Route path="/auth" element={<Navigate to="/auth/login" replace />} />
+            
+            {/* Separate shop and customer login routes */}
             <Route path="/shop/login" element={<ShopLogin />} />
+            <Route path="/customer-login" element={<CustomerLogin />} />
             
             {/* Testing Dashboard */}
             <Route 

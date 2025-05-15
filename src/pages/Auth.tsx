@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,19 +79,17 @@ const Auth = () => {
     }
   }, [isAuthenticated, portalType, navigate, fromPath]);
   
-  // Updated to navigate to auth login instead of direct customer page
   const goToCustomerLogin = () => {
     logAuthFlowEvent({
       event_type: 'navigating_to_customer_login',
       route_path: window.location.pathname,
       details: {
-        destination: "/auth/customer-login"
+        destination: "/customer-login"
       }
     });
     
-    // Instead of directly navigating to the customer page, switch to customer login
-    // This will now go through the authentication flow first
-    navigate("/auth/customer-login");
+    // Use the dedicated customer login route
+    navigate("/customer-login");
   };
   
   const goToShopLogin = () => {
@@ -104,6 +101,7 @@ const Auth = () => {
       }
     });
     
+    // Use the dedicated shop login route
     navigate("/shop/login");
   };
 
