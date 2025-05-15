@@ -14,7 +14,6 @@ export const useAuthDiagnostics = (componentName: string = 'Unknown') => {
     isLoading, 
     isAuthenticated,
     portalType,
-    isTestUser,
     validateAccess 
   } = useAuth();
   const location = useLocation();
@@ -26,7 +25,6 @@ export const useAuthDiagnostics = (componentName: string = 'Unknown') => {
     console.log('Auth loading:', isLoading);
     console.log('Is authenticated:', isAuthenticated);
     console.log('Portal type:', portalType);
-    console.log('Is test user:', isTestUser);
     
     // Check user data sources
     if (user) {
@@ -47,13 +45,13 @@ export const useAuthDiagnostics = (componentName: string = 'Unknown') => {
     
     // Test access to different roles
     if (isAuthenticated && profile?.role) {
-      console.log('Access to customer routes:', validateAccess(['customer', 'test_customer']));
-      console.log('Access to staff routes:', validateAccess(['staff', 'test_staff']));
-      console.log('Access to admin routes:', validateAccess(['admin', 'test_admin']));
+      console.log('Access to customer routes:', validateAccess(['customer']));
+      console.log('Access to staff routes:', validateAccess(['staff']));
+      console.log('Access to admin routes:', validateAccess(['admin']));
     }
     
     console.groupEnd();
-  }, [user, profile, isLoading, isAuthenticated, location.pathname, portalType, isTestUser, validateAccess]);
+  }, [user, profile, isLoading, isAuthenticated, location.pathname, portalType, validateAccess]);
   
   // Log navigation events
   useEffect(() => {

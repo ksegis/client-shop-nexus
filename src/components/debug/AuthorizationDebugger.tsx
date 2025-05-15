@@ -106,9 +106,9 @@ export const AuthorizationDebugger: React.FC = () => {
         
         // Check access for each role type
         if (profile?.role) {
-          addStep('Access: Customer', validateAccess(['customer', 'test_customer']), 'Access to customer routes');
-          addStep('Access: Staff', validateAccess(['staff', 'test_staff']), 'Access to staff routes');
-          addStep('Access: Admin', validateAccess(['admin', 'test_admin']), 'Access to admin routes');
+          addStep('Access: Customer', validateAccess(['customer']), 'Access to customer routes');
+          addStep('Access: Staff', validateAccess(['staff']), 'Access to staff routes');
+          addStep('Access: Admin', validateAccess(['admin']), 'Access to admin routes');
         }
       }
     }
@@ -124,10 +124,10 @@ export const AuthorizationDebugger: React.FC = () => {
       let requiredRoles: UserRole[] = [];
       
       if (currentPath.startsWith('/shop')) {
-        requiredRoles = ['staff', 'admin', 'test_staff', 'test_admin'];
+        requiredRoles = ['staff', 'admin'];
         addStep('Path Analysis', 'Shop Route', 'This path requires shop access');
       } else if (currentPath.startsWith('/customer')) {
-        requiredRoles = ['customer', 'staff', 'admin', 'test_customer', 'test_staff', 'test_admin'];
+        requiredRoles = ['customer', 'staff', 'admin'];
         addStep('Path Analysis', 'Customer Route', 'This path requires customer access');
       } else if (currentPath.startsWith('/auth')) {
         requiredRoles = [];
@@ -136,7 +136,7 @@ export const AuthorizationDebugger: React.FC = () => {
         requiredRoles = [];
         addStep('Path Analysis', 'Root Route', 'Root route has no role requirements');
       } else if (currentPath.startsWith('/testing')) {
-        requiredRoles = ['staff', 'admin', 'test_staff', 'test_admin'];
+        requiredRoles = ['staff', 'admin'];
         addStep('Path Analysis', 'Testing Route', 'This path requires staff or admin access');
       }
       

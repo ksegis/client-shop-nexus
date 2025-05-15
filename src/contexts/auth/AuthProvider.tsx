@@ -1,11 +1,10 @@
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback } from 'react';
 import { AuthContext } from './AuthContext';
 import { AuthContextType, UserRole } from './types';
 import { useAuthStateListener } from './hooks/useAuthStateListener';
 import { useAuthActions } from './hooks/useAuthActions';
 import { useProfileManagement } from './hooks/useProfileManagement';
-import { useLocation } from 'react-router-dom';
 
 interface AuthProviderProps {
   children: React.ReactNode;
@@ -27,8 +26,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     profileLoading, 
     portalType 
   } = useProfileManagement(user);
-  
-  const location = useLocation();
   
   const isDevMode = process.env.NODE_ENV === 'development';
 

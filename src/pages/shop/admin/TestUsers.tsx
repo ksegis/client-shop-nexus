@@ -1,58 +1,47 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TestUserManagement } from "@/components/admin/TestUserManagement";
-import { useAuth } from "@/contexts/auth";
 import { Navigate } from "react-router-dom";
+import { useAuth } from "@/contexts/auth";
 
 const TestUsers = () => {
   const { profile } = useAuth();
   
   // Only allow admins to access this page
-  if (!profile?.role?.includes('admin')) {
+  if (profile?.role !== 'admin') {
     return <Navigate to="/shop" replace />;
   }
   
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Test Users</h2>
+        <h2 className="text-3xl font-bold tracking-tight">User Management</h2>
         <p className="text-muted-foreground">
-          Create and manage test accounts for different user roles
+          Manage user accounts and permissions
         </p>
       </div>
       
-      <TestUserManagement />
-      
       <Card>
         <CardHeader>
-          <CardTitle>Test User Guidelines</CardTitle>
+          <CardTitle>User Management</CardTitle>
           <CardDescription>
-            Important information about using test accounts
+            Important information about managing user accounts
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <h3 className="font-medium mb-2">Test User Visibility</h3>
+            <h3 className="font-medium mb-2">User Roles</h3>
             <p className="text-sm text-muted-foreground">
-              Test users are clearly identified in the UI with yellow indicators and badges.
-              All actions performed by test users are marked in the database and do not affect 
-              production statistics or reporting.
+              The system supports three main user roles: Customer, Staff, and Admin.
+              Each role has different permissions and access levels within the application.
             </p>
           </div>
           
           <div>
-            <h3 className="font-medium mb-2">Data Isolation</h3>
+            <h3 className="font-medium mb-2">Data Access</h3>
             <p className="text-sm text-muted-foreground">
-              Test users interact with isolated data that does not affect production analytics.
-              This allows staff to safely test features without impacting business operations.
-            </p>
-          </div>
-          
-          <div>
-            <h3 className="font-medium mb-2">When to Use Test Accounts</h3>
-            <p className="text-sm text-muted-foreground">
-              Use test accounts when training new staff, testing new features,
-              or troubleshooting customer issues by reproducing them in a safe environment.
+              User access is controlled through role-based permissions.
+              Admin users have full access to all system features, while staff and customers
+              have progressively more limited access.
             </p>
           </div>
         </CardContent>

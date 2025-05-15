@@ -46,7 +46,7 @@ export const getPortalByRole = (role: UserRole): 'shop' | 'customer' => {
   if (role === 'admin') return 'shop';
   
   // For all other roles, check if they're customer or shop staff
-  return role.includes('customer') ? 'customer' : 'shop';
+  return role === 'customer' ? 'customer' : 'shop';
 };
 
 // Helper function to ensure role is compatible with database schema

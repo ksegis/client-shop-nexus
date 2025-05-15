@@ -9,7 +9,7 @@ export interface NavigationLink {
 
 export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
   const { user, profile } = useAuth();
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'test_admin';
+  const isAdmin = profile?.role === 'admin';
   
   const customerLinks: NavigationLink[] = [
     { name: 'Dashboard', path: '/customer' },
