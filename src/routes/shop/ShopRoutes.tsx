@@ -16,6 +16,7 @@ import WorkOrders from "@/pages/shop/WorkOrders";
 import AdminPage from "@/pages/shop/admin/AdminPage";
 import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
 import NotFound from "@/pages/NotFound";
+import Invoices from "@/pages/shop/invoices";
 
 const ShopRoutes = () => {
   return (
@@ -27,7 +28,7 @@ const ShopRoutes = () => {
         <Route path="/estimates" element={<Estimates />} />
         <Route path="/work-orders" element={<WorkOrders />} />
         <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
-        <Route path="/invoices" element={<Navigate to="/shop" replace />} />
+        <Route path="/invoices" element={<Invoices />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/parts" element={<Parts />} />
         <Route path="/inventory" element={<Inventory />} />
