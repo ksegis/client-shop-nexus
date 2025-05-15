@@ -86,7 +86,7 @@ export const useRedirection = (authState: {
         
         lastRedirectTime.current = Date.now();
         navigate(redirectPath, { replace: true });
-        logAuthFlowEvent('redirect', { from: location.pathname, to: redirectPath, reason: 'auth_page_authenticated' });
+        logAuthFlowEvent('redirect', { from: location.pathname, to: redirectPath });
         console.groupEnd();
         return;
       }
@@ -98,7 +98,7 @@ export const useRedirection = (authState: {
         
         lastRedirectTime.current = Date.now();
         navigate(redirectPath, { replace: true });
-        logAuthFlowEvent('redirect', { from: '/', to: redirectPath, reason: 'authenticated_on_index' });
+        logAuthFlowEvent('redirect', { from: '/', to: redirectPath });
         console.groupEnd();
         return;
       }
@@ -112,7 +112,7 @@ export const useRedirection = (authState: {
           console.log(`➡️ Redirecting to ${expectedPath} (authenticated user in wrong portal)`);
           lastRedirectTime.current = Date.now();
           navigate(expectedPath, { replace: true });
-          logAuthFlowEvent('redirect', { from: location.pathname, to: expectedPath, reason: 'wrong_portal_access' });
+          logAuthFlowEvent('redirect', { from: location.pathname, to: expectedPath });
           console.groupEnd();
           return;
         }
@@ -125,7 +125,7 @@ export const useRedirection = (authState: {
           console.log('➡️ Redirecting to /shop-login (unauthenticated on shop page)');
           lastRedirectTime.current = Date.now();
           navigate('/shop-login', { replace: true });
-          logAuthFlowEvent('redirect', { from: location.pathname, to: '/shop-login', reason: 'unauthenticated_shop_access' });
+          logAuthFlowEvent('redirect', { from: location.pathname, to: '/shop-login' });
           console.groupEnd();
           return;
         }
@@ -135,7 +135,7 @@ export const useRedirection = (authState: {
           console.log('➡️ Redirecting to /customer-login (unauthenticated on customer page)');
           lastRedirectTime.current = Date.now();
           navigate('/customer-login', { replace: true });
-          logAuthFlowEvent('redirect', { from: location.pathname, to: '/customer-login', reason: 'unauthenticated_customer_access' });
+          logAuthFlowEvent('redirect', { from: location.pathname, to: '/customer-login' });
           console.groupEnd();
           return;
         }
@@ -144,7 +144,7 @@ export const useRedirection = (authState: {
         console.log('➡️ Redirecting to / (unauthenticated on protected page)');
         lastRedirectTime.current = Date.now();
         navigate('/', { replace: true });
-        logAuthFlowEvent('redirect', { from: location.pathname, to: '/', reason: 'unauthenticated_protected_access' });
+        logAuthFlowEvent('redirect', { from: location.pathname, to: '/' });
         console.groupEnd();
         return;
       }
