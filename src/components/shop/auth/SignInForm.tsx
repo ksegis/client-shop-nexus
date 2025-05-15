@@ -1,15 +1,14 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from "@/components/ui/checkbox";
 import { CardContent } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth'; 
 import { Loader2 } from 'lucide-react';
-import { useAuthFlowLogs } from '@/hooks/useAuthFlowLogs';
 
 const SignInForm = () => {
   const [email, setEmail] = useState('');
@@ -18,78 +17,13 @@ const SignInForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const { signIn, user, portalType } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
-  const { logAuthFlowEvent } = useAuthFlowLogs();
-  
-  // Log component mount
-  useEffect(() => {
-    logAuthFlowEvent({
-      event_type: 'shop_signin_form_mounted',
-      user_id: user?.id,
-      email: user?.email,
-      user_role: user?.user_metadata?.role,
-      details: {
-        isAlreadyAuthenticated: !!user,
-        portalType
-      }
-    });
-  }, []);
-  
-  // Check if user is already authenticated and has appropriate role
-  useEffect(() => {
-    if (user) {
-      const role = user.user_metadata?.role;
-      
-      logAuthFlowEvent({
-        event_type: 'shop_signin_authenticated_check',
-        user_id: user?.id,
-        email: user?.email,
-        user_role: role,
-        details: {
-          role,
-          portalType,
-          location: window.location.pathname
-        }
-      });
-      
-      if (role === 'admin' || role === 'staff') {
-        logAuthFlowEvent({
-          event_type: 'shop_signin_redirect_to_shop',
-          user_id: user?.id,
-          email: user?.email,
-          user_role: role
-        });
-        
-        // Increased timeout from 800ms to 1600ms
-        const timer = setTimeout(() => {
-          navigate('/shop', { replace: true });
-        }, 1600);
-        
-        return () => clearTimeout(timer);
-      } else if (role === 'customer') {
-        logAuthFlowEvent({
-          event_type: 'shop_signin_customer_access_denied',
-          user_id: user?.id,
-          email: user?.email,
-          user_role: role
-        });
-        
-        // If customer is trying to access shop login, redirect to customer portal
-        toast({
-          title: "Access Restricted",
-          description: "Customers must use the Customer Portal",
-          variant: "destructive",
-        });
-        navigate('/customer/profile', { replace: true });
-      }
-    }
-  }, [user, navigate, toast]);
 
   // Clear error when inputs change
-  useEffect(() => {
+  const handleInputChange = () => {
     if (error) setError(null);
-  }, [email, password]);
+  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,44 +41,17 @@ const SignInForm = () => {
     setLoading(true);
     
     try {
-      logAuthFlowEvent({
-        event_type: 'shop_signin_attempt',
-        email,
-        details: {
-          rememberMe
-        }
-      });
-      
       console.log("SignIn: Attempting to sign in with email:", email);
       
-      // Sign in using auth context - now using rememberMe as a boolean
+      // Sign in using auth context
       const result = await signIn(email, password, rememberMe);
       
       if (result.success) {
-        logAuthFlowEvent({
-          event_type: 'shop_signin_success',
-          email,
-          user_id: result.data?.user?.id,
-          user_role: result.data?.user?.user_metadata?.role
-        });
-        
         console.log("SignIn: Sign-in successful, redirecting...");
-        
-        // Increased timeout from 1000ms to 2000ms
-        setTimeout(() => {
-          navigate('/shop', { replace: true });
-        }, 2000);
+        navigate('/shop', { replace: true });
       }
       
     } catch (error: any) {
-      logAuthFlowEvent({
-        event_type: 'shop_signin_error',
-        email,
-        details: {
-          error: error.message || "Unknown error"
-        }
-      });
-      
       console.error("SignIn error:", error);
       setError(error.message || "An unexpected error occurred");
       toast({
@@ -173,7 +80,10 @@ const SignInForm = () => {
             type="email" 
             placeholder="you@example.com" 
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              handleInputChange();
+            }}
             required
             disabled={loading}
             className={error ? "border-red-300" : ""}
@@ -185,7 +95,10 @@ const SignInForm = () => {
             id="signin-password" 
             type="password" 
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              handleInputChange();
+            }}
             required
             disabled={loading}
             className={error ? "border-red-300" : ""}

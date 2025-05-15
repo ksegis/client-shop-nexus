@@ -12,35 +12,14 @@ import ServiceAppointments from "@/pages/shop/ServiceAppointments";
 import SimpleInventory from "@/pages/shop/SimpleInventory";
 import Employees from "@/pages/shop/Employees";
 import WorkOrders from "@/pages/shop/WorkOrders";
-import TestUsers from "@/pages/shop/admin/TestUsers";
 import AdminPage from "@/pages/shop/admin/AdminPage";
 import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
-import AuthLogs from "@/pages/shop/admin/AuthLogs";
 import { useAuth } from "@/contexts/auth";
 import NotFound from "@/pages/NotFound";
-import { useAuthFlowLogs } from "@/hooks/useAuthFlowLogs";
-import { useEffect } from "react";
-import { useLocation } from "react-router-dom";
 
 const ShopRoutes = () => {
-  const { profile, user } = useAuth();
-  const location = useLocation();
-  const { logAuthFlowEvent } = useAuthFlowLogs();
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'test_admin';
-  
-  // Log when shop routes are loaded
-  useEffect(() => {
-    logAuthFlowEvent({
-      event_type: 'shop_routes_loaded',
-      user_id: user?.id,
-      email: user?.email,
-      user_role: profile?.role,
-      route_path: location.pathname,
-      details: {
-        isAdmin
-      }
-    });
-  }, []);
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
 
   return (
     <Layout portalType="shop">
@@ -64,8 +43,6 @@ const ShopRoutes = () => {
         {isAdmin && (
           <>
             <Route path="/admin" element={<AdminPage />} />
-            <Route path="/admin/test-users" element={<TestUsers />} />
-            <Route path="/admin/auth-logs" element={<AuthLogs />} />
           </>
         )}
         
