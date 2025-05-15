@@ -131,7 +131,7 @@ export function useTestUsers() {
     setActiveTestRole(role);
     
     // Save to localStorage to persist across refreshes
-    localStorage.setItem('test-user-mode', role);
+    localStorage.setItem('test-user-mode', JSON.stringify(testUsers[role].user));
     
     return testUsers[role];
   }, [originalUser, testUsers]);

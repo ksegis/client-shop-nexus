@@ -101,7 +101,7 @@ export function useAuthStateListener() {
               .from('profiles')
               .select('role')
               .eq('id', data.session.user.id)
-              .single();
+              .maybeSingle();
               
             if (profileData) {
               console.log('User has profile:', profileData.role);

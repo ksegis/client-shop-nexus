@@ -1,7 +1,7 @@
 
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { AuthResult, UserRole } from '../types';
+import { AuthResult, UserRole, mapRoleToDbRole } from '../types';
 import { useAuthMethods } from './useAuthMethods';
 import { useAuthLogging } from './useAuthLogging';
 
