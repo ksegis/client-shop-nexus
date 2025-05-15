@@ -17,7 +17,7 @@ const SignInForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const { signIn } = useAuth();
+  const { signIn, profile } = useAuth();
   const navigate = useNavigate();
 
   // Clear error when inputs change
@@ -53,9 +53,10 @@ const SignInForm = () => {
           description: "Redirecting to shop portal..."
         });
         
-        // Force immediate redirect to shop dashboard
-        // The explicit navigation here helps ensure the user sees progress
-        navigate('/shop', { replace: true });
+        // Immediate redirect on successful login
+        setTimeout(() => {
+          navigate('/shop', { replace: true });
+        }, 0);
       } else {
         throw new Error(result.error?.message || "Failed to sign in");
       }
@@ -72,6 +73,14 @@ const SignInForm = () => {
       setLoading(false);
     }
   };
+
+  // If somehow we have a profile already but ended up on this page,
+  // redirect immediately to the appropriate dashboard
+  if (profile) {
+    const redirectPath = profile.role === 'customer' ? '/customer' : '/shop';
+    navigate(redirectPath, { replace: true });
+    return null;
+  }
 
   return (
     <form onSubmit={handleSignIn}>

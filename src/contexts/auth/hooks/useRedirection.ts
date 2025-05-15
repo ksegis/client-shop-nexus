@@ -155,7 +155,7 @@ export const useRedirection = (authState: {
       // Reset the redirection flag after a shorter delay
       setTimeout(() => {
         redirectionInProgress.current = false;
-      }, 20); // Even shorter delay
+      }, 10); // Even shorter delay to make things faster
     }
   }, [user, isLoading, navigate, location.pathname, portalType, profile, logAuthFlowEvent]);
 };

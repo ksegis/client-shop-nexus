@@ -1,68 +1,84 @@
 
-import { useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { v4 as uuidv4 } from 'uuid';
+import { useLocation } from 'react-router-dom';
 
-// Define the structure for auth flow log events
-export interface AuthFlowLogEvent {
-  event_type: string;
-  user_id?: string | null;
-  email?: string | null;
-  user_role?: string | null;
-  route_path?: string | null;
-  required_roles?: string[] | null;
-  portal_type?: string | null;
-  access_granted?: boolean | null;
-  details?: Record<string, any> | null;
-  session_id?: string;
-}
+/**
+ * Custom hook for logging auth flow events
+ */
+export const useAuthFlowLogs = () => {
+  const location = useLocation();
+  const sessionId = useRef<string>(Math.random().toString(36).substring(2, 15)); // Simple session ID for tracking page flow
 
-// Generate a stable session ID for better tracking across page reloads
-const getSessionId = () => {
-  let sessionId = localStorage.getItem('auth_flow_session_id');
-  
-  if (!sessionId) {
-    sessionId = uuidv4();
-    localStorage.setItem('auth_flow_session_id', sessionId);
-  }
-  
-  return sessionId;
-};
+  // Log the navigation event
+  useEffect(() => {
+    const logNavigation = async () => {
+      try {
+        // Skip logging for API paths or asset files
+        if (location.pathname.startsWith('/api/') || 
+            location.pathname.includes('.')) {
+          return;
+        }
+        
+        // Get current user if available
+        const { data: { user } } = await supabase.auth.getUser();
 
-export function useAuthFlowLogs() {
-  const logAuthFlowEvent = useCallback(async (event: AuthFlowLogEvent) => {
-    try {
-      // Add session ID and timestamp
-      const sessionId = getSessionId();
-      const clientTimestamp = new Date().toISOString();
-      
-      // Log to console for immediate visibility (always works even if DB logging fails)
-      console.log(`🔍 Auth Flow Event [${event.event_type}]:`, {
-        ...event,
-        session_id: sessionId,
-        client_timestamp: clientTimestamp
-      });
-      
-      // Try to insert into database
-      const { error } = await supabase
-        .from('auth_flow_logs')
-        .insert({
-          ...event,
-          session_id: sessionId,
-          client_timestamp: clientTimestamp
+        await supabase.from('auth_flow_logs').insert({
+          event_type: 'navigation',
+          user_id: user?.id || null,
+          email: user?.email || null,
+          session_id: sessionId.current,
+          route_path: location.pathname,
+          client_timestamp: new Date().toISOString(),
+          details: {
+            from: document.referrer,
+            user_agent: navigator.userAgent,
+          }
         });
-      
-      if (error) {
-        console.error('Error logging auth flow event:', error);
+      } catch (error) {
+        // Silent fail - logging should never break the app
+        console.error('Failed to log navigation:', error);
       }
-      
-      return { success: true };
-    } catch (err) {
-      // Log any other errors but don't disrupt the app
-      console.error('Failed to log auth flow event:', err);
-      return { success: false, error: err };
+    };
+
+    // Log navigation events but don't block UI
+    logNavigation();
+  }, [location.pathname]);
+
+  /**
+   * Log an authentication flow event
+   */
+  const logAuthFlowEvent = async (eventType: string, details: Record<string, any> = {}) => {
+    try {
+      // Get current user if available
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Get profile role if user exists
+      let role = null;
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        role = profile?.role;
+      }
+
+      await supabase.from('auth_flow_logs').insert({
+        event_type: eventType,
+        user_id: user?.id || null,
+        email: user?.email || null,
+        user_role: role,
+        session_id: sessionId.current,
+        route_path: location.pathname,
+        client_timestamp: new Date().toISOString(),
+        details
+      });
+    } catch (error) {
+      // Silent fail - logging should never break the app
+      console.error('Failed to log auth flow event:', error);
     }
-  }, []);
-  
-  return { logAuthFlowEvent };
-}
+  };
+
+  return { logAuthFlowEvent, sessionId: sessionId.current };
+};

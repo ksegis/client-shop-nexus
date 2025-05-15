@@ -65,6 +65,7 @@ export function useAuthActions() {
           .single();
         
         if (profileData?.role) {
+          // Log the detected role and intended redirect path
           const redirectPath = getRedirectPathByRole(profileData.role as UserRole);
           console.log(`User role: ${profileData.role}, redirecting to: ${redirectPath}`);
         }

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +17,7 @@ const CustomerSignInForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const { signIn } = useAuth();
+  const { signIn, profile } = useAuth();
   const navigate = useNavigate();
 
   // Clear error when inputs change
@@ -52,8 +53,10 @@ const CustomerSignInForm = () => {
           description: "Redirecting to customer portal..."
         });
         
-        // Force immediate redirect to customer dashboard
-        navigate('/customer', { replace: true });
+        // Immediate redirect on successful login
+        setTimeout(() => {
+          navigate('/customer', { replace: true });
+        }, 0);
       } else {
         throw new Error(result.error?.message || "Failed to sign in");
       }
@@ -70,6 +73,14 @@ const CustomerSignInForm = () => {
       setLoading(false);
     }
   };
+
+  // If somehow we have a profile already but ended up on this page,
+  // redirect immediately to the appropriate dashboard
+  if (profile) {
+    const redirectPath = profile.role === 'customer' ? '/customer' : '/shop';
+    navigate(redirectPath, { replace: true });
+    return null;
+  }
 
   return (
     <form onSubmit={handleSignIn}>
