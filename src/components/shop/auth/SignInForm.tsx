@@ -47,9 +47,14 @@ const SignInForm = () => {
       const result = await signIn(email, password, rememberMe);
       
       if (result.success) {
-        console.log("SignIn: Sign-in successful, redirecting...");
-        // Always redirect to /shop directly as this is the shop sign-in form
-        navigate('/shop', { replace: true });
+        console.log("SignIn: Sign-in successful");
+        // Auth Provider's redirection logic will handle the redirect automatically
+        // No need to navigate here as the useRedirection hook will take care of it
+        // Just a small delay to ensure the auth state updates
+        toast({
+          title: "Login successful",
+          description: "Redirecting to shop portal..."
+        });
       }
       
     } catch (error: any) {

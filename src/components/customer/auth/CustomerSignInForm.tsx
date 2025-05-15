@@ -47,9 +47,14 @@ const CustomerSignInForm = () => {
       const result = await signIn(email, password, rememberMe);
       
       if (result.success) {
-        console.log("CustomerSignIn: Sign-in successful, redirecting...");
-        // Always redirect to customer portal after successful login
-        navigate('/customer', { replace: true });
+        console.log("CustomerSignIn: Sign-in successful");
+        // Auth Provider's redirection logic will handle the redirect automatically
+        // No need to navigate here as the useRedirection hook will take care of it
+        // Just a small delay to ensure the auth state updates
+        toast({
+          title: "Login successful",
+          description: "Redirecting to customer portal..."
+        });
       }
       
     } catch (error: any) {

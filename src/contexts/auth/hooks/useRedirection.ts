@@ -52,7 +52,7 @@ export const useRedirection = () => {
     }
     
     // CRITICAL: Skip redirection logic entirely when still loading OR when profile/portalType isn't determined yet
-    if (isLoading || (user && (!profile || !portalType))) {
+    if (isLoading) {
       logAuthFlowEvent({
         event_type: 'redirection_skipped_loading',
         user_id: user?.id,
@@ -66,7 +66,7 @@ export const useRedirection = () => {
           currentPath: location.pathname
         }
       });
-      console.log('🔄 Redirection: Loading auth state or waiting for profile data, skipping redirects');
+      console.log('🔄 Redirection: Loading auth state, skipping redirects');
       return;
     }
 
@@ -90,7 +90,48 @@ export const useRedirection = () => {
     try {
       redirectionInProgress.current = true;
       
-      // Case 1: Not authenticated trying to access protected page (not auth/login pages)
+      // PRIORITY CASE: Authenticated user detected, immediately redirect to proper portal
+      // This is true regardless of current path - we want to get logged in users
+      // to their proper portal as quickly as possible
+      if (user && portalType) {
+        // If user is already on proper portal path, don't redirect
+        if (
+          (portalType === 'shop' && currentPath.startsWith('/shop')) || 
+          (portalType === 'customer' && currentPath.startsWith('/customer'))
+        ) {
+          console.log('✅ User already on proper portal path, no redirect needed');
+          redirectionInProgress.current = false;
+          console.groupEnd();
+          return;
+        }
+        
+        // Otherwise redirect to proper portal home
+        const redirectPath = portalType === 'customer' ? '/customer' : '/shop';
+        
+        logAuthFlowEvent({
+          event_type: 'redirect_authenticated_to_portal',
+          user_id: user?.id,
+          email: user?.email, 
+          user_role: profile?.role,
+          route_path: currentPath,
+          portal_type: portalType,
+          details: {
+            redirectTo: redirectPath,
+            isAuthOrIndexPage,
+            hasProfile: !!profile,
+            hasPortalType: !!portalType
+          }
+        });
+        
+        console.log(`➡️ Redirecting to ${redirectPath} (authenticated user detected, portalType: ${portalType})`);
+        
+        lastRedirectTime.current = Date.now();
+        navigate(redirectPath, { replace: true });
+        console.groupEnd();
+        return;
+      }
+      
+      // Case: Not authenticated trying to access protected page (not auth/login pages)
       if (!user && !isAuthOrIndexPage) {
         logAuthFlowEvent({
           event_type: 'redirect_unauthenticated',
@@ -110,40 +151,7 @@ export const useRedirection = () => {
         });
         console.groupEnd();
         return;
-      } 
-      
-      // Case 2: Authenticated on auth page or index page - redirect to appropriate portal 
-      // ONLY if we have determined the portalType AND profile
-      if (user && isAuthOrIndexPage && portalType && profile) {
-        const redirectPath = portalType === 'customer' ? '/customer' : '/shop';
-        
-        logAuthFlowEvent({
-          event_type: 'redirect_authenticated_from_auth',
-          user_id: user?.id,
-          email: user?.email, 
-          user_role: profile?.role,
-          route_path: currentPath,
-          portal_type: portalType,
-          details: {
-            redirectTo: redirectPath,
-            isAuthOrIndexPage,
-            hasProfile: !!profile,
-            hasPortalType: !!portalType
-          }
-        });
-        
-        console.log(`➡️ Redirecting to ${redirectPath} (authenticated on auth/index page, portalType: ${portalType})`);
-        
-        // We don't need a long delay here as we're not changing auth state
-        setTimeout(() => {
-          lastRedirectTime.current = Date.now();
-          navigate(redirectPath, { replace: true });
-          redirectionInProgress.current = false;
-        }, 100);
-        
-        console.groupEnd();
-        return;
-      } 
+      }
       
       // No redirection needed
       logAuthFlowEvent({
