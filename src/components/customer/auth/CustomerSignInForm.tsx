@@ -17,6 +17,33 @@ const CustomerSignInForm = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  const createMockUser = () => {
+    // Create a mock customer user for development
+    const mockCustomerUser = {
+      id: 'dev-customer-user-id',
+      email: email || 'customer@example.com',
+      app_metadata: {
+        role: 'customer'
+      },
+      user_metadata: {
+        first_name: 'Dev',
+        last_name: 'Customer',
+        phone: '555-5678',
+        role: 'customer'
+      },
+      aud: 'authenticated',
+      created_at: new Date().toISOString()
+    };
+    
+    // Clear any existing stale auth data
+    localStorage.removeItem('dev-customer-user');
+    
+    // Store the mock user in localStorage for development
+    localStorage.setItem('dev-customer-user', JSON.stringify(mockCustomerUser));
+    
+    return mockCustomerUser;
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -24,31 +51,10 @@ const CustomerSignInForm = () => {
       // Simulate brief loading
       setLoading(true);
       
-      // Clear any existing stale auth data from localStorage
-      localStorage.removeItem('dev-customer-user');
+      const mockUser = createMockUser();
       
       // Add a small delay to simulate authentication
       setTimeout(() => {
-        // Create a mock customer user for development
-        const mockCustomerUser = {
-          id: 'dev-customer-user-id',
-          email: email || 'customer@example.com',
-          app_metadata: {
-            role: 'customer'
-          },
-          user_metadata: {
-            first_name: 'Dev',
-            last_name: 'Customer',
-            phone: '555-5678',
-            role: 'customer'
-          },
-          aud: 'authenticated',
-          created_at: new Date().toISOString()
-        };
-        
-        // Store the mock user in localStorage for development
-        localStorage.setItem('dev-customer-user', JSON.stringify(mockCustomerUser));
-        
         setLoading(false);
         toast({
           title: "Login successful",
@@ -65,6 +71,31 @@ const CustomerSignInForm = () => {
         variant: "destructive",
         title: "Login failed",
         description: "There was a problem signing in. Please try again."
+      });
+    }
+  };
+
+  const handleSkipSignIn = () => {
+    try {
+      setLoading(true);
+      
+      // Create the mock user
+      createMockUser();
+      
+      toast({
+        title: "Skipping sign in",
+        description: "Going to dashboard in development mode"
+      });
+      
+      // Navigate to the dashboard with replace: true to prevent back navigation issues
+      navigate('/customer/dashboard', { replace: true });
+    } catch (error) {
+      setLoading(false);
+      console.error('Error skipping sign in:', error);
+      toast({
+        variant: "destructive",
+        title: "Navigation failed",
+        description: "There was a problem accessing the dashboard."
       });
     }
   };
@@ -124,41 +155,15 @@ const CustomerSignInForm = () => {
         </Button>
         
         <div className="text-sm text-center text-gray-500">
-          <button
+          <Button
             type="button"
-            className="text-primary hover:underline"
+            variant="link"
+            className="text-primary hover:underline p-0 h-auto"
             disabled={loading}
-            onClick={() => {
-              // Create a mock customer user for skipping sign in
-              const mockCustomerUser = {
-                id: 'dev-customer-user-id',
-                email: 'customer@example.com',
-                app_metadata: {
-                  role: 'customer'
-                },
-                user_metadata: {
-                  first_name: 'Dev',
-                  last_name: 'Customer',
-                  phone: '555-5678',
-                  role: 'customer'
-                },
-                aud: 'authenticated',
-                created_at: new Date().toISOString()
-              };
-              
-              // Store the mock user in localStorage for development
-              localStorage.setItem('dev-customer-user', JSON.stringify(mockCustomerUser));
-              
-              toast({
-                title: "Skipping sign in",
-                description: "Going to dashboard in development mode"
-              });
-              
-              navigate('/customer/dashboard', { replace: true });
-            }}
+            onClick={handleSkipSignIn}
           >
             Skip sign in & go to dashboard
-          </button>
+          </Button>
         </div>
       </CardContent>
     </form>

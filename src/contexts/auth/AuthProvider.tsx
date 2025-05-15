@@ -11,25 +11,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Check for development user on mount
+  // Check for development user on mount and on localStorage changes
   useEffect(() => {
-    // Check if we have a dev user in localStorage
-    const devUserString = localStorage.getItem('dev-customer-user');
-    
-    if (devUserString) {
-      try {
-        const devUser = JSON.parse(devUserString);
-        setUser(devUser);
-        setIsAuthenticated(true);
-        console.log('Development user detected:', devUser.email);
-      } catch (error) {
-        console.error('Error parsing development user:', error);
-        // Clear invalid dev user data
-        localStorage.removeItem('dev-customer-user');
+    const checkForDevUser = () => {
+      // Check if we have a dev user in localStorage
+      const devUserString = localStorage.getItem('dev-customer-user');
+      
+      if (devUserString) {
+        try {
+          const devUser = JSON.parse(devUserString);
+          setUser(devUser);
+          setIsAuthenticated(true);
+          console.log('Development user detected:', devUser.email);
+        } catch (error) {
+          console.error('Error parsing development user:', error);
+          // Clear invalid dev user data
+          localStorage.removeItem('dev-customer-user');
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      } else {
+        // No dev user found
+        setUser(null);
+        setIsAuthenticated(false);
       }
-    }
+      
+      setIsLoading(false);
+    };
     
-    setIsLoading(false);
+    // Check immediately on mount
+    checkForDevUser();
+    
+    // Listen for storage changes (in case another tab updates the auth)
+    window.addEventListener('storage', checkForDevUser);
+    
+    return () => {
+      window.removeEventListener('storage', checkForDevUser);
+    };
   }, []);
   
   // Create simplified auth context value with development authentication

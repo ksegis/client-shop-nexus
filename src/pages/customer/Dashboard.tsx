@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth';
 import { useCustomerDashboard } from '@/hooks/customer/useCustomerDashboard';
 import {
@@ -13,6 +13,7 @@ import {
 
 const CustomerDashboard = () => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const { 
     firstName, 
     notifications, 
@@ -24,6 +25,7 @@ const CustomerDashboard = () => {
   
   // If not authenticated and not currently loading auth status, redirect to login
   if (!isAuthenticated && !authLoading) {
+    console.log("User is not authenticated, redirecting to login");
     return <Navigate to="/customer-login" replace />;
   }
   
