@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +6,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AuthDebugger } from "@/components/debug/AuthDebugger";
+import { AuthorizationDebugger } from "@/components/debug/AuthorizationDebugger";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -71,6 +71,8 @@ const Auth = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
       {process.env.NODE_ENV === 'development' && <AuthDebugger componentName="AuthPage" />}
+      {/* Add the AuthorizationDebugger */}
+      <AuthorizationDebugger />
       <div className="w-full max-w-md p-6">
         <Card>
           <CardHeader className="text-center">
