@@ -19,6 +19,7 @@ export function useProfileManagement(authUser: User | null) {
       if (!authUser) {
         setProfile(null);
         setProfileLoading(false);
+        setPortalType(null);
         return;
       }
       
@@ -139,9 +140,11 @@ export function useProfileManagement(authUser: User | null) {
     if (authUser) {
       fetchProfile();
     } else {
+      setProfile(null);
+      setPortalType(null);
       setProfileLoading(false);
     }
-  }, [authUser]);
+  }, [authUser, testUserMode]);
 
   // Helper functions from types.ts
   const isTestRole = (role: UserRole): boolean => {

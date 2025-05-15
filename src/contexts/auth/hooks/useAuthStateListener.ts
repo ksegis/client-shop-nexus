@@ -40,43 +40,9 @@ export function useAuthStateListener() {
           console.log('Auth state updated, user:', currentSession?.user?.email);
         }
         
-        // Wait to set loading to false until we know if the user exists
+        // Don't set loading to false until we know if there's a valid session
         if (event !== 'INITIAL_SESSION' || !currentSession) {
           setLoading(false);
-        }
-        
-        // Use setTimeout to defer any complex operations
-        if (currentSession?.user) {
-          setTimeout(async () => {
-            if (!isMounted) return;
-            
-            try {
-              // Check if user has a profile
-              const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', currentSession.user.id)
-                .maybeSingle();
-                
-              if (profileError) {
-                console.error('Error fetching user profile:', profileError);
-              } else if (!profileData) {
-                console.warn('No profile found for user, this may cause RLS issues');
-              } else if (!hasLogged) {
-                console.log('User profile verified, role:', profileData.role);
-              }
-              
-              // Now that we have profile info, we can safely say loading is done
-              if (isMounted) {
-                setLoading(false);
-              }
-            } catch (err) {
-              console.error('Error in deferred profile check:', err);
-              if (isMounted) {
-                setLoading(false);
-              }
-            }
-          }, 0);
         }
       }
     );
@@ -94,19 +60,6 @@ export function useAuthStateListener() {
         if (data.session) {
           setSession(data.session);
           setUser(data.session.user);
-          
-          // Check if user has a profile
-          if (data.session.user) {
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', data.session.user.id)
-              .maybeSingle();
-              
-            if (profileData) {
-              console.log('User has profile:', profileData.role);
-            }
-          }
         } else {
           // No session, make sure user is set to null
           console.log('No authenticated user found');
