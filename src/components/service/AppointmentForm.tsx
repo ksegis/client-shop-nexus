@@ -15,7 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useServiceScheduling } from '@/hooks/useServiceScheduling';
-import { useVehicleManagement } from '@/hooks/vehicles/useVehicleManagement';
+import { useCustomers } from '@/hooks/useCustomers';
+import { supabase } from '@/integrations/supabase/client';
 import { Vehicle } from '@/types/vehicle';
 import { NewAppointmentData } from '@/hooks/useServiceAppointments';
 import { useAuth } from '@/contexts/auth';
@@ -31,6 +32,9 @@ const serviceTypes = [
 ];
 
 const formSchema = z.object({
+  customer_id: z.string({
+    required_error: "Please select a customer",
+  }),
   vehicle_id: z.string({
     required_error: "Please select a vehicle",
   }),
@@ -57,18 +61,53 @@ interface AppointmentFormProps {
 
 const AppointmentForm = ({ onSubmit, customerId }: AppointmentFormProps) => {
   const { user } = useAuth();
-  const { vehicles } = useVehicleManagement(); 
+  const { customers, isLoading: isLoadingCustomers } = useCustomers();
+  const [customerVehicles, setCustomerVehicles] = useState<Vehicle[]>([]);
+  const [isLoadingVehicles, setIsLoadingVehicles] = useState(false);
   const { checkDateAvailability } = useServiceScheduling();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<{ time: string; available: boolean }[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(customerId);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       service_type: '',
       description: '',
+      customer_id: customerId || '',
     },
   });
+
+  // Fetch vehicles when customer changes
+  useEffect(() => {
+    const fetchVehicles = async () => {
+      if (!selectedCustomerId) {
+        setCustomerVehicles([]);
+        return;
+      }
+
+      setIsLoadingVehicles(true);
+      try {
+        const { data, error } = await supabase
+          .from('vehicles')
+          .select('*')
+          .eq('owner_id', selectedCustomerId);
+        
+        if (error) throw error;
+        setCustomerVehicles(data as Vehicle[]);
+      } catch (error) {
+        console.error('Error fetching vehicles:', error);
+        setCustomerVehicles([]);
+      } finally {
+        setIsLoadingVehicles(false);
+      }
+    };
+
+    fetchVehicles();
+    
+    // Clear vehicle selection when customer changes
+    form.setValue('vehicle_id', '');
+  }, [selectedCustomerId, form]);
 
   // Update available time slots when selected date changes
   useEffect(() => {
@@ -87,7 +126,7 @@ const AppointmentForm = ({ onSubmit, customerId }: AppointmentFormProps) => {
     if (!user) return;
     
     const appointmentData: NewAppointmentData = {
-      customer_id: customerId || user.id,
+      customer_id: values.customer_id,
       vehicle_id: values.vehicle_id,
       appointment_date: format(values.appointment_date, 'yyyy-MM-dd'),
       appointment_time: values.appointment_time,
@@ -98,23 +137,63 @@ const AppointmentForm = ({ onSubmit, customerId }: AppointmentFormProps) => {
     await onSubmit(appointmentData);
   };
 
+  // Handle customer change
+  const handleCustomerChange = (customerId: string) => {
+    setSelectedCustomerId(customerId);
+    form.setValue('customer_id', customerId);
+  };
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+        {!customerId && (
+          <FormField
+            control={form.control}
+            name="customer_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Customer</FormLabel>
+                <Select 
+                  onValueChange={(value) => handleCustomerChange(value)} 
+                  defaultValue={field.value}
+                  disabled={isLoadingCustomers}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select customer" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {customers?.map((customer) => (
+                      <SelectItem key={customer.id} value={customer.id}>
+                        {`${customer.first_name || ''} ${customer.last_name || ''}`.trim() || customer.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+        
         <FormField
           control={form.control}
           name="vehicle_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Your Vehicle</FormLabel>
-              <Select onValueChange={field.onChange}>
+              <FormLabel>Vehicle</FormLabel>
+              <Select 
+                onValueChange={field.onChange}
+                disabled={!selectedCustomerId || isLoadingVehicles}
+              >
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select vehicle" />
+                    <SelectValue placeholder={selectedCustomerId ? "Select vehicle" : "Select customer first"} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {vehicles.map((vehicle: Vehicle) => (
+                  {customerVehicles.map((vehicle) => (
                     <SelectItem key={vehicle.id} value={vehicle.id}>
                       {vehicle.year} {vehicle.make} {vehicle.model}
                     </SelectItem>
