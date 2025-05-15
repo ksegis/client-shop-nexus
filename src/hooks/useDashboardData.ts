@@ -76,9 +76,9 @@ export const useDashboardData = (): DashboardSummary => {
     queryKey: ['dashboard', 'inventory'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('parts')
+        .from('inventory')
         .select('*')
-        .order('current_stock', { ascending: true })
+        .order('quantity', { ascending: true })
         .limit(20);
       
       if (error) throw error;
@@ -90,8 +90,9 @@ export const useDashboardData = (): DashboardSummary => {
     queryKey: ['dashboard', 'customers'],
     queryFn: async () => {
       const { count, error } = await supabase
-        .from('customers')
-        .select('*', { count: 'exact', head: true });
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'customer');
       
       if (error) throw error;
       return count || 0;
@@ -130,14 +131,14 @@ export const useDashboardData = (): DashboardSummary => {
   };
 
   // Process inventory data
-  const lowStockItems = inventoryData?.filter(p => p.current_stock <= p.min_stock) || [];
+  const lowStockItems = inventoryData?.filter(p => p.quantity <= (p.reorder_level || 10)) || [];
   
   const inventoryAlerts = lowStockItems.map(item => ({
     id: item.id,
     part_name: item.name,
-    current_stock: item.current_stock,
-    min_stock: item.min_stock,
-    alert_type: 'low_stock' as const  // Fix for the TypeScript error
+    current_stock: item.quantity,
+    min_stock: item.reorder_level || 10,
+    alert_type: 'low_stock' as const
   }));
 
   const inventory = {

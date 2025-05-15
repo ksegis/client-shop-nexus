@@ -5,7 +5,7 @@ import { useDashboardData } from '@/hooks/useDashboardData';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const Dashboard = () => {
-  const { metrics, loading } = useDashboardData();
+  const { estimates, workOrders, inventory, customerCount, loading, error } = useDashboardData();
 
   // Metric card icons mapping
   const metricIcons = {
@@ -85,6 +85,16 @@ const Dashboard = () => {
     );
   }
 
+  // Error state
+  if (error) {
+    return (
+      <div className="p-6 bg-red-50 border border-red-200 rounded-md">
+        <h2 className="text-xl font-bold text-red-700">Error Loading Dashboard</h2>
+        <p className="text-red-600">{error.message}</p>
+      </div>
+    );
+  }
+
   // Calculate change percentages (these would be real calculations in a full implementation)
   // For demo, we'll use placeholder values
   const changeData = {
@@ -113,13 +123,13 @@ const Dashboard = () => {
 
       {/* Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {metrics && [
-          { id: 'totalEstimates', name: 'Total Estimates', value: metrics.totalEstimates },
-          { id: 'pendingApproval', name: 'Pending Approval', value: metrics.pendingApproval },
-          { id: 'approved', name: 'Approved', value: metrics.approved },
-          { id: 'rejected', name: 'Rejected', value: metrics.rejected }
+        {[
+          { id: 'totalEstimates', name: 'Total Estimates', value: estimates.count },
+          { id: 'pendingApproval', name: 'Pending Approval', value: estimates.pending },
+          { id: 'approved', name: 'Approved', value: estimates.approved },
+          { id: 'customerCount', name: 'Customers', value: customerCount }
         ].map((metric) => {
-          const IconComponent = metricIcons[metric.id as keyof typeof metricIcons];
+          const IconComponent = metricIcons[metric.id as keyof typeof metricIcons] || FileText;
           return (
             <Card key={metric.id}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -128,8 +138,11 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{metric.value}</div>
-                <p className={`text-xs ${changeType[metric.id as keyof typeof changeType] === 'positive' ? 'text-green-500' : 'text-red-500'}`}>
-                  {changeData[metric.id as keyof typeof changeData]} from last month
+                <p className={`text-xs ${
+                  changeType[metric.id as keyof typeof changeType] === 'positive' ? 
+                  'text-green-500' : 'text-red-500'}`
+                }>
+                  {changeData[metric.id as keyof typeof changeData] || "+0%"} from last month
                 </p>
               </CardContent>
             </Card>
@@ -145,15 +158,15 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {metrics && metrics.recentEstimates.length > 0 ? (
-                metrics.recentEstimates.map((estimate) => (
+              {estimates.recent.length > 0 ? (
+                estimates.recent.map((estimate) => (
                   <div key={estimate.id} className="flex items-center justify-between border-b last:border-0 py-2">
                     <div>
                       <p className="font-medium">Estimate #{estimate.id.substring(0, 8)}</p>
-                      <p className="text-sm text-gray-500">{estimate.vehicle}</p>
+                      <p className="text-sm text-gray-500">{estimate.customer_name}</p>
                     </div>
                     <div className="text-sm font-medium">
-                      ${estimate.amount.toFixed(2)}
+                      ${estimate.total_amount.toFixed(2)}
                     </div>
                   </div>
                 ))
@@ -172,12 +185,12 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {metrics && metrics.activeWorkOrders.length > 0 ? (
-                metrics.activeWorkOrders.map((workOrder) => (
+              {workOrders.recent.length > 0 ? (
+                workOrders.recent.map((workOrder) => (
                   <div key={workOrder.id} className="flex items-center justify-between border-b last:border-0 py-2">
                     <div>
                       <p className="font-medium">WO #{workOrder.id.substring(0, 8)}</p>
-                      <p className="text-sm text-gray-500">{workOrder.vehicle} - {workOrder.title}</p>
+                      <p className="text-sm text-gray-500">{workOrder.customer_name} - {workOrder.title}</p>
                     </div>
                     <div className="text-sm font-medium text-yellow-600">
                       {workOrder.status === 'in_progress' ? 'In Progress' : workOrder.status}
@@ -202,27 +215,22 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {metrics && metrics.inventoryAlerts.map((alert, index) => (
-                <div 
-                  key={index} 
-                  className={`p-4 ${
-                    alert.type === 'low_stock' 
-                      ? 'bg-red-50 border border-red-200 text-red-700' 
-                      : 'bg-yellow-50 border border-yellow-200 text-yellow-700'
-                  } rounded-md`}
-                >
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4" />
-                    <p className="font-medium">{alert.message}</p>
+              {inventory.alerts.length > 0 ? (
+                inventory.alerts.map((alert) => (
+                  <div 
+                    key={alert.id} 
+                    className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-md"
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      <p className="font-medium">{alert.part_name} is low on stock</p>
+                    </div>
+                    <p className="text-sm mt-1">
+                      Current: {alert.current_stock} / Minimum: {alert.min_stock}
+                    </p>
                   </div>
-                  <p className="text-sm mt-1">
-                    {alert.count} {alert.type === 'low_stock' 
-                      ? 'items are below minimum stock level' 
-                      : 'items need to be ordered'}
-                  </p>
-                </div>
-              ))}
-              {(!metrics || metrics.inventoryAlerts.length === 0) && (
+                ))
+              ) : (
                 <div className="text-center py-4 text-gray-500">
                   No inventory alerts at this time
                 </div>
