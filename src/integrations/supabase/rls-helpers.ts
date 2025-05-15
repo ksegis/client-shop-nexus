@@ -66,21 +66,3 @@ export const addStandardPolicies = async (tableName: string) => {
     return false;
   }
 };
-
-// New function to add a public insert policy for auth logs
-export const addPublicInsertPolicy = async (tableName: string) => {
-  try {
-    // Important to use service_role key or admin to modify policies
-    const { error } = await supabase.rpc(
-      'add_public_insert_policy', 
-      { target_table: tableName }
-    );
-    
-    if (error) throw error;
-    
-    return true;
-  } catch (err) {
-    console.error(`Error adding public insert policy to ${tableName}:`, err);
-    return false;
-  }
-};
