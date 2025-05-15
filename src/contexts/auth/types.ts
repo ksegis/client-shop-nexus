@@ -1,4 +1,3 @@
-
 import { User } from '@supabase/supabase-js';
 
 export type UserRole = 'admin' | 'staff' | 'customer';
@@ -24,6 +23,7 @@ export interface AuthResult {
   error?: any;
 }
 
+// Keep the same type definitions for compatibility, but all methods will be no-ops
 export interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;

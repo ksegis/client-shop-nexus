@@ -1,12 +1,11 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from "@/components/ui/checkbox";
 import { CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/auth'; 
 import { Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -15,82 +14,27 @@ const CustomerSignInForm = () => {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-  const { signIn, profile } = useAuth();
   const navigate = useNavigate();
-
-  // Clear error when inputs change
-  const handleInputChange = () => {
-    if (error) setError(null);
-  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     
-    if (!email || !password) {
-      toast({
-        title: "Missing fields",
-        description: "Please enter both email and password",
-        variant: "destructive",
-      });
-      return;
-    }
-    
+    // Simulate brief loading
     setLoading(true);
-    
-    try {
-      console.log("CustomerSignIn: Attempting to sign in with email:", email);
-      
-      // Sign in using auth context
-      const result = await signIn(email, password, rememberMe);
-      
-      if (result.success) {
-        console.log("CustomerSignIn: Sign-in successful");
-        toast({
-          title: "Login successful",
-          description: "Redirecting to customer portal..."
-        });
-        
-        // Immediate redirect on successful login
-        setTimeout(() => {
-          navigate('/customer', { replace: true });
-        }, 0);
-      } else {
-        throw new Error(result.error?.message || "Failed to sign in");
-      }
-      
-    } catch (error: any) {
-      console.error("CustomerSignIn error:", error);
-      setError(error.message || "An unexpected error occurred");
-      toast({
-        title: "Login failed",
-        description: error.message || "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
+    setTimeout(() => {
       setLoading(false);
-    }
+      toast({
+        title: "Access granted",
+        description: "No authentication required"
+      });
+      navigate('/customer');
+    }, 500);
   };
-
-  // If somehow we have a profile already but ended up on this page,
-  // redirect immediately to the appropriate dashboard
-  if (profile) {
-    const redirectPath = profile.role === 'customer' ? '/customer' : '/shop';
-    navigate(redirectPath, { replace: true });
-    return null;
-  }
 
   return (
     <form onSubmit={handleSignIn}>
       <CardContent className="space-y-4 pt-4">
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-md text-sm">
-            {error}
-          </div>
-        )}
-        
         <div className="space-y-2">
           <Label htmlFor="customer-signin-email">Email</Label>
           <Input 
@@ -98,13 +42,8 @@ const CustomerSignInForm = () => {
             type="email" 
             placeholder="you@example.com" 
             value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              handleInputChange();
-            }}
-            required
+            onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
-            className={error ? "border-red-300" : ""}
           />
         </div>
         
@@ -114,13 +53,8 @@ const CustomerSignInForm = () => {
             id="customer-signin-password" 
             type="password" 
             value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              handleInputChange();
-            }}
-            required
+            onChange={(e) => setPassword(e.target.value)}
             disabled={loading}
-            className={error ? "border-red-300" : ""}
           />
         </div>
         
@@ -157,9 +91,9 @@ const CustomerSignInForm = () => {
             type="button"
             className="text-primary hover:underline"
             disabled={loading}
-            onClick={() => window.location.href = '/customer/reset-password'}
+            onClick={() => navigate('/customer')}
           >
-            Forgot password?
+            Skip sign in & go to dashboard
           </button>
         </div>
       </CardContent>

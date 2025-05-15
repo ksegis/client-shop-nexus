@@ -14,13 +14,9 @@ import Employees from "@/pages/shop/Employees";
 import WorkOrders from "@/pages/shop/WorkOrders";
 import AdminPage from "@/pages/shop/admin/AdminPage";
 import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
-import { useAuth } from "@/contexts/auth";
 import NotFound from "@/pages/NotFound";
 
 const ShopRoutes = () => {
-  const { profile } = useAuth();
-  const isAdmin = profile?.role === 'admin';
-
   return (
     <Layout portalType="shop">
       <Routes>
@@ -37,15 +33,8 @@ const ShopRoutes = () => {
         <Route path="/inventory/simple" element={<SimpleInventory />} />
         <Route path="/service-desk" element={<ServiceDesk />} />
         <Route path="/service-appointments" element={<ServiceAppointments />} />
-        <Route path="/employees" element={isAdmin ? <Employees /> : <Navigate to="/shop" replace />} />
-        
-        {/* Admin routes */}
-        {isAdmin && (
-          <>
-            <Route path="/admin" element={<AdminPage />} />
-          </>
-        )}
-        
+        <Route path="/employees" element={<Employees />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>

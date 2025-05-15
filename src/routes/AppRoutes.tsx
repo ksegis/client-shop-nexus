@@ -5,7 +5,6 @@ import { AuthProvider } from '@/contexts/auth';
 import { MessagingProvider } from '@/contexts/messaging';
 import CustomerRoutes from './CustomerRoutes';
 import ShopRoutes from './shop/ShopRoutes';
-import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Index from '@/pages/Index';
 import ShopLogin from '@/pages/shop/Login';
 import CustomerLogin from '@/pages/customer/Login';
@@ -18,28 +17,15 @@ const AppRoutes: React.FC = () => {
         <Routes>
           <Route path="/" element={<Index />} />
           
-          {/* Separate login paths */}
+          {/* Login paths - now accessible to all */}
           <Route path="/shop-login" element={<ShopLogin />} />
           <Route path="/customer-login" element={<CustomerLogin />} />
 
-          <Route
-            path="/customer/*"
-            element={
-              <ProtectedRoute allowedRoles={['customer']}>
-                <CustomerRoutes />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/shop/*"
-            element={
-              <ProtectedRoute allowedRoles={['staff', 'admin']}>
-                <ShopRoutes />
-              </ProtectedRoute>
-            }
-          />
+          {/* Direct access to all routes */}
+          <Route path="/customer/*" element={<CustomerRoutes />} />
+          <Route path="/shop/*" element={<ShopRoutes />} />
           
-          {/* Redirect legacy auth paths */}
+          {/* Legacy auth path redirects */}
           <Route path="/auth" element={<Navigate to="/" replace />} />
           <Route path="/auth/*" element={<Navigate to="/" replace />} />
           
