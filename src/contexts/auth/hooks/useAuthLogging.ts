@@ -9,8 +9,8 @@ export type AuthEventType =
   | 'sign_up' 
   | 'password_reset'
   | 'password_update'
-  | 'impersonate_test_user'  // Add this to fix the error
-  | 'stop_impersonation';    // Add this to fix the error
+  | 'impersonate_test_user'
+  | 'stop_impersonation';
 
 export function useAuthLogging() {
   const logAuthEvent = async (eventType: AuthEventType, user: User | null, extraData: Record<string, any> = {}) => {
@@ -27,7 +27,10 @@ export function useAuthLogging() {
       
       console.log('Auth event:', eventData);
       
-      // Store event in Supabase if connected
+      // In a production environment, we would store this in a database
+      // For now, we'll just log to console
+      // The auth_logs table doesn't exist, so we're commenting out this code
+      /*
       try {
         const { error } = await supabase
           .from('auth_logs')
@@ -38,12 +41,13 @@ export function useAuthLogging() {
             metadata: { ...extraData, user_metadata: user?.user_metadata }
           });
         
-        if (error && !error.message.includes('does not exist')) {
+        if (error) {
           console.error('Error logging auth event:', error);
         }
       } catch (err) {
         // Silently catch if auth_logs table doesn't exist
       }
+      */
       
       console.log('Auth event logged:', eventType);
     } catch (err) {

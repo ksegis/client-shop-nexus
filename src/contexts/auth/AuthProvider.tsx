@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { AuthContext } from './AuthContext';
 import { AuthContextType, UserProfile, UserRole } from './types';
@@ -28,6 +29,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isTestUser, setIsTestUser] = useState<boolean>(false);
   const [portalType, setPortalType] = useState<'shop' | 'customer' | null>(null);
+  const [profileLoading, setProfileLoading] = useState<boolean>(true);
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -39,6 +41,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const fetchProfile = async () => {
       if (!user) {
         setProfile(null);
+        setProfileLoading(false);
         return;
       }
       
@@ -61,6 +64,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setIsAuthenticated(true);
           setIsTestUser(true);
           setPortalType(getPortalByRole(testUser.user_metadata?.role || 'customer'));
+          setProfileLoading(false);
           return;
         } catch (err) {
           console.error('Error parsing test user data:', err);
@@ -84,6 +88,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // If there's a network error, don't clear the profile - this might cause redirect loops
           if (profileError.code === 'PGRST116') {
             console.log('Network error when fetching profile - keeping current auth state');
+            setProfileLoading(false);
             return;
           }
         }
@@ -103,24 +108,49 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setIsAuthenticated(true);
           setIsTestUser(isTestRole(profileData.role));
           setPortalType(getPortalByRole(profileData.role));
+          console.log('Profile loaded:', userProfile.role, 'Portal type:', getPortalByRole(profileData.role));
         } else if (user) {
           // If no profile exists but we have a user, create a default one
           // This prevents redirect loops caused by auth state being inconsistent
+          console.log('No profile found, creating default profile with user metadata');
+          const role = (user.user_metadata?.role as UserRole) || 'customer';
+          
           const newUserProfile: UserProfile = {
             id: user.id,
             email: user.email || '',
             first_name: user.user_metadata?.first_name || '',
             last_name: user.user_metadata?.last_name || '',
-            role: (user.user_metadata?.role as UserRole) || 'customer',
+            role: role,
             is_test_account: false
           };
           
           setProfile(newUserProfile);
           setIsAuthenticated(true);
           setIsTestUser(false);
-          setPortalType(user.user_metadata?.role?.includes('customer') ? 'customer' : 'shop');
+          setPortalType(getPortalByRole(role));
           
-          console.warn('Creating default profile for authenticated user to prevent redirect loops');
+          console.warn('Created default profile for authenticated user');
+          
+          // Also create the profile in the database
+          try {
+            const { error: insertError } = await supabase
+              .from('profiles')
+              .insert({
+                id: user.id,
+                email: user.email,
+                first_name: user.user_metadata?.first_name || '',
+                last_name: user.user_metadata?.last_name || '',
+                role: role
+              });
+              
+            if (insertError) {
+              console.error('Failed to create profile in database:', insertError);
+            } else {
+              console.log('Created profile in database');
+            }
+          } catch (insertErr) {
+            console.error('Error creating profile:', insertErr);
+          }
         }
       } catch (error) {
         console.error('Error processing profile data:', error);
@@ -130,11 +160,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setProfile(null);
           setIsAuthenticated(false);
         }
+      } finally {
+        setProfileLoading(false);
       }
     };
 
     if (user) {
       fetchProfile();
+    } else {
+      setProfileLoading(false);
     }
   }, [user, session]);
 
@@ -207,7 +241,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     profile,
     session,
-    isLoading: loading,
+    isLoading: loading || profileLoading, // Consider profile loading as part of overall loading
     isAuthenticated,
     isTestUser,
     portalType,

@@ -20,7 +20,68 @@ export function useAuthStateListener() {
       setHasLogged(true);
     }
     
-    // First get the existing session (critical for initial page loads)
+    // Set up the auth state change listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, currentSession) => {
+        if (!isMounted) return;
+        
+        if (!hasLogged) {
+          console.log('Auth state change:', event);
+        }
+        
+        // Only synchronously update state in the callback
+        if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUser(null);
+          console.log('User signed out, clearing session');
+        } else if (currentSession) {
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          console.log('Auth state updated, user:', currentSession?.user?.email);
+        }
+        
+        // Wait to set loading to false until we know if the user exists
+        if (event !== 'INITIAL_SESSION' || !currentSession) {
+          setLoading(false);
+        }
+        
+        // Use setTimeout to defer any complex operations
+        if (currentSession?.user) {
+          setTimeout(async () => {
+            if (!isMounted) return;
+            
+            try {
+              // Check if user has a profile
+              const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', currentSession.user.id)
+                .maybeSingle();
+                
+              if (profileError) {
+                console.error('Error fetching user profile:', profileError);
+              } else if (!profileData) {
+                console.warn('No profile found for user, this may cause RLS issues');
+              } else if (!hasLogged) {
+                console.log('User profile verified, role:', profileData.role);
+              }
+              
+              // Now that we have profile info, we can safely say loading is done
+              if (isMounted) {
+                setLoading(false);
+              }
+            } catch (err) {
+              console.error('Error in deferred profile check:', err);
+              if (isMounted) {
+                setLoading(false);
+              }
+            }
+          }, 0);
+        }
+      }
+    );
+    
+    // THEN get the existing session (critical for initial page loads)
     const initSession = async () => {
       if (!isMounted) return;
       
@@ -52,64 +113,18 @@ export function useAuthStateListener() {
           setUser(null);
           setSession(null);
         }
+        
+        // Make sure to set loading to false even if there's no session
+        if (isMounted) {
+          setLoading(false);
+        }
       } catch (error) {
         console.error('Error getting session:', error);
-      } finally {
         if (isMounted) {
           setLoading(false);
         }
       }
     };
-    
-    // Set up the auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
-        if (!isMounted) return;
-        
-        if (!hasLogged) {
-          console.log('Auth state change:', event);
-        }
-        
-        // Only synchronously update state in the callback
-        if (event === 'SIGNED_OUT') {
-          setSession(null);
-          setUser(null);
-          console.log('User signed out, clearing session');
-        } else if (currentSession) {
-          setSession(currentSession);
-          setUser(currentSession?.user ?? null);
-          console.log('Auth state updated, user:', currentSession?.user?.email);
-        }
-        
-        setLoading(false);
-        
-        // Use setTimeout to defer any complex operations
-        if (currentSession?.user) {
-          setTimeout(async () => {
-            if (!isMounted) return;
-            
-            try {
-              // Check if user has a profile
-              const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', currentSession.user.id)
-                .maybeSingle();
-                
-              if (profileError) {
-                console.error('Error fetching user profile:', profileError);
-              } else if (!profileData) {
-                console.warn('No profile found for user, this may cause RLS issues');
-              } else if (!hasLogged) {
-                console.log('User profile verified, role:', profileData.role);
-              }
-            } catch (err) {
-              console.error('Error in deferred profile check:', err);
-            }
-          }, 0);
-        }
-      }
-    );
     
     // Initialize session
     initSession();

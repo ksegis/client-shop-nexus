@@ -53,7 +53,7 @@ export const useRedirection = () => {
       // Add a slight delay to ensure other auth state processing completes
       const timer = setTimeout(() => {
         navigate(redirectPath, { replace: true });
-      }, 300);
+      }, 500); // Increased delay for more reliability
       
       console.groupEnd();
       return () => clearTimeout(timer);
