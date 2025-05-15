@@ -63,7 +63,13 @@ export const useCustomerDashboard = (): CustomerDashboardData => {
     
     const fetchUserProfile = async () => {
       try {
-        // Fetch profile information
+        if (!isValidUuid(user.id)) {
+          // For mock/dev users, use the metadata directly
+          setFirstName(user.user_metadata?.first_name || 'Customer');
+          return;
+        }
+
+        // Fetch profile information for real users
         const { data: profileData } = await supabase
           .from('profiles')
           .select('first_name')
@@ -82,6 +88,64 @@ export const useCustomerDashboard = (): CustomerDashboardData => {
       setLoading(true);
       
       try {
+        // For dev/mock users, provide mock data
+        if (!isValidUuid(user.id)) {
+          console.log('Using mock dashboard data for dev/mock user');
+          
+          // Mock notifications
+          const mockNotifications = [
+            {
+              id: 'mock-notif-1',
+              title: 'Service Completed',
+              message: 'Your oil change service has been completed.',
+              date: new Date().toLocaleDateString(),
+              type: 'service'
+            },
+            {
+              id: 'mock-notif-2',
+              title: 'New Message',
+              message: 'You have a new message from the service department.',
+              date: new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString(),
+              type: 'message'
+            },
+            {
+              id: 'mock-notif-3',
+              title: 'Estimate Ready',
+              message: 'Your estimate for brake service is ready for review.',
+              date: new Date(Date.now() - 48 * 60 * 60 * 1000).toLocaleDateString(),
+              type: 'estimate'
+            }
+          ];
+          
+          // Mock active work order
+          const mockWorkOrder = {
+            id: 'mock-wo-1',
+            title: 'Brake Service',
+            status: 'in_progress',
+            progress: 75,
+            estimated_completion: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toLocaleDateString(),
+            vehicle: {
+              make: 'Toyota',
+              model: 'Camry',
+              year: '2020'
+            }
+          };
+          
+          // Mock outstanding invoice
+          const mockInvoice = {
+            id: 'mock-inv-1',
+            amount_due: 156.75,
+            due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()
+          };
+          
+          setNotifications(mockNotifications);
+          setActiveWorkOrder(mockWorkOrder);
+          setOutstandingInvoice(mockInvoice);
+          setLoading(false);
+          return;
+        }
+        
+        // For real users, proceed with database queries
         // Fetch notifications (could be from messages table, estimates updates, etc.)
         const { data: notificationData } = await supabase
           .from('message_threads')
