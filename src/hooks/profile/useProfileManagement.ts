@@ -72,12 +72,24 @@ export const useProfileManagement = (): ProfileManagement => {
 
   const createProfile = async (userId: string, profileData: Partial<UserProfile>): Promise<UserProfile | null> => {
     try {
+      // Ensure email is provided as it's required by the database
+      if (!profileData.email) {
+        throw new Error("Email is required to create a profile");
+      }
+
+      const profileToInsert = {
+        id: userId,
+        email: profileData.email,
+        role: profileData.role || 'customer',
+        first_name: profileData.first_name || '',
+        last_name: profileData.last_name || '',
+        avatar_url: profileData.avatar_url || '',
+        phone: profileData.phone || ''
+      };
+
       const { data, error } = await supabase
         .from('profiles')
-        .insert({
-          id: userId,
-          ...profileData
-        })
+        .insert(profileToInsert)
         .select()
         .single();
         
@@ -104,9 +116,17 @@ export const useProfileManagement = (): ProfileManagement => {
     }
     
     try {
+      // Make a copy of updates without modifying the original object
+      const updateData = { ...updates };
+      
+      // Delete email from updates if it exists, since we shouldn't update it
+      if ('email' in updateData) {
+        delete updateData.email;
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .update(updates)
+        .update(updateData)
         .eq('id', profile.id);
         
       if (error) throw error;
@@ -114,7 +134,7 @@ export const useProfileManagement = (): ProfileManagement => {
       // Update the local state
       setProfile((prev) => {
         if (!prev) return null;
-        const updated = { ...prev, ...updates };
+        const updated = { ...prev, ...updateData };
         const detectedPortalType = getPortalType(updated);
         setPortalType(detectedPortalType);
         return updated;
