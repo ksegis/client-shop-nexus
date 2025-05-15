@@ -7,8 +7,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Eye, Filter } from 'lucide-react';
+import { RefreshCw, Eye, Filter, Shield } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { addPublicInsertPolicy } from '@/integrations/supabase/rls-helpers';
 
 // Type for the logs retrieved from the database
 interface AuthFlowLog {
@@ -32,11 +34,13 @@ export function AuthFlowLogsViewer() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('all');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [hasRlsError, setHasRlsError] = useState(false);
   const { toast } = useToast();
   
   const fetchLogs = async () => {
     try {
       setLoading(true);
+      setHasRlsError(false);
       
       // Query to get the logs, limited to recent entries to avoid performance issues
       let query = supabase
@@ -58,6 +62,9 @@ export function AuthFlowLogsViewer() {
       const { data, error } = await query;
       
       if (error) {
+        if (error.message?.includes('row-level security') || error.code === '42501') {
+          setHasRlsError(true);
+        }
         throw error;
       }
       
@@ -73,6 +80,36 @@ export function AuthFlowLogsViewer() {
       toast({
         title: "Error fetching logs",
         description: "There was an error fetching the authentication logs. You may not have permission to view them.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fixRlsPolicy = async () => {
+    try {
+      setLoading(true);
+      const success = await addPublicInsertPolicy('auth_flow_logs');
+      if (success) {
+        toast({
+          title: "RLS Policy Added",
+          description: "Successfully added insert policy to auth_flow_logs table",
+        });
+        // Re-fetch logs after fixing policy
+        await fetchLogs();
+      } else {
+        toast({
+          title: "Error Adding Policy",
+          description: "Failed to add insert policy to auth_flow_logs table. You might need admin privileges.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error adding RLS policy:', error);
+      toast({
+        title: "Error Adding Policy",
+        description: "An error occurred while adding the RLS policy.",
         variant: "destructive",
       });
     } finally {
@@ -163,6 +200,25 @@ export function AuthFlowLogsViewer() {
         </div>
       </CardHeader>
       <CardContent>
+        {hasRlsError && (
+          <Alert variant="destructive" className="mb-4">
+            <Shield className="h-4 w-4" />
+            <AlertTitle>Row-Level Security Policy Issue</AlertTitle>
+            <AlertDescription>
+              <p>There is an RLS policy issue with the auth_flow_logs table. Non-admin users cannot insert logs.</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-2" 
+                onClick={fixRlsPolicy}
+              >
+                <Shield className="mr-2 h-4 w-4" />
+                Add Public Insert Policy
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-4">
           <TabsList className="mb-2 flex-wrap h-auto">
             <TabsTrigger value="all">All Events</TabsTrigger>
@@ -210,7 +266,9 @@ export function AuthFlowLogsViewer() {
                   {logs.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
-                        No authentication logs found
+                        {hasRlsError ? 
+                          "RLS policy issues preventing access to logs" : 
+                          "No authentication logs found"}
                       </TableCell>
                     </TableRow>
                   ) : (

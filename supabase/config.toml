@@ -7,3 +7,6 @@ verify_jwt = true
 
 [functions.restore-admin]
 verify_jwt = true
+
+[functions.add_public_insert_policy]
+verify_jwt = true

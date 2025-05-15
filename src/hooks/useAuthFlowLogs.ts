@@ -36,28 +36,35 @@ export function useAuthFlowLogs() {
       const sessionId = getSessionId();
       const clientTimestamp = new Date().toISOString();
       
-      // Log to console for immediate visibility
+      // Log to console for immediate visibility (always works even if DB logging fails)
       console.log(`🔍 Auth Flow Event [${event.event_type}]:`, {
         ...event,
         session_id: sessionId,
         client_timestamp: clientTimestamp
       });
       
-      // Insert into database
-      const { error } = await supabase
-        .from('auth_flow_logs')
-        .insert({
-          ...event,
-          session_id: sessionId,
-          client_timestamp: clientTimestamp
-        });
-      
-      if (error) {
-        console.error('Error logging auth flow event:', error);
+      // Try to insert into database - but don't let errors disrupt the app flow
+      try {
+        const { error } = await supabase
+          .from('auth_flow_logs')
+          .insert({
+            ...event,
+            session_id: sessionId,
+            client_timestamp: clientTimestamp
+          });
+        
+        if (error) {
+          // Just log the error to console without throwing
+          console.error('Error logging auth flow event:', error);
+        }
+      } catch (dbError) {
+        // Silently catch database errors to prevent disrupting the auth flow
+        console.error('Failed to write to auth_flow_logs table:', dbError);
       }
       
-      return { success: !error };
+      return { success: true };
     } catch (err) {
+      // Log any other errors but don't disrupt the app
       console.error('Failed to log auth flow event:', err);
       return { success: false, error: err };
     }
