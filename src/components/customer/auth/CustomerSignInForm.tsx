@@ -6,8 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from "@/components/ui/checkbox";
 import { CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/auth';
+import { useAuth } from '@/contexts/auth'; 
 import { Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const CustomerSignInForm = () => {
   const [email, setEmail] = useState('');
@@ -17,6 +18,7 @@ const CustomerSignInForm = () => {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const { signIn } = useAuth();
+  const navigate = useNavigate();
 
   // Clear error when inputs change
   const handleInputChange = () => {
@@ -50,12 +52,18 @@ const CustomerSignInForm = () => {
           title: "Login successful",
           description: "Redirecting to customer portal..."
         });
-        // The redirection will be handled by the useRedirection hook
-        // No need to explicitly navigate here
+        
+        // Force redirect to customer dashboard
+        // This serves as a backup in case the useRedirection hook doesn't trigger
+        setTimeout(() => {
+          navigate('/customer', { replace: true });
+        }, 500);
+      } else {
+        throw new Error(result.error?.message || "Failed to sign in");
       }
       
     } catch (error: any) {
-      console.error("SignIn error:", error);
+      console.error("CustomerSignIn error:", error);
       setError(error.message || "An unexpected error occurred");
       toast({
         title: "Login failed",
@@ -92,6 +100,7 @@ const CustomerSignInForm = () => {
             className={error ? "border-red-300" : ""}
           />
         </div>
+        
         <div className="space-y-2">
           <Label htmlFor="customer-signin-password">Password</Label>
           <Input 

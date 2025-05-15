@@ -44,7 +44,7 @@ export const useRedirection = (authState: {
     
     // Prevent redirect loops with minimum time between redirects
     const currentTime = Date.now();
-    if (currentTime - lastRedirectTime.current < 10000) {
+    if (currentTime - lastRedirectTime.current < 1000) { // Reduced from 10s to 1s to make login redirect faster
       console.log('🛑 Too many redirects in a short period, preventing redirect loop');
       return;
     }
@@ -75,8 +75,10 @@ export const useRedirection = (authState: {
         // If we have portal type information, use it for precise redirection
         if (portalType === 'shop') {
           redirectPath = '/shop';
+          console.log('Detected shop user on login page, redirecting to shop dashboard');
         } else if (portalType === 'customer') {
           redirectPath = '/customer';
+          console.log('Detected customer user on login page, redirecting to customer dashboard');
         }
         
         console.log(`➡️ Redirecting to ${redirectPath} (authenticated user on login page)`);
@@ -132,7 +134,7 @@ export const useRedirection = (authState: {
       // Reset the redirection flag after a short delay
       setTimeout(() => {
         redirectionInProgress.current = false;
-      }, 1000);
+      }, 100); // Reduced from 1000ms to 100ms
     }
   }, [user, isLoading, navigate, location.pathname, portalType, profile]);
 };

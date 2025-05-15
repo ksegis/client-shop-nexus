@@ -8,6 +8,7 @@ import { CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth'; 
 import { Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const SignInForm = () => {
   const [email, setEmail] = useState('');
@@ -17,6 +18,7 @@ const SignInForm = () => {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const { signIn } = useAuth();
+  const navigate = useNavigate();
 
   // Clear error when inputs change
   const handleInputChange = () => {
@@ -50,8 +52,14 @@ const SignInForm = () => {
           title: "Login successful",
           description: "Redirecting to shop portal..."
         });
-        // The redirection will be handled by the useRedirection hook
-        // No need to explicitly navigate here
+        
+        // Force redirect to shop dashboard
+        // This serves as a backup in case the useRedirection hook doesn't trigger
+        setTimeout(() => {
+          navigate('/shop', { replace: true });
+        }, 500);
+      } else {
+        throw new Error(result.error?.message || "Failed to sign in");
       }
       
     } catch (error: any) {

@@ -48,14 +48,38 @@ export function useAuthActions() {
   };
   
   const signIn = async (email: string, password: string, rememberMe = false): Promise<AuthResult> => {
-    const result = await authSignIn({ email, password });
-    
-    if (result.success && result.data?.user) {
-      // Log the signin event
-      await logAuthEvent('sign_in', result.data.user);
+    try {
+      console.log(`Signing in with email: ${email}, rememberMe: ${rememberMe}`);
+      const result = await authSignIn({ email, password });
+      
+      if (result.success && result.data?.user) {
+        // Log the signin event
+        await logAuthEvent('sign_in', result.data.user);
+        console.log(`Sign in successful for user: ${result.data.user.id}`);
+        
+        // Get user profile to determine redirect path
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', result.data.user.id)
+          .single();
+        
+        if (profileData?.role) {
+          const redirectPath = getRedirectPathByRole(profileData.role as UserRole);
+          console.log(`User role: ${profileData.role}, redirecting to: ${redirectPath}`);
+          
+          // Force redirect to the appropriate dashboard without losing authState
+          setTimeout(() => {
+            navigate(redirectPath, { replace: true });
+          }, 100);
+        }
+      }
+      
+      return result;
+    } catch (error: any) {
+      console.error('Sign in error:', error);
+      return { success: false, error };
     }
-    
-    return result;
   };
   
   const signOut = async (): Promise<AuthResult> => {
@@ -71,7 +95,7 @@ export function useAuthActions() {
           await logAuthEvent('sign_out', user);
         }
         
-        navigate('/');
+        navigate('/', { replace: true });
       }
       
       return result;
@@ -118,9 +142,9 @@ export function useAuthActions() {
   const getRedirectPathByRole = (role: UserRole) => {
     switch (role) {
       case 'customer':
-        return '/customer/profile';
+        return '/customer';
       case 'admin':
-        return '/shop/admin';
+        return '/shop';
       case 'staff':
         return '/shop';
       default:
