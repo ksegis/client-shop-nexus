@@ -24,9 +24,20 @@ const ProtectedRoute = ({
     );
   }
 
-  // If not authenticated, redirect to main auth page
+  // If not authenticated, redirect to appropriate login page based on the roles
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    // If we're trying to access customer routes, redirect to customer login
+    if (allowedRoles.includes('customer')) {
+      return <Navigate to="/customer-login" replace />;
+    }
+    
+    // If we're trying to access shop/admin routes, redirect to shop login
+    if (allowedRoles.includes('staff') || allowedRoles.includes('admin')) {
+      return <Navigate to="/shop-login" replace />;
+    }
+    
+    // Default fallback to main index
+    return <Navigate to="/" replace />;
   }
   
   // If no specific roles are required, or user has an allowed role
@@ -37,8 +48,15 @@ const ProtectedRoute = ({
     return <>{children}</>;
   }
   
-  // User doesn't have the required role
-  return <Navigate to="/auth" replace />;
+  // User doesn't have the required role - redirect to their appropriate portal
+  if (profile?.role === 'customer') {
+    return <Navigate to="/customer" replace />;
+  } else if (profile?.role === 'staff' || profile?.role === 'admin') {
+    return <Navigate to="/shop" replace />;
+  }
+  
+  // Final fallback
+  return <Navigate to="/" replace />;
 };
 
 export default ProtectedRoute;
