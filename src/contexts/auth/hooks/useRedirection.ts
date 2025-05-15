@@ -44,7 +44,7 @@ export const useRedirection = (authState: {
     
     // Prevent redirect loops with minimum time between redirects
     const currentTime = Date.now();
-    if (currentTime - lastRedirectTime.current < 1000) { // Reduced from 10s to 1s to make login redirect faster
+    if (currentTime - lastRedirectTime.current < 500) { // Even shorter time to make login faster
       console.log('🛑 Too many redirects in a short period, preventing redirect loop');
       return;
     }
@@ -131,10 +131,10 @@ export const useRedirection = (authState: {
       console.log('✅ No redirection needed');
       console.groupEnd();
     } finally {
-      // Reset the redirection flag after a short delay
+      // Reset the redirection flag after a shorter delay
       setTimeout(() => {
         redirectionInProgress.current = false;
-      }, 100); // Reduced from 1000ms to 100ms
+      }, 50); // Even shorter delay
     }
   }, [user, isLoading, navigate, location.pathname, portalType, profile]);
 };

@@ -25,6 +25,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     updateProfile, 
     getPortalType 
   } = useProfileManagement();
+  
   const { 
     signUp, 
     signIn, 

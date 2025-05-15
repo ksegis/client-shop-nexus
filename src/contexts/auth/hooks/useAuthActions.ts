@@ -67,11 +67,6 @@ export function useAuthActions() {
         if (profileData?.role) {
           const redirectPath = getRedirectPathByRole(profileData.role as UserRole);
           console.log(`User role: ${profileData.role}, redirecting to: ${redirectPath}`);
-          
-          // Force redirect to the appropriate dashboard without losing authState
-          setTimeout(() => {
-            navigate(redirectPath, { replace: true });
-          }, 100);
         }
       }
       
@@ -95,6 +90,7 @@ export function useAuthActions() {
           await logAuthEvent('sign_out', user);
         }
         
+        // Force redirect to home page
         navigate('/', { replace: true });
       }
       

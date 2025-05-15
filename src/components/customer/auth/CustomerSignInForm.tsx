@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,11 +52,8 @@ const CustomerSignInForm = () => {
           description: "Redirecting to customer portal..."
         });
         
-        // Force redirect to customer dashboard
-        // This serves as a backup in case the useRedirection hook doesn't trigger
-        setTimeout(() => {
-          navigate('/customer', { replace: true });
-        }, 500);
+        // Force immediate redirect to customer dashboard
+        navigate('/customer', { replace: true });
       } else {
         throw new Error(result.error?.message || "Failed to sign in");
       }

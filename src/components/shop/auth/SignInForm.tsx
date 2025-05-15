@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,11 +52,8 @@ const SignInForm = () => {
           description: "Redirecting to shop portal..."
         });
         
-        // Force redirect to shop dashboard
-        // This serves as a backup in case the useRedirection hook doesn't trigger
-        setTimeout(() => {
-          navigate('/shop', { replace: true });
-        }, 500);
+        // Force immediate redirect to shop dashboard
+        navigate('/shop', { replace: true });
       } else {
         throw new Error(result.error?.message || "Failed to sign in");
       }
