@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -60,10 +61,10 @@ const SignInForm = () => {
           user_role: role
         });
         
-        // Increased timeout from 100ms to 800ms
+        // Increased timeout from 800ms to 1600ms
         const timer = setTimeout(() => {
           navigate('/shop', { replace: true });
-        }, 800);
+        }, 1600);
         
         return () => clearTimeout(timer);
       } else if (role === 'customer') {
@@ -129,10 +130,10 @@ const SignInForm = () => {
         
         console.log("SignIn: Sign-in successful, redirecting...");
         
-        // Increased timeout from 300ms to 1000ms
+        // Increased timeout from 1000ms to 2000ms
         setTimeout(() => {
           navigate('/shop', { replace: true });
-        }, 1000);
+        }, 2000);
       }
       
     } catch (error: any) {
