@@ -48,8 +48,7 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
       path: '#', 
       children: [
         { name: 'Parts & Accessories', path: '/shop/parts' },
-        { name: 'Inventory', path: '/shop/inventory' },
-        { name: 'Simple Inventory', path: '/shop/inventory/simple' }
+        { name: 'Inventory', path: '/shop/inventory' }
       ]
     },
     { name: 'Reports', path: '/shop/reports' }

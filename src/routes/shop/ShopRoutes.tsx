@@ -10,7 +10,6 @@ import Parts from "@/pages/shop/Parts";
 import Reports from "@/pages/shop/Reports";
 import ServiceDesk from "@/pages/shop/ServiceDesk";
 import ServiceAppointments from "@/pages/shop/ServiceAppointments";
-import SimpleInventory from "@/pages/shop/SimpleInventory";
 import Employees from "@/pages/shop/Employees";
 import WorkOrders from "@/pages/shop/WorkOrders";
 import AdminPage from "@/pages/shop/admin/AdminPage";
@@ -32,7 +31,6 @@ const ShopRoutes = () => {
         <Route path="/reports" element={<Reports />} />
         <Route path="/parts" element={<Parts />} />
         <Route path="/inventory" element={<Inventory />} />
-        <Route path="/inventory/simple" element={<SimpleInventory />} />
         <Route path="/service-desk" element={<ServiceDesk />} />
         <Route path="/service-appointments" element={<ServiceAppointments />} />
         <Route path="/employees" element={<Employees />} />
