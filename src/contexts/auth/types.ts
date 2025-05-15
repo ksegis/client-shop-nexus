@@ -29,6 +29,8 @@ export interface AuthContextType {
   profile: UserProfile | null;
   portalType: 'shop' | 'customer' | null;
   isLoading: boolean;
+  isAuthenticated: boolean;
+  session?: any;
   signUp: (email: string, password: string, firstName?: string, lastName?: string) => Promise<AuthResult>;
   signIn: (email: string, password: string, rememberMe?: boolean) => Promise<AuthResult>;
   signOut: () => Promise<AuthResult>;

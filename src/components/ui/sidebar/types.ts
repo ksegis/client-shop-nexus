@@ -11,3 +11,21 @@ export interface NavigationItem {
 export interface NavigationGroup {
   [key: string]: NavigationItem[];
 }
+
+export interface SidebarSection {
+  title?: string;
+  items: SidebarItemType[];
+}
+
+export interface SidebarItemType {
+  id: string;
+  title: string;
+  icon?: any;
+  href?: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  external?: boolean;
+  labels?: Record<string, string>;
+  roles?: string[];
+}

@@ -1,34 +1,57 @@
 
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import React from "react";
+import { cn } from "@/lib/utils";
+import { SidebarItemType } from "./types";
 
-interface SidebarItemProps {
-  href: string;
-  title: string;
-  icon: LucideIcon;
+export interface SidebarItemProps {
+  isActive?: boolean;
+  isCollapsed?: boolean;
+  icon?: React.ReactNode;
+  onClick?: () => void;
+  id?: string;
+  title?: string;
+  disabled?: boolean;
+  href?: string;
+  external?: boolean;
+  item: SidebarItemType;
 }
 
-export const SidebarItem = ({ href, title, icon: Icon }: SidebarItemProps) => {
-  // Ensure proper navigation with React Router using relative paths
-  // This approach avoids hard-coded URLs like localhost
+export function SidebarItem({
+  isActive,
+  isCollapsed,
+  icon,
+  onClick,
+  item,
+}: SidebarItemProps) {
+  const Component = item.href ? 'a' : 'button';
+
   return (
-    <NavLink
-      to={href}
-      className={({ isActive }) =>
-        cn(
-          'flex items-center gap-3 rounded-lg px-3 py-2 text-base transition-colors hover:text-foreground',
-          'mx-2 mb-1',
-          isActive
-            ? 'bg-accent text-foreground font-medium'
-            : 'text-muted-foreground hover:bg-muted'
-        )
-      }
-      end // This ensures exact path matching
-    >
-      <Icon className="h-5 w-5" />
-      <span>{title}</span>
-    </NavLink>
+    <div className="px-2">
+      <Component
+        className={cn(
+          "flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors",
+          isActive && "bg-accent text-accent-foreground",
+          (item.disabled as boolean) && "pointer-events-none opacity-50",
+          isCollapsed && "justify-center"
+        )}
+        onClick={onClick}
+        role={!item.href ? "button" : undefined}
+        {...(item.href
+          ? {
+              href: item.href,
+              target: item.external ? "_blank" : undefined,
+              rel: item.external ? "noreferrer" : undefined,
+            }
+          : {})}
+      >
+        {icon}
+        {!isCollapsed && <span>{item.title}</span>}
+        {!isCollapsed && item?.labels?.new && (
+          <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+            {item.labels.new}
+          </span>
+        )}
+      </Component>
+    </div>
   );
-};
+}

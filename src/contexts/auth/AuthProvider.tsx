@@ -23,10 +23,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   
   const { 
     profile, 
-    profileLoading, 
-    portalType 
+    isLoadingProfile, 
+    profileError, 
+    updateProfile,
+    getPortalType 
   } = useProfileManagement(user);
-  
+
+  const portalType = profile ? getPortalType(profile) : null;
   const isDevMode = process.env.NODE_ENV === 'development';
 
   // Helper function for validating user access
@@ -48,8 +51,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const contextValue: AuthContextType = {
     user,
     profile,
-    session,
-    isLoading: authLoading || profileLoading,
+    isLoading: authLoading || isLoadingProfile,
     isAuthenticated: !!user,
     portalType,
     signIn,
@@ -57,9 +59,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signUp,
     resetPassword,
     updatePassword,
-    getRedirectPathByRole,
-    validateAccess,
-    isDevMode
+    updateProfile,
+    validateAccess
   };
 
   return (
