@@ -43,15 +43,8 @@ const CustomerSignUpForm = () => {
     setLoading(true);
     
     try {
-      // Include customer role and name in metadata
-      await signUp(email, password, {
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-          role: 'customer' // Explicitly set role as customer
-        },
-        redirectTo: `${window.location.origin}/customer`
-      });
+      // Call signUp with separate arguments to match the expected signature
+      await signUp(email, password, firstName, lastName);
       
       toast({
         title: "Account created",
