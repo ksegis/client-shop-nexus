@@ -19,7 +19,7 @@ const CustomerRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={<Layout portalType="customer" />}>
-        <Route index element={<Navigate to="/customer/profile" replace />} />
+        <Route index element={<Navigate to="/customer/dashboard" replace />} />
         <Route 
           path="dashboard" 
           element={<Dashboard />} 
