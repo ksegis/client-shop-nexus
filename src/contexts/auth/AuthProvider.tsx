@@ -1,5 +1,5 @@
 
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { AuthContext } from './AuthContext';
 
 interface AuthProviderProps {
@@ -7,21 +7,61 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  // Create simplified auth context value with no authentication
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Check for development user on mount
+  useEffect(() => {
+    // Check if we have a dev user in localStorage
+    const devUserString = localStorage.getItem('dev-customer-user');
+    
+    if (devUserString) {
+      try {
+        const devUser = JSON.parse(devUserString);
+        setUser(devUser);
+        setIsAuthenticated(true);
+        console.log('Development user detected:', devUser.email);
+      } catch (error) {
+        console.error('Error parsing development user:', error);
+        // Clear invalid dev user data
+        localStorage.removeItem('dev-customer-user');
+      }
+    }
+    
+    setIsLoading(false);
+  }, []);
+  
+  // Create simplified auth context value with development authentication
   const value = {
-    user: null,
-    profile: null,
-    portalType: null,
-    session: null,
-    isLoading: false,
-    isAuthenticated: false,
+    user,
+    profile: user ? {
+      id: user?.id,
+      email: user?.email,
+      first_name: user?.user_metadata?.first_name || '',
+      last_name: user?.user_metadata?.last_name || '',
+      phone: user?.user_metadata?.phone || '',
+      role: user?.user_metadata?.role || 'customer',
+      created_at: user?.created_at,
+      updated_at: user?.created_at,
+    } : null,
+    portalType: user?.user_metadata?.role || null,
+    session: user ? { user } : null,
+    isLoading,
+    isAuthenticated,
     signUp: async () => ({ success: true }),
     signIn: async () => ({ success: true }),
-    signOut: async () => ({ success: true }),
+    signOut: async () => {
+      // Clear development user
+      localStorage.removeItem('dev-customer-user');
+      setUser(null);
+      setIsAuthenticated(false);
+      return { success: true };
+    },
     resetPassword: async () => ({ success: true }),
     updatePassword: async () => ({ success: true }),
     updateProfile: async () => ({ success: true }),
-    validateAccess: () => true,
+    validateAccess: () => isAuthenticated,
   };
   
   return (
