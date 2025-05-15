@@ -4,7 +4,8 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { AuthContext } from './AuthContext';
 import { UserProfile, UserRole, AuthResult } from './types';
-import { useAuthStateListener, useRedirection } from './hooks';
+import { useAuthStateListener } from './hooks';
+import { useRedirection } from './hooks/useRedirection';
 import { useProfileManagement } from '@/hooks/profile/useProfileManagement';
 import { useAuthActions } from './hooks/useAuthActions';
 
@@ -40,10 +41,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     fetchProfile
   });
   
-  // Setup redirects
-  useRedirection();
-  
-  // Function to validate if user has the required role
+  // Validate if user has the required role
   const validateAccess = (allowedRoles?: UserRole[]): boolean => {
     if (!user || !profile) return false;
     if (!allowedRoles || allowedRoles.length === 0) return true;
@@ -56,6 +54,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   
   // Auth is initialized and user data is available
   const isAuthenticated = !combinedIsLoading && !!user && !!profile;
+
+  // Setup redirects - pass auth state directly instead of using useAuth hook
+  useRedirection({
+    user,
+    isLoading: combinedIsLoading,
+    profile,
+    portalType,
+    validateAccess
+  });
   
   // Create auth context value
   const value = {

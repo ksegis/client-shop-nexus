@@ -1,17 +1,25 @@
 
 import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../useAuth';
 import { useAuthFlowLogs } from '@/hooks/useAuthFlowLogs';
 
-export const useRedirection = () => {
+// This hook is used for redirection based on auth state
+// It no longer uses useAuth directly to avoid circular dependencies
+export const useRedirection = (authState: {
+  user: any;
+  isLoading: boolean;
+  profile: any;
+  portalType: 'shop' | 'customer' | null;
+  validateAccess: (roles?: any[]) => boolean;
+}) => {
   const { 
     user, 
     isLoading, 
     profile, 
     portalType,
     validateAccess 
-  } = useAuth();
+  } = authState;
+  
   const navigate = useNavigate();
   const location = useLocation();
   const redirectionInProgress = useRef(false);
