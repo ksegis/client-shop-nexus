@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import {
   Dialog,
@@ -12,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast";
 import { CoreCharge, Part } from "@/types/parts";
 
 interface CoreChargeHandlerProps {
@@ -23,7 +22,6 @@ interface CoreChargeHandlerProps {
 }
 
 export function CoreChargeHandler({ part, open, onOpenChange, onProcessReturn }: CoreChargeHandlerProps) {
-  const { toast } = useToast();
   const [condition, setCondition] = useState<'new' | 'used' | 'damaged'>('new');
   const [receiptNumber, setReceiptNumber] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);

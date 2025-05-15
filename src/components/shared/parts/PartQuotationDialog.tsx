@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import {
   Dialog,
@@ -7,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast";
 import { PartQuotationForm } from './PartQuotationForm';
 import { Part, PartOrderItem, PartQuotation } from '@/types/parts';
 import { Button } from '@/components/ui/button';
@@ -26,7 +25,6 @@ export function PartQuotationDialog({
   items,
   onRemoveItem
 }: PartQuotationDialogProps) {
-  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [quotation, setQuotation] = useState<PartQuotation | null>(null);
 

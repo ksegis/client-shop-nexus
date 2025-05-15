@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CardContent } from '@/components/ui/card';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth';
 import { Loader2 } from 'lucide-react';
 
@@ -15,7 +15,6 @@ const CustomerSignUpForm = () => {
   const [lastName, setLastName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
   const { signUp } = useAuth();
 
   const handleSignUp = async (e: React.FormEvent) => {

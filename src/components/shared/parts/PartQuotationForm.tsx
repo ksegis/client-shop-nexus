@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -14,7 +13,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast";
 import { X } from "lucide-react";
 import { PartOrderItem, Part } from "@/types/parts";
 
@@ -42,7 +41,6 @@ export function PartQuotationForm({
   onRemoveItem,
   isSubmitting 
 }: PartQuotationFormProps) {
-  const { toast } = useToast();
   const [subtotalWithTax, setSubtotalWithTax] = useState<number>(0);
   
   const form = useForm<FormValues>({

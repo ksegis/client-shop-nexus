@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from 'react';
 import { Part } from '@/types/parts';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from '@/hooks/use-toast';
 import { LoadingPartsGrid } from './grid/LoadingPartsGrid';
 import { EmptyPartsGrid } from './grid/EmptyPartsGrid';
 import { PartsGrid } from './grid/PartsGrid';
@@ -36,7 +37,6 @@ export const PartsCatalogGrid = ({
   hideSupplier = false,
   hideSku = false
 }: PartsCatalogGridProps) => {
-  const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
   
