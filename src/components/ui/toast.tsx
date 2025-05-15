@@ -22,7 +22,7 @@ const toastVariants = cva(
 )
 
 export interface ToastProps
-  extends React.HTMLAttributes<HTMLDivElement>,
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, "title">, 
     VariantProps<typeof toastVariants> {
   title?: React.ReactNode
   description?: React.ReactNode
@@ -30,7 +30,7 @@ export interface ToastProps
 }
 
 const Toast = React.forwardRef<HTMLDivElement, ToastProps>(
-  ({ className, variant, ...props }, ref) => {
+  ({ className, variant, title, description, action, ...props }, ref) => {
     return (
       <div
         ref={ref}
