@@ -18,7 +18,7 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
     { name: 'Invoices', path: '/customer/invoices' },
     { name: 'Work Orders', path: '/customer/work-orders' },
     { name: 'Vehicles', path: '/customer/vehicles' },
-    { name: 'Parts', path: '/customer/parts' },
+    { name: 'Parts & Accessories', path: '/customer/parts' },
     { name: 'Transactions', path: '/customer/transactions' },
     { name: 'Profile', path: '/customer/profile' }
   ];
@@ -47,7 +47,7 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
       name: 'Inventory', 
       path: '#', 
       children: [
-        { name: 'Parts', path: '/shop/parts' },
+        { name: 'Parts & Accessories', path: '/shop/parts' },
         { name: 'Inventory', path: '/shop/inventory' },
         { name: 'Simple Inventory', path: '/shop/inventory/simple' }
       ]
