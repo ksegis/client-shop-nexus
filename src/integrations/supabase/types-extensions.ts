@@ -86,6 +86,8 @@ export interface ServiceAppointment {
   status: string;
   created_at: string;
   updated_at: string;
+  contact_email?: string;
+  contact_phone?: string | null;
   vehicles?: {
     make: string;
     model: string;
@@ -121,4 +123,6 @@ export type NewAppointmentData = {
   service_type: string;
   description?: string | null;
   status?: string;
+  contact_email?: string;
+  contact_phone?: string | null;
 };

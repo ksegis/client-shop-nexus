@@ -80,7 +80,9 @@ export const useServiceAppointments = () => {
           appointment_time: appointmentData.appointment_time,
           service_type: appointmentData.service_type,
           description: appointmentData.description,
-          status: appointmentData.status || 'scheduled'
+          status: appointmentData.status || 'scheduled',
+          contact_email: appointmentData.contact_email,
+          contact_phone: appointmentData.contact_phone
         })
         .select()
         .single();

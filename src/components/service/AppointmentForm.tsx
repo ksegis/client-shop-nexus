@@ -20,6 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Vehicle } from '@/types/vehicle';
 import { NewAppointmentData } from '@/hooks/useServiceAppointments';
 import { useAuth } from '@/contexts/auth';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const serviceTypes = [
   { value: 'maintenance', label: 'Routine Maintenance' },
@@ -50,6 +51,12 @@ const formSchema = z.object({
   description: z.string()
     .min(5, "Please provide a brief description of the service needed")
     .max(500, "Description is too long"),
+  contact_email: z.string()
+    .email("Please enter a valid email address"),
+  contact_phone: z.string()
+    .optional(),
+  override_contact: z.boolean()
+    .default(false),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -68,6 +75,11 @@ const AppointmentForm = ({ onSubmit, customerId }: AppointmentFormProps) => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<{ time: string; available: boolean }[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(customerId);
+  const [customerContact, setCustomerContact] = useState<{email: string, phone: string | null}>({
+    email: '',
+    phone: null
+  });
+  const [overrideContact, setOverrideContact] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -75,6 +87,9 @@ const AppointmentForm = ({ onSubmit, customerId }: AppointmentFormProps) => {
       service_type: '',
       description: '',
       customer_id: customerId || '',
+      contact_email: '',
+      contact_phone: '',
+      override_contact: false,
     },
   });
 
@@ -83,20 +98,44 @@ const AppointmentForm = ({ onSubmit, customerId }: AppointmentFormProps) => {
     const fetchVehicles = async () => {
       if (!selectedCustomerId) {
         setCustomerVehicles([]);
+        setCustomerContact({ email: '', phone: null });
         return;
       }
 
       setIsLoadingVehicles(true);
       try {
-        const { data, error } = await supabase
+        // Fetch vehicles
+        const { data: vehiclesData, error: vehiclesError } = await supabase
           .from('vehicles')
           .select('*')
           .eq('owner_id', selectedCustomerId);
         
-        if (error) throw error;
-        setCustomerVehicles(data as Vehicle[]);
+        if (vehiclesError) throw vehiclesError;
+        setCustomerVehicles(vehiclesData as Vehicle[]);
+
+        // Fetch customer contact info
+        const { data: customerData, error: customerError } = await supabase
+          .from('profiles')
+          .select('email, phone')
+          .eq('id', selectedCustomerId)
+          .single();
+
+        if (customerError) throw customerError;
+        
+        if (customerData) {
+          setCustomerContact({
+            email: customerData.email || '',
+            phone: customerData.phone || null
+          });
+          
+          // Update form with customer contact info
+          form.setValue('contact_email', customerData.email || '');
+          if (customerData.phone) {
+            form.setValue('contact_phone', customerData.phone);
+          }
+        }
       } catch (error) {
-        console.error('Error fetching vehicles:', error);
+        console.error('Error fetching customer data:', error);
         setCustomerVehicles([]);
       } finally {
         setIsLoadingVehicles(false);
@@ -122,6 +161,14 @@ const AppointmentForm = ({ onSubmit, customerId }: AppointmentFormProps) => {
     }
   }, [selectedDate, checkDateAvailability]);
 
+  // Handle override contact toggling
+  useEffect(() => {
+    if (!overrideContact && customerContact.email) {
+      form.setValue('contact_email', customerContact.email);
+      form.setValue('contact_phone', customerContact.phone || '');
+    }
+  }, [overrideContact, customerContact, form]);
+
   const handleSubmit = async (values: FormValues) => {
     if (!user) return;
     
@@ -132,6 +179,8 @@ const AppointmentForm = ({ onSubmit, customerId }: AppointmentFormProps) => {
       appointment_time: values.appointment_time,
       service_type: values.service_type,
       description: values.description,
+      contact_email: values.contact_email,
+      contact_phone: values.contact_phone || null,
     };
     
     await onSubmit(appointmentData);
@@ -141,6 +190,17 @@ const AppointmentForm = ({ onSubmit, customerId }: AppointmentFormProps) => {
   const handleCustomerChange = (customerId: string) => {
     setSelectedCustomerId(customerId);
     form.setValue('customer_id', customerId);
+  };
+
+  // Handle override contact change
+  const handleOverrideContactChange = (checked: boolean) => {
+    setOverrideContact(checked);
+    form.setValue('override_contact', checked);
+    
+    if (!checked && customerContact.email) {
+      form.setValue('contact_email', customerContact.email);
+      form.setValue('contact_phone', customerContact.phone || '');
+    }
   };
 
   return (
@@ -335,6 +395,68 @@ const AppointmentForm = ({ onSubmit, customerId }: AppointmentFormProps) => {
             </FormItem>
           )}
         />
+
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Contact Information</h3>
+          
+          <FormField
+            control={form.control}
+            name="override_contact"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={(checked) => {
+                      handleOverrideContactChange(checked as boolean);
+                    }}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel>Override contact information</FormLabel>
+                </div>
+              </FormItem>
+            )}
+          />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormField
+              control={form.control}
+              name="contact_email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email for confirmation</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Email address"
+                      disabled={!overrideContact && !!customerContact.email}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="contact_phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Phone number (optional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Phone number"
+                      disabled={!overrideContact && !!customerContact.phone}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
         
         <Button type="submit" className="w-full bg-shop-primary hover:bg-shop-primary/90">
           Schedule Appointment

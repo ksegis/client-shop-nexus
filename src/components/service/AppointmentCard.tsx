@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, Clock, Car, FileText, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, Car, FileText, AlertCircle, Mail, Phone } from 'lucide-react';
 import { ServiceAppointment } from '@/hooks/useServiceAppointments';
 
 interface AppointmentCardProps {
@@ -78,7 +78,9 @@ const AppointmentCard = ({ appointment, onCancel, showCustomerInfo }: Appointmen
     description, 
     status, 
     vehicles, 
-    profiles 
+    profiles,
+    contact_email,
+    contact_phone
   } = appointment;
   
   const formattedDate = format(new Date(appointment_date), 'PPP');
@@ -138,6 +140,28 @@ const AppointmentCard = ({ appointment, onCancel, showCustomerInfo }: Appointmen
               </p>
             </div>
           )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {contact_email && (
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">Contact Email:</span>
+                </div>
+                <p className="text-sm text-muted-foreground">{contact_email}</p>
+              </div>
+            )}
+            
+            {contact_phone && (
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">Contact Phone:</span>
+                </div>
+                <p className="text-sm text-muted-foreground">{contact_phone}</p>
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
       
