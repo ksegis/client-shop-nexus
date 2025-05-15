@@ -1,5 +1,5 @@
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { AuthContext } from './AuthContext';
 import { AuthContextType, UserRole } from './types';
 import { useAuthStateListener } from './hooks/useAuthStateListener';
@@ -15,6 +15,7 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const isInitialMount = useRef(true);
   const { user, session, loading: authLoading } = useAuthStateListener();
   const { 
     signUp, 
@@ -39,6 +40,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const { toast } = useToast();
   
   const isDevMode = process.env.NODE_ENV === 'development';
+
+  // Log when the AuthProvider mounts/remounts
+  useEffect(() => {
+    if (isInitialMount.current) {
+      console.log('🔑 AuthProvider mounted');
+      isInitialMount.current = false;
+    }
+    return () => {
+      console.log('🔑 AuthProvider unmounted');
+    };
+  }, []);
   
   // Helper functions for validating user access
   const validateAccess = useCallback((allowedRoles: UserRole[]): boolean => {

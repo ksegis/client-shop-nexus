@@ -1,5 +1,5 @@
 
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth';
 import { UserRole, getBaseRole } from '@/contexts/auth/types';
@@ -24,6 +24,7 @@ const ProtectedRoute = ({
     validateAccess 
   } = useAuth();
   const location = useLocation();
+  const lastRedirectTime = useRef(0);
 
   // Add debugging for protected route
   useEffect(() => {
@@ -50,6 +51,17 @@ const ProtectedRoute = ({
     }
   }, [location.pathname, isLoading, isAuthenticated, profile, portalType, requiredPortal, allowedRoles, validateAccess]);
 
+  // Prevent redirect loops by enforcing minimum time between redirects
+  const currentTime = Date.now();
+  if (currentTime - lastRedirectTime.current < 3000) {
+    console.log('🛑 Protected Route: Too many redirects in a short period, showing loading state');
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
   // IMPROVED LOADING STATE: Handle loading state OR when profile data isn't loaded yet
   // This prevents premature redirects when we have a user but profile data isn't ready
   if (isLoading || (isAuthenticated && (!profile || !portalType))) {
@@ -64,6 +76,7 @@ const ProtectedRoute = ({
   // If not authenticated, redirect to login
   if (!isAuthenticated) {
     console.log(`🚫 Access denied: Not authenticated, redirecting to /auth from ${location.pathname}`);
+    lastRedirectTime.current = currentTime;
     return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
   }
 
@@ -99,6 +112,7 @@ const ProtectedRoute = ({
         allowedRoles: allowedRoles
       });
         
+      lastRedirectTime.current = currentTime;
       return <Navigate to={defaultPath} replace />;
     } else {
       // If portal type is not determined yet, show loading
