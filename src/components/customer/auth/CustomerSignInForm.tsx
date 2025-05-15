@@ -9,6 +9,7 @@ import { CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/auth'; 
 import { Loader2 } from 'lucide-react';
+import { useAuthFlowLogs } from '@/hooks/useAuthFlowLogs';
 
 const CustomerSignInForm = () => {
   const [email, setEmail] = useState('');
@@ -19,13 +20,46 @@ const CustomerSignInForm = () => {
   const { toast } = useToast();
   const { signIn, user } = useAuth();
   const navigate = useNavigate();
+  const { logAuthFlowEvent } = useAuthFlowLogs();
+  
+  // Log component mount
+  useEffect(() => {
+    logAuthFlowEvent({
+      event_type: 'customer_signin_form_mounted',
+      user_id: user?.id,
+      email: user?.email,
+      user_role: user?.user_metadata?.role,
+      details: {
+        isAlreadyAuthenticated: !!user,
+        location: window.location.pathname
+      }
+    });
+  }, []);
   
   // Check if user is already authenticated and has appropriate role
   useEffect(() => {
     if (user) {
-      const role = user.app_metadata?.role;
+      const role = user.user_metadata?.role;
+      
+      logAuthFlowEvent({
+        event_type: 'customer_signin_authenticated_check',
+        user_id: user?.id,
+        email: user?.email,
+        user_role: role,
+        details: {
+          role,
+          location: window.location.pathname
+        }
+      });
       
       if (role === 'customer' || role === 'test_customer') {
+        logAuthFlowEvent({
+          event_type: 'customer_signin_redirect_to_customer',
+          user_id: user?.id,
+          email: user?.email,
+          user_role: role
+        });
+        
         // Allow a small delay to ensure all state is synchronized
         const timer = setTimeout(() => {
           navigate('/customer', { replace: true });
@@ -33,6 +67,13 @@ const CustomerSignInForm = () => {
         
         return () => clearTimeout(timer);
       } else if (role === 'admin' || role === 'staff') {
+        logAuthFlowEvent({
+          event_type: 'customer_signin_staff_access_denied',
+          user_id: user?.id,
+          email: user?.email,
+          user_role: role
+        });
+        
         // If shop staff is trying to access customer login, redirect to shop portal
         toast({
           title: "Access Restricted",
@@ -65,12 +106,27 @@ const CustomerSignInForm = () => {
     setLoading(true);
     
     try {
+      logAuthFlowEvent({
+        event_type: 'customer_signin_attempt',
+        email,
+        details: {
+          rememberMe
+        }
+      });
+      
       console.log("CustomerSignIn: Attempting to sign in with email:", email);
       
       // Sign in using auth context - now using rememberMe as a boolean
       const result = await signIn(email, password, rememberMe);
       
       if (result.success) {
+        logAuthFlowEvent({
+          event_type: 'customer_signin_success',
+          email,
+          user_id: result.data?.user?.id,
+          user_role: result.data?.user?.user_metadata?.role
+        });
+        
         console.log("CustomerSignIn: Sign-in successful, redirecting to customer portal");
         
         // Explicitly navigate to customer dashboard after successful login
@@ -81,6 +137,14 @@ const CustomerSignInForm = () => {
       }
       
     } catch (error: any) {
+      logAuthFlowEvent({
+        event_type: 'customer_signin_error',
+        email,
+        details: {
+          error: error.message || "Unknown error"
+        }
+      });
+      
       console.error("CustomerSignIn error:", error);
       setError(error.message || "An unexpected error occurred");
       toast({

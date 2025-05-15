@@ -1,5 +1,5 @@
 
-import { AuthLogsViewer } from "@/components/admin/AuthLogsViewer";
+import { AuthFlowLogsViewer } from "@/components/admin/AuthFlowLogsViewer";
 import { useAuth } from "@/contexts/auth";
 import { Navigate } from "react-router-dom";
 
@@ -16,11 +16,11 @@ const AuthLogs = () => {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Authentication Logs</h2>
         <p className="text-muted-foreground">
-          Monitor and audit authentication activity across both portals
+          Monitor and audit authentication activity across the application
         </p>
       </div>
       
-      <AuthLogsViewer />
+      <AuthFlowLogsViewer />
     </div>
   );
 };

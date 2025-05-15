@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,26 +8,36 @@ import { useAuth } from "@/contexts/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AuthDebugger } from "@/components/debug/AuthDebugger";
 import { AuthorizationDebugger } from "@/components/debug/AuthorizationDebugger";
+import { useAuthFlowLogs } from "@/hooks/useAuthFlowLogs";
 
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { impersonateTestUser, isAuthenticated, profile, portalType } = useAuth();
   const [isLoadingTest, setIsLoadingTest] = useState(false);
+  const { logAuthFlowEvent } = useAuthFlowLogs();
   
   // Get the "from" redirect parameter if it exists
   const searchParams = new URLSearchParams(location.search);
   const fromPath = searchParams.get('from');
   
-  // Log initial authentication state
+  // Log page load
   useEffect(() => {
-    console.log('Auth Page - Initial State:', { 
-      isAuthenticated, 
-      profileRole: profile?.role,
-      pathname: window.location.pathname,
-      fromPath
+    logAuthFlowEvent({
+      event_type: 'auth_page_loaded',
+      user_id: profile?.id,
+      email: profile?.email,
+      user_role: profile?.role,
+      route_path: window.location.pathname,
+      details: {
+        isAuthenticated,
+        fromPath,
+        portalType,
+        search: location.search,
+        state: location.state
+      }
     });
-  }, [isAuthenticated, profile, fromPath]);
+  }, []);
   
   // If already authenticated, redirect to the appropriate portal or the original "from" path
   useEffect(() => {
@@ -44,6 +55,22 @@ const Auth = () => {
         }
       }
       
+      logAuthFlowEvent({
+        event_type: 'auth_page_redirect_authenticated',
+        user_id: profile?.id,
+        email: profile?.email,
+        user_role: profile?.role,
+        route_path: window.location.pathname,
+        portal_type: portalType,
+        details: {
+          fromPath,
+          redirectPath,
+          isFromPathForCorrectPortal: fromPath ? 
+            (portalType === 'customer' && fromPath.startsWith('/customer')) ||
+            (portalType === 'shop' && fromPath.startsWith('/shop')) : false
+        }
+      });
+      
       console.log(`Auth Page - Redirecting to ${redirectPath} (already authenticated)`);
       navigate(redirectPath, { replace: true });
     }
@@ -51,16 +78,40 @@ const Auth = () => {
   
   // Updated to navigate to auth login instead of direct customer page
   const goToCustomerLogin = () => {
+    logAuthFlowEvent({
+      event_type: 'navigating_to_customer_login',
+      route_path: window.location.pathname,
+      details: {
+        destination: "/auth/customer-login"
+      }
+    });
+    
     // Instead of directly navigating to the customer page, switch to customer login
     // This will now go through the authentication flow first
     navigate("/auth/customer-login");
   };
   
   const goToShopLogin = () => {
+    logAuthFlowEvent({
+      event_type: 'navigating_to_shop_login',
+      route_path: window.location.pathname,
+      details: {
+        destination: "/shop/login"
+      }
+    });
+    
     navigate("/shop/login");
   };
 
   const switchToTestAccount = (role: 'test_customer' | 'test_staff' | 'test_admin') => {
+    logAuthFlowEvent({
+      event_type: 'test_account_impersonation',
+      route_path: window.location.pathname,
+      details: {
+        requestedRole: role
+      }
+    });
+    
     setIsLoadingTest(true);
     setTimeout(() => {
       impersonateTestUser(role);
