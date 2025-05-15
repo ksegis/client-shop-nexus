@@ -2,7 +2,8 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
-  Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+  Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+  BarChart, LineChart, AreaChart
 } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { 
@@ -11,9 +12,8 @@ import {
   ChartTooltipContent 
 } from '@/components/ui/chart';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Calendar } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { toast } from "@/hooks/use-toast";
 
 // Sample data with more detail
@@ -66,11 +66,10 @@ const technicianPerformanceData = [
   { name: 'David', efficiency: 88, quality: 92, customerRating: 4.8 }
 ];
 
-// Chart configurations
+// Chart configurations - fixed to match ChartConfig type
 const chartConfig = {
   revenue: {
     label: "Revenue",
-    color: "#4f46e5",
     theme: {
       light: "#4f46e5",
       dark: "#818cf8"
@@ -78,7 +77,6 @@ const chartConfig = {
   },
   expenses: {
     label: "Expenses",
-    color: "#ef4444",
     theme: {
       light: "#ef4444",
       dark: "#f87171"
@@ -86,7 +84,6 @@ const chartConfig = {
   },
   profit: {
     label: "Profit",
-    color: "#22c55e",
     theme: {
       light: "#22c55e",
       dark: "#4ade80"
@@ -94,7 +91,6 @@ const chartConfig = {
   },
   count: {
     label: "Job Count",
-    color: "#8b5cf6",
     theme: {
       light: "#8b5cf6",
       dark: "#a78bfa"
@@ -102,7 +98,6 @@ const chartConfig = {
   },
   service: {
     label: "Service",
-    color: "#f97316",
     theme: {
       light: "#f97316", 
       dark: "#fb923c"
@@ -160,7 +155,7 @@ const Reports = () => {
               className="flex items-center gap-1" 
               onClick={filterData}
             >
-              <Calendar className="h-4 w-4" />
+              <CalendarDays className="h-4 w-4" />
               <span>Filter</span>
             </Button>
           </div>
@@ -234,10 +229,7 @@ const Reports = () => {
             >
               <ResponsiveContainer width="100%" height="100%">
                 {chartType === 'bar' ? (
-                  <Bar 
-                    data={filteredRevenueData} 
-                    margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                  >
+                  <BarChart data={filteredRevenueData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
@@ -246,20 +238,17 @@ const Reports = () => {
                     />
                     <Legend />
                     {(revenueView === 'revenue' || revenueView === 'all') && (
-                      <Bar dataKey="revenue" fill="var(--color-revenue)" name="Revenue" />
+                      <Bar dataKey="revenue" name="Revenue" />
                     )}
                     {(revenueView === 'expenses' || revenueView === 'all') && (
-                      <Bar dataKey="expenses" fill="var(--color-expenses)" name="Expenses" />
+                      <Bar dataKey="expenses" name="Expenses" />
                     )}
                     {(revenueView === 'profit' || revenueView === 'all') && (
-                      <Bar dataKey="profit" fill="var(--color-profit)" name="Profit" />
+                      <Bar dataKey="profit" name="Profit" />
                     )}
-                  </Bar>
+                  </BarChart>
                 ) : chartType === 'line' ? (
-                  <Line 
-                    data={filteredRevenueData}
-                    margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                  >
+                  <LineChart data={filteredRevenueData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
@@ -268,20 +257,17 @@ const Reports = () => {
                     />
                     <Legend />
                     {(revenueView === 'revenue' || revenueView === 'all') && (
-                      <Line type="monotone" dataKey="revenue" stroke="var(--color-revenue)" activeDot={{ r: 8 }} name="Revenue" />
+                      <Line type="monotone" dataKey="revenue" activeDot={{ r: 8 }} name="Revenue" />
                     )}
                     {(revenueView === 'expenses' || revenueView === 'all') && (
-                      <Line type="monotone" dataKey="expenses" stroke="var(--color-expenses)" activeDot={{ r: 8 }} name="Expenses" />
+                      <Line type="monotone" dataKey="expenses" activeDot={{ r: 8 }} name="Expenses" />
                     )}
                     {(revenueView === 'profit' || revenueView === 'all') && (
-                      <Line type="monotone" dataKey="profit" stroke="var(--color-profit)" activeDot={{ r: 8 }} name="Profit" />
+                      <Line type="monotone" dataKey="profit" activeDot={{ r: 8 }} name="Profit" />
                     )}
-                  </Line>
+                  </LineChart>
                 ) : (
-                  <Area 
-                    data={filteredRevenueData}
-                    margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                  >
+                  <AreaChart data={filteredRevenueData}>
                     <defs>
                       <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="var(--color-revenue)" stopOpacity={0.8}/>
@@ -333,7 +319,7 @@ const Reports = () => {
                         name="Profit"
                       />
                     )}
-                  </Area>
+                  </AreaChart>
                 )}
               </ResponsiveContainer>
             </ChartContainer>
@@ -364,7 +350,7 @@ const Reports = () => {
               className="aspect-[4/3] w-full"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <Bar 
+                <BarChart 
                   data={
                     // Sort based on selected metric
                     [...servicesData].sort((a, b) => 
@@ -382,11 +368,10 @@ const Reports = () => {
                   />
                   <Bar 
                     dataKey={serviceMetric} 
-                    fill={serviceMetric === "count" ? "var(--color-count)" : "var(--color-revenue)"} 
                     name={serviceMetric === "count" ? "Jobs" : "Revenue"}
                     label={{ position: 'top', fill: '#666', fontSize: 12 }}
                   />
-                </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </ChartContainer>
           </CardContent>
@@ -403,7 +388,7 @@ const Reports = () => {
               className="aspect-[4/3] w-full"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <Line data={customerSatisfactionData}>
+                <LineChart data={customerSatisfactionData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis domain={[0, 5]} />
@@ -417,7 +402,7 @@ const Reports = () => {
                     activeDot={{ r: 8 }}
                     name="Rating (0-5)" 
                   />
-                </Line>
+                </LineChart>
               </ResponsiveContainer>
             </ChartContainer>
           </CardContent>
@@ -434,14 +419,8 @@ const Reports = () => {
               className="aspect-[4/2] w-full"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <Bar
+                <BarChart
                   data={technicianPerformanceData}
-                  margin={{
-                    top: 20,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                  }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
@@ -456,7 +435,7 @@ const Reports = () => {
                   <Bar yAxisId="left" dataKey="efficiency" name="Efficiency %" fill="#3b82f6" />
                   <Bar yAxisId="left" dataKey="quality" name="Quality %" fill="#14b8a6" />
                   <Bar yAxisId="right" dataKey="customerRating" name="Rating (0-5)" fill="#f97316" />
-                </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </ChartContainer>
           </CardContent>
