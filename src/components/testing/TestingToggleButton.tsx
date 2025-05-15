@@ -6,8 +6,27 @@ import { useTesting } from '@/contexts/testing';
 import { useNavigate } from 'react-router-dom';
 
 export const TestingToggleButton: React.FC = () => {
-  const { isTestingEnabled, enableTesting, disableTesting } = useTesting();
   const navigate = useNavigate();
+  
+  // Try to access the testing context, but don't throw if not available
+  let testingContext;
+  try {
+    testingContext = useTesting();
+  } catch (error) {
+    // If TestingProvider is not available, render a simplified button
+    // that just navigates to the testing page
+    return (
+      <Button 
+        variant="outline"
+        className="flex items-center gap-1"
+        onClick={() => navigate('/testing')}
+      >
+        <Bug className="h-4 w-4" /> Testing
+      </Button>
+    );
+  }
+
+  const { isTestingEnabled, enableTesting, disableTesting } = testingContext;
 
   const handleClick = () => {
     if (isTestingEnabled) {
