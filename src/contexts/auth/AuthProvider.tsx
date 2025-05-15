@@ -81,7 +81,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         if (profileError) {
           console.error('Error fetching profile:', profileError);
-          // Handle error appropriately, maybe set a default profile or display an error message
+          // If there's a network error, don't clear the profile - this might cause redirect loops
+          if (profileError.code === 'PGRST116') {
+            console.log('Network error when fetching profile - keeping current auth state');
+            return;
+          }
         }
 
         if (profileData) {
@@ -99,8 +103,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setIsAuthenticated(true);
           setIsTestUser(isTestRole(profileData.role));
           setPortalType(getPortalByRole(profileData.role));
-        } else {
-          // If no profile exists, create a default one
+        } else if (user) {
+          // If no profile exists but we have a user, create a default one
+          // This prevents redirect loops caused by auth state being inconsistent
           const newUserProfile: UserProfile = {
             id: user.id,
             email: user.email || '',
@@ -113,17 +118,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setProfile(newUserProfile);
           setIsAuthenticated(true);
           setIsTestUser(false);
-          setPortalType('customer'); // Default to customer portal
+          setPortalType(user.user_metadata?.role?.includes('customer') ? 'customer' : 'shop');
           
-          console.warn('No profile found, consider creating a default profile.');
+          console.warn('Creating default profile for authenticated user to prevent redirect loops');
         }
       } catch (error) {
         console.error('Error processing profile data:', error);
+        // If we encounter a fatal error, clear auth state to prevent redirect loops
+        if (error instanceof Error && error.message.includes('Failed to fetch')) {
+          console.warn('Fatal error fetching profile - clearing auth state to prevent redirect loop');
+          setProfile(null);
+          setIsAuthenticated(false);
+        }
       }
     };
 
-    fetchProfile();
-  }, [user, session, location.pathname, navigate, toast]);
+    if (user) {
+      fetchProfile();
+    }
+  }, [user, session]);
 
   // Update auth state
   useEffect(() => {

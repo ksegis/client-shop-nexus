@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../useAuth';
 
 export const useRedirection = () => {
-  const { user, isLoading, portalType } = useAuth();
+  const { user, isLoading, portalType, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -30,14 +30,8 @@ export const useRedirection = () => {
     console.log('Current path:', currentPath);
     console.log('Is auth page:', isAuthPage);
     console.log('User authenticated:', !!user);
-    if (user) {
-      console.log('User role from metadata:', user?.user_metadata?.role);
-      console.log('Portal type:', portalType);
-    }
-    
-    // Only redirect if:
-    // 1. Not authenticated AND trying to access a protected page (not auth page)
-    // 2. Already authenticated AND on an auth page
+    console.log('Portal type:', portalType);
+    console.log('Profile:', profile);
     
     // Case 1: Not authenticated trying to access protected page
     if (!user && !isAuthPage) {
@@ -46,26 +40,26 @@ export const useRedirection = () => {
         replace: true,
         state: { from: currentPath } 
       });
+      console.groupEnd();
+      return;
     } 
+    
     // Case 2: Authenticated on auth page - redirect to appropriate portal 
-    // with a deliberate timeout to ensure other auth state processing is complete
-    else if (user && isAuthPage && portalType) {
-      // Only redirect if we have determined the portalType
-      // This prevents redirect loops where portalType is null
+    // ONLY if we have determined the portalType - this is critical to prevent loops
+    if (user && isAuthPage && portalType && profile) {
       const redirectPath = portalType === 'customer' ? '/customer' : '/shop';
       console.log(`➡️ Redirecting to ${redirectPath} (authenticated on auth page, portalType: ${portalType})`);
       
       // Add a slight delay to ensure other auth state processing completes
       const timer = setTimeout(() => {
         navigate(redirectPath, { replace: true });
-      }, 200);
+      }, 300);
       
+      console.groupEnd();
       return () => clearTimeout(timer);
     } 
-    else {
-      console.log('✅ No redirection needed');
-    }
     
+    console.log('✅ No redirection needed');
     console.groupEnd();
-  }, [user, isLoading, navigate, location.pathname, portalType]);
+  }, [user, isLoading, navigate, location.pathname, portalType, profile]);
 };

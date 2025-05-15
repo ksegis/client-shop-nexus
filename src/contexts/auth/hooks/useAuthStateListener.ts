@@ -20,7 +20,48 @@ export function useAuthStateListener() {
       setHasLogged(true);
     }
     
-    // First set up the auth state change listener
+    // First get the existing session (critical for initial page loads)
+    const initSession = async () => {
+      if (!isMounted) return;
+      
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!hasLogged && data.session?.user?.email) {
+          console.log('Got existing session:', data.session?.user?.email);
+        }
+        
+        if (data.session) {
+          setSession(data.session);
+          setUser(data.session.user);
+          
+          // Check if user has a profile
+          if (data.session.user) {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', data.session.user.id)
+              .single();
+              
+            if (profileData) {
+              console.log('User has profile:', profileData.role);
+            }
+          }
+        } else {
+          // No session, make sure user is set to null
+          console.log('No authenticated user found');
+          setUser(null);
+          setSession(null);
+        }
+      } catch (error) {
+        console.error('Error getting session:', error);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    // Set up the auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
         if (!isMounted) return;
@@ -33,9 +74,11 @@ export function useAuthStateListener() {
         if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
+          console.log('User signed out, clearing session');
         } else if (currentSession) {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
+          console.log('Auth state updated, user:', currentSession?.user?.email);
         }
         
         setLoading(false);
@@ -68,29 +111,7 @@ export function useAuthStateListener() {
       }
     );
     
-    // Then check for existing session (always after setting up the listener)
-    const initSession = async () => {
-      if (!isMounted) return;
-      
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!hasLogged && data.session?.user?.email) {
-          console.log('Got existing session:', data.session?.user?.email);
-        }
-        
-        if (data.session) {
-          setSession(data.session);
-          setUser(data.session.user);
-        }
-      } catch (error) {
-        console.error('Error getting session:', error);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-    
+    // Initialize session
     initSession();
     
     // Cleanup subscription on unmount
