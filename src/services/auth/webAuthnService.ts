@@ -53,6 +53,18 @@ export const webAuthnService = {
       const challenge = new Uint8Array(32);
       window.crypto.getRandomValues(challenge);
       
+      // Save this challenge to verify later
+      const { error: challengeError } = await supabase
+        .from('webauthn_challenges')
+        .insert({
+          user_id: userId,
+          challenge: arrayBufferToBase64(challenge),
+          type: 'registration',
+          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
+        });
+        
+      if (challengeError) throw challengeError;
+      
       // Create PublicKey credential creation options
       const publicKeyOptions: PublicKeyCredentialCreationOptions = {
         challenge,
@@ -125,6 +137,20 @@ export const webAuthnService = {
       // Create a challenge for this authentication
       const challenge = new Uint8Array(32);
       window.crypto.getRandomValues(challenge);
+      
+      // Save this challenge
+      if (userId) {
+        const { error: challengeError } = await supabase
+          .from('webauthn_challenges')
+          .insert({
+            user_id: userId,
+            challenge: arrayBufferToBase64(challenge),
+            type: 'authentication',
+            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
+          });
+          
+        if (challengeError) throw challengeError;
+      }
       
       // Create PublicKey credential request options
       const publicKeyOptions: PublicKeyCredentialRequestOptions = {
