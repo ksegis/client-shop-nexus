@@ -18,6 +18,7 @@ import Invoices from "@/pages/shop/invoices";
 import UserManagement from "@/pages/shop/admin/UserManagement";
 import SessionManagement from "@/pages/shop/admin/SessionManagement";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import SecurityDashboard from "@/pages/shop/admin/components/SecurityDashboard";
 
 const ShopRoutes = () => {
   return (
@@ -50,6 +51,12 @@ const ShopRoutes = () => {
           </ProtectedRoute>
         } />
         
+        <Route path="/security-dashboard" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <SecurityDashboard />
+          </ProtectedRoute>
+        } />
+        
         <Route path="/admin/user-management" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <UserManagement />
@@ -59,6 +66,12 @@ const ShopRoutes = () => {
         <Route path="/admin/session-management" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <SessionManagement />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/admin/security-dashboard" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <SecurityDashboard />
           </ProtectedRoute>
         } />
         
