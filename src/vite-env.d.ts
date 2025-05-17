@@ -7,6 +7,10 @@
 interface ImportMetaEnv {
   readonly VITE_APP_TITLE: string;
   readonly NODE_ENV: 'development' | 'production' | 'test';
+  readonly VITE_EGIS_CLIENT_ID: string;
+  readonly VITE_EGIS_CLIENT_SECRET: string;
+  readonly VITE_EGIS_AUTH_URL: string;
+  readonly VITE_EGIS_TOKEN_URL: string;
   // Add other environment variables here
 }
 

@@ -4,6 +4,15 @@ type EnvironmentConfig = {
   siteUrl: string;
   apiBaseUrl: string;
   mode: 'development' | 'production' | 'test';
+  oauth: {
+    egis: {
+      clientId: string;
+      clientSecret: string;
+      authUrl: string;
+      tokenUrl: string;
+      redirectUri: string;
+    }
+  };
 };
 
 /**
@@ -19,11 +28,28 @@ const getSiteUrl = (): string => {
   return '';
 };
 
+/**
+ * Builds the redirect URI using the site URL
+ */
+const getRedirectUri = (): string => {
+  const baseUrl = getSiteUrl();
+  return `${baseUrl}/auth/callback`;
+};
+
 // Application configuration
 export const config: EnvironmentConfig = {
   siteUrl: getSiteUrl(),
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '/api',
   mode: (import.meta.env.MODE || 'development') as 'development' | 'production' | 'test',
+  oauth: {
+    egis: {
+      clientId: import.meta.env.VITE_EGIS_CLIENT_ID || '',
+      clientSecret: import.meta.env.VITE_EGIS_CLIENT_SECRET || '',
+      authUrl: import.meta.env.VITE_EGIS_AUTH_URL || '',
+      tokenUrl: import.meta.env.VITE_EGIS_TOKEN_URL || '',
+      redirectUri: getRedirectUri()
+    }
+  }
 };
 
 /**
@@ -41,4 +67,25 @@ export const getFullUrl = (path: string): string => {
   return config.siteUrl 
     ? `${config.siteUrl}/${formattedPath}`.replace(/([^:]\/)\/+/g, '$1') // Avoid double slashes
     : `/${formattedPath}`;
+};
+
+/**
+ * Helper to get the OAuth URL for initiating the authentication flow
+ */
+export const getOAuthUrl = (): string => {
+  const { clientId, authUrl, redirectUri } = config.oauth.egis;
+  
+  if (!clientId || !authUrl) {
+    console.error('OAuth configuration is incomplete');
+    return '';
+  }
+  
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid profile email',
+  });
+  
+  return `${authUrl}?${params.toString()}`;
 };
