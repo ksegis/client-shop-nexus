@@ -8,19 +8,47 @@ import { useToast } from "@/hooks/use-toast";
 import { sessionService } from "@/utils/sessionService";
 import { SecurityStatus } from './components/SecurityStatus';
 import { SessionsList } from './components/SessionsList';
+import { SecurityAlerts } from './components/SecurityAlerts';
+import { supabase } from '@/integrations/supabase/client';
 
 const SessionManagement: React.FC = () => {
   const { user, profile } = useAuth();
   const { sessions, currentSession, loading, anomalies, checkForAnomalies, terminateSession, terminateOtherSessions } = useSession();
   const [isChecking, setIsChecking] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [securityAlerts, setSecurityAlerts] = useState<any[]>([]);
+  const [alertsLoading, setAlertsLoading] = useState(true);
   const { toast } = useToast();
   
   useEffect(() => {
     if (user?.id) {
       checkForAnomalies(user.id);
+      fetchSecurityAlerts();
     }
   }, [user?.id]);
+  
+  const fetchSecurityAlerts = async () => {
+    setAlertsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('security_alerts')
+        .select('*')
+        .is('resolved_at', null)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setSecurityAlerts(data || []);
+    } catch (error) {
+      console.error('Error fetching security alerts:', error);
+      toast({
+        title: "Failed to load security alerts",
+        description: "Could not retrieve security alerts data",
+        variant: "destructive",
+      });
+    } finally {
+      setAlertsLoading(false);
+    }
+  };
   
   const handleCheck = async () => {
     if (!user?.id) return;
@@ -105,6 +133,31 @@ const SessionManagement: React.FC = () => {
     }
   };
   
+  const handleResolveAlert = async (alertId: string) => {
+    try {
+      const { error } = await supabase
+        .from('security_alerts')
+        .update({ resolved_at: new Date().toISOString() })
+        .eq('id', alertId);
+      
+      if (error) throw error;
+      
+      setSecurityAlerts(prevAlerts => prevAlerts.filter(alert => alert.id !== alertId));
+      
+      toast({
+        title: "Alert resolved",
+        description: "Security alert has been marked as resolved",
+      });
+    } catch (error) {
+      console.error('Error resolving security alert:', error);
+      toast({
+        title: "Failed to resolve alert",
+        description: "Could not resolve the security alert",
+        variant: "destructive",
+      });
+    }
+  };
+  
   // Check if user is an admin
   const isAdmin = profile?.role === 'admin';
   
@@ -126,6 +179,14 @@ const SessionManagement: React.FC = () => {
               anomalies={anomalies} 
               isChecking={isChecking}
               onCheck={handleCheck}
+            />
+          )}
+          
+          {isAdmin && securityAlerts.length > 0 && (
+            <SecurityAlerts 
+              alerts={securityAlerts}
+              loading={alertsLoading}
+              onResolve={handleResolveAlert}
             />
           )}
           

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { sessionService } from '@/utils/sessionService';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth';
+import { supabase } from '@/integrations/supabase/client';
 
 // Define types for session anomalies
 interface SessionAnomaly {
@@ -54,16 +55,43 @@ export function useSession() {
       
       const result = await checkForAnomalies(user.id);
       if (result?.new_device) {
+        createSecurityAlert(user.id, 'new_device', {
+          message: 'New device detected accessing your account',
+          device: navigator.userAgent,
+          timestamp: new Date().toISOString()
+        });
+        
         toast({
           title: "Security Alert",
           description: "New device detected accessing your account. If this wasn't you, please secure your account.",
           variant: "destructive",
         });
       }
+      
+      // Check for other security anomalies
+      if (result?.suspicious_location) {
+        createSecurityAlert(user.id, 'impossible_travel', {
+          message: 'Login detected from unusual location',
+          timestamp: new Date().toISOString()
+        });
+      }
     }, 30000); // Update every 30 seconds
 
     return () => clearInterval(interval);
   }, [user, toast]);
+
+  // Create security alert
+  const createSecurityAlert = async (userId: string, alertType: string, metadata: any) => {
+    try {
+      await supabase.from('security_alerts').insert({
+        user_id: userId,
+        alert_type: alertType,
+        metadata
+      });
+    } catch (error) {
+      console.error('Failed to create security alert:', error);
+    }
+  };
 
   // Check for anomalies
   const checkForAnomalies = async (userId: string): Promise<SessionAnomaly | null> => {
@@ -80,6 +108,15 @@ export function useSession() {
       }
       
       setAnomalies(anomalyData);
+      
+      // Check if we need to create a security alert for multiple sessions
+      if (anomalyData && anomalyData.simultaneous_sessions > 5) {
+        createSecurityAlert(userId, 'multiple_failures', {
+          message: `Unusual number of simultaneous sessions (${anomalyData.simultaneous_sessions})`,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
       return anomalyData;
     } catch (error) {
       console.error('Failed to check for session anomalies:', error);

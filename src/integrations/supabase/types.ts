@@ -597,6 +597,33 @@ export type Database = {
         }
         Relationships: []
       }
+      security_alerts: {
+        Row: {
+          alert_type: string | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          resolved_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          alert_type?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          resolved_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          alert_type?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          resolved_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       service_appointments: {
         Row: {
           appointment_date: string

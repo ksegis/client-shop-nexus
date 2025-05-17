@@ -16,6 +16,7 @@ import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
 import UserManagement from "@/pages/shop/admin/UserManagement";
+import SessionManagement from "@/pages/shop/admin/SessionManagement";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 const ShopRoutes = () => {
@@ -42,10 +43,22 @@ const ShopRoutes = () => {
             <UserManagement />
           </ProtectedRoute>
         } />
+
+        <Route path="/session-management" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <SessionManagement />
+          </ProtectedRoute>
+        } />
         
         <Route path="/admin/user-management" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <UserManagement />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/admin/session-management" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <SessionManagement />
           </ProtectedRoute>
         } />
         
