@@ -1,49 +1,35 @@
 
-import { format } from 'date-fns';
-import { isRoleInactive } from '../../users/types';
+import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 
-// Format a role for display, removing any 'inactive_' prefix
-export const formatUserRole = (role: string): string => {
+export function isRoleInactive(role: string): boolean {
+  return role.startsWith('inactive_');
+}
+
+export function formatUserRole(role: string): string {
+  // Remove 'inactive_' prefix if present
+  const baseRole = role.replace('inactive_', '');
+  
+  // Remove 'test_' prefix if present
+  const cleanRole = baseRole.replace('test_', '');
+  
+  // Capitalize first letter
+  return cleanRole.charAt(0).toUpperCase() + cleanRole.slice(1);
+}
+
+export function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+// Get the base role name without 'inactive_' prefix
+export function getBaseRole(role: ExtendedUserRole): "admin" | "staff" | "customer" {
   if (role.startsWith('inactive_')) {
-    return role.replace('inactive_', '');
+    const baseRole = role.replace('inactive_', '') as "admin" | "staff" | "customer";
+    return baseRole;
   }
-  return role;
-};
-
-// Format a date for display
-export const formatDate = (dateString: string): string => {
-  try {
-    return format(new Date(dateString), 'MMM d, yyyy');
-  } catch (error) {
-    console.error('Error formatting date:', error);
-    return dateString;
-  }
-};
-
-// Generate a strong password for user accounts
-export const generateStrongPassword = (): string => {
-  const upperChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const lowerChars = 'abcdefghijklmnopqrstuvwxyz';
-  const numbers = '0123456789';
-  const specialChars = '!@#$%^&*()_+';
-  
-  // Generate at least one character from each set
-  const upper = upperChars[Math.floor(Math.random() * upperChars.length)];
-  const lower = lowerChars[Math.floor(Math.random() * lowerChars.length)];
-  const number = numbers[Math.floor(Math.random() * numbers.length)];
-  const special = specialChars[Math.floor(Math.random() * specialChars.length)];
-  
-  // Generate remaining characters randomly (total password length = 12)
-  const allChars = upperChars + lowerChars + numbers + specialChars;
-  let password = upper + lower + number + special;
-  
-  for (let i = 0; i < 8; i++) {
-    password += allChars[Math.floor(Math.random() * allChars.length)];
-  }
-  
-  // Shuffle the password to avoid predictable patterns
-  return password.split('').sort(() => Math.random() - 0.5).join('');
-};
-
-// Re-export isRoleInactive for convenience
-export { isRoleInactive };
+  return role as "admin" | "staff" | "customer";
+}
