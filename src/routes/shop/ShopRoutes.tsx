@@ -34,7 +34,10 @@ const ShopRoutes = () => {
         <Route path="/service-desk" element={<ServiceDesk />} />
         <Route path="/service-appointments" element={<ServiceAppointments />} />
         <Route path="/employees" element={<Employees />} />
+        
+        {/* Add the route for UserManagement with both paths */}
         <Route path="/user-management" element={<UserManagement />} />
+        <Route path="/admin/user-management" element={<UserManagement />} />
         
         {/* Removing the nested /admin route to avoid conflicts */}
         {/* Redirect /shop/admin to the root /admin path */}
