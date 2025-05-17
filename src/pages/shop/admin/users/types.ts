@@ -16,6 +16,8 @@ export interface User {
   twitter_url?: string | null;
   instagram_url?: string | null;
   linkedin_url?: string | null;
+  invite_token?: string | null;
+  invited_by?: string | null;
 }
 
 export interface InviteUserFormValues {
