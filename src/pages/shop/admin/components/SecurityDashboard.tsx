@@ -41,32 +41,46 @@ export default function SecurityDashboard() {
   const { data: securityStats, isLoading: isLoadingStats } = useQuery({
     queryKey: ['security-stats'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(`
-          id, email,
-          user_sessions:user_sessions(device_hash),
-          security_alerts:security_alerts(id, resolved_at)
-        `)
-        .order('email');
-      
-      if (error) {
+      try {
+        // First get all users
+        const { data: users, error: usersError } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .order('email');
+        
+        if (usersError) throw usersError;
+        
+        // Process each user to get their sessions and alerts
+        const userStats = await Promise.all((users || []).map(async (user) => {
+          // Get user sessions
+          const { data: sessions } = await supabase
+            .from('user_sessions')
+            .select('device_hash')
+            .eq('user_id', user.id);
+            
+          // Get user alerts
+          const { data: userAlerts } = await supabase
+            .from('security_alerts')
+            .select('id, resolved_at')
+            .eq('user_id', user.id);
+            
+          // Calculate stats
+          const uniqueDevices = new Set(sessions?.map(s => s.device_hash) || []);
+          const activeAlerts = userAlerts?.filter(a => a.resolved_at === null).length || 0;
+          
+          return {
+            user_id: user.id,
+            email: user.email,
+            devices: uniqueDevices.size,
+            active_alerts: activeAlerts
+          };
+        }));
+        
+        return userStats;
+      } catch (error: any) {
         console.error("Error fetching security stats:", error);
         return [];
       }
-      
-      // Process the data to get the stats we need
-      return (data || []).map(user => {
-        const devices = new Set(user.user_sessions?.map((s: any) => s.device_hash) || []).size;
-        const active_alerts = user.security_alerts?.filter((a: any) => a.resolved_at === null).length || 0;
-        
-        return {
-          user_id: user.id,
-          email: user.email,
-          devices: devices,
-          active_alerts: active_alerts
-        };
-      });
     }
   });
 
