@@ -3,100 +3,74 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from "@/components/ui/checkbox";
 import { CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 const CustomerSignInForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const createMockUser = () => {
-    // Create a mock customer user for development
-    const mockCustomerUser = {
-      id: 'dev-customer-user-id',
-      email: email || 'customer@example.com',
-      app_metadata: {
-        role: 'customer'
-      },
-      user_metadata: {
-        first_name: 'Dev',
-        last_name: 'Customer',
-        phone: '555-5678',
-        role: 'customer'
-      },
-      aud: 'authenticated',
-      created_at: new Date().toISOString()
-    };
-    
-    // Clear any existing stale auth data
-    localStorage.removeItem('dev-customer-user');
-    
-    // Store the mock user in localStorage for development
-    localStorage.setItem('dev-customer-user', JSON.stringify(mockCustomerUser));
-    
-    return mockCustomerUser;
-  };
-
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     
     try {
-      // Simulate brief loading
-      setLoading(true);
+      // Attempt to sign in with email and password
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password 
+      });
       
-      const mockUser = createMockUser();
+      if (error) throw error;
       
-      // Add a small delay to simulate authentication
-      setTimeout(() => {
-        setLoading(false);
-        toast({
-          title: "Login successful",
-          description: "Welcome to your customer dashboard!"
-        });
+      // Check if the user has MFA enabled
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('mfa_enabled')
+          .eq('id', data.user.id)
+          .maybeSingle();
         
-        // Navigate to the dashboard
-        navigate('/customer/dashboard', { replace: true });
-      }, 1000);
-    } catch (error) {
-      setLoading(false);
+        if (profile?.mfa_enabled) {
+          // Store minimal session info for MFA verification
+          sessionStorage.setItem('mfaSession', JSON.stringify({
+            userId: data.user.id,
+            email: data.user.email
+          }));
+          
+          // Redirect to MFA verification page with state
+          navigate('/verify-mfa', { 
+            state: { 
+              userId: data.user.id,
+              email: data.user.email 
+            }
+          });
+          return;
+        }
+      }
+      
+      // If no MFA required, proceed with normal login flow
+      toast({
+        title: "Login successful",
+        description: "Welcome to your customer portal!"
+      });
+      
+      navigate('/customer');
+    } catch (error: any) {
       console.error('Sign in error:', error);
       toast({
         variant: "destructive",
         title: "Login failed",
-        description: "There was a problem signing in. Please try again."
+        description: error.message || "Invalid credentials"
       });
-    }
-  };
-
-  const handleSkipSignIn = () => {
-    try {
-      setLoading(true);
-      
-      // Create the mock user
-      createMockUser();
-      
-      toast({
-        title: "Skipping sign in",
-        description: "Going to dashboard in development mode"
-      });
-      
-      // Navigate to the dashboard with replace: true to prevent back navigation issues
-      navigate('/customer/dashboard', { replace: true });
-    } catch (error) {
+    } finally {
       setLoading(false);
-      console.error('Error skipping sign in:', error);
-      toast({
-        variant: "destructive",
-        title: "Navigation failed",
-        description: "There was a problem accessing the dashboard."
-      });
     }
   };
 
@@ -114,7 +88,6 @@ const CustomerSignInForm = () => {
             disabled={loading}
           />
         </div>
-        
         <div className="space-y-2">
           <Label htmlFor="customer-signin-password">Password</Label>
           <Input 
@@ -126,19 +99,15 @@ const CustomerSignInForm = () => {
           />
         </div>
         
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="customer-remember-me" 
-            checked={rememberMe} 
-            onCheckedChange={(checked) => setRememberMe(!!checked)} 
-            disabled={loading}
-          />
-          <label 
-            htmlFor="customer-remember-me"
-            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        <div className="flex justify-end">
+          <Button 
+            variant="link" 
+            type="button" 
+            className="p-0 h-auto text-sm"
+            onClick={() => navigate('/customer/reset-password')}
           >
-            Remember me
-          </label>
+            Forgot password?
+          </Button>
         </div>
         
         <Button 
@@ -153,18 +122,6 @@ const CustomerSignInForm = () => {
             </>
           ) : "Sign In"}
         </Button>
-        
-        <div className="text-sm text-center text-gray-500">
-          <Button
-            type="button"
-            variant="link"
-            className="text-primary hover:underline p-0 h-auto"
-            disabled={loading}
-            onClick={handleSkipSignIn}
-          >
-            Skip sign in & go to dashboard
-          </Button>
-        </div>
       </CardContent>
     </form>
   );

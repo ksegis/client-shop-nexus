@@ -110,5 +110,52 @@ export const mfaService = {
       console.error('Error recording MFA attempt:', error);
       return false;
     }
+  },
+  
+  // Verify MFA during login
+  verifyMfaLogin: async (userId: string, code: string) => {
+    try {
+      // Get the user's MFA secret
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('mfa_secret, recovery_codes')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      if (profileError) throw profileError;
+      if (!profile?.mfa_secret) return false;
+      
+      // Check if the code is one of the recovery codes
+      if (profile.recovery_codes && Array.isArray(profile.recovery_codes)) {
+        const isRecoveryCode = profile.recovery_codes.includes(code);
+        
+        if (isRecoveryCode) {
+          // Remove the used recovery code
+          const updatedCodes = profile.recovery_codes.filter(c => c !== code);
+          
+          await supabase
+            .from('profiles')
+            .update({ recovery_codes: updatedCodes })
+            .eq('id', userId);
+            
+          // Record the successful recovery code use
+          await mfaService.recordAttempt(userId, true);
+          
+          return true;
+        }
+      }
+      
+      // Verify the TOTP code
+      // For demo purposes, we're using a simple implementation
+      const isValid = verifyTimeBasedCode(code, profile.mfa_secret);
+      
+      // Record the attempt
+      await mfaService.recordAttempt(userId, isValid);
+      
+      return isValid;
+    } catch (error) {
+      console.error('Error verifying MFA during login:', error);
+      return false;
+    }
   }
 };

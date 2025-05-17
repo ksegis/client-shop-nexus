@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { logAuditEvent, AuditLogType } from '@/utils/auditUtils';
+import { supabase } from '@/integrations/supabase/client';
 
 const SignInForm = () => {
   const [email, setEmail] = useState('');
@@ -20,17 +21,60 @@ const SignInForm = () => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Simulate brief loading
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      toast({
-        title: "Access granted",
-        description: "No authentication required"
+    
+    try {
+      // Attempt to sign in with email and password
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password 
       });
+      
+      if (error) throw error;
+      
+      // Check if the user has MFA enabled
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('mfa_enabled')
+          .eq('id', data.user.id)
+          .maybeSingle();
+        
+        if (profile?.mfa_enabled) {
+          // Store minimal session info for MFA verification
+          sessionStorage.setItem('mfaSession', JSON.stringify({
+            userId: data.user.id,
+            email: data.user.email
+          }));
+          
+          // Redirect to MFA verification page with state
+          navigate('/verify-mfa', { 
+            state: { 
+              userId: data.user.id,
+              email: data.user.email 
+            }
+          });
+          return;
+        }
+      }
+      
+      // If no MFA required, proceed with normal login flow
+      toast({
+        title: "Login successful",
+        description: "Welcome back!"
+      });
+      
       navigate('/shop');
-    }, 500);
+    } catch (error: any) {
+      console.error('Sign in error:', error);
+      toast({
+        variant: "destructive",
+        title: "Login failed",
+        description: error.message || "Invalid credentials"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSkipSignIn = () => {

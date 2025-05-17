@@ -14,6 +14,7 @@ import NotFound from '@/pages/NotFound';
 import Unauthorized from '@/pages/Unauthorized';
 import { useAuth } from '@/contexts/auth';
 import AuthCallbackPage from '@/pages/auth/Callback';
+import VerifyMFA from '@/pages/VerifyMFA'; // Add this import
 
 // Profile redirect component that checks the user role and redirects accordingly
 const ProfileRedirect = () => {
@@ -48,6 +49,9 @@ const AppRoutes: React.FC = () => {
             <Route path="/shop-login" element={<ShopLogin />} />
             <Route path="/customer-login" element={<CustomerLogin />} />
 
+            {/* MFA verification route */}
+            <Route path="/verify-mfa" element={<VerifyMFA />} />
+
             {/* Direct access to all routes */}
             <Route path="/customer/*" element={<CustomerRoutes />} />
             <Route path="/shop/*" element={<ShopRoutes />} />
@@ -64,7 +68,7 @@ const AppRoutes: React.FC = () => {
             {/* Authentication callback routes */}
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             
-            {/* Legacy auth path redirects */}
+            {/* Legacy auth paths redirects */}
             <Route path="/auth" element={<Navigate to="/" replace />} />
             <Route path="/auth/*" element={<Navigate to="/" replace />} />
             
