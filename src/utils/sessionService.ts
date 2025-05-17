@@ -121,8 +121,8 @@ export const sessionService = {
    */
   checkAnomalies: async (userId: string) => {
     try {
-      const { data, error } = await supabase.rpc('check_session_anomalies', {
-        user_id: userId
+      const { data, error } = await supabase.functions.invoke('check-session-anomalies', {
+        body: { user_id: userId }
       });
       
       if (error) {
@@ -140,7 +140,10 @@ export const sessionService = {
 
 // Hook to track session on mount or login
 export const useSessionTracking = () => {
-  React.useEffect(() => {
+  // Import React instead of using it directly
+  import { useEffect } from 'react';
+  
+  useEffect(() => {
     // Track session on component mount
     sessionService.trackSession();
     
