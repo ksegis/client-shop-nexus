@@ -15,6 +15,7 @@ import WorkOrders from "@/pages/shop/WorkOrders";
 import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
+import UserManagement from "@/pages/shop/admin/UserManagement";
 
 const ShopRoutes = () => {
   return (
@@ -33,6 +34,8 @@ const ShopRoutes = () => {
         <Route path="/service-desk" element={<ServiceDesk />} />
         <Route path="/service-appointments" element={<ServiceAppointments />} />
         <Route path="/employees" element={<Employees />} />
+        <Route path="/user-management" element={<UserManagement />} />
+        
         {/* Removing the nested /admin route to avoid conflicts */}
         {/* Redirect /shop/admin to the root /admin path */}
         <Route path="/admin" element={<Navigate to="/admin" replace />} />
