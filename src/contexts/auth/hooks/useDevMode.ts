@@ -5,6 +5,18 @@ import { UserProfile } from '../types';
 import { useToast } from '@/hooks/use-toast';
 
 export function useDevMode() {
+  // BLOCK ALL DEV MODE ACCESS IN PRODUCTION
+  if (import.meta.env.PROD) {
+    return {
+      isDevMode: false,
+      setIsDevMode: () => console.error('Dev mode disabled in production'),
+      devUser: null as User | null,
+      mockProfile: null as UserProfile | null,
+      useDevCustomer: false,
+      showDevModeNotification: () => console.error('Dev mode disabled in production')
+    };
+  }
+  
   const { toast } = useToast();
   const [isDevMode, setIsDevMode] = useState<boolean>(false);
   const [alreadyNotified, setAlreadyNotified] = useState<boolean>(false);
