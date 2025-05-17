@@ -1,6 +1,8 @@
 
 import { useState, useEffect } from 'react';
 import { sessionService } from '@/utils/sessionService';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/auth';
 
 /**
  * Hook for session management
@@ -11,6 +13,8 @@ export function useSession() {
   const [currentSession, setCurrentSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [anomalies, setAnomalies] = useState<any>(null);
+  const { toast } = useToast();
+  const { user } = useAuth();
 
   // Load sessions on mount
   useEffect(() => {
@@ -34,15 +38,35 @@ export function useSession() {
     initializeSession();
   }, []);
 
+  // Periodic session check for security monitoring
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const interval = setInterval(async () => {
+      await sessionService.trackSession();
+      
+      const result = await checkForAnomalies(user.id);
+      if (result?.new_device) {
+        toast({
+          title: "Security Alert",
+          description: "New device detected accessing your account. If this wasn't you, please secure your account.",
+          variant: "destructive",
+        });
+      }
+    }, 30000); // Update every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user, toast]);
+
   // Check for anomalies
   const checkForAnomalies = async (userId: string) => {
-    setLoading(true);
     try {
       const result = await sessionService.checkAnomalies(userId);
       setAnomalies(result);
       return result;
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error('Failed to check for session anomalies:', error);
+      return null;
     }
   };
 
