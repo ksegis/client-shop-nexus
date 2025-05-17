@@ -2,8 +2,7 @@
 import React, { useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { egisAuth } from "@/services/auth/egisAuth";
-import { getEgisOAuthUrl } from "@/config";
+import EgisLoginButton from "@/components/auth/EgisLoginButton";
 
 /**
  * This page now serves as a redirect handler for authentication flows
@@ -12,16 +11,6 @@ const Auth = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const error = searchParams.get("error");
-  
-  // Handle EGIS login
-  const handleEgisLogin = () => {
-    // Generate state and store it for later verification
-    const state = egisAuth.initiateAuth('/shop');
-    
-    // Redirect to EGIS auth URL
-    const authUrl = getEgisOAuthUrl(state);
-    window.location.href = authUrl;
-  };
   
   useEffect(() => {
     // Check if we need to show this page or redirect to homepage
@@ -59,13 +48,10 @@ const Auth = () => {
                 </Button>
               </Link>
               
-              <Button 
-                onClick={handleEgisLogin}
-                variant="outline" 
+              <EgisLoginButton 
+                redirectPath="/shop"
                 className="w-full"
-              >
-                Login with EGIS
-              </Button>
+              />
               
               <div className="mt-4 text-center">
                 <Link to="/" className="text-sm text-blue-600 hover:text-blue-800">
