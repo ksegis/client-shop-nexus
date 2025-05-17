@@ -1,11 +1,12 @@
 
 import React, { useState } from 'react';
 import { useUserManagement } from './UserManagementContext';
-import { EyeIcon, Key, UserCog, UserRoundCheck } from 'lucide-react';
-import { formatUserRole, formatDate } from './utils';
+import { EyeIcon, Key, UserCog, Shield } from 'lucide-react';
+import { formatUserRole, formatDate, isRoleInactive } from './utils';
 import { useImpersonation } from '@/utils/admin/impersonationUtils';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/hooks/use-toast';
+import { Switch } from '@/components/ui/switch';
+import { toast } from "@/hooks/use-toast";
 import {
   Table,
   TableBody,
@@ -26,9 +27,10 @@ export const UsersTable: React.FC<UsersTableProps> = ({
   onEditProfile,
   onImpersonate
 }) => {
-  const { users, isLoading } = useUserManagement();
+  const { users, isLoading, toggleUserActive } = useUserManagement();
   const { impersonateUser } = useImpersonation();
   const [impersonationLoading, setImpersonationLoading] = useState<string | null>(null);
+  const [activationLoading, setActivationLoading] = useState<string | null>(null);
 
   const handleImpersonate = async (userId: string, email: string) => {
     try {
@@ -52,6 +54,30 @@ export const UsersTable: React.FC<UsersTableProps> = ({
       });
     } finally {
       setImpersonationLoading(null);
+    }
+  };
+
+  const handleToggleActive = async (userId: string, currentRole: string) => {
+    try {
+      setActivationLoading(userId);
+      
+      await toggleUserActive(userId, currentRole);
+      
+      const isCurrentlyActive = !isRoleInactive(currentRole);
+      toast({
+        title: isCurrentlyActive ? "User Deactivated" : "User Activated",
+        description: isCurrentlyActive 
+          ? "The user has been successfully deactivated." 
+          : "The user has been successfully activated.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error updating user status",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setActivationLoading(null);
     }
   };
 
@@ -80,6 +106,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>Created</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -92,15 +119,30 @@ export const UsersTable: React.FC<UsersTableProps> = ({
               <TableCell>{user.email}</TableCell>
               <TableCell>
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  user.role === 'admin' ? 'bg-blue-100 text-blue-800' : 
-                  user.role === 'staff' ? 'bg-green-100 text-green-800' : 
-                  user.role === 'customer' ? 'bg-gray-100 text-gray-800' : 
-                  'bg-red-100 text-red-800'
+                  user.role.includes('admin') ? 'bg-blue-100 text-blue-800' : 
+                  user.role.includes('staff') ? 'bg-green-100 text-green-800' : 
+                  'bg-gray-100 text-gray-800'
                 }`}>
                   {formatUserRole(user.role)}
                 </span>
               </TableCell>
               <TableCell>{formatDate(user.created_at)}</TableCell>
+              <TableCell>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    checked={!isRoleInactive(user.role)}
+                    onCheckedChange={() => handleToggleActive(user.id, user.role)}
+                    disabled={activationLoading === user.id}
+                    aria-label={isRoleInactive(user.role) ? "Activate user" : "Deactivate user"}
+                  />
+                  <span className="text-sm">
+                    {isRoleInactive(user.role) ? "Inactive" : "Active"}
+                  </span>
+                  {activationLoading === user.id && (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent ml-2" />
+                  )}
+                </div>
+              </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end space-x-2">
                   <Button

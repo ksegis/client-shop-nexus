@@ -10,30 +10,37 @@ export interface User {
   role: ExtendedUserRole;
   created_at: string;
   updated_at: string;
-  avatar_url: string | null;
+  force_password_change?: boolean;
+  avatar_url?: string | null;
+  facebook_url?: string | null;
+  twitter_url?: string | null;
+  instagram_url?: string | null;
+  linkedin_url?: string | null;
 }
 
-export type FormRole = 'customer' | 'staff' | 'admin';
-
-export interface UserContextType {
-  users: User[];
-  isLoading: boolean;
-  error: Error | null;
-  createUser: (user: Partial<User>, password: string) => Promise<void>;
-  updateUser: (id: string, user: Partial<User>, password?: string) => Promise<void>;
-  toggleUserActive: (id: string, currentRole: string) => Promise<void>;
-  refetchUsers: () => Promise<void>;
-  selectedUserId: string | null;
-  setSelectedUserId: (id: string | null) => void;
+export function isRoleInactive(role: string): boolean {
+  return role.startsWith('inactive_');
 }
 
-// Helper functions for role management
-export const getBaseRole = (role: ExtendedUserRole): FormRole => {
-  if (role === 'inactive_staff' || role === 'test_staff') return 'staff';
-  if (role === 'inactive_admin' || role === 'test_admin') return 'admin';
-  return role === 'admin' ? 'admin' : role === 'staff' ? 'staff' : 'customer';
-};
+export interface InviteUserFormValues {
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: "admin" | "staff"; // Restricting to valid role values
+  password: string;
+}
 
-export const isRoleInactive = (role: ExtendedUserRole): boolean => {
-  return role === 'inactive_staff' || role === 'inactive_admin';
-};
+export interface ResetPasswordFormValues {
+  password: string;
+  confirmPassword: string;
+}
+
+export interface ProfileFormValues {
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  facebook: string | null;
+  twitter: string | null;
+  instagram: string | null;
+  linkedin: string | null;
+}
