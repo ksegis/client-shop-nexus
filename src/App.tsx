@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { setupAudioCleanupOnNavigation } from "@/utils/audioUtils";
 import { HeaderProvider } from "./components/layout/HeaderContext";
 import { DevModeIndicator } from "./components/shared/DevModeIndicator";
+import { useSessionTracking } from "./utils/sessionService";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -28,6 +29,9 @@ const App = () => {
   useEffect(() => {
     return setupAudioCleanupOnNavigation();
   }, []);
+  
+  // Track user sessions
+  useSessionTracking();
   
   return (
     <QueryClientProvider client={queryClient}>

@@ -861,6 +861,7 @@ export type Database = {
       }
       user_sessions: {
         Row: {
+          created_at: string | null
           device_hash: string
           id: string
           ip_address: string | null
@@ -870,6 +871,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          created_at?: string | null
           device_hash: string
           id?: string
           ip_address?: string | null
@@ -879,6 +881,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          created_at?: string | null
           device_hash?: string
           id?: string
           ip_address?: string | null
@@ -1078,6 +1081,14 @@ export type Database = {
       add_standard_policies: {
         Args: { target_table: string }
         Returns: undefined
+      }
+      check_session_anomalies: {
+        Args: { user_id: string }
+        Returns: {
+          simultaneous_sessions: number
+          new_device: boolean
+          suspicious_location: boolean
+        }[]
       }
       disable_all_rls: {
         Args: Record<PropertyKey, never>

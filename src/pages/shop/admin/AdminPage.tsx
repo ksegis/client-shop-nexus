@@ -5,6 +5,7 @@ import ApiConnectionsManager from './ApiConnectionsManager';
 import TestUsers from './TestUsers';
 import AuthLogs from './AuthLogs';
 import AuditLogsViewer from '@/components/admin/AuditLogsViewer';
+import SessionManagement from './SessionManagement';
 import { useAuth } from "@/contexts/auth";
 import { useNavigate } from "react-router-dom";
 
@@ -78,6 +79,7 @@ const AdminPage = () => {
           <TabsTrigger value="connections">API Connections</TabsTrigger>
           <TabsTrigger value="auth-logs">Auth Logs</TabsTrigger>
           <TabsTrigger value="audit-logs">System Audit Logs</TabsTrigger>
+          <TabsTrigger value="sessions">Session Security</TabsTrigger>
         </TabsList>
         
         <TabsContent value="users" className="space-y-4">
@@ -94,6 +96,10 @@ const AdminPage = () => {
         
         <TabsContent value="audit-logs" className="space-y-4">
           <AuditLogsViewer />
+        </TabsContent>
+        
+        <TabsContent value="sessions" className="space-y-4">
+          <SessionManagement />
         </TabsContent>
       </Tabs>
     </div>

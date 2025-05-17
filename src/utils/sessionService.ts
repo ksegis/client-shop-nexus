@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
 import { useEffect } from 'react';
@@ -115,14 +116,14 @@ export const sessionService = {
 
   /**
    * Checks for anomalies in user sessions (multiple locations, unusual activity)
-   * This requires a server-side function to be implemented
+   * Uses the database function we created instead of an edge function
    * @param userId The user ID to check
    * @returns Anomaly data if found
    */
   checkAnomalies: async (userId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('check-session-anomalies', {
-        body: { user_id: userId }
+      const { data, error } = await supabase.rpc('check_session_anomalies', {
+        user_id: userId
       });
       
       if (error) {
