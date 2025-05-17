@@ -22,14 +22,14 @@ export default function AuthCallbackPage() {
     const error = params.get('error');
 
     if (error) {
-      console.error(`[EGIS Auth] Error: ${error}`);
+      console.error(`[EGIS Dynamics Auth] Error: ${error}`);
       setStatus(`Authentication error: ${error}`);
       setTimeout(() => navigate(`/auth?error=${error}`), 2000);
       return;
     }
 
     if (!code || !state) {
-      console.error('[EGIS Auth] Missing code or state parameter');
+      console.error('[EGIS Dynamics Auth] Missing code or state parameter');
       setStatus('Invalid callback parameters');
       setTimeout(() => navigate('/auth?error=invalid_callback'), 2000);
       return;
@@ -40,7 +40,7 @@ export default function AuthCallbackPage() {
         setStatus('Validating authentication...');
         const result = await egisAuth.handleCallback(code, state);
         
-        console.log('[EGIS Auth] Authentication successful', result);
+        console.log('[EGIS Dynamics Auth] Authentication successful', result);
         setStatus('Authentication successful! Redirecting...');
         
         // Check if we have a specific redirect path
@@ -51,7 +51,7 @@ export default function AuthCallbackPage() {
           navigate('/shop');
         }
       } catch (err: any) {
-        console.error('[EGIS Auth]', err);
+        console.error('[EGIS Dynamics Auth]', err);
         setStatus(`Authentication failed: ${err.message || 'Unknown error'}`);
         setTimeout(() => navigate('/auth?error=auth_failed'), 2000);
       }
@@ -66,7 +66,7 @@ export default function AuthCallbackPage() {
         <div className="mb-4">
           <div className="h-12 w-12 mx-auto border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
         </div>
-        <h1 className="text-xl font-semibold mb-2">EGIS Authentication</h1>
+        <h1 className="text-xl font-semibold mb-2">EGIS Dynamics Authentication</h1>
         <p className="text-gray-500">{status}</p>
       </div>
     </div>
