@@ -525,7 +525,10 @@ export type Database = {
           invited_by: string | null
           last_name: string | null
           linkedin_url: string | null
+          mfa_enabled: boolean | null
+          mfa_secret: string | null
           phone: string | null
+          recovery_codes: string[] | null
           role: Database["public"]["Enums"]["user_role"]
           twitter_url: string | null
           updated_at: string
@@ -543,7 +546,10 @@ export type Database = {
           invited_by?: string | null
           last_name?: string | null
           linkedin_url?: string | null
+          mfa_enabled?: boolean | null
+          mfa_secret?: string | null
           phone?: string | null
+          recovery_codes?: string[] | null
           role?: Database["public"]["Enums"]["user_role"]
           twitter_url?: string | null
           updated_at?: string
@@ -561,7 +567,10 @@ export type Database = {
           invited_by?: string | null
           last_name?: string | null
           linkedin_url?: string | null
+          mfa_enabled?: boolean | null
+          mfa_secret?: string | null
           phone?: string | null
+          recovery_codes?: string[] | null
           role?: Database["public"]["Enums"]["user_role"]
           twitter_url?: string | null
           updated_at?: string
