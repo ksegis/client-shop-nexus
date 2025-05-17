@@ -61,8 +61,9 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
       path: '#', 
       adminOnly: true,
       children: [
+        { name: 'User Management', path: '/shop/user-management', adminOnly: true },
         { name: 'Employees', path: '/shop/employees', adminOnly: true },
-        { name: 'Settings', path: '/admin', adminOnly: true } // Changed from /shop/admin to /admin
+        { name: 'Settings', path: '/admin', adminOnly: true }
       ]
     }
   ];

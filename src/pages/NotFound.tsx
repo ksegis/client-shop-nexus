@@ -2,7 +2,7 @@
 import { useLocation, Link } from "react-router-dom";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { HomeIcon } from "lucide-react";
+import { HomeIcon, Users } from "lucide-react";
 
 const NotFound = () => {
   const location = useLocation();
@@ -30,7 +30,10 @@ const NotFound = () => {
             </Link>
           </Button>
           <Button asChild variant="outline" className="w-full">
-            <Link to="/shop/user-management">Go to User Management</Link>
+            <Link to="/shop/user-management">
+              <Users className="mr-2 h-4 w-4" />
+              Go to User Management
+            </Link>
           </Button>
         </div>
       </div>
