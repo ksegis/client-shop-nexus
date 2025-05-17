@@ -6,6 +6,7 @@ import AppRoutes from "./routes/AppRoutes";
 import { useEffect } from "react";
 import { setupAudioCleanupOnNavigation } from "@/utils/audioUtils";
 import { HeaderProvider } from "./components/layout/HeaderContext";
+import { DevModeIndicator } from "./components/shared/DevModeIndicator";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -34,6 +35,7 @@ const App = () => {
         <HeaderProvider>
           <AppRoutes />
           <Toaster />
+          <DevModeIndicator />
         </HeaderProvider>
       </TooltipProviderWrapper>
     </QueryClientProvider>

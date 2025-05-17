@@ -12,9 +12,14 @@ export const PortalIndicator = ({ portalType }: PortalIndicatorProps) => {
     ? 'bg-shop-dark' 
     : 'bg-shop-primary';
   
+  // Add development mode indicator to the text
+  const displayText = import.meta.env.PROD 
+    ? indicatorText
+    : `${indicatorText} (DEV MODE)`;
+  
   return (
     <div className={`py-1 text-center text-white text-xs font-medium ${bgColorClass}`}>
-      {indicatorText}
+      {displayText}
     </div>
   );
 };
