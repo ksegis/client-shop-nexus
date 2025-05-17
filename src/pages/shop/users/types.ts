@@ -22,6 +22,15 @@ export function isRoleInactive(role: string): boolean {
   return role.startsWith('inactive_');
 }
 
+// Get the base role name without 'inactive_' prefix
+export function getBaseRole(role: string): "admin" | "staff" | "customer" {
+  if (role.startsWith('inactive_')) {
+    const baseRole = role.replace('inactive_', '') as "admin" | "staff" | "customer";
+    return baseRole;
+  }
+  return role as "admin" | "staff" | "customer";
+}
+
 export interface InviteUserFormValues {
   email: string;
   firstName: string;

@@ -6,10 +6,22 @@ import { useAuth } from '@/contexts/auth';
 
 export const ImpersonationBanner: React.FC = () => {
   const { user } = useAuth();
-  const { stopImpersonatingUser, getOriginalUser } = useImpersonation();
-  const originalUser = getOriginalUser();
+  const { exitImpersonation } = useImpersonation();
   
-  if (!originalUser) return null;
+  // Check if we have an impersonation session
+  const impersonationSession = localStorage.getItem('impersonation-session');
+  
+  if (!impersonationSession) return null;
+  
+  // Parse the impersonation data
+  const originalUser = (() => {
+    try {
+      const data = JSON.parse(impersonationSession);
+      return data.user_metadata?.original_user || null;
+    } catch (e) {
+      return null;
+    }
+  })();
   
   return (
     <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded mb-4">
@@ -24,7 +36,7 @@ export const ImpersonationBanner: React.FC = () => {
           </p>
           <div className="mt-3 md:mt-0 md:ml-6">
             <button
-              onClick={() => stopImpersonatingUser()}
+              onClick={() => exitImpersonation()}
               className="inline-flex items-center rounded-md border border-transparent bg-amber-100 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2"
             >
               <LogOut className="mr-2 h-4 w-4" />

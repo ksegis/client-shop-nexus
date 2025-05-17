@@ -14,6 +14,7 @@ interface UserManagementContextType {
   inviteUser: (email: string, firstName: string, lastName: string, role: "admin" | "staff", password: string) => Promise<void>;
   resetPassword: (userId: string, email: string, newPassword: string) => Promise<void>;
   updateUserProfile: (userId: string, profileData: Partial<User>) => Promise<void>;
+  toggleUserActive: (userId: string, currentRole: string) => Promise<void>;
   refetchUsers: () => Promise<void>;
 }
 
@@ -180,6 +181,48 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const toggleUserActive = async (userId: string, currentRole: string) => {
+    try {
+      let newRole;
+      
+      // Toggle between active and inactive states based on current role
+      if (currentRole.startsWith('inactive_')) {
+        // Activate: remove 'inactive_' prefix
+        newRole = currentRole.replace('inactive_', '');
+      } else if (currentRole === 'admin' || currentRole === 'staff') {
+        // Deactivate: add 'inactive_' prefix 
+        newRole = `inactive_${currentRole}`;
+      } else {
+        // For other roles like 'customer', we don't have an inactive variant in the database
+        // so we'll just keep the original role
+        newRole = currentRole;
+      }
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId);
+      
+      if (error) throw error;
+      
+      toast({
+        title: currentRole.startsWith('inactive_') ? "User Activated" : "User Deactivated",
+        description: currentRole.startsWith('inactive_') 
+          ? "The user has been successfully activated." 
+          : "The user has been successfully deactivated.",
+      });
+      
+      await refetchUsers();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error updating user status",
+        description: error.message || "An unexpected error occurred",
+      });
+      throw error;
+    }
+  };
+
   return (
     <UserManagementContext.Provider
       value={{
@@ -191,6 +234,7 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
         inviteUser,
         resetPassword,
         updateUserProfile,
+        toggleUserActive,
         refetchUsers,
       }}
     >
