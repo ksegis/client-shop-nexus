@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { generateRandomString } from '@/lib/utils';
+import { generateRandomString, generateRecoveryCodes } from '@/lib/utils';
 
 // Simple 6-digit code generator using cryptographically secure random values
 const generateSixDigitCode = (): string => {
@@ -26,7 +26,8 @@ export const mfaService = {
       secret, 
       temporaryCode,
       // We're not using QR codes in this simplified version
-      uri: `mfa:${email}:${secret}`
+      uri: `mfa:${email}:${secret}`,
+      recoveryCodes: generateRecoveryCodes()
     };
   },
 
@@ -38,11 +39,15 @@ export const mfaService = {
   },
 
   // Enable MFA for a user
-  enableForUser: async (userId: string, secret: string) => {
+  enableForUser: async (userId: string, secret: string, recoveryCodes: string[] = []) => {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ mfa_secret: secret, mfa_enabled: true })
+        .update({ 
+          mfa_secret: secret, 
+          mfa_enabled: true,
+          recovery_codes: recoveryCodes
+        })
         .eq('id', userId);
       
       if (error) throw error;
@@ -67,7 +72,11 @@ export const mfaService = {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ mfa_secret: null, mfa_enabled: false })
+        .update({ 
+          mfa_secret: null, 
+          mfa_enabled: false,
+          recovery_codes: null
+        })
         .eq('id', userId);
       
       if (error) throw error;

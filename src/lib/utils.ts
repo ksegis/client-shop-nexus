@@ -27,3 +27,13 @@ export function formatCurrency(amount: number): string {
     maximumFractionDigits: 2
   }).format(amount);
 }
+
+/**
+ * Generate recovery codes for MFA
+ */
+export function generateRecoveryCodes(): string[] {
+  // Generate 8 random codes that are 10 characters long
+  return Array.from({ length: 8 }, () => 
+    crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase()
+  );
+}
