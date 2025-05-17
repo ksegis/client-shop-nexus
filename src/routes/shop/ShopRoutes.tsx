@@ -75,7 +75,6 @@ const ShopRoutes = () => {
           </ProtectedRoute>
         } />
         
-        {/* Removing the nested /admin route to avoid conflicts */}
         {/* Redirect /shop/admin to the root /admin path */}
         <Route path="/admin" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<NotFound />} />

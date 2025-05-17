@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,6 +10,7 @@ interface MfaAttempt {
   user_id: string;
   ip_address: string;
   successful: boolean;
+  action: string;
   created_at: string;
   profiles?: {
     email: string;
@@ -186,6 +186,12 @@ export default function SimpleDashboard() {
                   </span>
                   <span className="mx-2">from</span>
                   <span className="text-gray-700">{attempt.ip_address || 'Unknown IP'}</span>
+                  {attempt.action && (
+                    <>
+                      <span className="mx-2">-</span>
+                      <span className="text-gray-700">{attempt.action}</span>
+                    </>
+                  )}
                 </div>
                 <div>
                   {attempt.successful ? (
