@@ -2,6 +2,9 @@
 # This file defines config for your edge functions.
 project_id = "vqkxrbflwhunvbotjdds"
 
+[functions.rate-limiter]
+verify_jwt = true
+
 [functions.impersonate-user]
 verify_jwt = true
 
