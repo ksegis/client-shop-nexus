@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -61,6 +62,13 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
 
   const inviteUser = async (email: string, firstName: string, lastName: string, role: "admin" | "staff", password: string) => {
     try {
+      // Get current user id to track who sent the invitation
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) throw new Error("You must be logged in to invite users");
+      
+      // Generate a unique invite token
+      const inviteToken = crypto.randomUUID();
+      
       // First check if user exists in employees table
       const { data: employeeData, error: employeeError } = await supabase
         .from('profiles')
@@ -94,15 +102,17 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
 
       if (signUpError) throw signUpError;
       
-      // Update profile with force_password_change flag using raw SQL
-      // Since the profiles table schema doesn't have force_password_change field defined in the type
+      // Update profile with force_password_change flag, invite_token and invited_by
       const { error: updateError } = await supabase
-        .rpc('update_user_profile_with_password_change', {
-          user_id: data.user?.id,
-          first_name_val: firstName,
-          last_name_val: lastName,
-          force_change: true
-        });
+        .from('profiles')
+        .update({ 
+          first_name: firstName,
+          last_name: lastName,
+          force_password_change: true,
+          invite_token: inviteToken,
+          invited_by: currentUser.id
+        })
+        .eq('id', data.user?.id);
 
       if (updateError) throw updateError;
 
@@ -218,6 +228,7 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
         variant: "destructive",
         title: "Error updating user status",
         description: error.message || "An unexpected error occurred",
+        variant: "destructive",
       });
       throw error;
     }

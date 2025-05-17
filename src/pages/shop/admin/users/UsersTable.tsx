@@ -7,6 +7,7 @@ import { useImpersonation } from '@/utils/admin/impersonationUtils';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { toast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Table,
   TableBody,
@@ -31,6 +32,13 @@ export const UsersTable: React.FC<UsersTableProps> = ({
   const { impersonateUser } = useImpersonation();
   const [impersonationLoading, setImpersonationLoading] = useState<string | null>(null);
   const [activationLoading, setActivationLoading] = useState<string | null>(null);
+
+  // Find invited by names
+  const getInviterName = (invitedById: string | null | undefined) => {
+    if (!invitedById) return "—";
+    const inviter = users.find(user => user.id === invitedById);
+    return inviter ? `${inviter.first_name} ${inviter.last_name}` : "Unknown";
+  };
 
   const handleImpersonate = async (userId: string, email: string) => {
     try {
@@ -98,90 +106,109 @@ export const UsersTable: React.FC<UsersTableProps> = ({
   }
 
   return (
-    <div className="border rounded-md">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {users.map((user) => (
-            <TableRow key={user.id}>
-              <TableCell>
-                {user.first_name} {user.last_name}
-              </TableCell>
-              <TableCell>{user.email}</TableCell>
-              <TableCell>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  user.role.includes('admin') ? 'bg-blue-100 text-blue-800' : 
-                  user.role.includes('staff') ? 'bg-green-100 text-green-800' : 
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {formatUserRole(user.role)}
-                </span>
-              </TableCell>
-              <TableCell>{formatDate(user.created_at)}</TableCell>
-              <TableCell>
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    checked={!isRoleInactive(user.role)}
-                    onCheckedChange={() => handleToggleActive(user.id, user.role)}
-                    disabled={activationLoading === user.id}
-                    aria-label={isRoleInactive(user.role) ? "Activate user" : "Deactivate user"}
-                  />
-                  <span className="text-sm">
-                    {isRoleInactive(user.role) ? "Inactive" : "Active"}
-                  </span>
-                  {activationLoading === user.id && (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent ml-2" />
-                  )}
-                </div>
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end space-x-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    title="Reset Password"
-                    onClick={() => onResetPassword(user.id, user.email)}
-                  >
-                    <Key className="h-4 w-4" />
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    title="Edit Profile"
-                    onClick={() => onEditProfile(user.id, user.email)}
-                  >
-                    <UserCog className="h-4 w-4" />
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    title="Impersonate User"
-                    onClick={() => handleImpersonate(user.id, user.email)}
-                    disabled={impersonationLoading === user.id}
-                  >
-                    {impersonationLoading === user.id ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                    ) : (
-                      <EyeIcon className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </TableCell>
+    <TooltipProvider>
+      <div className="border rounded-md">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead>Invited By</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          </TableHeader>
+          <TableBody>
+            {users.map((user) => (
+              <TableRow key={user.id}>
+                <TableCell>
+                  {user.first_name} {user.last_name}
+                </TableCell>
+                <TableCell>{user.email}</TableCell>
+                <TableCell>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    user.role.includes('admin') ? 'bg-blue-100 text-blue-800' : 
+                    user.role.includes('staff') ? 'bg-green-100 text-green-800' : 
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {formatUserRole(user.role)}
+                  </span>
+                </TableCell>
+                <TableCell>{formatDate(user.created_at)}</TableCell>
+                <TableCell>{getInviterName(user.invited_by)}</TableCell>
+                <TableCell>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={!isRoleInactive(user.role)}
+                      onCheckedChange={() => handleToggleActive(user.id, user.role)}
+                      disabled={activationLoading === user.id}
+                      aria-label={isRoleInactive(user.role) ? "Activate user" : "Deactivate user"}
+                    />
+                    <span className="text-sm">
+                      {isRoleInactive(user.role) ? "Inactive" : "Active"}
+                    </span>
+                    {activationLoading === user.id && (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent ml-2" />
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end space-x-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          title="Reset Password"
+                          onClick={() => onResetPassword(user.id, user.email)}
+                        >
+                          <Key className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Reset Password</TooltipContent>
+                    </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          title="Edit Profile"
+                          onClick={() => onEditProfile(user.id, user.email)}
+                        >
+                          <UserCog className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Edit Profile</TooltipContent>
+                    </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          title="Impersonate User"
+                          onClick={() => handleImpersonate(user.id, user.email)}
+                          disabled={impersonationLoading === user.id}
+                        >
+                          {impersonationLoading === user.id ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                          ) : (
+                            <EyeIcon className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Impersonate User</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </TooltipProvider>
   );
 };

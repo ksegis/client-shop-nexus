@@ -521,6 +521,8 @@ export type Database = {
           force_password_change: boolean | null
           id: string
           instagram_url: string | null
+          invite_token: string | null
+          invited_by: string | null
           last_name: string | null
           linkedin_url: string | null
           phone: string | null
@@ -537,6 +539,8 @@ export type Database = {
           force_password_change?: boolean | null
           id: string
           instagram_url?: string | null
+          invite_token?: string | null
+          invited_by?: string | null
           last_name?: string | null
           linkedin_url?: string | null
           phone?: string | null
@@ -553,6 +557,8 @@ export type Database = {
           force_password_change?: boolean | null
           id?: string
           instagram_url?: string | null
+          invite_token?: string | null
+          invited_by?: string | null
           last_name?: string | null
           linkedin_url?: string | null
           phone?: string | null
@@ -560,7 +566,15 @@ export type Database = {
           twitter_url?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       service_appointments: {
         Row: {
