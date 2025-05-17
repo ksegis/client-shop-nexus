@@ -1,22 +1,24 @@
 
-import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
-
-export type ProfileData = {
+export interface ProfileData {
   id: string;
   email: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  role: ExtendedUserRole;
+  first_name?: string;
+  last_name?: string;
+  avatar_url?: string;
+  phone?: string;
+  role?: string;
   created_at: string;
   updated_at: string;
-  avatar_url?: string | null;
-  facebook_url?: string | null;
-  twitter_url?: string | null;
-  instagram_url?: string | null;
-  linkedin_url?: string | null;
-};
+  mfa_enabled?: boolean;
+  mfa_secret?: string;
+}
 
-export type ProfileUpdateData = Partial<Omit<ProfileData, 'id' | 'email' | 'created_at' | 'updated_at' | 'role'>> & {
-  role?: ExtendedUserRole;
-};
+export interface ProfileUpdateData {
+  first_name?: string;
+  last_name?: string;
+  avatar_url?: string;
+  phone?: string;
+  role?: string;
+  mfa_enabled?: boolean;
+  mfa_secret?: string;
+}
