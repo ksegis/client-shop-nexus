@@ -47,15 +47,13 @@ export function UserProfileDropdown() {
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem
-              onClick={() => navigate(
-                profile?.role?.includes('customer') ? '/customer/profile' : '/shop/profile'
-              )}
+              onClick={() => navigate('/profile')}
             >
               <User className="mr-2 h-4 w-4" />
               <span>Profile</span>
             </DropdownMenuItem>
             {profile?.role === 'admin' && (
-              <DropdownMenuItem onClick={() => navigate('/shop/admin')}>
+              <DropdownMenuItem onClick={() => navigate('/admin')}>
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Admin Settings</span>
               </DropdownMenuItem>
