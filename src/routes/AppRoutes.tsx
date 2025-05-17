@@ -50,7 +50,7 @@ const AppRoutes: React.FC = () => {
             <Route path="/customer/*" element={<CustomerRoutes />} />
             <Route path="/shop/*" element={<ShopRoutes />} />
             
-            {/* Direct access to admin page */}
+            {/* Direct access to admin page at root level */}
             <Route path="/admin" element={<AdminPage />} />
             
             {/* Profile redirect - new route to handle /profile requests */}

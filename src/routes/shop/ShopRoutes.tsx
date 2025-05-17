@@ -12,7 +12,6 @@ import ServiceDesk from "@/pages/shop/ServiceDesk";
 import ServiceAppointments from "@/pages/shop/ServiceAppointments";
 import Employees from "@/pages/shop/Employees";
 import WorkOrders from "@/pages/shop/WorkOrders";
-import AdminPage from "@/pages/shop/admin/AdminPage";
 import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
@@ -34,8 +33,9 @@ const ShopRoutes = () => {
         <Route path="/service-desk" element={<ServiceDesk />} />
         <Route path="/service-appointments" element={<ServiceAppointments />} />
         <Route path="/employees" element={<Employees />} />
-        <Route path="/admin" element={<AdminPage />} />
-        {/* Add a redirect from /admin to /shop/admin for compatibility */}
+        {/* Removing the nested /admin route to avoid conflicts */}
+        {/* Redirect /shop/admin to the root /admin path */}
+        <Route path="/admin" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>
