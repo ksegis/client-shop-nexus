@@ -13,6 +13,7 @@ import CustomerLogin from '@/pages/customer/Login';
 import NotFound from '@/pages/NotFound';
 import Unauthorized from '@/pages/Unauthorized';
 import { useAuth } from '@/contexts/auth';
+import AuthCallbackPage from '@/pages/auth/Callback';
 
 // Profile redirect component that checks the user role and redirects accordingly
 const ProfileRedirect = () => {
@@ -59,6 +60,9 @@ const AppRoutes: React.FC = () => {
             
             {/* Profile redirect - new route to handle /profile requests */}
             <Route path="/profile" element={<ProfileRedirect />} />
+            
+            {/* Authentication callback routes */}
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
             
             {/* Legacy auth path redirects */}
             <Route path="/auth" element={<Navigate to="/" replace />} />
