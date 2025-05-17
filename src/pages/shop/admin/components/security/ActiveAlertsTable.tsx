@@ -4,15 +4,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { CheckCircle, AlertCircle } from 'lucide-react';
-
-interface Alert {
-  id: string;
-  alert_type: string;
-  created_at: string;
-  profiles?: {
-    email: string;
-  };
-}
+import type { Alert } from '@/hooks/useSecurityDashboard';
 
 interface ActiveAlertsTableProps {
   alerts: Alert[];

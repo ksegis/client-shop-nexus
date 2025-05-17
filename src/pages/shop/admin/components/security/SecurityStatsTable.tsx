@@ -2,13 +2,7 @@
 import React from 'react';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-
-interface SecurityStat {
-  user_id: string;
-  email: string;
-  devices: number;
-  active_alerts: number;
-}
+import type { SecurityStat } from '@/hooks/useSecurityDashboard';
 
 interface SecurityStatsTableProps {
   stats: SecurityStat[];
