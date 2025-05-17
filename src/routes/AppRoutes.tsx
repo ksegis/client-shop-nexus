@@ -11,6 +11,7 @@ import Index from '@/pages/Index';
 import ShopLogin from '@/pages/shop/Login';
 import CustomerLogin from '@/pages/customer/Login';
 import NotFound from '@/pages/NotFound';
+import Unauthorized from '@/pages/Unauthorized';
 import { useAuth } from '@/contexts/auth';
 
 // Profile redirect component that checks the user role and redirects accordingly
@@ -52,6 +53,9 @@ const AppRoutes: React.FC = () => {
             
             {/* Direct access to admin page at root level */}
             <Route path="/admin" element={<AdminPage />} />
+            
+            {/* Unauthorized access page */}
+            <Route path="/unauthorized" element={<Unauthorized />} />
             
             {/* Profile redirect - new route to handle /profile requests */}
             <Route path="/profile" element={<ProfileRedirect />} />

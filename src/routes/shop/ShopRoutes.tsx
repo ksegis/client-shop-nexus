@@ -16,6 +16,7 @@ import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
 import UserManagement from "@/pages/shop/admin/UserManagement";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 const ShopRoutes = () => {
   return (
@@ -35,9 +36,18 @@ const ShopRoutes = () => {
         <Route path="/service-appointments" element={<ServiceAppointments />} />
         <Route path="/employees" element={<Employees />} />
         
-        {/* Add the route for UserManagement with both paths */}
-        <Route path="/user-management" element={<UserManagement />} />
-        <Route path="/admin/user-management" element={<UserManagement />} />
+        {/* Add protected routes for admin-only pages */}
+        <Route path="/user-management" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <UserManagement />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/admin/user-management" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <UserManagement />
+          </ProtectedRoute>
+        } />
         
         {/* Removing the nested /admin route to avoid conflicts */}
         {/* Redirect /shop/admin to the root /admin path */}
