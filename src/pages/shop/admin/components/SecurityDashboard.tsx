@@ -37,17 +37,36 @@ export default function SecurityDashboard() {
     }
   });
 
+  // Using a direct query for security stats instead of an RPC function
   const { data: securityStats, isLoading: isLoadingStats } = useQuery({
     queryKey: ['security-stats'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_security_overview');
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(`
+          id, email,
+          user_sessions:user_sessions(device_hash),
+          security_alerts:security_alerts(id, resolved_at)
+        `)
+        .order('email');
       
       if (error) {
         console.error("Error fetching security stats:", error);
         return [];
       }
       
-      return data || [];
+      // Process the data to get the stats we need
+      return (data || []).map(user => {
+        const devices = new Set(user.user_sessions?.map((s: any) => s.device_hash) || []).size;
+        const active_alerts = user.security_alerts?.filter((a: any) => a.resolved_at === null).length || 0;
+        
+        return {
+          user_id: user.id,
+          email: user.email,
+          devices: devices,
+          active_alerts: active_alerts
+        };
+      });
     }
   });
 
