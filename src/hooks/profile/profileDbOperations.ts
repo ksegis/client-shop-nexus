@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { mapExtendedRoleToDbRole } from '@/integrations/supabase/types-extensions';
 import { ProfileData, ProfileUpdateData } from './types';
 import { mapDbProfileToExtendedProfile, createProfileFromUserMetadata } from './profileUtils';
+import { ExtendedUserRole } from '@/integrations/supabase/types-extensions';
 
 // Helper function to check if a userId is a valid UUID
 const isValidUuid = (id: string): boolean => {
@@ -78,7 +79,7 @@ export const createNewProfile = async (userId: string, email: string, metadata: 
     let role = metadata?.role || 'customer';
     
     // When saving to the database, we need to map the extended role to a database role
-    const dbRole = mapExtendedRoleToDbRole(role);
+    const dbRole = mapExtendedRoleToDbRole(role as ExtendedUserRole);
     
     const { error: insertError } = await supabase.from('profiles').insert({
       id: userId,
@@ -119,7 +120,7 @@ export const updateUserProfile = async (userId: string, updateData: ProfileUpdat
     
     // If role is included in the update data, map it to database role
     if (updateData.role) {
-      dbUpdateData.role = mapExtendedRoleToDbRole(updateData.role);
+      dbUpdateData.role = mapExtendedRoleToDbRole(updateData.role as ExtendedUserRole);
     }
     
     // Update the profile with the database-compatible data

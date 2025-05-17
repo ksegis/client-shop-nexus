@@ -38,7 +38,7 @@ export const useProfileData = () => {
           first_name: user.user_metadata?.first_name || 'Test',
           last_name: user.user_metadata?.last_name || 'User',
           phone: user.user_metadata?.phone || '555-1234',
-          role: (user.user_metadata?.role || 'customer') as ExtendedUserRole,
+          role: (user.user_metadata?.role || 'customer') as string,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           avatar_url: user.user_metadata?.avatar_url || null
@@ -65,7 +65,7 @@ export const useProfileData = () => {
           user.user_metadata || {}
         );
         
-        setProfileData(defaultProfile);
+        setProfileData(defaultProfile as ProfileData);
         console.log(`Creating new profile for user ${user.id}`);
         
         // Create the missing profile in the database
