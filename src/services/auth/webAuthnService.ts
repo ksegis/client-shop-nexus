@@ -54,11 +54,13 @@ export const webAuthnService = {
       window.crypto.getRandomValues(challenge);
       
       // Save this challenge to verify later - using executeQuery with manual SQL to handle the new table
-      const { error: challengeError } = await supabase.rpc('store_webauthn_challenge', { 
-        p_user_id: userId,
-        p_challenge: arrayBufferToBase64(challenge),
-        p_type: 'registration',
-        p_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
+      const { error: challengeError } = await supabase.functions.invoke('store_webauthn_challenge', { 
+        body: { 
+          p_user_id: userId,
+          p_challenge: arrayBufferToBase64(challenge),
+          p_type: 'registration',
+          p_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
+        }
       });
         
       if (challengeError) throw challengeError;
@@ -138,11 +140,13 @@ export const webAuthnService = {
       
       // Save this challenge - using RPC to handle the new table
       if (userId) {
-        const { error: challengeError } = await supabase.rpc('store_webauthn_challenge', {
-          p_user_id: userId,
-          p_challenge: arrayBufferToBase64(challenge),
-          p_type: 'authentication',
-          p_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
+        const { error: challengeError } = await supabase.functions.invoke('store_webauthn_challenge', {
+          body: { 
+            p_user_id: userId,
+            p_challenge: arrayBufferToBase64(challenge),
+            p_type: 'authentication',
+            p_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
+          }
         });
           
         if (challengeError) throw challengeError;
@@ -234,4 +238,3 @@ export const webAuthnService = {
     }
   }
 };
-

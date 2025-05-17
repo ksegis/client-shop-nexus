@@ -1235,6 +1235,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      store_webauthn_challenge: {
+        Args: {
+          p_user_id: string
+          p_challenge: string
+          p_type: string
+          p_expires_at: string
+        }
+        Returns: undefined
+      }
       update_password_change_flag: {
         Args: { user_id: string; force_change: boolean }
         Returns: undefined
