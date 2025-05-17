@@ -8,6 +8,7 @@ import { CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { logAuditEvent, AuditLogType } from '@/utils/auditUtils';
 
 const SignInForm = () => {
   const [email, setEmail] = useState('');
@@ -30,6 +31,23 @@ const SignInForm = () => {
       });
       navigate('/shop');
     }, 500);
+  };
+
+  const handleSkipSignIn = () => {
+    // Log the skip auth event if not in production
+    if (!import.meta.env.PROD) {
+      logAuditEvent(AuditLogType.SKIP_AUTH, {
+        email: email || 'anonymous',
+        timestamp: new Date().toISOString()
+      });
+      navigate('/shop');
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Not available in production",
+        description: "Skip sign-in is only available in development mode."
+      });
+    }
   };
 
   return (
@@ -90,7 +108,7 @@ const SignInForm = () => {
             type="button"
             className="text-primary hover:underline"
             disabled={loading}
-            onClick={() => navigate('/shop')}
+            onClick={handleSkipSignIn}
           >
             Skip sign in & go to dashboard
           </button>
