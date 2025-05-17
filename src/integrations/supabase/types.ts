@@ -919,6 +919,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_authenticators: {
+        Row: {
+          created_at: string | null
+          credential_id: string
+          device_name: string | null
+          id: string
+          last_used_at: string | null
+          public_key: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          credential_id: string
+          device_name?: string | null
+          id?: string
+          last_used_at?: string | null
+          public_key: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          credential_id?: string
+          device_name?: string | null
+          id?: string
+          last_used_at?: string | null
+          public_key?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_sessions: {
         Row: {
           created_at: string | null

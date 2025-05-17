@@ -5,6 +5,7 @@ import { MfaVerificationForm } from '@/components/auth/MfaVerificationForm';
 import { mfaService } from '@/services/mfa/mfaService';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { webAuthnService } from '@/services/auth/webAuthnService';
 
 const VerifyMFA = () => {
   const navigate = useNavigate();
@@ -59,8 +60,18 @@ const VerifyMFA = () => {
     if (!userId) return false;
     
     try {
-      // Call the MFA verification service
-      const success = await mfaService.verifyMfaLogin(userId, code);
+      let success = false;
+      
+      // Handle special WebAuthn verification
+      if (code === 'webauthn-verification') {
+        // For WebAuthn, we've already authenticated with the security key
+        // Now we just need to check if this user has WebAuthn enabled
+        const authenticators = await webAuthnService.getUserAuthenticators(userId);
+        success = authenticators.length > 0;
+      } else {
+        // Standard MFA code verification
+        success = await mfaService.verifyMfaLogin(userId, code);
+      }
       
       if (success) {
         // Remove the temporary session data
