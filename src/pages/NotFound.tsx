@@ -20,7 +20,7 @@ const NotFound = () => {
         <h1 className="text-6xl font-bold text-gray-900 mb-4">404</h1>
         <p className="text-2xl text-gray-600 mb-6">Page Not Found</p>
         <p className="text-gray-500 mb-8">
-          The page you are looking for doesn't exist or has been moved.
+          The requested path "{location.pathname}" doesn't exist or has been moved.
         </p>
         <div className="flex flex-col space-y-3">
           <Button asChild className="w-full">
@@ -30,7 +30,7 @@ const NotFound = () => {
             </Link>
           </Button>
           <Button asChild variant="outline" className="w-full">
-            <Link to="/customer/login">Go to Customer Portal</Link>
+            <Link to="/shop/user-management">Go to User Management</Link>
           </Button>
         </div>
       </div>
