@@ -46,7 +46,8 @@ export function useSession() {
       await sessionService.trackSession();
       
       const result = await checkForAnomalies(user.id);
-      if (result && result.new_device) {
+      // Fix: Ensure result exists and get the first item if it's an array
+      if (result && (Array.isArray(result) ? result[0]?.new_device : result.new_device)) {
         toast({
           title: "Security Alert",
           description: "New device detected accessing your account. If this wasn't you, please secure your account.",
@@ -62,8 +63,10 @@ export function useSession() {
   const checkForAnomalies = async (userId: string) => {
     try {
       const result = await sessionService.checkAnomalies(userId);
-      setAnomalies(result);
-      return result;
+      // Store the result in state, handling the case of it being an array
+      const anomalyData = Array.isArray(result) ? result[0] : result;
+      setAnomalies(anomalyData);
+      return anomalyData;
     } catch (error) {
       console.error('Failed to check for session anomalies:', error);
       return null;
