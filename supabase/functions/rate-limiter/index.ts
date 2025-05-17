@@ -47,87 +47,121 @@ serve(async (req) => {
     // Construct a unique key for this rate limit
     const rateLimitKey = `${path}:${ip}`;
     
-    // Try to get an existing rate limit record
-    const { data: existingData, error: selectError } = await supabase
+    // Use upsert to simplify the rate limiting logic
+    const { data, error } = await supabase
       .from('rate_limits')
+      .upsert(
+        { 
+          key: rateLimitKey, 
+          count: 1, 
+          expires_at: new Date(Date.now() + windowMs).toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        { 
+          onConflict: 'key', 
+          ignoreDuplicates: false 
+        }
+      )
       .select('count, expires_at')
-      .eq('key', rateLimitKey)
-      .maybeSingle();
-    
-    if (selectError) {
-      console.error('Error checking rate limit:', selectError);
+      .single()
+      .catch(() => ({ 
+        error: { message: 'Rate limit table not configured' } 
+      }));
+
+    if (error) {
+      if (error.message.includes('relation "public.rate_limits"')) {
+        return new Response(
+          JSON.stringify({ error: 'Rate limiting not configured' }),
+          { status: 501, headers: corsHeaders }
+        );
+      }
+      
+      console.error('Error checking rate limit:', error);
       throw new Error('Failed to check rate limit');
     }
-    
-    let count = 1;
-    let expiresAt = new Date(Date.now() + windowMs).toISOString();
-    
-    if (existingData) {
-      // Check if the existing record has expired
-      if (new Date(existingData.expires_at) < new Date()) {
-        // Create a new rate limit period
-        const { error: updateError } = await supabase
-          .from('rate_limits')
-          .update({ count: 1, expires_at: expiresAt, updated_at: new Date().toISOString() })
-          .eq('key', rateLimitKey);
-          
-        if (updateError) {
-          console.error('Error resetting rate limit:', updateError);
-          throw new Error('Failed to reset rate limit');
-        }
-      } else {
-        // Increment the existing count
-        count = existingData.count + 1;
-        expiresAt = existingData.expires_at;
-        
-        const { error: incrementError } = await supabase
-          .from('rate_limits')
-          .update({ count, updated_at: new Date().toISOString() })
-          .eq('key', rateLimitKey);
-          
-        if (incrementError) {
-          console.error('Error incrementing rate limit:', incrementError);
-          throw new Error('Failed to update rate limit');
-        }
-      }
-    } else {
-      // Create a new rate limit record
-      const { error: insertError } = await supabase
+
+    // If record exists but has expired, reset the count
+    if (data && new Date(data.expires_at) < new Date()) {
+      const newExpiresAt = new Date(Date.now() + windowMs).toISOString();
+      const { error: resetError } = await supabase
         .from('rate_limits')
-        .insert([{ key: rateLimitKey, count, expires_at: expiresAt, updated_at: new Date().toISOString() }]);
+        .update({ 
+          count: 1, 
+          expires_at: newExpiresAt, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('key', rateLimitKey);
         
-      if (insertError) {
-        console.error('Error creating rate limit:', insertError);
-        throw new Error('Failed to create rate limit');
+      if (resetError) {
+        console.error('Error resetting rate limit:', resetError);
+        throw new Error('Failed to reset rate limit');
       }
-    }
-    
-    // Check if rate limit exceeded
-    if (count > maxRequests) {
+      
       return new Response(
-        JSON.stringify({ 
-          error: 'Rate limit exceeded', 
-          retryAfter: expiresAt,
+        JSON.stringify({
+          success: true,
           limit: maxRequests,
-          remaining: 0
+          remaining: maxRequests - 1,
+          reset: newExpiresAt,
         }),
-        { 
-          status: 429, 
-          headers: {
-            ...corsHeaders,
-            'Retry-After': Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000).toString()
+        { headers: corsHeaders }
+      );
+    }
+
+    // If we've reached this point, we need to increment the counter
+    if (data) {
+      const newCount = data.count + 1;
+      const { error: incrementError } = await supabase
+        .from('rate_limits')
+        .update({ 
+          count: newCount, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('key', rateLimitKey);
+        
+      if (incrementError) {
+        console.error('Error incrementing rate limit:', incrementError);
+        throw new Error('Failed to update rate limit');
+      }
+      
+      // Check if rate limit exceeded
+      if (newCount > maxRequests) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Rate limit exceeded', 
+            retryAfter: data.expires_at,
+            limit: maxRequests,
+            remaining: 0
+          }),
+          { 
+            status: 429, 
+            headers: {
+              ...corsHeaders,
+              'Retry-After': Math.ceil((new Date(data.expires_at).getTime() - Date.now()) / 1000).toString()
+            }
           }
-        }
+        );
+      }
+      
+      // Return success with updated count
+      return new Response(
+        JSON.stringify({
+          success: true,
+          limit: maxRequests,
+          remaining: maxRequests - newCount,
+          reset: data.expires_at,
+        }),
+        { headers: corsHeaders }
       );
     }
     
-    // Return success response with rate limit info
+    // Return success response for new rate limit
     return new Response(
       JSON.stringify({
         success: true,
         limit: maxRequests,
-        remaining: maxRequests - count,
-        reset: expiresAt,
+        remaining: maxRequests - 1,
+        reset: new Date(Date.now() + windowMs).toISOString(),
       }),
       { headers: corsHeaders }
     );
