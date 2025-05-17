@@ -13,6 +13,11 @@ const LayoutContent: React.FC<LayoutProps> = ({ portalType, children }) => {
   const location = useLocation();
   const { setHeaderMounted } = useHeaderContext();
   
+  // For debugging purposes
+  useEffect(() => {
+    console.log("Layout rendering with path:", location.pathname);
+  }, [location.pathname]);
+  
   // Reset header mounted state on location change
   useEffect(() => {
     setHeaderMounted(false);

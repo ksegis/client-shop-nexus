@@ -13,6 +13,9 @@ import CustomerLogin from '@/pages/customer/Login';
 import NotFound from '@/pages/NotFound';
 
 const AppRoutes: React.FC = () => {
+  // Add debug logging to verify routes are correctly set up
+  console.log("AppRoutes component loading");
+  
   return (
     <AuthProvider>
       <MessagingProvider>

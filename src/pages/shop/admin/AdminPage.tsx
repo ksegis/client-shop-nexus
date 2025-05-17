@@ -1,12 +1,53 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ApiConnectionsManager from './ApiConnectionsManager';
 import TestUsers from './TestUsers';
 import AuthLogs from './AuthLogs';
 import AuditLogsViewer from '@/components/admin/AuditLogsViewer';
+import { useAuth } from "@/contexts/auth";
+import { useNavigate } from "react-router-dom";
 
 const AdminPage = () => {
+  const { profile } = useAuth();
+  const navigate = useNavigate();
+  
+  // Add console logging to verify we're hitting this component
+  useEffect(() => {
+    console.log("AdminPage component loaded", { profile });
+  }, [profile]);
+  
+  // Check for admin access - only admins should see this page
+  const isAdmin = profile?.role === 'admin';
+  
+  // If no profile or not an admin, redirect to dashboard
+  useEffect(() => {
+    if (profile && !isAdmin) {
+      console.log("Not an admin, redirecting to dashboard");
+      navigate("/shop", { replace: true });
+    }
+  }, [profile, isAdmin, navigate]);
+  
+  // Show message while checking authorization
+  if (!profile) {
+    return (
+      <div className="p-6">
+        <h2 className="text-2xl font-bold mb-4">Loading Admin Panel...</h2>
+        <p>Verifying permissions...</p>
+      </div>
+    );
+  }
+  
+  // If we have a profile but not an admin, show access denied (the redirect should happen)
+  if (!isAdmin) {
+    return (
+      <div className="p-6 bg-red-50 border border-red-200 rounded-md">
+        <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
+        <p>You do not have permission to view this page.</p>
+      </div>
+    );
+  }
+  
   return (
     <div className="space-y-6">
       <div>
