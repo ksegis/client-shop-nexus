@@ -859,6 +859,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_sessions: {
+        Row: {
+          device_hash: string
+          id: string
+          ip_address: string | null
+          is_active: boolean | null
+          last_active: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          device_hash: string
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_active?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          device_hash?: string
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_active?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       vehicles: {
         Row: {
           color: string | null
