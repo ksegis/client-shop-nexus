@@ -20,6 +20,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (devUserString) {
         try {
           const devUser = JSON.parse(devUserString);
+          
+          // If this is the dev customer@example.com user, ensure they have admin privileges
+          if (devUser.email === 'customer@example.com' && devUser.user_metadata) {
+            devUser.user_metadata.role = 'admin';
+            // Update localStorage with the modified user
+            localStorage.setItem('dev-customer-user', JSON.stringify(devUser));
+          }
+          
           setUser(devUser);
           setIsAuthenticated(true);
           console.log('Development user detected:', devUser.email);
@@ -59,7 +67,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       first_name: user?.user_metadata?.first_name || '',
       last_name: user?.user_metadata?.last_name || '',
       phone: user?.user_metadata?.phone || '',
-      role: user?.user_metadata?.role || 'customer',
+      role: user?.email === 'customer@example.com' ? 'admin' : (user?.user_metadata?.role || 'customer'),
       created_at: user?.created_at,
       updated_at: user?.created_at,
     } : null,

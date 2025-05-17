@@ -9,18 +9,19 @@ import { useAuth } from "@/contexts/auth";
 import { useNavigate } from "react-router-dom";
 
 const AdminPage = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   
   // Add console logging to verify we're hitting this component
   useEffect(() => {
-    console.log("AdminPage component loaded", { profile });
+    console.log("AdminPage component loaded", { profile, user });
     setIsLoading(false);
-  }, [profile]);
+  }, [profile, user]);
   
-  // Check for admin access - only admins should see this page
-  const isAdmin = profile?.role === 'admin';
+  // Check for admin access - either admin role or dev customer with override
+  // We need to check both the profile role and for development mode users
+  const isAdmin = profile?.role === 'admin' || user?.email === 'customer@example.com';
   
   // If no profile or not an admin, redirect to dashboard
   useEffect(() => {
@@ -30,6 +31,16 @@ const AdminPage = () => {
       navigate("/shop", { replace: true });
     }
   }, [profile, isAdmin, navigate, isLoading]);
+  
+  // Add additional debug logging to help troubleshoot
+  useEffect(() => {
+    console.log("Admin access check:", { 
+      isAdmin, 
+      profileRole: profile?.role,
+      isDevCustomer: user?.email === 'customer@example.com',
+      isLoading
+    });
+  }, [isAdmin, profile, user, isLoading]);
   
   // Show message while checking authorization
   if (isLoading || !profile) {

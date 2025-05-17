@@ -47,10 +47,19 @@ export function useDevMode() {
     created_at: new Date().toISOString()
   } as User), []);
   
-  // Define mock customer user for development
+  // Define mock customer user for development with admin privileges
   const mockCustomerUser = useMemo(() => {
-    const storedCustomer = localStorage.getItem('dev-customer-user');
-    return storedCustomer ? JSON.parse(storedCustomer) as User : null;
+    let storedCustomer = localStorage.getItem('dev-customer-user');
+    let parsedUser = storedCustomer ? JSON.parse(storedCustomer) as User : null;
+    
+    // Make sure our development customer user has admin role
+    if (parsedUser && parsedUser.user_metadata && parsedUser.email === 'customer@example.com') {
+      parsedUser.user_metadata.role = 'admin';
+      // Update localStorage with the modified user
+      localStorage.setItem('dev-customer-user', JSON.stringify(parsedUser));
+    }
+    
+    return parsedUser;
   }, []);
   
   // Check if we should use dev customer mode
@@ -65,7 +74,8 @@ export function useDevMode() {
     email: devUser.email || '',
     first_name: devUser.user_metadata?.first_name || '',
     last_name: devUser.user_metadata?.last_name || '',
-    role: devUser.user_metadata?.role as 'admin' | 'staff' | 'customer'
+    role: (devUser.user_metadata?.role || 'admin') as 'admin' | 'staff' | 'customer',
+    phone: devUser.user_metadata?.phone || ''
   }), [devUser]);
 
   // Effect to log dev mode enablement
@@ -88,7 +98,7 @@ export function useDevMode() {
       if (useDevCustomer) {
         toast({
           title: "Customer Development Mode",
-          description: "Using mock customer authentication credentials",
+          description: "Using mock customer authentication with admin privileges",
         });
         
         logAuditEvent(AuditLogType.DEV_CUSTOMER_IMPERSONATION, {
