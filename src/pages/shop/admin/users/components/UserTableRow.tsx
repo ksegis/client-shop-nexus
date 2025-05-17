@@ -45,7 +45,7 @@ export const UserTableRow: React.FC<UserTableRowProps> = ({
       <TableCell>{formatDate(user.created_at)}</TableCell>
       <TableCell>{invitedBy}</TableCell>
       <TableCell>
-        <Badge variant={isInactive ? 'destructive' : 'success'}>
+        <Badge variant={isInactive ? "destructive" : "secondary"} className={!isInactive ? 'bg-green-100 text-green-800' : ''}>
           {isInactive ? 'Inactive' : 'Active'}
         </Badge>
       </TableCell>
