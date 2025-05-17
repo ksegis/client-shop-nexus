@@ -136,6 +136,28 @@ export const sessionService = {
       console.error('Session anomaly check error:', error);
       return null;
     }
+  },
+  
+  /**
+   * Cleans up old sessions (older than 30 days)
+   * Admin function - should be restricted to admin users
+   * @returns Success status
+   */
+  cleanOldSessions: async () => {
+    try {
+      const { error } = await supabase.rpc('clean_old_sessions');
+      
+      if (error) {
+        console.error('Failed to clean old sessions:', error);
+        return false;
+      }
+      
+      console.log('Successfully cleaned old sessions');
+      return true;
+    } catch (error) {
+      console.error('Session cleanup error:', error);
+      return false;
+    }
   }
 };
 

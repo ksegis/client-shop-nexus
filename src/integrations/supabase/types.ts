@@ -1090,6 +1090,10 @@ export type Database = {
           suspicious_location: boolean
         }[]
       }
+      clean_old_sessions: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       disable_all_rls: {
         Args: Record<PropertyKey, never>
         Returns: undefined

@@ -4,15 +4,17 @@ import { useAuth } from "@/contexts/auth";
 import { useSession } from "@/hooks/useSession";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Shield, User, Monitor, Clock, AlertTriangle, X } from "lucide-react";
+import { Shield, User, Monitor, Clock, AlertTriangle, X, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format, formatDistanceToNow } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
+import { sessionService } from "@/utils/sessionService";
 
 const SessionManagement: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { sessions, currentSession, loading, anomalies, checkForAnomalies, terminateSession, terminateOtherSessions } = useSession();
   const [isChecking, setIsChecking] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
   const { toast } = useToast();
   
   useEffect(() => {
@@ -73,6 +75,39 @@ const SessionManagement: React.FC = () => {
       });
     }
   };
+  
+  const handleCleanOldSessions = async () => {
+    setIsCleaning(true);
+    
+    try {
+      const result = await sessionService.cleanOldSessions();
+      
+      if (result) {
+        toast({
+          title: "Sessions cleaned",
+          description: "Old inactive sessions have been removed from the database",
+        });
+      } else {
+        toast({
+          title: "Cleaning failed",
+          description: "Could not clean old sessions",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An error occurred while cleaning sessions",
+        variant: "destructive",
+      });
+      console.error("Session cleaning error:", error);
+    } finally {
+      setIsCleaning(false);
+    }
+  };
+  
+  // Check if user is an admin
+  const isAdmin = profile?.role === 'admin';
   
   return (
     <div className="space-y-6">
@@ -145,11 +180,26 @@ const SessionManagement: React.FC = () => {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium">Active Sessions ({sessions.length})</h3>
-              {sessions.length > 1 && (
-                <Button size="sm" variant="outline" onClick={handleTerminateOthers}>
-                  Logout from All Other Devices
-                </Button>
-              )}
+              <div className="space-x-2">
+                {sessions.length > 1 && (
+                  <Button size="sm" variant="outline" onClick={handleTerminateOthers}>
+                    Logout from All Other Devices
+                  </Button>
+                )}
+                
+                {isAdmin && (
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={handleCleanOldSessions}
+                    disabled={isCleaning}
+                    className="flex items-center gap-1"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {isCleaning ? "Cleaning..." : "Clean Old Sessions"}
+                  </Button>
+                )}
+              </div>
             </div>
             
             <div className="space-y-4">

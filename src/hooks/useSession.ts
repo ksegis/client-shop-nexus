@@ -4,6 +4,13 @@ import { sessionService } from '@/utils/sessionService';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth';
 
+// Define types for session anomalies
+interface SessionAnomaly {
+  simultaneous_sessions: number;
+  new_device: boolean;
+  suspicious_location: boolean;
+}
+
 /**
  * Hook for session management
  * @returns Session management utilities and state
@@ -12,7 +19,7 @@ export function useSession() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [currentSession, setCurrentSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [anomalies, setAnomalies] = useState<any>(null);
+  const [anomalies, setAnomalies] = useState<SessionAnomaly | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -46,8 +53,7 @@ export function useSession() {
       await sessionService.trackSession();
       
       const result = await checkForAnomalies(user.id);
-      // Fix: Ensure result exists and get the first item if it's an array
-      if (result && (Array.isArray(result) ? result[0]?.new_device : result.new_device)) {
+      if (result?.new_device) {
         toast({
           title: "Security Alert",
           description: "New device detected accessing your account. If this wasn't you, please secure your account.",
@@ -60,11 +66,19 @@ export function useSession() {
   }, [user, toast]);
 
   // Check for anomalies
-  const checkForAnomalies = async (userId: string) => {
+  const checkForAnomalies = async (userId: string): Promise<SessionAnomaly | null> => {
     try {
       const result = await sessionService.checkAnomalies(userId);
-      // Store the result in state, handling the case of it being an array
-      const anomalyData = Array.isArray(result) ? result[0] : result;
+      
+      // Process the result, which could be an array or a single object
+      let anomalyData: SessionAnomaly | null = null;
+      
+      if (Array.isArray(result)) {
+        anomalyData = result[0] || null;
+      } else {
+        anomalyData = result;
+      }
+      
       setAnomalies(anomalyData);
       return anomalyData;
     } catch (error) {
