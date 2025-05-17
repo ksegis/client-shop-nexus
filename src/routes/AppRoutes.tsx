@@ -6,6 +6,7 @@ import { MessagingProvider } from '@/contexts/messaging';
 import { PartsCartProvider } from '@/contexts/parts/PartsCartContext';
 import CustomerRoutes from './CustomerRoutes';
 import ShopRoutes from './shop/ShopRoutes';
+import AdminPage from '@/pages/shop/admin/AdminPage';
 import Index from '@/pages/Index';
 import ShopLogin from '@/pages/shop/Login';
 import CustomerLogin from '@/pages/customer/Login';
@@ -26,6 +27,9 @@ const AppRoutes: React.FC = () => {
             {/* Direct access to all routes */}
             <Route path="/customer/*" element={<CustomerRoutes />} />
             <Route path="/shop/*" element={<ShopRoutes />} />
+            
+            {/* Direct access to admin page */}
+            <Route path="/admin" element={<AdminPage />} />
             
             {/* Legacy auth path redirects */}
             <Route path="/auth" element={<Navigate to="/" replace />} />

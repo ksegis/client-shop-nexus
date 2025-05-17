@@ -35,6 +35,7 @@ const ShopRoutes = () => {
         <Route path="/service-appointments" element={<ServiceAppointments />} />
         <Route path="/employees" element={<Employees />} />
         <Route path="/admin" element={<AdminPage />} />
+        {/* Add a redirect from /admin to /shop/admin for compatibility */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>
