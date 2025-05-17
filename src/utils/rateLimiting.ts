@@ -36,9 +36,10 @@ export const checkRateLimit = async (path: string): Promise<{
     if (!response.ok) {
       const errorData = await response.json();
       
-      // If this is a rate limit exceeded error, throw with details
+      // If this is a rate limit exceeded error, throw with specific format
       if (response.status === 429) {
-        throw new Error(`Rate limit exceeded. Try again after ${new Date(errorData.retryAfter).toLocaleTimeString()}`);
+        const retryTime = new Date(errorData.retryAfter).toLocaleTimeString();
+        throw new Error(`Too many requests. Try again after ${retryTime}`);
       }
       
       throw new Error(errorData.error || 'Rate limit check failed');
@@ -47,6 +48,12 @@ export const checkRateLimit = async (path: string): Promise<{
     return await response.json();
   } catch (error) {
     console.error('Rate limit check failed:', error);
+    
+    // Check if this is already a formatted error from our code
+    if (error.message && error.message.includes('Too many requests')) {
+      throw error; // Re-throw rate limit errors with our format
+    }
+    
     // Return a default object to allow the application to continue
     return {
       success: false,
