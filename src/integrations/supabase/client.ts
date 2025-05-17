@@ -43,3 +43,29 @@ export const handleRlsError = (
   
   return false;
 };
+
+// Auth event logging function
+export const logAuthEvent = async (eventType: string, userId?: string | null, metadata: Record<string, any> = {}) => {
+  try {
+    console.log(`Logging auth event: ${eventType}`, { userId, ...metadata });
+    
+    // Log to auth_flow_logs table if it exists
+    try {
+      const { error } = await supabase.from('auth_flow_logs').insert({
+        event_type: eventType,
+        user_id: userId || null,
+        details: metadata,
+        client_timestamp: new Date().toISOString()
+      });
+      
+      if (error) {
+        console.error('Error logging auth event:', error);
+      }
+    } catch (err) {
+      // Silently catch if auth_flow_logs table doesn't exist or other errors
+      console.warn('Could not log auth event to database:', err);
+    }
+  } catch (error) {
+    console.error('Auth logging error:', error);
+  }
+};
