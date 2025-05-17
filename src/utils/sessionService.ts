@@ -1,6 +1,6 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
+import { useEffect } from 'react';
 
 /**
  * Service for managing user sessions
@@ -140,9 +140,6 @@ export const sessionService = {
 
 // Hook to track session on mount or login
 export const useSessionTracking = () => {
-  // Import React instead of using it directly
-  import { useEffect } from 'react';
-  
   useEffect(() => {
     // Track session on component mount
     sessionService.trackSession();
