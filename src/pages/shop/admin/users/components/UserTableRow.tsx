@@ -16,7 +16,7 @@ interface UserTableRowProps {
   onEditProfile: (userId: string, email: string) => void;
   onImpersonate: (userId: string, email: string) => void;
   onToggleActive: (userId: string, currentRole: string) => void;
-  getInviterName: (invitedById: string | null | undefined) => string;
+  getInviterName: (invitedById: string | null | undefined) => Promise<string>;
 }
 
 export const UserTableRow: React.FC<UserTableRowProps> = ({
@@ -31,7 +31,15 @@ export const UserTableRow: React.FC<UserTableRowProps> = ({
 }) => {
   const isInactive = isRoleInactive(user.role);
   const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unnamed User';
-  const invitedBy = getInviterName(user.invited_by);
+  const [inviterName, setInviterName] = React.useState<string>('Loading...');
+  
+  React.useEffect(() => {
+    if (user.invited_by) {
+      getInviterName(user.invited_by).then(name => setInviterName(name));
+    } else {
+      setInviterName('Direct Signup');
+    }
+  }, [user.invited_by, getInviterName]);
   
   return (
     <TableRow className={isInactive ? 'opacity-75' : ''}>
@@ -43,7 +51,7 @@ export const UserTableRow: React.FC<UserTableRowProps> = ({
         </Badge>
       </TableCell>
       <TableCell>{formatDate(user.created_at)}</TableCell>
-      <TableCell>{invitedBy}</TableCell>
+      <TableCell>{inviterName}</TableCell>
       <TableCell>
         <Badge variant={isInactive ? "destructive" : "secondary"} className={!isInactive ? 'bg-green-100 text-green-800' : ''}>
           {isInactive ? 'Inactive' : 'Active'}
