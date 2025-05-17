@@ -46,7 +46,7 @@ export function useSession() {
       await sessionService.trackSession();
       
       const result = await checkForAnomalies(user.id);
-      if (result?.new_device) {
+      if (result && result.new_device) {
         toast({
           title: "Security Alert",
           description: "New device detected accessing your account. If this wasn't you, please secure your account.",
