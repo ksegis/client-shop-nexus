@@ -1,17 +1,14 @@
-
 // Environment configuration
 type EnvironmentConfig = {
   siteUrl: string;
   apiBaseUrl: string;
   mode: 'development' | 'production' | 'test';
-  oauth: {
-    egis: {
-      clientId: string;
-      clientSecret: string;
-      authUrl: string;
-      tokenUrl: string;
-      redirectUri: string;
-    }
+  egis: {
+    clientId: string;
+    clientSecret: string;
+    authUrl: string;
+    tokenUrl: string;
+    redirectUri: string;
   };
 };
 
@@ -32,6 +29,12 @@ const getSiteUrl = (): string => {
  * Builds the redirect URI using the site URL
  */
 const getRedirectUri = (): string => {
+  // Use the explicit redirect URI if provided in env vars
+  if (import.meta.env.VITE_EGIS_REDIRECT_URI) {
+    return import.meta.env.VITE_EGIS_REDIRECT_URI;
+  }
+  
+  // Otherwise build it from the site URL
   const baseUrl = getSiteUrl();
   return `${baseUrl}/auth/callback`;
 };
@@ -41,14 +44,12 @@ export const config: EnvironmentConfig = {
   siteUrl: getSiteUrl(),
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '/api',
   mode: (import.meta.env.MODE || 'development') as 'development' | 'production' | 'test',
-  oauth: {
-    egis: {
-      clientId: import.meta.env.VITE_EGIS_CLIENT_ID || '',
-      clientSecret: import.meta.env.VITE_EGIS_CLIENT_SECRET || '',
-      authUrl: import.meta.env.VITE_EGIS_AUTH_URL || '',
-      tokenUrl: import.meta.env.VITE_EGIS_TOKEN_URL || '',
-      redirectUri: getRedirectUri()
-    }
+  egis: {
+    clientId: import.meta.env.VITE_EGIS_CLIENT_ID || '',
+    clientSecret: import.meta.env.VITE_EGIS_CLIENT_SECRET || '',
+    authUrl: import.meta.env.VITE_EGIS_AUTH_URL || '',
+    tokenUrl: import.meta.env.VITE_EGIS_TOKEN_URL || '',
+    redirectUri: getRedirectUri()
   }
 };
 
@@ -71,21 +72,32 @@ export const getFullUrl = (path: string): string => {
 
 /**
  * Helper to get the OAuth URL for initiating the authentication flow
+ * @param state Optional state parameter for CSRF protection
  */
-export const getOAuthUrl = (): string => {
-  const { clientId, authUrl, redirectUri } = config.oauth.egis;
+export const getOAuthUrl = (state?: string): string => {
+  const { clientId, authUrl, redirectUri } = config.egis;
   
   if (!clientId || !authUrl) {
     console.error('OAuth configuration is incomplete');
     return '';
   }
   
-  const params = new URLSearchParams({
+  const params: Record<string, string> = {
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
     scope: 'openid profile email',
-  });
+  };
   
-  return `${authUrl}?${params.toString()}`;
+  // Add state parameter if provided
+  if (state) {
+    params.state = state;
+  }
+  
+  return `${authUrl}?${new URLSearchParams(params).toString()}`;
 };
+
+/**
+ * Alternative name for getOAuthUrl to match your preferred naming convention
+ */
+export const getEgisOAuthUrl = getOAuthUrl;
