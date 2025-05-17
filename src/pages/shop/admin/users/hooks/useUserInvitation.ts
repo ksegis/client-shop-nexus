@@ -1,30 +1,36 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
+import { logAuthEvent } from '@/integrations/supabase/client';
 
 export const useUserInvitation = (refetchUsers: () => Promise<void>) => {
+  const { toast } = useToast();
+
   const inviteUser = async (email: string, firstName: string, lastName: string, role: "admin" | "staff", password: string) => {
     try {
       // Get current user id to track who sent the invitation
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) throw new Error("You must be logged in to invite users");
       
-      // Generate a unique invite token
-      const inviteToken = crypto.randomUUID();
+      // Generate a unique invite token using our database function
+      const { data: tokenData, error: tokenError } = await supabase.rpc('generate_invite_token');
       
-      // First check if user exists in employees table
-      const { data: employeeData, error: employeeError } = await supabase
+      if (tokenError) throw tokenError;
+      
+      const inviteToken = tokenData;
+      
+      // First check if user exists in the profiles table already
+      const { data: existingProfile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('email', email)
-        .eq('role', role)
         .single();
 
-      if (employeeError || !employeeData) {
+      if (existingProfile) {
         toast({
           variant: "destructive",
           title: "Error",
-          description: "This email is not associated with an existing employee",
+          description: "This email is already associated with an existing user",
         });
         return;
       }
@@ -58,6 +64,28 @@ export const useUserInvitation = (refetchUsers: () => Promise<void>) => {
         .eq('id', data.user?.id);
 
       if (updateError) throw updateError;
+      
+      // Also record the invitation in our shop_invites table
+      const { error: inviteError } = await supabase
+        .from('shop_invites')
+        .insert({
+          email,
+          token: inviteToken,
+          role,
+          invited_by: currentUser.id
+        });
+        
+      if (inviteError) {
+        console.error('Error recording invitation:', inviteError);
+        // Continue anyway since the user was created
+      }
+      
+      // Log the invitation event
+      await logAuthEvent('user_invited', currentUser.id, {
+        invited_user_email: email,
+        invited_user_role: role,
+        invite_token: inviteToken
+      });
 
       // Simulate sending invitation email
       toast({

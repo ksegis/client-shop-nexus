@@ -4,6 +4,9 @@ import { UserManagementProvider } from './users/UserManagementContext';
 import { UsersTable } from './users/UsersTable';
 import { UserHeader } from './users/UserHeader';
 import { UserDialog } from './users/UserDialog';
+import { ImpersonationBanner } from './users/components/ImpersonationBanner';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Shield } from 'lucide-react';
 
 const UserManagement = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -32,12 +35,28 @@ const UserManagement = () => {
   return (
     <UserManagementProvider>
       <div className="space-y-6">
+        <ImpersonationBanner />
+        
         <UserHeader onAddUser={() => setDialogOpen(true)} />
-        <UsersTable 
-          onResetPassword={handleResetPassword}
-          onEditProfile={handleEditProfile}
-          onImpersonate={handleImpersonate}
-        />
+        
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" /> 
+              User Management
+            </CardTitle>
+            <CardDescription>
+              Manage user accounts and their permissions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <UsersTable 
+              onResetPassword={handleResetPassword}
+              onEditProfile={handleEditProfile}
+              onImpersonate={handleImpersonate}
+            />
+          </CardContent>
+        </Card>
         
         {/* Add User Dialog */}
         <UserDialog 

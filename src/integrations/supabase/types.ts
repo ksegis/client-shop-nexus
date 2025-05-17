@@ -731,6 +731,47 @@ export type Database = {
           },
         ]
       }
+      shop_invites: {
+        Row: {
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          role: Database["public"]["Enums"]["user_role"]
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by: string
+          role?: Database["public"]["Enums"]["user_role"]
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_invites_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_history: {
         Row: {
           id: string
@@ -990,6 +1031,10 @@ export type Database = {
       disable_all_rls: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      generate_invite_token: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       is_admin: {
         Args: Record<PropertyKey, never>

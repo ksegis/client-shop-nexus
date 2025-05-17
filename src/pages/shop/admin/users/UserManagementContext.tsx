@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, ReactNode } from 'react';
-import { User, InviteUserFormValues } from './types';
+import { User } from './types';
 import { 
   useUserQuery,
   useUserInvitation,
@@ -8,6 +8,7 @@ import {
   useProfileManagement,
   useUserActivation
 } from './hooks';
+import { useUserImpersonation } from './hooks/useUserImpersonation';
 
 interface UserManagementContextType {
   users: User[];
@@ -20,6 +21,11 @@ interface UserManagementContextType {
   updateUserProfile: (userId: string, profileData: Partial<User>) => Promise<void>;
   toggleUserActive: (userId: string, currentRole: string) => Promise<void>;
   refetchUsers: () => Promise<void>;
+  impersonateUser: (userId: string, email: string) => Promise<boolean>;
+  exitImpersonationMode: () => Promise<boolean>;
+  impersonationLoading: string | null;
+  isImpersonationActive: () => boolean;
+  getImpersonatedUser: () => string | null;
 }
 
 const UserManagementContext = createContext<UserManagementContextType | undefined>(undefined);
@@ -31,6 +37,13 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
   const { resetPassword } = usePasswordReset(refetchUsers);
   const { updateUserProfile } = useProfileManagement(refetchUsers);
   const { toggleUserActive } = useUserActivation(refetchUsers);
+  const { 
+    impersonateUser, 
+    exitImpersonationMode, 
+    impersonationLoading,
+    isImpersonationActive,
+    getImpersonatedUser
+  } = useUserImpersonation();
 
   return (
     <UserManagementContext.Provider
@@ -45,6 +58,11 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
         updateUserProfile,
         toggleUserActive,
         refetchUsers,
+        impersonateUser,
+        exitImpersonationMode,
+        impersonationLoading,
+        isImpersonationActive,
+        getImpersonatedUser
       }}
     >
       {children}

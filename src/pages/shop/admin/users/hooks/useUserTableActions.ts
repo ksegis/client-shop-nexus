@@ -1,65 +1,84 @@
 
 import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { useUserImpersonation } from './useUserImpersonation';
 import { useUserManagement } from '../UserManagementContext';
-import { useImpersonation } from '@/utils/admin/impersonationUtils';
-import { toast } from "@/hooks/use-toast";
-import { User } from '../types';
-import { isRoleInactive } from '../utils';
 
 export const useUserTableActions = () => {
-  const { users, toggleUserActive } = useUserManagement();
-  const { impersonateUser } = useImpersonation();
-  const [impersonationLoading, setImpersonationLoading] = useState<string | null>(null);
   const [activationLoading, setActivationLoading] = useState<string | null>(null);
+  const { toast } = useToast();
+  const { refetchUsers } = useUserManagement();
+  const { impersonateUser, impersonationLoading } = useUserImpersonation();
 
-  // Find invited by names
-  const getInviterName = (invitedById: string | null | undefined) => {
-    if (!invitedById) return "—";
-    const inviter = users.find(user => user.id === invitedById);
-    return inviter ? `${inviter.first_name} ${inviter.last_name}` : "Unknown";
+  const getInviterName = async (invitedById: string | null | undefined): Promise<string> => {
+    if (!invitedById) return 'Direct Signup';
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('first_name, last_name')
+        .eq('id', invitedById)
+        .single();
+
+      if (error || !data) {
+        return 'Unknown';
+      }
+
+      const name = `${data.first_name || ''} ${data.last_name || ''}`.trim();
+      return name || 'Unknown';
+    } catch (error) {
+      console.error('Error fetching inviter name:', error);
+      return 'Unknown';
+    }
   };
 
   const handleImpersonate = async (userId: string, email: string) => {
-    try {
-      setImpersonationLoading(userId);
-      const userName = users.find(u => u.id === userId)?.first_name || email;
-      
-      // Call impersonation utility
-      const success = await impersonateUser(userId, userName);
-      
-      if (!success) {
-        throw new Error('Failed to impersonate user');
-      }
-      
-    } catch (error) {
-      console.error('Impersonation error:', error);
-      toast({
-        title: 'Impersonation failed',
-        description: 'There was an error impersonating this user.',
-        variant: 'destructive',
-      });
-    } finally {
-      setImpersonationLoading(null);
-    }
+    await impersonateUser(userId, email);
   };
 
   const handleToggleActive = async (userId: string, currentRole: string) => {
     try {
       setActivationLoading(userId);
+
+      // Check if the role is already inactive
+      const isInactive = currentRole.startsWith('inactive_');
       
-      await toggleUserActive(userId, currentRole);
-      
-      const isCurrentlyActive = !isRoleInactive(currentRole);
+      let newRole;
+      if (isInactive) {
+        // Activate: Remove inactive_ prefix
+        newRole = currentRole.replace('inactive_', '');
+      } else {
+        // Deactivate: Add inactive_ prefix
+        newRole = `inactive_${currentRole}`;
+      }
+
+      // Update the user's role in the database
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId);
+
+      if (error) {
+        throw error;
+      }
+
       toast({
-        title: isCurrentlyActive ? "User Deactivated" : "User Activated",
-        description: isCurrentlyActive 
-          ? "The user has been successfully deactivated." 
-          : "The user has been successfully activated.",
+        title: isInactive ? "User Activated" : "User Deactivated",
+        description: isInactive 
+          ? "User account has been successfully activated" 
+          : "User account has been successfully deactivated",
+        variant: "default",
       });
+
+      // Refresh the user list
+      await refetchUsers();
     } catch (error: any) {
+      console.error('Error toggling user active status:', error);
+      
       toast({
-        title: "Error updating user status",
-        description: error.message || "An unexpected error occurred",
+        title: "Action Failed",
+        description: error.message || "Could not update user status",
         variant: "destructive",
       });
     } finally {
