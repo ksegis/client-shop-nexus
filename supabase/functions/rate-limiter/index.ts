@@ -48,11 +48,16 @@ serve(async (req) => {
     const rateLimitKey = `${path}:${ip}`;
     
     // Try to get an existing rate limit record
-    const { data: existingData } = await supabase
+    const { data: existingData, error: selectError } = await supabase
       .from('rate_limits')
       .select('count, expires_at')
       .eq('key', rateLimitKey)
       .maybeSingle();
+    
+    if (selectError) {
+      console.error('Error checking rate limit:', selectError);
+      throw new Error('Failed to check rate limit');
+    }
     
     let count = 1;
     let expiresAt = new Date(Date.now() + windowMs).toISOString();
@@ -61,13 +66,13 @@ serve(async (req) => {
       // Check if the existing record has expired
       if (new Date(existingData.expires_at) < new Date()) {
         // Create a new rate limit period
-        const { error } = await supabase
+        const { error: updateError } = await supabase
           .from('rate_limits')
-          .update({ count: 1, expires_at: expiresAt })
+          .update({ count: 1, expires_at: expiresAt, updated_at: new Date().toISOString() })
           .eq('key', rateLimitKey);
           
-        if (error) {
-          console.error('Error resetting rate limit:', error);
+        if (updateError) {
+          console.error('Error resetting rate limit:', updateError);
           throw new Error('Failed to reset rate limit');
         }
       } else {
@@ -75,24 +80,24 @@ serve(async (req) => {
         count = existingData.count + 1;
         expiresAt = existingData.expires_at;
         
-        const { error } = await supabase
+        const { error: incrementError } = await supabase
           .from('rate_limits')
-          .update({ count })
+          .update({ count, updated_at: new Date().toISOString() })
           .eq('key', rateLimitKey);
           
-        if (error) {
-          console.error('Error incrementing rate limit:', error);
+        if (incrementError) {
+          console.error('Error incrementing rate limit:', incrementError);
           throw new Error('Failed to update rate limit');
         }
       }
     } else {
       // Create a new rate limit record
-      const { error } = await supabase
+      const { error: insertError } = await supabase
         .from('rate_limits')
-        .insert([{ key: rateLimitKey, count, expires_at: expiresAt }]);
+        .insert([{ key: rateLimitKey, count, expires_at: expiresAt, updated_at: new Date().toISOString() }]);
         
-      if (error) {
-        console.error('Error creating rate limit:', error);
+      if (insertError) {
+        console.error('Error creating rate limit:', insertError);
         throw new Error('Failed to create rate limit');
       }
     }

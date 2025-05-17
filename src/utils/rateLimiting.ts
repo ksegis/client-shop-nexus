@@ -23,7 +23,7 @@ export const checkRateLimit = async (path: string): Promise<{
     // Build the URL for the rate-limiter edge function
     const functionsUrl = `${config.siteUrl ? config.siteUrl : 'https://vqkxrbflwhunvbotjdds.supabase.co'}/functions/v1`;
     
-    // Call the rate-limiter edge function
+    // Call the rate-limiter edge function (ensure name matches what's in config.toml)
     const response = await fetch(`${functionsUrl}/rate-limiter`, {
       method: 'POST',
       headers: { 

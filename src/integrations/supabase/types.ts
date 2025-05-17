@@ -576,6 +576,27 @@ export type Database = {
           },
         ]
       }
+      rate_limits: {
+        Row: {
+          count: number
+          expires_at: string
+          key: string
+          updated_at: string
+        }
+        Insert: {
+          count?: number
+          expires_at: string
+          key: string
+          updated_at?: string
+        }
+        Update: {
+          count?: number
+          expires_at?: string
+          key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       service_appointments: {
         Row: {
           appointment_date: string
