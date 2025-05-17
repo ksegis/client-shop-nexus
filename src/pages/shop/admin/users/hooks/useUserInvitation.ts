@@ -12,6 +12,19 @@ export const useUserInvitation = (refetchUsers: () => Promise<void>) => {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) throw new Error("You must be logged in to invite users");
       
+      // Verify that the current user is an admin
+      const { data: currentProfile, error: profileCheckError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', currentUser.id)
+        .single();
+      
+      if (profileCheckError) throw profileCheckError;
+      
+      if (currentProfile?.role !== 'admin') {
+        throw new Error("Only administrators can invite new users");
+      }
+      
       // Generate a unique invite token using our database function
       const { data: tokenData, error: tokenError } = await supabase.rpc('generate_invite_token');
       
