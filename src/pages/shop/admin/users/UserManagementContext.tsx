@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -225,10 +224,8 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
       await refetchUsers();
     } catch (error: any) {
       toast({
-        variant: "destructive",
         title: "Error updating user status",
         description: error.message || "An unexpected error occurred",
-        variant: "destructive",
       });
       throw error;
     }
