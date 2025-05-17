@@ -4,7 +4,18 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Alert } from '@/hooks/useSecurityDashboard';
 import { Badge } from '@/components/ui/badge';
-import { ShieldCheck, ShieldX, Bell } from 'lucide-react';
+import { ShieldCheck, ShieldX, Bell, AlertCircle, Activity } from 'lucide-react';
+
+interface MfaAttempt {
+  id: string;
+  user_id: string;
+  ip_address: string;
+  successful: boolean;
+  created_at: string;
+  profiles?: {
+    email: string;
+  };
+}
 
 export default function SimpleDashboard() {
   const { data: alerts, isLoading } = useQuery({
@@ -72,6 +83,55 @@ export default function SimpleDashboard() {
     }
   });
 
+  // Query for recent MFA attempts
+  const { data: mfaAttempts, isLoading: mfaAttemptsLoading } = useQuery({
+    queryKey: ['mfa-attempts'],
+    queryFn: async () => {
+      // Fetch the most recent MFA attempts
+      const { data: attemptsData, error: attemptsError } = await supabase
+        .from('mfa_attempts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      if (attemptsError) {
+        console.error("Error fetching MFA attempts:", attemptsError);
+        return [];
+      }
+
+      // If there are no attempts, return empty array
+      if (!attemptsData || attemptsData.length === 0) {
+        return [];
+      }
+
+      // Get unique user IDs from attempts to fetch profiles
+      const userIds = [...new Set(attemptsData.map(attempt => attempt.user_id))];
+      
+      // Fetch profiles for these users
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('id', userIds);
+      
+      if (profilesError) {
+        console.error("Error fetching profiles for MFA attempts:", profilesError);
+        return attemptsData;
+      }
+      
+      // Create a map of user_id -> profile for quick lookup
+      const profileMap = new Map();
+      profiles?.forEach(profile => {
+        profileMap.set(profile.id, profile);
+      });
+      
+      // Join attempts with profile data
+      return attemptsData.map(attempt => ({
+        ...attempt,
+        profiles: profileMap.get(attempt.user_id) || { email: 'Unknown' }
+      }));
+    }
+  });
+
   if (isLoading) {
     return <div>Loading security alerts...</div>;
   }
@@ -102,6 +162,49 @@ export default function SimpleDashboard() {
               <div className="text-xl font-bold">{mfaStats?.percentage || 0}%</div>
             </div>
           </div>
+        )}
+      </div>
+      
+      {/* Recent MFA Attempts Card */}
+      <div className="bg-white rounded-lg shadow p-4 border">
+        <h3 className="text-lg font-medium mb-2 flex items-center">
+          <Activity className="mr-2 h-5 w-5 text-indigo-500" />
+          Recent MFA Authentication Attempts
+        </h3>
+        
+        {mfaAttemptsLoading ? (
+          <div className="text-sm text-gray-500">Loading MFA attempts...</div>
+        ) : mfaAttempts && mfaAttempts.length > 0 ? (
+          <ul className="space-y-2">
+            {mfaAttempts.map((attempt: MfaAttempt) => (
+              <li key={attempt.id} className="p-3 border rounded flex items-center justify-between">
+                <div>
+                  <span className="font-medium">{attempt.profiles?.email || 'Unknown user'}</span>
+                  <span className="mx-2">-</span>
+                  <span className="text-gray-700">
+                    {new Date(attempt.created_at).toLocaleString()}
+                  </span>
+                  <span className="mx-2">from</span>
+                  <span className="text-gray-700">{attempt.ip_address || 'Unknown IP'}</span>
+                </div>
+                <div>
+                  {attempt.successful ? (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                      <ShieldCheck className="mr-1 h-3 w-3" />
+                      Successful
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                      <AlertCircle className="mr-1 h-3 w-3" />
+                      Failed
+                    </Badge>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-muted-foreground">No recent MFA authentication attempts</p>
         )}
       </div>
       
