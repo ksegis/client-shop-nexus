@@ -1035,6 +1035,33 @@ export type Database = {
           },
         ]
       }
+      webauthn_challenges: {
+        Row: {
+          challenge: string
+          created_at: string
+          expires_at: string
+          id: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          challenge: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          challenge?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       work_order_line_items: {
         Row: {
           created_at: string
@@ -1181,6 +1208,10 @@ export type Database = {
         }[]
       }
       clean_old_sessions: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      cleanup_expired_webauthn_challenges: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }

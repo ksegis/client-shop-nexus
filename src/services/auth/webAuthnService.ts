@@ -53,15 +53,13 @@ export const webAuthnService = {
       const challenge = new Uint8Array(32);
       window.crypto.getRandomValues(challenge);
       
-      // Save this challenge to verify later
-      const { error: challengeError } = await supabase
-        .from('webauthn_challenges')
-        .insert({
-          user_id: userId,
-          challenge: arrayBufferToBase64(challenge),
-          type: 'registration',
-          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
-        });
+      // Save this challenge to verify later - using executeQuery with manual SQL to handle the new table
+      const { error: challengeError } = await supabase.rpc('store_webauthn_challenge', { 
+        p_user_id: userId,
+        p_challenge: arrayBufferToBase64(challenge),
+        p_type: 'registration',
+        p_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
+      });
         
       if (challengeError) throw challengeError;
       
@@ -138,16 +136,14 @@ export const webAuthnService = {
       const challenge = new Uint8Array(32);
       window.crypto.getRandomValues(challenge);
       
-      // Save this challenge
+      // Save this challenge - using RPC to handle the new table
       if (userId) {
-        const { error: challengeError } = await supabase
-          .from('webauthn_challenges')
-          .insert({
-            user_id: userId,
-            challenge: arrayBufferToBase64(challenge),
-            type: 'authentication',
-            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
-          });
+        const { error: challengeError } = await supabase.rpc('store_webauthn_challenge', {
+          p_user_id: userId,
+          p_challenge: arrayBufferToBase64(challenge),
+          p_type: 'authentication',
+          p_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
+        });
           
         if (challengeError) throw challengeError;
       }
@@ -238,3 +234,4 @@ export const webAuthnService = {
     }
   }
 };
+
