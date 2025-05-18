@@ -1,19 +1,27 @@
 
 import { useState } from 'react';
 import { webAuthnService } from '@/services/auth/webauthn';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
+import { Key, Loader2 } from 'lucide-react';
 
-interface RegisterPasskeyDialogProps {
+// Form schema
+const formSchema = z.object({
+  deviceName: z.string().min(1, 'Device name is required')
+    .max(64, 'Device name cannot exceed 64 characters')
+});
+
+type RegisterPasskeyDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string;
-  onSuccess: () => void;
-}
+  onSuccess?: () => void;
+};
 
 export function RegisterPasskeyDialog({ 
   open, 
@@ -21,32 +29,37 @@ export function RegisterPasskeyDialog({
   userId, 
   onSuccess 
 }: RegisterPasskeyDialogProps) {
-  const [deviceName, setDeviceName] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
-  const { toast } = useToast();
+  
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      deviceName: ''
+    }
+  });
 
-  const handleRegister = async () => {
-    if (!deviceName.trim()) return;
-    
+  const handleSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsRegistering(true);
+    
     try {
-      const success = await webAuthnService.registerCredential(userId, deviceName);
+      const success = await webAuthnService.registerCredential(
+        userId,
+        values.deviceName
+      );
       
       if (success) {
-        onSuccess();
+        form.reset();
+        onOpenChange(false);
+        if (onSuccess) onSuccess();
       } else {
-        toast({
-          title: "Registration failed",
-          description: "Failed to register security key. Please try again.",
-          variant: "destructive"
+        form.setError('root', { 
+          message: 'Failed to register security key. Please try again.' 
         });
       }
     } catch (error) {
-      console.error('Error registering key:', error);
-      toast({
-        title: "Registration failed",
-        description: "An error occurred while registering your security key",
-        variant: "destructive"
+      console.error('Error registering security key:', error);
+      form.setError('root', { 
+        message: 'An error occurred while registering your security key.' 
       });
     } finally {
       setIsRegistering(false);
@@ -55,41 +68,55 @@ export function RegisterPasskeyDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Register Security Key</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Key className="h-5 w-5" />
+            <span>Register Security Key</span>
+          </DialogTitle>
           <DialogDescription>
-            Add a security key or passkey to your account for enhanced security
+            Add a security key or passkey to secure your account
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={(e) => { e.preventDefault(); handleRegister(); }}>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="deviceName">Device Name</Label>
-              <Input
-                id="deviceName"
-                placeholder="e.g., My iPhone or YubiKey"
-                value={deviceName}
-                onChange={(e) => setDeviceName(e.target.value)}
+        
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+            <FormField
+              control={form.control}
+              name="deviceName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Device Name</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g., My Phone, Work Laptop" 
+                      {...field} 
+                      disabled={isRegistering}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            {form.formState.errors.root && (
+              <div className="text-destructive text-sm">
+                {form.formState.errors.root.message}
+              </div>
+            )}
+            
+            <div className="flex justify-end">
+              <Button 
+                type="submit"
                 disabled={isRegistering}
-              />
+                className="flex items-center gap-2"
+              >
+                {isRegistering && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isRegistering ? 'Registering...' : 'Register Key'}
+              </Button>
             </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isRegistering}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isRegistering || !deviceName.trim()}>
-              {isRegistering && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Register Key
-            </Button>
-          </DialogFooter>
-        </form>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
