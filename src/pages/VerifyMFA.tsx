@@ -15,6 +15,7 @@ const VerifyMFA = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string>('');
+  const [isTrustedDevice, setIsTrustedDevice] = useState(false);
   
   // Get session data from location state or sessionStorage
   useEffect(() => {
@@ -25,7 +26,7 @@ const VerifyMFA = () => {
       if (state?.userId && state?.email) {
         setUserId(state.userId);
         setEmail(state.email);
-        setIsLoading(false);
+        await checkTrustedDevice(state.userId);
         return;
       }
       
@@ -37,7 +38,7 @@ const VerifyMFA = () => {
           if (userId && email) {
             setUserId(userId);
             setEmail(email);
-            setIsLoading(false);
+            await checkTrustedDevice(userId);
             return;
           }
         } catch (error) {
@@ -52,6 +53,31 @@ const VerifyMFA = () => {
         variant: "destructive"
       });
       navigate('/shop-login');
+    };
+    
+    const checkTrustedDevice = async (userId: string) => {
+      try {
+        // Generate device fingerprint
+        const { FingerprintJS } = await import('@fingerprintjs/fingerprintjs');
+        const fp = await FingerprintJS.load();
+        const result = await fp.get();
+        const deviceHash = result.visitorId;
+        
+        // Check if this device is trusted
+        const trusted = await managementManager.isDeviceTrusted(userId, deviceHash);
+        
+        if (trusted) {
+          setIsTrustedDevice(true);
+          // Automatically bypass MFA for trusted devices
+          handleVerify('trusted-device');
+          return;
+        }
+        
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Error checking trusted device:", error);
+        setIsLoading(false);
+      }
     };
     
     checkSession();
@@ -70,6 +96,21 @@ const VerifyMFA = () => {
         const authenticators = await webAuthnService.getUserAuthenticators(userId);
         success = authenticators.length > 0;
       } 
+      // Handle trusted device bypass
+      else if (code === 'trusted-device') {
+        success = true;
+        
+        // Log the MFA bypass due to trusted device
+        await supabase
+          .from('mfa_attempts')
+          .insert({
+            user_id: userId,
+            successful: true,
+            ip_address: 'client-ip',
+            action: 'trusted_device_bypass',
+            metadata: { user_agent: navigator.userAgent }
+          });
+      }
       // Handle recovery codes
       else if (code.startsWith('recovery:')) {
         const recoveryCode = code.replace('recovery:', '');
@@ -113,6 +154,19 @@ const VerifyMFA = () => {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  // If it's a trusted device, show a loading screen while we automatically verify
+  if (isTrustedDevice) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
+          <h3 className="text-lg font-medium">Verifying trusted device...</h3>
+          <p className="text-sm text-muted-foreground mt-2">You'll be redirected automatically</p>
+        </div>
       </div>
     );
   }

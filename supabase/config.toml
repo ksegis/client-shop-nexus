@@ -4,7 +4,7 @@ project_id = "vqkxrbflwhunvbotjdds"
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "storage"]
+schemas = ["public", "storage", "graphql_public"]
 
 [db]
 port = 54322
@@ -18,27 +18,26 @@ api_url = "http://localhost"
 enabled = true
 port = 54324
 
-[auth]
-enabled = true
-port = 9999
-
 [storage]
 enabled = true
-port = 5000
 
-[functions]
-[functions.store_webauthn_challenge]
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+
+[auth.email]
+enabled = true
+
+[realtime]
+enabled = true
+
+[analytics]
+enabled = false
+
+[[functions]]
+name = "check-session-anomalies"
 verify_jwt = true
 
-[functions.webauthn-registration-options]
+[[functions]]
+name = "send-security-notification"
 verify_jwt = true
-
-[functions.webauthn-registration-verification]
-verify_jwt = true
-
-[functions.webauthn-authentication-options]
-verify_jwt = true
-
-[functions.webauthn-authentication-verification]
-verify_jwt = true
-

@@ -15,7 +15,7 @@ serve(async (req) => {
 
   // Handle OPTIONS request
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
@@ -52,6 +52,7 @@ serve(async (req) => {
       suspicious_location: false,
       recentActivities: [],
       suspiciousSessions: [],
+      rapid_failures: false
     };
     
     // Check for multiple browsers
@@ -122,6 +123,18 @@ serve(async (req) => {
       // If this is a new device not seen in the last 5 sessions
       if (!Array.from(knownDevices).slice(0, 5).includes(currentDevice)) {
         anomalies.new_device = true;
+        
+        // Create a security alert for the new device
+        await supabase.from('security_alerts').insert({
+          user_id: user_id,
+          alert_type: 'new_device',
+          metadata: {
+            message: 'New device detected accessing your account',
+            device_hash: currentDevice,
+            user_agent: sessions[0].user_agent,
+            timestamp: new Date().toISOString()
+          }
+        });
       }
     }
 
@@ -139,12 +152,51 @@ serve(async (req) => {
         ipAddress: session.ip_address || 'Unknown',
         userAgent: session.user_agent
       }));
+    
+    // Check for rapid failed login attempts
+    const lastMinute = new Date();
+    lastMinute.setMinutes(lastMinute.getMinutes() - 1);
+    
+    const { data: recentFailures, error: failuresError } = await supabase
+      .from('mfa_attempts')
+      .select('id')
+      .eq('user_id', user_id)
+      .eq('successful', false)
+      .gt('created_at', lastMinute.toISOString());
+      
+    if (!failuresError && recentFailures && recentFailures.length >= 5) {
+      anomalies.rapid_failures = true;
+      
+      // Create a security alert for rapid failed attempts
+      await supabase.from('security_alerts').insert({
+        user_id: user_id,
+        alert_type: 'multiple_failures',
+        metadata: {
+          message: `${recentFailures.length} failed login attempts in the last minute`,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
+      // If there's an active IP, implement temporary IP block
+      if (sessions && sessions.length > 0 && sessions[0].ip_address) {
+        const blockExpiry = new Date();
+        blockExpiry.setHours(blockExpiry.getHours() + 1); // 1 hour block
+        
+        await supabase.from('ip_blocks').insert({
+          ip_address: sessions[0].ip_address,
+          reason: 'rapid_failed_logins',
+          expires_at: blockExpiry.toISOString(),
+          user_id: user_id
+        });
+      }
+    }
 
     return new Response(
       JSON.stringify({
         simultaneous_sessions: anomalies.simultaneous_sessions, 
         new_device: anomalies.new_device,
-        suspicious_location: anomalies.suspicious_location
+        suspicious_location: anomalies.suspicious_location,
+        rapid_failures: anomalies.rapid_failures
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
