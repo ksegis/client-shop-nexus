@@ -303,10 +303,10 @@ class ManagementManager {
         return false;
       }
       
-      // Check if trust has expired - using safe property access
-      const trustedUntil = data.trusted_until as string | undefined;
-      if (trustedUntil) {
-        const trustExpiration = new Date(trustedUntil);
+      // Check if trust has expired - using safe property access with type assertion
+      const deviceData = data as TrustedDevice;
+      if (deviceData.trusted_until) {
+        const trustExpiration = new Date(deviceData.trusted_until);
         if (trustExpiration < new Date()) {
           // Trust has expired
           return false;
