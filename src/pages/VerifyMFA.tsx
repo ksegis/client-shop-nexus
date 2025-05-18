@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MfaVerificationForm } from '@/components/auth/MfaVerificationForm';
@@ -67,8 +68,14 @@ const VerifyMFA = () => {
         // Now we just need to check if this user has WebAuthn enabled
         const authenticators = await webAuthnService.getUserAuthenticators(userId);
         success = authenticators.length > 0;
-      } else {
-        // Standard MFA code verification
+      } 
+      // Handle recovery codes
+      else if (code.startsWith('recovery:')) {
+        const recoveryCode = code.replace('recovery:', '');
+        success = await webAuthnService.managementManager.verifyRecoveryCode(userId, recoveryCode);
+      } 
+      // Standard MFA code verification
+      else {
         success = await mfaService.verifyMfaLogin(userId, code);
       }
       
