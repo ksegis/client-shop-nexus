@@ -1,6 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { arrayBufferToBase64 } from './utils';
+import { arrayBufferToBase64, base64ToArrayBuffer } from './utils';
 import type { RegisterCredentialParams } from './types';
 
 /**
@@ -24,9 +24,23 @@ export const registrationManager = {
         return false;
       }
       
+      // Convert base64 challenge to ArrayBuffer for the authenticator
+      const publicKeyOptions = {
+        ...registrationData.options,
+        challenge: base64ToArrayBuffer(registrationData.options.challenge),
+        user: {
+          ...registrationData.options.user,
+          id: base64ToArrayBuffer(registrationData.options.user.id),
+        },
+        excludeCredentials: registrationData.options.excludeCredentials?.map(cred => ({
+          ...cred,
+          id: base64ToArrayBuffer(cred.id),
+        })),
+      };
+      
       // Create the credential using the options from our edge function
       const credential = await navigator.credentials.create({
-        publicKey: registrationData.options
+        publicKey: publicKeyOptions
       }) as PublicKeyCredential;
       
       if (!credential) throw new Error("Failed to create credential");
@@ -34,15 +48,31 @@ export const registrationManager = {
       // Get attestation and client data from the credential
       const response = credential.response as AuthenticatorAttestationResponse;
       
-      // Store credential in database
-      const { error } = await supabase.from('user_authenticators').insert({
-        user_id: userId,
-        credential_id: arrayBufferToBase64(credential.rawId),
-        public_key: arrayBufferToBase64(response.getPublicKey() as ArrayBuffer),
-        device_name: deviceName || 'Security Key'
+      // Prepare attestation object for verification
+      const attestation = {
+        id: credential.id,
+        rawId: arrayBufferToBase64(credential.rawId),
+        response: {
+          clientDataJSON: arrayBufferToBase64(response.clientDataJSON),
+          attestationObject: arrayBufferToBase64(response.attestationObject),
+        },
+        type: credential.type,
+      };
+      
+      // Call our verification endpoint
+      const { data: verificationData, error: verificationError } = await supabase.functions.invoke('webauthn-registration-verification', {
+        body: { 
+          userId, 
+          attestation, 
+          challengeId: registrationData.challengeId,
+          deviceName
+        }
       });
       
-      if (error) throw error;
+      if (verificationError || !verificationData?.verified) {
+        console.error('Error verifying credential:', verificationError || 'Verification failed');
+        return false;
+      }
       
       return true;
     } catch (error) {
