@@ -1,4 +1,3 @@
-
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -27,7 +26,7 @@ export function useSecurityDashboard() {
   
   // Query for active security alerts
   const { 
-    data: alerts, 
+    data: alerts = [], 
     isLoading: alertsLoading, 
     refetch: refetchAlerts 
   } = useQuery({
@@ -175,6 +174,7 @@ export function useSecurityDashboard() {
     alertsLoading,
     securityStats,
     statsLoading,
-    resolveAlert
+    resolveAlert,
+    refetchAlerts
   };
 }

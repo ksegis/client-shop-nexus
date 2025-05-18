@@ -22,8 +22,12 @@ interface SecurityIncident {
 }
 
 export function SecurityIncidentDashboard() {
-  const { activeAlerts, resolvedAlerts, isLoading, refreshData } = useSecurityDashboard();
+  const { alerts, alertsLoading, resolveAlert, refetchAlerts } = useSecurityDashboard();
   const { toast } = useToast();
+  
+  // Filter active and resolved alerts
+  const activeAlerts = alerts.filter(alert => alert.resolved_at === null);
+  const resolvedAlerts = alerts.filter(alert => alert.resolved_at !== null);
   
   const handleResolveAlert = async (alertId: string) => {
     try {
@@ -37,7 +41,7 @@ export function SecurityIncidentDashboard() {
           title: "Alert Resolved",
           description: "The security alert has been marked as resolved.",
         });
-        refreshData();
+        refetchAlerts();
       } else {
         throw error;
       }
@@ -163,7 +167,7 @@ export function SecurityIncidentDashboard() {
     </div>
   );
   
-  if (isLoading) {
+  if (alertsLoading) {
     return (
       <div className="space-y-4">
         <Card>

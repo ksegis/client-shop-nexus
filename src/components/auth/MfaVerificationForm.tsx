@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -373,7 +372,7 @@ export const MfaVerificationForm = ({ email, onVerify, onCancel }: MfaVerificati
             <TabsContent value="help">
               <div className="py-4 space-y-4">
                 <div className="flex justify-center py-4">
-                  <Lifebuoy className="h-16 w-16 text-primary" />
+                  <LifeBuoy className="h-16 w-16 text-primary" />
                 </div>
                 
                 <Alert>

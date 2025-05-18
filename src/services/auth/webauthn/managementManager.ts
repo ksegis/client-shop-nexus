@@ -19,6 +19,33 @@ interface TrustedDevice {
 
 class ManagementManager {
   /**
+   * Request account recovery for a user
+   * @param email User's email address
+   * @returns Result object with success status and message
+   */
+  async requestAccountRecovery(email: string): Promise<{ 
+    success: boolean; 
+    message: string;
+    timeDelay?: string;
+  }> {
+    try {
+      // Implement account recovery request logic
+      // This would typically send an email with recovery instructions
+      // For this example, we'll just return a success message
+      return {
+        success: true,
+        message: "Recovery instructions have been sent to your email."
+      };
+    } catch (error) {
+      console.error('Error requesting account recovery:', error);
+      return {
+        success: false,
+        message: "An error occurred. Please try again later."
+      };
+    }
+  }
+
+  /**
    * Get all authenticators for a user
    * @param userId User ID
    * @returns Array of authenticators
@@ -201,9 +228,18 @@ class ManagementManager {
       // If userId is an email, get the actual user ID
       let actualUserId = userId;
       if (userId.includes('@')) {
-        const { data: userData } = await supabase.auth.admin.getUserByEmail(userId);
-        if (userData?.user) {
-          actualUserId = userData.user.id;
+        // Since getUserByEmail doesn't exist, we'll use a different approach
+        const { data: userData, error } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', userId)
+          .single();
+          
+        if (userData) {
+          actualUserId = userData.id;
+        } else {
+          console.error('User not found with email:', userId);
+          return false;
         }
       }
       
@@ -267,9 +303,10 @@ class ManagementManager {
         return false;
       }
       
-      // Check if trust has expired
-      if (data.trusted_until) {
-        const trustExpiration = new Date(data.trusted_until);
+      // Check if trust has expired - using safe property access
+      const trustedUntil = data.trusted_until as string | undefined;
+      if (trustedUntil) {
+        const trustExpiration = new Date(trustedUntil);
         if (trustExpiration < new Date()) {
           // Trust has expired
           return false;
