@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/auth';
 import { useProfileData } from '@/hooks/profile/useProfileData';
@@ -8,7 +7,7 @@ import { Shield, ShieldAlert, Key } from 'lucide-react';
 import { mfaService } from '@/services/mfa/mfaService';
 import { MfaSetupDialog } from '@/components/auth/MfaSetupDialog';
 import { useToast } from '@/hooks/use-toast';
-import { PasskeyManager } from '@/components/auth/PasskeyManager';
+import { PasskeyManager } from '@/components/auth/passkeys';
 
 export function SecuritySettings() {
   const { user } = useAuth();
