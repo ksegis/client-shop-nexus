@@ -14,51 +14,19 @@ export const registrationManager = {
     { userId, deviceName, options = {} }: RegisterCredentialParams
   ): Promise<boolean> => {
     try {
-      // Create a new challenge for this registration
-      const challenge = new Uint8Array(32);
-      window.crypto.getRandomValues(challenge);
-      
-      // Save this challenge to verify later
-      const { error: challengeError } = await supabase.functions.invoke('store_webauthn_challenge', { 
-        body: { 
-          p_user_id: userId,
-          p_challenge: arrayBufferToBase64(challenge),
-          p_type: 'registration',
-          p_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
-        }
+      // Call our edge function to get registration options
+      const { data: registrationData, error: optionsError } = await supabase.functions.invoke('webauthn-registration-options', {
+        body: { user_id: userId, device_name: deviceName }
       });
-        
-      if (challengeError) throw challengeError;
       
-      // Create PublicKey credential creation options
-      const publicKeyOptions: PublicKeyCredentialCreationOptions = {
-        challenge,
-        rp: {
-          name: options.rpName || 'Auto Shop Management',
-          // Use the current domain for the RP ID
-          id: window.location.hostname
-        },
-        user: {
-          id: Uint8Array.from(userId, c => c.charCodeAt(0)),
-          name: userId,
-          displayName: deviceName || 'Security Key'
-        },
-        pubKeyCredParams: [
-          { type: 'public-key', alg: -7 }, // ES256
-          { type: 'public-key', alg: -257 } // RS256
-        ],
-        timeout: 60000,
-        attestation: 'none',
-        authenticatorSelection: {
-          userVerification: 'preferred',
-          residentKey: 'preferred',
-          requireResidentKey: false
-        }
-      };
+      if (optionsError || !registrationData) {
+        console.error('Error getting registration options:', optionsError || 'No data returned');
+        return false;
+      }
       
-      // Create the credential
+      // Create the credential using the options from our edge function
       const credential = await navigator.credentials.create({
-        publicKey: publicKeyOptions
+        publicKey: registrationData.options
       }) as PublicKeyCredential;
       
       if (!credential) throw new Error("Failed to create credential");
