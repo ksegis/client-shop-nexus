@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { webAuthnService } from '@/services/auth/webauthn';
 import { managementManager } from '@/services/auth/webauthn/managementManager';
-import { Loader2, KeyRound, Shield, AlertTriangle, Lifebuoy } from 'lucide-react';
+import { Loader2, KeyRound, Shield, AlertTriangle, LifeBuoy } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -145,8 +145,8 @@ export const MfaVerificationForm = ({ email, onVerify, onCancel }: MfaVerificati
   const generateDeviceHash = async (): Promise<string> => {
     // In a real implementation, you would use a library like FingerprintJS
     // For this example, we'll create a simple hash of user agent and other characteristics
-    const { FingerprintJS } = await import('@fingerprintjs/fingerprintjs');
-    const fp = await FingerprintJS.load();
+    const fpPromise = import('@fingerprintjs/fingerprintjs').then(FingerprintJS => FingerprintJS.load());
+    const fp = await fpPromise;
     const result = await fp.get();
     return result.visitorId;
   };

@@ -58,8 +58,8 @@ const VerifyMFA = () => {
     const checkTrustedDevice = async (userId: string) => {
       try {
         // Generate device fingerprint
-        const { FingerprintJS } = await import('@fingerprintjs/fingerprintjs');
-        const fp = await FingerprintJS.load();
+        const fpPromise = import('@fingerprintjs/fingerprintjs').then(FingerprintJS => FingerprintJS.load());
+        const fp = await fpPromise;
         const result = await fp.get();
         const deviceHash = result.visitorId;
         
