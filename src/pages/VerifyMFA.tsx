@@ -6,6 +6,7 @@ import { mfaService } from '@/services/mfa/mfaService';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { webAuthnService } from '@/services/auth/webauthn';
+import { managementManager } from '@/services/auth/webauthn/managementManager';
 
 const VerifyMFA = () => {
   const navigate = useNavigate();
@@ -72,7 +73,7 @@ const VerifyMFA = () => {
       // Handle recovery codes
       else if (code.startsWith('recovery:')) {
         const recoveryCode = code.replace('recovery:', '');
-        success = await webAuthnService.managementManager.verifyRecoveryCode(userId, recoveryCode);
+        success = await managementManager.verifyRecoveryCode(userId, recoveryCode);
       } 
       // Standard MFA code verification
       else {
