@@ -1,6 +1,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { arrayBufferToBase64, base64ToArrayBuffer } from './utils';
+import type { AuthenticateParams } from './types';
 
 /**
  * Handles WebAuthn authentication
@@ -9,83 +10,67 @@ export const authenticateManager = {
   /**
    * Authenticate using a WebAuthn credential
    */
-  authenticate: async (userId?: string): Promise<boolean> => {
+  authenticate: async ({ userId }: AuthenticateParams = {}): Promise<boolean> => {
     try {
-      // Get user's registered credentials
-      let credentials: Array<{credential_id: string}> = [];
+      // Call our edge function to get authentication options
+      const { data: authData, error: optionsError } = await supabase.functions.invoke('webauthn-authentication-options', {
+        body: { user_id: userId }
+      });
       
-      if (userId) {
-        const { data, error } = await supabase
-          .from('user_authenticators')
-          .select('credential_id')
-          .eq('user_id', userId);
-          
-        if (error) throw error;
-        credentials = data || [];
+      if (optionsError || !authData) {
+        console.error('Error getting authentication options:', optionsError || 'No data returned');
+        return false;
       }
       
-      // Create a challenge for this authentication
-      const challenge = new Uint8Array(32);
-      window.crypto.getRandomValues(challenge);
-      
-      // Save this challenge - using RPC to handle the new table
-      if (userId) {
-        const { error: challengeError } = await supabase.functions.invoke('store_webauthn_challenge', {
-          body: { 
-            p_user_id: userId,
-            p_challenge: arrayBufferToBase64(challenge),
-            p_type: 'authentication',
-            p_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes expiry
-          }
-        });
-          
-        if (challengeError) throw challengeError;
-      }
-      
-      // Create PublicKey credential request options
-      const publicKeyOptions: PublicKeyCredentialRequestOptions = {
-        challenge,
-        timeout: 60000,
-        userVerification: 'preferred',
-        // Include allowCredentials only if we have specific credentials
-        ...(credentials.length > 0 && {
-          allowCredentials: credentials.map(cred => ({
-            id: base64ToArrayBuffer(cred.credential_id),
-            type: 'public-key'
-          }))
-        })
+      // Convert base64 challenge to ArrayBuffer for the authenticator
+      const publicKeyOptions = {
+        ...authData.options,
+        challenge: base64ToArrayBuffer(authData.options.challenge),
+        allowCredentials: authData.options.allowCredentials?.map(cred => ({
+          ...cred,
+          id: base64ToArrayBuffer(cred.id),
+        })),
       };
       
-      // Request the credential
-      const assertion = await navigator.credentials.get({
+      // Request the credential from the user's authenticator
+      const credential = await navigator.credentials.get({
         publicKey: publicKeyOptions
       }) as PublicKeyCredential;
       
-      if (!assertion) throw new Error("No assertion returned");
+      if (!credential) throw new Error("No credential returned");
       
-      // Extract credential ID and user ID
-      const credentialId = arrayBufferToBase64(assertion.rawId);
+      // Get assertion and client data from the credential
+      const response = credential.response as AuthenticatorAssertionResponse;
       
-      // Find the credential in our database
-      const { data, error } = await supabase
-        .from('user_authenticators')
-        .select('user_id')
-        .eq('credential_id', credentialId)
-        .single();
+      // Prepare assertion object for verification
+      const assertion = {
+        id: credential.id,
+        rawId: arrayBufferToBase64(credential.rawId),
+        response: {
+          clientDataJSON: arrayBufferToBase64(response.clientDataJSON),
+          authenticatorData: arrayBufferToBase64(response.authenticatorData),
+          signature: arrayBufferToBase64(response.signature),
+          userHandle: response.userHandle ? arrayBufferToBase64(response.userHandle) : null,
+        },
+        type: credential.type
+      };
       
-      if (error) throw error;
+      // Call our verification endpoint
+      const { data: verificationData, error: verificationError } = await supabase.functions.invoke('webauthn-authentication-verification', {
+        body: { 
+          userId,
+          assertion,
+          challengeId: authData.challengeId
+        }
+      });
       
-      if (!data?.user_id) {
-        throw new Error("Invalid credential");
+      if (verificationError || !verificationData?.verified) {
+        console.error('Error verifying assertion:', verificationError || 'Verification failed');
+        return false;
       }
       
-      // Update the last_used_at timestamp
-      await supabase
-        .from('user_authenticators')
-        .update({ last_used_at: new Date().toISOString() })
-        .eq('credential_id', credentialId);
+      // Update last used timestamp (done in the edge function)
       
-      // If we get here, authentication was successful
       return true;
     } catch (error) {
       console.error('Error authenticating with WebAuthn:', error);

@@ -36,3 +36,9 @@ verify_jwt = true
 [functions.webauthn-registration-verification]
 verify_jwt = true
 
+[functions.webauthn-authentication-options]
+verify_jwt = true
+
+[functions.webauthn-authentication-verification]
+verify_jwt = true
+

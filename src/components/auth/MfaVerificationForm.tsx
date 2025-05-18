@@ -1,13 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { useToast } from '@/hooks/use-toast';
-import { webAuthnService } from '@/services/auth/webAuthnService';
-import { Loader2, Key, Fingerprint } from 'lucide-react';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { webAuthnService } from '@/services/auth/webauthn';
+import { Loader2, KeyRound } from 'lucide-react';
 
 interface MfaVerificationFormProps {
   email: string;
@@ -15,80 +12,55 @@ interface MfaVerificationFormProps {
   onCancel: () => void;
 }
 
-export function MfaVerificationForm({ email, onVerify, onCancel }: MfaVerificationFormProps) {
+export const MfaVerificationForm = ({ email, onVerify, onCancel }: MfaVerificationFormProps) => {
   const [code, setCode] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [isWebAuthnSupported, setIsWebAuthnSupported] = useState(false);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    // Check if WebAuthn is supported
-    setIsWebAuthnSupported(webAuthnService.isSupported());
-  }, []);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isWebAuthnSubmitting, setIsWebAuthnSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isWebAuthnSupported] = useState(webAuthnService.isSupported());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!code.trim()) {
-      toast({
-        title: "Verification code required",
-        description: "Please enter your verification code",
-        variant: "destructive"
-      });
+    if (code.length !== 6) {
+      setError('Please enter a valid 6-digit code');
       return;
     }
     
-    setIsVerifying(true);
+    setIsSubmitting(true);
+    setError(null);
     
     try {
       const success = await onVerify(code);
-      
       if (!success) {
-        toast({
-          title: "Verification failed",
-          description: "Invalid verification code. Please try again.",
-          variant: "destructive"
-        });
+        setError('Invalid verification code. Please try again.');
       }
+    } catch (err) {
+      setError('An error occurred during verification');
+      console.error(err);
     } finally {
-      setIsVerifying(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleWebAuthnAuthentication = async () => {
-    setIsAuthenticating(true);
+  const handleWebAuthnAuth = async () => {
+    setIsWebAuthnSubmitting(true);
+    setError(null);
     
     try {
       const success = await webAuthnService.authenticate();
       
       if (success) {
-        // If WebAuthn succeeds, pass a special code to the verification handler
-        const verifySuccess = await onVerify('webauthn-verification');
-        
-        if (!verifySuccess) {
-          toast({
-            title: "Verification failed",
-            description: "Your security key was recognized, but additional verification is needed.",
-            variant: "destructive"
-          });
-        }
+        // If WebAuthn authentication is successful, we pass a special code to the parent component
+        await onVerify('webauthn-verification');
       } else {
-        toast({
-          title: "Authentication failed",
-          description: "Security key verification failed. Please try again or use your verification code.",
-          variant: "destructive"
-        });
+        setError('Security key verification failed. Please try again.');
       }
-    } catch (error) {
-      console.error('WebAuthn authentication error:', error);
-      toast({
-        title: "Authentication error",
-        description: "An error occurred during security key verification.",
-        variant: "destructive"
-      });
+    } catch (err) {
+      console.error('WebAuthn authentication error:', err);
+      setError('An error occurred during security key verification');
     } finally {
-      setIsAuthenticating(false);
+      setIsWebAuthnSubmitting(false);
     }
   };
 
@@ -97,65 +69,91 @@ export function MfaVerificationForm({ email, onVerify, onCancel }: MfaVerificati
       <CardHeader>
         <CardTitle>Two-Factor Authentication</CardTitle>
         <CardDescription>
-          Enter the verification code to sign in as {email}
+          Enter the verification code from your authenticator app or use your registered security key
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {isWebAuthnSupported && (
-          <>
-            <div className="mb-4">
-              <Button
-                className="w-full"
-                onClick={handleWebAuthnAuthentication}
-                disabled={isAuthenticating}
-              >
-                {isAuthenticating ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Key className="mr-2 h-4 w-4" />
+        <div className="space-y-4">
+          <div className="text-sm">
+            Verifying for <span className="font-medium">{email}</span>
+          </div>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex flex-col items-center space-y-2">
+              <InputOTP
+                maxLength={6}
+                value={code}
+                onChange={setCode}
+                disabled={isSubmitting}
+                render={({ slots }) => (
+                  <InputOTPGroup>
+                    {slots.map((slot, index) => (
+                      <InputOTPSlot key={index} {...slot} />
+                    ))}
+                  </InputOTPGroup>
                 )}
-                Sign in with Security Key
-              </Button>
+              />
+              
+              {error && (
+                <div className="text-destructive text-sm mt-2">
+                  {error}
+                </div>
+              )}
             </div>
             
-            <div className="relative my-4">
-              <Separator />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="bg-card px-2 text-xs text-muted-foreground">OR</span>
-              </div>
+            <div className="flex justify-between">
+              <Button 
+                variant="outline" 
+                type="button" 
+                onClick={onCancel}
+                disabled={isSubmitting || isWebAuthnSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={code.length !== 6 || isSubmitting || isWebAuthnSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  'Verify'
+                )}
+              </Button>
             </div>
-          </>
-        )}
-        
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="verification-code">Verification Code</Label>
-              <Input
-                id="verification-code"
-                placeholder="Enter 6-digit verification code"
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ''))}
-                maxLength={6}
-                disabled={isVerifying}
-              />
+          </form>
+          
+          {isWebAuthnSupported && (
+            <div className="pt-4 border-t">
+              <Button
+                variant="secondary"
+                type="button"
+                className="w-full"
+                onClick={handleWebAuthnAuth}
+                disabled={isSubmitting || isWebAuthnSubmitting}
+              >
+                {isWebAuthnSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    Use Security Key
+                  </>
+                )}
+              </Button>
             </div>
-          </div>
-        </form>
-      </CardContent>
-      <CardFooter className="flex justify-between">
-        <Button variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button onClick={handleSubmit} disabled={isVerifying}>
-          {isVerifying ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Fingerprint className="mr-2 h-4 w-4" />
           )}
-          Verify
-        </Button>
+        </div>
+      </CardContent>
+      <CardFooter className="flex flex-col text-xs text-muted-foreground">
+        <p>If you're having trouble, contact support.</p>
       </CardFooter>
     </Card>
   );
-}
+};

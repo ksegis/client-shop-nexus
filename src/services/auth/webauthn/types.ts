@@ -25,3 +25,8 @@ export interface AuthenticateParams {
   userId?: string;
   options?: WebAuthnOptions;
 }
+
+export interface AuthenticationResult {
+  verified: boolean;
+  userId?: string;
+}

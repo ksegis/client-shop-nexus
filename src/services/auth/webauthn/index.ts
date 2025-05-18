@@ -3,7 +3,7 @@ import { isWebAuthnSupported, supportsAutofill } from './utils';
 import { authenticateManager } from './authenticateManager';
 import { registrationManager } from './registrationManager';
 import { managementManager } from './managementManager';
-import type { RegisteredAuthenticator, WebAuthnOptions } from './types';
+import type { RegisteredAuthenticator, WebAuthnOptions, AuthenticationResult } from './types';
 
 // Export the main WebAuthn service
 export const webAuthnService = {
@@ -19,7 +19,9 @@ export const webAuthnService = {
   },
   
   // Authenticate using a WebAuthn credential
-  authenticate: authenticateManager.authenticate,
+  authenticate: async (userId?: string, options?: WebAuthnOptions): Promise<boolean> => {
+    return authenticateManager.authenticate({ userId, options });
+  },
   
   // Get all registered authenticators for a user
   getUserAuthenticators: managementManager.getUserAuthenticators,
@@ -28,4 +30,4 @@ export const webAuthnService = {
   deleteAuthenticator: managementManager.deleteAuthenticator
 };
 
-export type { RegisteredAuthenticator, WebAuthnOptions };
+export type { RegisteredAuthenticator, WebAuthnOptions, AuthenticationResult };
