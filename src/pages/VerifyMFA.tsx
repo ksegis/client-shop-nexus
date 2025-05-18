@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MfaVerificationForm } from '@/components/auth/MfaVerificationForm';
 import { mfaService } from '@/services/mfa/mfaService';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { webAuthnService } from '@/services/auth/webAuthnService';
+import { webAuthnService } from '@/services/auth/webauthn';
 
 const VerifyMFA = () => {
   const navigate = useNavigate();

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Key, Trash2 } from 'lucide-react';
-import { webAuthnService, RegisteredAuthenticator } from '@/services/auth/webAuthnService';
+import { webAuthnService, RegisteredAuthenticator } from '@/services/auth/webauthn';
 import { formatDistanceToNow } from 'date-fns';
 
 interface PasskeyManagerProps {
