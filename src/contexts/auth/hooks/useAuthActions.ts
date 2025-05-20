@@ -99,6 +99,8 @@ export function useAuthActions() {
             // Check if password change is required
             if (profileData.force_password_change) {
               console.log('Password change required, redirecting to change-password page');
+              
+              // Use navigate for internal app redirects
               navigate('/auth/change-password', { replace: true });
               
               toast({
@@ -119,7 +121,14 @@ export function useAuthActions() {
               description: `Welcome to your ${profileData.role} portal!`
             });
             
-            // Force direct navigation instead of using React Router to ensure full page reload
+            // Check if in development mode (this is for debugging purposes)
+            const isDev = process.env.NODE_ENV === 'development' || 
+                          window.location.hostname === 'localhost' || 
+                          window.location.hostname.includes('.local');
+            
+            console.log(`Environment: ${isDev ? 'Development' : 'Production'}, performing navigation to ${redirectPath}`);
+            
+            // Hard navigation to ensure we break out of any issues with React Router
             window.location.href = redirectPath;
             
             return result;
@@ -168,7 +177,7 @@ export function useAuthActions() {
           await logAuthEvent('sign_out', user);
         }
         
-        // Force redirect to home page
+        // Force redirect to home page with a full page reload
         window.location.href = '/';
       }
       
