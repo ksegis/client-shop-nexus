@@ -17,7 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
   email: z.string().email({
@@ -48,11 +48,15 @@ const SignInForm = () => {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     try {
+      console.log("Attempting to sign in with:", values.email);
       const { success, error } = await signIn(values.email, values.password, values.rememberMe);
       
       if (!success) {
         throw error;
       }
+      
+      // Success toast will be shown by the signIn function
+      console.log("Sign in successful");
 
     } catch (error: any) {
       console.error("Sign in error:", error);
@@ -178,7 +182,12 @@ const SignInForm = () => {
             </Button>
           </div>
           <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? "Signing in..." : "Sign In"}
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing in...
+              </>
+            ) : "Sign In"}
           </Button>
         </form>
       </Form>

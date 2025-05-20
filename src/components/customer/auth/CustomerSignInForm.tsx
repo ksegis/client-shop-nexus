@@ -22,22 +22,37 @@ const CustomerSignInForm = () => {
     setLoading(true);
     
     try {
+      console.log('Customer attempting to sign in with:', email);
+      
       // Attempt to sign in with email and password
       const { data, error } = await supabase.auth.signInWithPassword({ 
         email, 
         password 
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Customer sign in error:', error);
+        throw error;
+      }
+      
+      console.log('Customer sign in successful:', data.user.email);
       
       // Check if the user has MFA enabled
       if (data.user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('mfa_enabled')
+          .select('mfa_enabled, force_password_change')
           .eq('id', data.user.id)
           .maybeSingle();
         
+        // Check if password change is required
+        if (profile?.force_password_change) {
+          console.log('Password change required, redirecting to change-password page');
+          navigate('/auth/change-password', { replace: true });
+          return;
+        }
+        
+        // Check for MFA
         if (profile?.mfa_enabled) {
           // Store minimal session info for MFA verification
           sessionStorage.setItem('mfaSession', JSON.stringify({
@@ -64,7 +79,7 @@ const CustomerSignInForm = () => {
       
       navigate('/customer');
     } catch (error: any) {
-      console.error('Sign in error:', error);
+      console.error('Customer sign in error:', error);
       toast({
         variant: "destructive",
         title: "Login failed",

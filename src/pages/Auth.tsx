@@ -16,6 +16,7 @@ const Auth = () => {
   useEffect(() => {
     // Check for password reset flow
     if (type === "recovery") {
+      console.log("Password recovery flow detected, redirecting to change password page");
       // If it's a password reset, direct to the change password page
       navigate("/auth/change-password", { replace: true });
       return;
@@ -27,7 +28,6 @@ const Auth = () => {
     }
   }, [error, type, navigate]);
 
-  // Return a minimal auth page with EGIS login option
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">

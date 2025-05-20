@@ -1,8 +1,10 @@
 
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 export function useAuthMethods() {
+  const { toast } = useToast();
+
   const signUp = async ({ email, password, metadata = {} }) => {
     try {
       const { data, error } = await supabase.auth.signUp({ 
@@ -32,12 +34,19 @@ export function useAuthMethods() {
   
   const signIn = async ({ email, password }) => {
     try {
+      console.log('Attempting to sign in with Supabase:', email);
+      
       const { data, error } = await supabase.auth.signInWithPassword({ 
         email, 
         password 
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase signin error:', error);
+        throw error;
+      }
+      
+      console.log('Supabase signin successful:', data.user.email);
       
       toast({
         title: "Login successful",
@@ -46,12 +55,14 @@ export function useAuthMethods() {
       
       return { success: true, data };
     } catch (error) {
-      console.error('Sign in error:', error);
+      console.error('Sign in error details:', error);
+      
       toast({
         variant: "destructive",
         title: "Login failed",
         description: error.message || "Invalid credentials"
       });
+      
       return { success: false, error };
     }
   };

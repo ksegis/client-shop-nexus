@@ -52,21 +52,32 @@ export function useAuthActions() {
       console.log(`Signing in with email: ${email}, rememberMe: ${rememberMe}`);
       const result = await authSignIn({ email, password });
       
+      if (!result.success) {
+        console.error('Sign in failed:', result.error);
+        return result;
+      }
+      
       if (result.success && result.data?.user) {
         // Log the signin event
         await logAuthEvent('sign_in', result.data.user);
         console.log(`Sign in successful for user: ${result.data.user.id}`);
         
         // Get user profile to determine redirect path
-        const { data: profileData } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('role, force_password_change')
           .eq('id', result.data.user.id)
           .single();
         
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+          return { success: false, error: profileError };
+        }
+        
         if (profileData) {
           // Check if password change is required
           if (profileData.force_password_change) {
+            console.log('Password change required, redirecting to change-password page');
             navigate('/auth/change-password', { replace: true });
             return result;
           }
@@ -75,6 +86,9 @@ export function useAuthActions() {
           const redirectPath = getRedirectPathByRole(profileData.role as UserRole);
           console.log(`User role: ${profileData.role}, redirecting to: ${redirectPath}`);
           navigate(redirectPath, { replace: true });
+        } else {
+          console.error('No profile data found for user');
+          return { success: false, error: new Error('No profile found for user') };
         }
       }
       
@@ -114,6 +128,8 @@ export function useAuthActions() {
       // Get the current origin and specify the exact path to redirect to
       const redirectTo = `${window.location.origin}/auth/change-password`;
       
+      console.log(`Resetting password for ${email}, redirect to: ${redirectTo}`);
+      
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: redirectTo
       });
@@ -125,6 +141,7 @@ export function useAuthActions() {
       
       return { success: true };
     } catch (error: any) {
+      console.error('Password reset error:', error);
       return { success: false, error };
     }
   };
