@@ -1,6 +1,8 @@
 
 import { ReactNode, useState, useEffect } from 'react';
 import { AuthContext } from './AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -10,56 +12,59 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+  const navigate = useNavigate();
   
-  // Check for development user on mount and on localStorage changes
+  // Auto-login as customer@example.com on mount
   useEffect(() => {
-    const checkForDevUser = () => {
-      console.log('Checking for development user...');
+    const autoLogin = async () => {
+      console.log('Auto-logging in as customer@example.com...');
       
-      // Check if we have a dev user in localStorage
-      const devUserString = localStorage.getItem('dev-customer-user');
+      // Create a mock admin user
+      const devUser = {
+        id: 'dev-' + Date.now(),
+        email: 'customer@example.com',
+        user_metadata: {
+          first_name: 'Dev',
+          last_name: 'Admin',
+          role: 'admin',
+          phone: '555-1234'
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
       
-      if (devUserString) {
-        try {
-          const devUser = JSON.parse(devUserString);
-          
-          // If this is the dev customer@example.com user, ensure they have admin privileges
-          if (devUser.email === 'customer@example.com' && devUser.user_metadata) {
-            devUser.user_metadata.role = 'admin';
-            // Update localStorage with the modified user
-            localStorage.setItem('dev-customer-user', JSON.stringify(devUser));
-          }
-          
-          setUser(devUser);
-          setIsAuthenticated(true);
-          console.log('Development user detected:', devUser.email);
-        } catch (error) {
-          console.error('Error parsing development user:', error);
-          // Clear invalid dev user data
-          localStorage.removeItem('dev-customer-user');
-          setUser(null);
-          setIsAuthenticated(false);
-        }
-      } else {
-        // No dev user found
-        setUser(null);
-        setIsAuthenticated(false);
-        console.log('No development user found');
-      }
+      // Store in localStorage
+      localStorage.setItem('dev-customer-user', JSON.stringify(devUser));
       
+      // Update state
+      setUser(devUser);
+      setIsAuthenticated(true);
       setIsLoading(false);
+      
+      // Show toast notification
+      toast({
+        title: "Auto-login successful",
+        description: "Logged in as customer@example.com with admin privileges",
+      });
+      
+      // Redirect to dashboard if on login page
+      const currentPath = window.location.pathname;
+      if (currentPath.includes('login')) {
+        setTimeout(() => {
+          navigate('/shop/dashboard', { replace: true });
+        }, 500);
+      }
     };
     
-    // Check immediately on mount
-    checkForDevUser();
+    // Execute auto-login
+    autoLogin();
     
-    // Listen for storage changes (in case another tab updates the auth)
-    window.addEventListener('storage', checkForDevUser);
-    
+    // Clean up function
     return () => {
-      window.removeEventListener('storage', checkForDevUser);
+      // Nothing to clean up for now
     };
-  }, []);
+  }, [navigate, toast]);
   
   // Create simplified auth context value with development authentication
   const value = {
