@@ -117,7 +117,7 @@ export const useUserInvitation = (refetchUsers: () => Promise<void>) => {
             <div className="text-xs break-all">{inviteUrl}</div>
           </div>
         ),
-        duration: 10000, // Show for longer so they can copy the link
+        // Removed the duration property as it's not defined in ToastProps
       });
       
       await refetchUsers();

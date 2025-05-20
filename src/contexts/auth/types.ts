@@ -1,3 +1,4 @@
+
 import { User } from '@supabase/supabase-js';
 
 export type UserRole = 'admin' | 'staff' | 'customer';
@@ -12,6 +13,7 @@ export interface UserProfile {
   phone?: string;
   updated_at?: string;
   created_at?: string;
+  force_password_change?: boolean;
 }
 
 export interface AuthResult {
