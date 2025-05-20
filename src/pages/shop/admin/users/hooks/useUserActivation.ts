@@ -1,47 +1,97 @@
+
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 export const useUserActivation = (refetchUsers: () => Promise<void>) => {
+  const [loading, setLoading] = useState<string | null>(null);
+  const { toast } = useToast();
+
   const toggleUserActive = async (userId: string, currentRole: string) => {
     try {
+      setLoading(userId);
+
+      // Check if the role is already inactive
+      const isInactive = currentRole.startsWith('inactive_');
+      
       let newRole;
-      
-      // Toggle between active and inactive states based on current role
-      if (currentRole.startsWith('inactive_')) {
-        // Activate: remove 'inactive_' prefix
+      if (isInactive) {
+        // Activate: Remove inactive_ prefix
         newRole = currentRole.replace('inactive_', '');
-      } else if (currentRole === 'admin' || currentRole === 'staff') {
-        // Deactivate: add 'inactive_' prefix 
-        newRole = `inactive_${currentRole}`;
       } else {
-        // For other roles like 'customer', we don't have an inactive variant in the database
-        // so we'll just keep the original role
-        newRole = currentRole;
+        // Deactivate: Add inactive_ prefix
+        newRole = `inactive_${currentRole}`;
       }
-      
+
+      // Update the user's role in the database
       const { error } = await supabase
         .from('profiles')
         .update({ role: newRole })
         .eq('id', userId);
-      
-      if (error) throw error;
-      
+
+      if (error) {
+        throw error;
+      }
+
       toast({
-        title: currentRole.startsWith('inactive_') ? "User Activated" : "User Deactivated",
-        description: currentRole.startsWith('inactive_') 
-          ? "The user has been successfully activated." 
-          : "The user has been successfully deactivated.",
+        title: isInactive ? "User Activated" : "User Deactivated",
+        description: isInactive 
+          ? "User account has been successfully activated" 
+          : "User account has been successfully deactivated",
+        variant: "default",
       });
-      
+
+      // Refresh the user list
       await refetchUsers();
     } catch (error: any) {
+      console.error('Error toggling user active status:', error);
+      
       toast({
-        title: "Error updating user status",
-        description: error.message || "An unexpected error occurred",
+        title: "Action Failed",
+        description: error.message || "Could not update user status",
+        variant: "destructive",
       });
-      throw error;
+    } finally {
+      setLoading(null);
     }
   };
 
-  return { toggleUserActive };
+  const deleteUser = async (userId: string, email: string) => {
+    try {
+      setLoading(userId);
+
+      // Call the Edge Function to delete the auth user
+      const { data, error } = await supabase.functions.invoke('delete-auth-user', {
+        body: { userId }
+      });
+
+      if (error) throw error;
+      
+      toast({
+        title: "User Deleted",
+        description: `User ${email} has been permanently deleted`,
+      });
+
+      // Refresh the user list
+      await refetchUsers();
+      return true;
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Could not delete user",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return {
+    loading,
+    toggleUserActive,
+    deleteUser
+  };
 };

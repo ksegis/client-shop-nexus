@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/auth';
@@ -17,6 +18,7 @@ import VerifyMFA from '@/pages/VerifyMFA';
 import InviteAccept from '@/pages/auth/InviteAccept';
 import ChangePassword from '@/pages/auth/ChangePassword';
 import AccountRecovery from '@/pages/AccountRecovery';
+import DeleteUserPage from '@/pages/DeleteUserPage';
 
 // Profile redirect component that checks the user role and redirects accordingly
 const ProfileRedirect = () => {
@@ -77,6 +79,9 @@ const AppRoutes: React.FC = () => {
 
             {/* MFA verification route */}
             <Route path="/verify-mfa" element={<VerifyMFA />} />
+
+            {/* Special routes */}
+            <Route path="/delete-user" element={<DeleteUserPage />} />
 
             {/* Customer portal routes - clearly labeled */}
             <Route path="/customer/*" element={

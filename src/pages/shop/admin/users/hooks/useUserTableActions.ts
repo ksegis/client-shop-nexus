@@ -7,8 +7,9 @@ import { useUserManagement } from '../UserManagementContext';
 
 export const useUserTableActions = () => {
   const [activationLoading, setActivationLoading] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const { toast } = useToast();
-  const { refetchUsers } = useUserManagement();
+  const { refetchUsers, deleteUser } = useUserManagement();
   const { impersonateUser, impersonationLoading } = useUserImpersonation();
 
   const getInviterName = async (invitedById: string | null | undefined): Promise<string> => {
@@ -35,6 +36,16 @@ export const useUserTableActions = () => {
 
   const handleImpersonate = async (userId: string, email: string) => {
     await impersonateUser(userId, email);
+  };
+  
+  const handleDeleteUser = async (userId: string, email: string) => {
+    setDeleteLoading(userId);
+    try {
+      const success = await deleteUser(userId, email);
+      return success;
+    } finally {
+      setDeleteLoading(null);
+    }
   };
 
   const handleToggleActive = async (userId: string, currentRole: string) => {
@@ -89,8 +100,10 @@ export const useUserTableActions = () => {
   return {
     impersonationLoading,
     activationLoading,
+    deleteLoading,
     getInviterName,
     handleImpersonate,
-    handleToggleActive
+    handleToggleActive,
+    handleDeleteUser
   };
 };

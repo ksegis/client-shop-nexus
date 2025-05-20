@@ -20,6 +20,7 @@ interface UserManagementContextType {
   resetPassword: (userId: string, email: string, newPassword: string) => Promise<void>;
   updateUserProfile: (userId: string, profileData: Partial<User>) => Promise<void>;
   toggleUserActive: (userId: string, currentRole: string) => Promise<void>;
+  deleteUser: (userId: string, email: string) => Promise<boolean>;
   refetchUsers: () => Promise<void>;
   impersonateUser: (userId: string, email: string) => Promise<boolean>;
   exitImpersonationMode: () => Promise<boolean>;
@@ -36,7 +37,7 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
   const { inviteUser } = useUserInvitation(refetchUsers);
   const { resetPassword } = usePasswordReset(refetchUsers);
   const { updateUserProfile } = useProfileManagement(refetchUsers);
-  const { toggleUserActive } = useUserActivation(refetchUsers);
+  const { toggleUserActive, deleteUser } = useUserActivation(refetchUsers);
   const { 
     impersonateUser, 
     exitImpersonationMode, 
@@ -57,6 +58,7 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
         resetPassword,
         updateUserProfile,
         toggleUserActive,
+        deleteUser,
         refetchUsers,
         impersonateUser,
         exitImpersonationMode,

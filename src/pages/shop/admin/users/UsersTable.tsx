@@ -7,6 +7,7 @@ import { useUserManagement } from './UserManagementContext';
 import { UserTableRow } from './components/UserTableRow';
 import { ResetPasswordDialog } from './ResetPasswordDialog';
 import { ProfileDialog } from './ProfileDialog';
+import { DeleteUserDialog } from './components/DeleteUserDialog';
 
 interface UsersTableProps {
   onResetPassword: (userId: string, email: string) => void;
@@ -18,13 +19,17 @@ export function UsersTable({ onResetPassword, onEditProfile, onImpersonate }: Us
   const { employees, customers, isLoading } = useUserManagement();
   const { 
     impersonationLoading, 
-    activationLoading, 
+    activationLoading,
+    deleteLoading,
     getInviterName,
     handleImpersonate,
-    handleToggleActive
+    handleToggleActive,
+    handleDeleteUser
   } = useUserTableActions();
+  
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserEmail, setSelectedUserEmail] = useState<string | null>(null);
 
@@ -38,6 +43,12 @@ export function UsersTable({ onResetPassword, onEditProfile, onImpersonate }: Us
     setSelectedUserId(userId);
     setSelectedUserEmail(email);
     setProfileDialogOpen(true);
+  };
+  
+  const handleConfirmDelete = (userId: string, email: string) => {
+    setSelectedUserId(userId);
+    setSelectedUserEmail(email);
+    setDeleteDialogOpen(true);
   };
 
   if (isLoading) {
@@ -82,10 +93,12 @@ export function UsersTable({ onResetPassword, onEditProfile, onImpersonate }: Us
                   user={user}
                   impersonationLoading={impersonationLoading}
                   activationLoading={activationLoading}
+                  deleteLoading={deleteLoading}
                   onResetPassword={handleResetPassword}
                   onEditProfile={handleEditProfile}
                   onImpersonate={handleImpersonate}
                   onToggleActive={handleToggleActive}
+                  onDelete={handleConfirmDelete}
                   getInviterName={getInviterName}
                 />
               ))
@@ -108,6 +121,14 @@ export function UsersTable({ onResetPassword, onEditProfile, onImpersonate }: Us
         onOpenChange={setProfileDialogOpen}
         userId={selectedUserId}
         email={selectedUserEmail}
+      />
+      
+      {/* Delete User Dialog */}
+      <DeleteUserDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        userId={selectedUserId}
+        userEmail={selectedUserEmail}
       />
     </div>
   );
