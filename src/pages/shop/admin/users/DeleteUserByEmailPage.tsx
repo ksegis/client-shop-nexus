@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,10 +8,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { UserManagementProvider, useUserManagement } from './UserManagementContext';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/auth';
 
 const formSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -111,27 +113,87 @@ const DeleteUserForm = () => {
           </div>
         )}
         
-        <Button 
-          type="submit" 
-          variant="destructive"
-          disabled={isDeleting}
-          className="w-full"
-        >
-          {isDeleting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Deleting User...
-            </>
-          ) : (
-            "Delete User"
-          )}
-        </Button>
+        <div className="flex flex-col space-y-2">
+          <Button 
+            type="submit" 
+            variant="destructive"
+            disabled={isDeleting}
+            className="w-full"
+          >
+            {isDeleting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Deleting User...
+              </>
+            ) : (
+              "Delete User"
+            )}
+          </Button>
+          
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={() => navigate('/shop/admin/user-management')}
+            className="w-full"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to User Management
+          </Button>
+        </div>
       </form>
     </Form>
   );
 };
 
 const DeleteUserByEmailPage = () => {
+  const { user, profile, isLoading } = useAuth();
+  const navigate = useNavigate();
+
+  // Handle loading state
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-10">
+        <Card>
+          <CardHeader>
+            <CardTitle>Loading...</CardTitle>
+            <CardDescription>
+              Verifying your permissions...
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-center items-center py-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Handle unauthorized access
+  if (!user || profile?.role !== 'admin') {
+    return (
+      <div className="container mx-auto py-10">
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="text-destructive">Access Denied</CardTitle>
+            <CardDescription>
+              You do not have permission to access this page.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4">Current role: {profile?.role || 'Not authenticated'}</p>
+            <Button onClick={() => navigate('/shop/admin')} variant="outline">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Return to Admin Panel
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  // Authorized user view
   return (
     <UserManagementProvider>
       <div className="container mx-auto py-10">

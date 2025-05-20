@@ -16,6 +16,16 @@ const ProtectedRoute = ({
   const { user, profile, isLoading } = useAuth();
   const location = useLocation();
 
+  // For debugging - log auth state
+  useEffect(() => {
+    console.log('Protected route auth state:', { 
+      isLoading, 
+      isAuthenticated: !!user, 
+      userRole: profile?.role,
+      requiredRoles: allowedRoles
+    });
+  }, [isLoading, user, profile, allowedRoles]);
+
   // If still loading auth state, show loading indicator
   if (isLoading) {
     return (
