@@ -4,9 +4,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { AuthResult, UserRole } from '../types';
 import { useAuthMethods } from './useAuthMethods';
 import { useAuthLogging } from './useAuthLogging';
+import { useToast } from '@/hooks/use-toast';
 
 export function useAuthActions() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { 
     signUp: authSignUp, 
     signIn: authSignIn, 
@@ -49,7 +51,18 @@ export function useAuthActions() {
   
   const signIn = async (email: string, password: string, rememberMe = false): Promise<AuthResult> => {
     try {
-      console.log(`Signing in with email: ${email}, rememberMe: ${rememberMe}`);
+      console.log(`Attempting to sign in with email: ${email}, rememberMe: ${rememberMe}`);
+      
+      if (!email || !password) {
+        const errorMsg = 'Email and password are required';
+        toast({
+          variant: "destructive",
+          title: "Login failed",
+          description: errorMsg
+        });
+        return { success: false, error: new Error(errorMsg) };
+      }
+      
       const result = await authSignIn({ email, password });
       
       if (!result.success) {
@@ -71,6 +84,11 @@ export function useAuthActions() {
         
         if (profileError) {
           console.error('Error fetching profile:', profileError);
+          toast({
+            variant: "destructive",
+            title: "Login error",
+            description: "Could not retrieve user profile"
+          });
           return { success: false, error: profileError };
         }
         
@@ -86,8 +104,18 @@ export function useAuthActions() {
           const redirectPath = getRedirectPathByRole(profileData.role as UserRole);
           console.log(`User role: ${profileData.role}, redirecting to: ${redirectPath}`);
           navigate(redirectPath, { replace: true });
+          
+          toast({
+            title: "Login successful",
+            description: `Welcome to your ${profileData.role} portal!`
+          });
         } else {
           console.error('No profile data found for user');
+          toast({
+            variant: "destructive",
+            title: "Login error",
+            description: "User profile not found"
+          });
           return { success: false, error: new Error('No profile found for user') };
         }
       }
@@ -95,6 +123,11 @@ export function useAuthActions() {
       return result;
     } catch (error: any) {
       console.error('Sign in error:', error);
+      toast({
+        variant: "destructive",
+        title: "Login failed",
+        description: error.message || "Authentication failed"
+      });
       return { success: false, error };
     }
   };

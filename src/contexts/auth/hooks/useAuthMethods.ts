@@ -36,6 +36,11 @@ export function useAuthMethods() {
     try {
       console.log('Attempting to sign in with Supabase:', email);
       
+      // Make sure we're actually attempting to authenticate
+      if (!email || !password) {
+        throw new Error('Email and password are required');
+      }
+      
       const { data, error } = await supabase.auth.signInWithPassword({ 
         email, 
         password 
@@ -46,7 +51,12 @@ export function useAuthMethods() {
         throw error;
       }
       
-      console.log('Supabase signin successful:', data.user.email);
+      if (!data || !data.user) {
+        console.error('No user returned from authentication');
+        throw new Error('Authentication failed');
+      }
+      
+      console.log('Supabase signin successful for:', data.user.email);
       
       toast({
         title: "Login successful",

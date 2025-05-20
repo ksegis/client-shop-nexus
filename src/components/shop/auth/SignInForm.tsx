@@ -46,9 +46,15 @@ const SignInForm = () => {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (isLoading) return; // Prevent multiple submissions
+    
     setIsLoading(true);
     try {
       console.log("Attempting to sign in with:", values.email);
+      
+      if (!values.email || !values.password) {
+        throw new Error("Email and password are required");
+      }
       
       // Call the signIn function from auth context
       const { success, error } = await signIn(values.email, values.password, values.rememberMe);
@@ -56,11 +62,10 @@ const SignInForm = () => {
       if (!success) {
         // Explicitly throw the error to be caught by the catch block
         console.error("Sign in failed:", error);
-        throw error;
+        throw error || new Error("Authentication failed");
       }
       
-      // Success toast will be shown by the signIn function
-      console.log("Sign in successful");
+      // The success notification and redirection will be handled by useAuthActions
 
     } catch (error: any) {
       console.error("Sign in error:", error);
@@ -69,6 +74,9 @@ const SignInForm = () => {
         title: "Sign in failed",
         description: error.message || "Invalid credentials. Please try again.",
       });
+      
+      // Reset the form's password field on failure
+      form.setValue("password", "");
     } finally {
       setIsLoading(false);
     }
@@ -150,6 +158,7 @@ const SignInForm = () => {
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3 py-2"
                     onClick={togglePasswordVisibility}
+                    tabIndex={-1}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
@@ -180,7 +189,7 @@ const SignInForm = () => {
               size="sm"
               className="px-0 font-normal text-blue-500"
               onClick={handlePasswordReset}
-              disabled={isResetting}
+              disabled={isResetting || isLoading}
             >
               {isResetting ? "Sending..." : "Forgot password?"}
             </Button>

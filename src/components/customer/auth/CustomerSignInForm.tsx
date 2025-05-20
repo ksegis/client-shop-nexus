@@ -20,22 +20,31 @@ const CustomerSignInForm = () => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (loading) return; // Prevent multiple submissions
+    
+    if (!email.trim() || !password.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Login failed",
+        description: "Email and password are required"
+      });
+      return;
+    }
+    
     setLoading(true);
     
     try {
       console.log('Customer attempting to sign in with:', email);
       
       // Use the auth context's signIn method
-      const { success, error, data } = await signIn(email, password);
+      const { success, error } = await signIn(email, password);
       
-      if (!success || !data?.user) {
+      if (!success) {
         throw error || new Error('Sign in failed');
       }
       
-      console.log('Customer sign in successful:', data.user.email);
-      
-      // Success notification will be shown by the signIn function
-      // Navigation will be handled by the auth context's redirects
+      // Success notification and navigation will be handled by the auth context
       
     } catch (error: any) {
       console.error('Customer sign in error:', error);
@@ -44,6 +53,8 @@ const CustomerSignInForm = () => {
         title: "Login failed",
         description: error.message || "Invalid credentials"
       });
+      // Clear password on error
+      setPassword('');
     } finally {
       setLoading(false);
     }
@@ -51,6 +62,19 @@ const CustomerSignInForm = () => {
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
+  };
+  
+  const handleForgotPassword = () => {
+    if (!email.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Email required",
+        description: "Please enter your email address to reset your password"
+      });
+      return;
+    }
+    
+    navigate('/customer/reset-password', { state: { email } });
   };
 
   return (
@@ -85,6 +109,7 @@ const CustomerSignInForm = () => {
               size="sm"
               className="absolute right-0 top-0 h-full px-3 py-2"
               onClick={togglePasswordVisibility}
+              tabIndex={-1}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>
@@ -96,7 +121,8 @@ const CustomerSignInForm = () => {
             variant="link" 
             type="button" 
             className="p-0 h-auto text-sm"
-            onClick={() => navigate('/customer/reset-password')}
+            onClick={handleForgotPassword}
+            disabled={loading}
           >
             Forgot password?
           </Button>

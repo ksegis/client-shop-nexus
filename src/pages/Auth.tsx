@@ -3,6 +3,7 @@ import React, { useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import EgisLoginButton from "@/components/auth/EgisLoginButton";
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * This page now serves as a redirect handler for authentication flows
@@ -10,6 +11,8 @@ import EgisLoginButton from "@/components/auth/EgisLoginButton";
 const Auth = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { toast } = useToast();
+  
   const error = searchParams.get("error");
   const type = searchParams.get("type");
   
