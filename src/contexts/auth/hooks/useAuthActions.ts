@@ -119,8 +119,11 @@ export function useAuthActions() {
               description: `Welcome to your ${profileData.role} portal!`
             });
             
-            // Redirect the user to the appropriate dashboard
-            navigate(redirectPath, { replace: true });
+            // Redirect the user to the appropriate dashboard with a slight delay to ensure state is updated
+            setTimeout(() => {
+              console.log(`Executing navigation to ${redirectPath}`);
+              navigate(redirectPath, { replace: true });
+            }, 100);
           } else {
             console.error('No profile data found for user');
             toast({
