@@ -10,7 +10,7 @@ export const useEmployeesQuery = () => {
     queryFn: async () => {
       try {
         // Define our allowed roles - including both active and inactive roles
-        const allowedRoles: DatabaseUserRole[] = [
+        const allowedRoles: ExtendedRole[] = [
           'staff', 'admin', 'inactive_staff', 'inactive_admin'
         ];
         
