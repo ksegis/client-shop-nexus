@@ -36,11 +36,7 @@ const UserManagement = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <UsersTable 
-              onResetPassword={(userId, email) => {}}
-              onEditProfile={(userId, email) => {}}
-              onImpersonate={(userId, email) => {}}
-            />
+            <UsersTable />
           </CardContent>
         </Card>
         
