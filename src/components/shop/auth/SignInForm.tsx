@@ -184,6 +184,19 @@ const SignInForm = () => {
               {isResetting ? "Sending..." : "Forgot password?"}
             </Button>
           </div>
+          
+          <Button 
+            type="submit" 
+            className="w-full mt-2" 
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing in...
+              </>
+            ) : "Sign In"}
+          </Button>
         </form>
       </Form>
       
