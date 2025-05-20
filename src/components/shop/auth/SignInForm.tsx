@@ -49,9 +49,13 @@ const SignInForm = () => {
     setIsLoading(true);
     try {
       console.log("Attempting to sign in with:", values.email);
+      
+      // Call the signIn function from auth context
       const { success, error } = await signIn(values.email, values.password, values.rememberMe);
       
       if (!success) {
+        // Explicitly throw the error to be caught by the catch block
+        console.error("Sign in failed:", error);
         throw error;
       }
       

@@ -7,7 +7,7 @@ import { CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/auth';
 
 const CustomerSignInForm = () => {
   const [email, setEmail] = useState('');
@@ -16,6 +16,7 @@ const CustomerSignInForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { signIn } = useAuth();
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,60 +25,18 @@ const CustomerSignInForm = () => {
     try {
       console.log('Customer attempting to sign in with:', email);
       
-      // Attempt to sign in with email and password
-      const { data, error } = await supabase.auth.signInWithPassword({ 
-        email, 
-        password 
-      });
+      // Use the auth context's signIn method
+      const { success, error, data } = await signIn(email, password);
       
-      if (error) {
-        console.error('Customer sign in error:', error);
-        throw error;
+      if (!success || !data?.user) {
+        throw error || new Error('Sign in failed');
       }
       
       console.log('Customer sign in successful:', data.user.email);
       
-      // Check if the user has MFA enabled
-      if (data.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('mfa_enabled, force_password_change')
-          .eq('id', data.user.id)
-          .maybeSingle();
-        
-        // Check if password change is required
-        if (profile?.force_password_change) {
-          console.log('Password change required, redirecting to change-password page');
-          navigate('/auth/change-password', { replace: true });
-          return;
-        }
-        
-        // Check for MFA
-        if (profile?.mfa_enabled) {
-          // Store minimal session info for MFA verification
-          sessionStorage.setItem('mfaSession', JSON.stringify({
-            userId: data.user.id,
-            email: data.user.email
-          }));
-          
-          // Redirect to MFA verification page with state
-          navigate('/verify-mfa', { 
-            state: { 
-              userId: data.user.id,
-              email: data.user.email 
-            }
-          });
-          return;
-        }
-      }
+      // Success notification will be shown by the signIn function
+      // Navigation will be handled by the auth context's redirects
       
-      // If no MFA required, proceed with normal login flow
-      toast({
-        title: "Login successful",
-        description: "Welcome to your customer portal!"
-      });
-      
-      navigate('/customer');
     } catch (error: any) {
       console.error('Customer sign in error:', error);
       toast({
@@ -106,6 +65,7 @@ const CustomerSignInForm = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
+            required
           />
         </div>
         <div className="space-y-2">
@@ -117,6 +77,7 @@ const CustomerSignInForm = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
+              required
             />
             <Button
               type="button"
