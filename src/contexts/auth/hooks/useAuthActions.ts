@@ -100,13 +100,16 @@ export function useAuthActions() {
             if (profileData.force_password_change) {
               console.log('Password change required, redirecting to change-password page');
               
-              // Use navigate for internal app redirects
-              navigate('/auth/change-password', { replace: true });
-              
               toast({
                 title: "Password change required",
                 description: "Please change your password to continue"
               });
+              
+              // Add delay before navigation to ensure toast is shown
+              setTimeout(() => {
+                console.log('Navigating to change-password page');
+                navigate('/auth/change-password', { replace: true });
+              }, 500);
               
               return result;
             }
@@ -121,15 +124,14 @@ export function useAuthActions() {
               description: `Welcome to your ${profileData.role} portal!`
             });
             
-            // Check if in development mode (this is for debugging purposes)
-            const isDev = process.env.NODE_ENV === 'development' || 
-                          window.location.hostname === 'localhost' || 
-                          window.location.hostname.includes('.local');
+            // Add debug logging
+            console.log(`Preparing to navigate to ${redirectPath}`);
             
-            console.log(`Environment: ${isDev ? 'Development' : 'Production'}, performing navigation to ${redirectPath}`);
-            
-            // Hard navigation to ensure we break out of any issues with React Router
-            window.location.href = redirectPath;
+            // Use consistent navigation approach with delay to ensure toast is shown
+            setTimeout(() => {
+              console.log(`Executing navigation to ${redirectPath}`);
+              navigate(redirectPath, { replace: true });
+            }, 500);
             
             return result;
           } else {
@@ -177,8 +179,16 @@ export function useAuthActions() {
           await logAuthEvent('sign_out', user);
         }
         
-        // Force redirect to home page with a full page reload
-        window.location.href = '/';
+        toast({
+          title: "Logged out",
+          description: "You have been successfully logged out"
+        });
+        
+        // Use consistent navigation approach with delay
+        setTimeout(() => {
+          console.log('Navigating to home page after logout');
+          navigate('/', { replace: true });
+        }, 500);
       }
       
       return result;
@@ -209,10 +219,35 @@ export function useAuthActions() {
         
         // Log the password update
         await logAuthEvent('password_update', data.user);
+        
+        toast({
+          title: "Password updated",
+          description: "Your password has been successfully updated"
+        });
+        
+        // Navigate to appropriate page after password change
+        setTimeout(async () => {
+          // Get user profile to determine redirect path
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', data.user.id)
+            .single();
+            
+          const redirectPath = getRedirectPathByRole(profileData?.role as UserRole || 'customer');
+          console.log(`Navigating to ${redirectPath} after password change`);
+          navigate(redirectPath, { replace: true });
+        }, 500);
       }
       
       return { success: true };
     } catch (error: any) {
+      console.error('Password update error:', error);
+      toast({
+        variant: "destructive",
+        title: "Password update failed",
+        description: error.message || "Failed to update password"
+      });
       return { success: false, error };
     }
   };
