@@ -51,7 +51,7 @@ export function useAuthActions() {
   
   const signIn = async (email: string, password: string, rememberMe = false): Promise<AuthResult> => {
     try {
-      console.log(`Attempting to sign in with email: ${email}, rememberMe: ${rememberMe}`);
+      console.log(`Attempting sign in with email: ${email}, rememberMe: ${rememberMe}`);
       
       if (!email || !password) {
         const errorMsg = 'Email and password are required';
@@ -63,66 +63,86 @@ export function useAuthActions() {
         return { success: false, error: new Error(errorMsg) };
       }
       
+      // Call the authentication method
       const result = await authSignIn({ email, password });
       
       if (!result.success) {
-        console.error('Sign in failed:', result.error);
+        console.error('Authentication failed:', result.error);
         return result;
       }
       
       if (result.success && result.data?.user) {
-        // Log the signin event
-        await logAuthEvent('sign_in', result.data.user);
-        console.log(`Sign in successful for user: ${result.data.user.id}`);
-        
-        // Get user profile to determine redirect path
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('role, force_password_change')
-          .eq('id', result.data.user.id)
-          .single();
-        
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
-          toast({
-            variant: "destructive",
-            title: "Login error",
-            description: "Could not retrieve user profile"
-          });
-          return { success: false, error: profileError };
-        }
-        
-        if (profileData) {
-          // Check if password change is required
-          if (profileData.force_password_change) {
-            console.log('Password change required, redirecting to change-password page');
-            navigate('/auth/change-password', { replace: true });
-            return result;
+        try {
+          // Log the signin event
+          await logAuthEvent('sign_in', result.data.user);
+          console.log(`Sign in successful for user: ${result.data.user.id}`);
+          
+          // Get user profile to determine redirect path
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('role, force_password_change')
+            .eq('id', result.data.user.id)
+            .single();
+          
+          if (profileError) {
+            console.error('Error fetching profile:', profileError);
+            toast({
+              variant: "destructive",
+              title: "Login error",
+              description: "Could not retrieve user profile"
+            });
+            return { success: false, error: profileError };
           }
           
-          // Log the detected role and intended redirect path
-          const redirectPath = getRedirectPathByRole(profileData.role as UserRole);
-          console.log(`User role: ${profileData.role}, redirecting to: ${redirectPath}`);
-          navigate(redirectPath, { replace: true });
-          
-          toast({
-            title: "Login successful",
-            description: `Welcome to your ${profileData.role} portal!`
-          });
-        } else {
-          console.error('No profile data found for user');
+          if (profileData) {
+            // Check if password change is required
+            if (profileData.force_password_change) {
+              console.log('Password change required, redirecting to change-password page');
+              navigate('/auth/change-password', { replace: true });
+              
+              toast({
+                title: "Password change required",
+                description: "Please change your password to continue"
+              });
+              
+              return result;
+            }
+            
+            // Log the detected role and intended redirect path
+            const redirectPath = getRedirectPathByRole(profileData.role as UserRole);
+            console.log(`User role: ${profileData.role}, redirecting to: ${redirectPath}`);
+            
+            // Show success toast and redirect
+            toast({
+              title: "Login successful",
+              description: `Welcome to your ${profileData.role} portal!`
+            });
+            
+            // Redirect the user to the appropriate dashboard
+            navigate(redirectPath, { replace: true });
+          } else {
+            console.error('No profile data found for user');
+            toast({
+              variant: "destructive",
+              title: "Login error",
+              description: "User profile not found"
+            });
+            return { success: false, error: new Error('No profile found for user') };
+          }
+        } catch (error: any) {
+          console.error('Post-authentication error:', error);
           toast({
             variant: "destructive",
             title: "Login error",
-            description: "User profile not found"
+            description: error.message || "An error occurred after authentication"
           });
-          return { success: false, error: new Error('No profile found for user') };
+          return { success: false, error };
         }
       }
       
       return result;
     } catch (error: any) {
-      console.error('Sign in error:', error);
+      console.error('Sign in process error:', error);
       toast({
         variant: "destructive",
         title: "Login failed",

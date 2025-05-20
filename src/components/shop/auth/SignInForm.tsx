@@ -23,14 +23,14 @@ const formSchema = z.object({
   email: z.string().email({
     message: "Please enter a valid email address.",
   }),
-  password: z.string().min(6, {
-    message: "Password must be at least 6 characters.",
+  password: z.string().min(1, {
+    message: "Password is required.",
   }),
   rememberMe: z.boolean().default(false),
 });
 
 const SignInForm = () => {
-  const { signIn, resetPassword } = useAuth();
+  const { signIn } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -52,27 +52,23 @@ const SignInForm = () => {
     try {
       console.log("Attempting to sign in with:", values.email);
       
-      if (!values.email || !values.password) {
-        throw new Error("Email and password are required");
+      // Call signIn from auth context
+      const result = await signIn(values.email, values.password, values.rememberMe);
+      
+      // The result handling is done within the signIn function
+      // This includes navigation, toasts, and error handling
+      
+      if (!result.success) {
+        // If not successful, reset the password field
+        form.setValue("password", "");
       }
       
-      // Call the signIn function from auth context
-      const { success, error } = await signIn(values.email, values.password, values.rememberMe);
-      
-      if (!success) {
-        // Explicitly throw the error to be caught by the catch block
-        console.error("Sign in failed:", error);
-        throw error || new Error("Authentication failed");
-      }
-      
-      // The success notification and redirection will be handled by useAuthActions
-
     } catch (error: any) {
       console.error("Sign in error:", error);
       toast({
         variant: "destructive",
         title: "Sign in failed",
-        description: error.message || "Invalid credentials. Please try again.",
+        description: error.message || "Authentication error occurred.",
       });
       
       // Reset the form's password field on failure
@@ -95,6 +91,7 @@ const SignInForm = () => {
 
     setIsResetting(true);
     try {
+      const { signIn, resetPassword } = useAuth();
       const { success, error } = await resetPassword(email);
       
       if (!success) {

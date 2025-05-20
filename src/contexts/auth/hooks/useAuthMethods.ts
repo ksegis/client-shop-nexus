@@ -34,45 +34,43 @@ export function useAuthMethods() {
   
   const signIn = async ({ email, password }) => {
     try {
-      console.log('Attempting to sign in with Supabase:', email);
+      console.log('Attempting to sign in with:', email);
       
-      // Make sure we're actually attempting to authenticate
-      if (!email || !password) {
-        throw new Error('Email and password are required');
-      }
-      
+      // Make the authentication request to Supabase
       const { data, error } = await supabase.auth.signInWithPassword({ 
         email, 
         password 
       });
       
+      // If there's an error from Supabase, throw it to be caught below
       if (error) {
-        console.error('Supabase signin error:', error);
+        console.error('Authentication error:', error);
         throw error;
       }
       
+      // Check if we got valid user data back
       if (!data || !data.user) {
-        console.error('No user returned from authentication');
+        console.error('No user data returned from authentication');
         throw new Error('Authentication failed');
       }
       
-      console.log('Supabase signin successful for:', data.user.email);
-      
-      toast({
-        title: "Login successful",
-        description: "Welcome back!"
-      });
+      // Authentication succeeded, log success but don't show toast yet
+      // Toast will be shown by useAuthActions after profile is loaded
+      console.log('Authentication successful for:', data.user.email);
       
       return { success: true, data };
     } catch (error) {
-      console.error('Sign in error details:', error);
+      // Log the error details for debugging
+      console.error('Sign in failed:', error);
       
+      // Show error toast to user
       toast({
         variant: "destructive",
         title: "Login failed",
         description: error.message || "Invalid credentials"
       });
       
+      // Return failure result
       return { success: false, error };
     }
   };

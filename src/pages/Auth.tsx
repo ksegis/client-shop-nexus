@@ -6,7 +6,7 @@ import EgisLoginButton from "@/components/auth/EgisLoginButton";
 import { useToast } from '@/hooks/use-toast';
 
 /**
- * This page now serves as a redirect handler for authentication flows
+ * This page serves as a redirect handler for authentication flows
  */
 const Auth = () => {
   const navigate = useNavigate();

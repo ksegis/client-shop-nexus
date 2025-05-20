@@ -16,7 +16,7 @@ const CustomerSignInForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { signIn, resetPassword } = useAuth();
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,21 +37,22 @@ const CustomerSignInForm = () => {
     try {
       console.log('Customer attempting to sign in with:', email);
       
-      // Use the auth context's signIn method
-      const { success, error } = await signIn(email, password);
+      // Call the auth context's signIn method
+      const result = await signIn(email, password);
       
-      if (!success) {
-        throw error || new Error('Sign in failed');
+      // Result handling (navigation and toasts) is done inside the signIn function
+      // We only need to handle additional errors here
+      
+      if (!result.success) {
+        // Clear password on error
+        setPassword('');
       }
-      
-      // Success notification and navigation will be handled by the auth context
-      
     } catch (error: any) {
       console.error('Customer sign in error:', error);
       toast({
         variant: "destructive",
         title: "Login failed",
-        description: error.message || "Invalid credentials"
+        description: error.message || "Authentication failed"
       });
       // Clear password on error
       setPassword('');
@@ -64,7 +65,7 @@ const CustomerSignInForm = () => {
     setShowPassword(!showPassword);
   };
   
-  const handleForgotPassword = () => {
+  const handleForgotPassword = async () => {
     if (!email.trim()) {
       toast({
         variant: "destructive",
@@ -74,7 +75,27 @@ const CustomerSignInForm = () => {
       return;
     }
     
-    navigate('/customer/reset-password', { state: { email } });
+    setLoading(true);
+    try {
+      const result = await resetPassword(email);
+      
+      if (result.success) {
+        toast({
+          title: "Password reset email sent",
+          description: "Check your email for a link to reset your password"
+        });
+      } else {
+        throw result.error;
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Password reset failed",
+        description: error.message || "Failed to send password reset email"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
