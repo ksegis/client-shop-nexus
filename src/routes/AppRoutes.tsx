@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/auth';
@@ -16,6 +17,7 @@ import AuthCallbackPage from '@/pages/auth/Callback';
 import VerifyMFA from '@/pages/VerifyMFA';
 import InviteAccept from '@/pages/auth/InviteAccept';
 import ChangePassword from '@/pages/auth/ChangePassword';
+import AccountRecovery from '@/pages/AccountRecovery';
 
 // Profile redirect component that checks the user role and redirects accordingly
 const ProfileRedirect = () => {
@@ -70,6 +72,9 @@ const AppRoutes: React.FC = () => {
             {/* Invitation and password change routes */}
             <Route path="/auth/invite" element={<InviteAccept />} />
             <Route path="/auth/change-password" element={<ChangePassword />} />
+            
+            {/* Account recovery route */}
+            <Route path="/account-recovery" element={<AccountRecovery />} />
 
             {/* MFA verification route */}
             <Route path="/verify-mfa" element={<VerifyMFA />} />

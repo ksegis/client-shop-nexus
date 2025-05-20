@@ -111,8 +111,11 @@ export function useAuthActions() {
 
   const resetPassword = async (email: string): Promise<AuthResult> => {
     try {
+      // Get the current origin and specify the exact path to redirect to
+      const redirectTo = `${window.location.origin}/auth/change-password`;
+      
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/auth/change-password'
+        redirectTo: redirectTo
       });
       
       if (error) throw error;

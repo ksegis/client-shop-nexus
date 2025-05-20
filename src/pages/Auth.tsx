@@ -11,13 +11,21 @@ const Auth = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const error = searchParams.get("error");
+  const type = searchParams.get("type");
   
   useEffect(() => {
+    // Check for password reset flow
+    if (type === "recovery") {
+      // If it's a password reset, direct to the change password page
+      navigate("/auth/change-password", { replace: true });
+      return;
+    }
+    
     // Check if we need to show this page or redirect to homepage
-    if (!error) {
+    if (!error && !type) {
       console.log("No error parameter, showing portal selection");
     }
-  }, [error, navigate]);
+  }, [error, type, navigate]);
 
   // Return a minimal auth page with EGIS login option
   return (
