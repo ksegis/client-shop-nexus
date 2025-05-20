@@ -9,8 +9,10 @@ export const useEmployeesQuery = () => {
     queryKey: ['employees'],
     queryFn: async () => {
       try {
-        // Define our allowed roles - limiting to database-accepted roles for the query
-        const allowedRoles: DatabaseUserRole[] = ['staff', 'admin'];
+        // Define our allowed roles - including both active and inactive roles
+        const allowedRoles: DatabaseUserRole[] = [
+          'staff', 'admin', 'inactive_staff', 'inactive_admin'
+        ];
         
         const { data, error: queryError } = await supabase
           .from('profiles')

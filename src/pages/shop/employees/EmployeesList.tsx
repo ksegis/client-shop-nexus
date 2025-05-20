@@ -6,6 +6,7 @@ import { UserCheck, UserX } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useEmployees } from './EmployeesContext';
 import { EmployeeDialog } from './EmployeeDialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export const EmployeesList = () => {
   const { toast } = useToast();
@@ -43,7 +44,7 @@ export const EmployeesList = () => {
   }
 
   return (
-    <>
+    <TooltipProvider>
       <Table>
         <TableHeader>
           <TableRow>
@@ -56,63 +57,82 @@ export const EmployeesList = () => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {employees.map((employee) => (
-            <TableRow 
-              key={employee.id}
-              className={selectedEmployeeId === employee.id ? "bg-muted" : ""}
-              onClick={() => handleSelectEmployee(employee.id)}
-            >
-              <TableCell className="font-medium">
-                {employee.first_name} {employee.last_name}
-              </TableCell>
-              <TableCell>{employee.email}</TableCell>
-              <TableCell>{employee.phone || "—"}</TableCell>
-              <TableCell>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  employee.role === 'admin' || employee.role === 'inactive_admin'
-                    ? 'bg-purple-100 text-purple-800' 
-                    : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {employee.role === 'inactive_admin' ? 'admin' : 
-                   employee.role === 'inactive_staff' ? 'staff' : 
-                   employee.role}
-                </span>
-              </TableCell>
-              <TableCell>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  employee.role.startsWith('inactive_') 
-                    ? 'bg-red-100 text-red-800' 
-                    : 'bg-green-100 text-green-800'
-                }`}>
-                  {employee.role.startsWith('inactive_') ? 'inactive' : 'active'}
-                </span>
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end gap-2">
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditEmployee(employee);
-                    }}
-                  >
-                    <UserCheck className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeactivateEmployee(employee);
-                    }}
-                  >
-                    <UserX className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
+          {employees.map((employee) => {
+            const isInactive = employee.role.startsWith('inactive_');
+            
+            return (
+              <TableRow 
+                key={employee.id}
+                className={selectedEmployeeId === employee.id ? "bg-muted" : ""}
+                onClick={() => handleSelectEmployee(employee.id)}
+              >
+                <TableCell className="font-medium">
+                  {employee.first_name} {employee.last_name}
+                </TableCell>
+                <TableCell>{employee.email}</TableCell>
+                <TableCell>{employee.phone || "—"}</TableCell>
+                <TableCell>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    employee.role === 'admin' || employee.role === 'inactive_admin'
+                      ? 'bg-purple-100 text-purple-800' 
+                      : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {employee.role === 'inactive_admin' ? 'admin' : 
+                     employee.role === 'inactive_staff' ? 'staff' : 
+                     employee.role}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    isInactive
+                      ? 'bg-red-100 text-red-800' 
+                      : 'bg-green-100 text-green-800'
+                  }`}>
+                    {isInactive ? 'inactive' : 'active'}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditEmployee(employee);
+                          }}
+                        >
+                          <UserCheck className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Edit employee</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeactivateEmployee(employee);
+                          }}
+                        >
+                          <UserX className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {isInactive ? <p>Activate employee</p> : <p>Deactivate employee</p>}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
 
@@ -127,6 +147,6 @@ export const EmployeesList = () => {
         }}
         employee={selectedEmployee}
       />
-    </>
+    </TooltipProvider>
   );
 };
