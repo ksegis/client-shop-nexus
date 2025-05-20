@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
@@ -18,6 +17,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const formSchema = z.object({
   email: z.string().email({
@@ -184,14 +184,6 @@ const SignInForm = () => {
               {isResetting ? "Sending..." : "Forgot password?"}
             </Button>
           </div>
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in...
-              </>
-            ) : "Sign In"}
-          </Button>
         </form>
       </Form>
       
