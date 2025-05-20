@@ -119,11 +119,10 @@ export function useAuthActions() {
               description: `Welcome to your ${profileData.role} portal!`
             });
             
-            // Redirect the user to the appropriate dashboard with a slight delay to ensure state is updated
-            setTimeout(() => {
-              console.log(`Executing navigation to ${redirectPath}`);
-              navigate(redirectPath, { replace: true });
-            }, 100);
+            // Force direct navigation instead of using React Router to ensure full page reload
+            window.location.href = redirectPath;
+            
+            return result;
           } else {
             console.error('No profile data found for user');
             toast({
@@ -170,7 +169,7 @@ export function useAuthActions() {
         }
         
         // Force redirect to home page
-        navigate('/', { replace: true });
+        window.location.href = '/';
       }
       
       return result;
