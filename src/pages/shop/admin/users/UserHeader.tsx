@@ -1,74 +1,32 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
-import { UserPlus, UserPlus2, MailPlus } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { InviteUserForm } from './InviteUserForm';
-import { useAuth } from '@/contexts/auth';
-import { useToast } from '@/hooks/use-toast';
+import { UserPlus, Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface UserHeaderProps {
   onAddUser: () => void;
 }
 
-export const UserHeader: React.FC<UserHeaderProps> = ({ onAddUser }) => {
-  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
-  const { profile } = useAuth();
-  const { toast } = useToast();
-  
-  const isAdmin = profile?.role === 'admin';
-
-  const handleInviteClick = () => {
-    if (!isAdmin) {
-      toast({
-        title: "Access denied",
-        description: "Only administrators can invite new users",
-        variant: "destructive"
-      });
-      return;
-    }
-    setInviteDialogOpen(true);
-  };
-
+export function UserHeader({ onAddUser }: UserHeaderProps) {
   return (
-    <div className="flex justify-between items-center">
+    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
       <div>
-        <h1 className="text-2xl font-bold">User Management</h1>
-        <p className="text-muted-foreground">Manage users and their permissions</p>
+        <h1 className="text-2xl font-semibold">User Management</h1>
+        <p className="text-muted-foreground">Manage all user accounts and permissions.</p>
       </div>
-
-      <div className="flex space-x-2">
-        <Button 
-          variant="outline" 
-          onClick={handleInviteClick}
-          className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200"
-        >
-          <MailPlus className="h-4 w-4 text-blue-600" />
-          <span className="font-medium">Invite User</span>
-          {!isAdmin && <span className="sr-only">(Admin only)</span>}
-        </Button>
-        
+      <div className="flex gap-2">
         <Button onClick={onAddUser} className="flex items-center gap-2">
           <UserPlus className="h-4 w-4" />
-          <span>Add User</span>
+          Add User
+        </Button>
+        <Button variant="outline" asChild className="flex items-center gap-2">
+          <Link to="/shop/admin/delete-user">
+            <Trash2 className="h-4 w-4" />
+            Delete by Email
+          </Link>
         </Button>
       </div>
-
-      {/* Invite User Dialog */}
-      <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Invite User</DialogTitle>
-            <DialogDescription>
-              Send an invitation to a new staff member to join the portal.
-            </DialogDescription>
-          </DialogHeader>
-          <InviteUserForm 
-            onSuccess={() => setInviteDialogOpen(false)} 
-            onCancel={() => setInviteDialogOpen(false)} 
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
-};
+}

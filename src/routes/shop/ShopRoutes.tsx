@@ -20,6 +20,7 @@ import SessionManagement from "@/pages/shop/admin/SessionManagement";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import SecurityDashboard from "@/pages/shop/admin/components/SecurityDashboard";
 import AdminPage from "@/pages/shop/admin/AdminPage";
+import DeleteUserByEmailPage from "@/pages/shop/admin/users/DeleteUserByEmailPage";
 
 const ShopRoutes = () => {
   return (
@@ -61,6 +62,12 @@ const ShopRoutes = () => {
         <Route path="admin/user-management" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <UserManagement />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="admin/delete-user" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <DeleteUserByEmailPage />
           </ProtectedRoute>
         } />
 
