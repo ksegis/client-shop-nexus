@@ -21,6 +21,11 @@ export const useProfileManagement = (refetchUsers: () => Promise<void>) => {
 
       if (updateError) throw updateError;
       
+      toast({
+        title: "Profile Updated",
+        description: "User profile has been successfully updated.",
+      });
+      
       await refetchUsers();
     } catch (error: any) {
       toast({

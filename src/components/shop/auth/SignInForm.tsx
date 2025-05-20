@@ -1,164 +1,173 @@
 
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from "@/components/ui/checkbox";
-import { CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Link } from 'react-router-dom';
+import { useAuth } from '@/contexts/auth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { logAuditEvent, AuditLogType } from '@/utils/auditUtils';
-import { supabase } from '@/integrations/supabase/client';
+
+const formSchema = z.object({
+  email: z.string().email({
+    message: "Please enter a valid email address.",
+  }),
+  password: z.string().min(6, {
+    message: "Password must be at least 6 characters.",
+  }),
+  rememberMe: z.boolean().default(false),
+});
 
 const SignInForm = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const { signIn, resetPassword } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+      rememberMe: false,
+    },
+  });
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsLoading(true);
     try {
-      // Attempt to sign in with email and password
-      const { data, error } = await supabase.auth.signInWithPassword({ 
-        email, 
-        password 
-      });
+      const { success, error } = await signIn(values.email, values.password, values.rememberMe);
       
-      if (error) throw error;
-      
-      // Check if the user has MFA enabled
-      if (data.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('mfa_enabled')
-          .eq('id', data.user.id)
-          .maybeSingle();
-        
-        if (profile?.mfa_enabled) {
-          // Store minimal session info for MFA verification
-          sessionStorage.setItem('mfaSession', JSON.stringify({
-            userId: data.user.id,
-            email: data.user.email
-          }));
-          
-          // Redirect to MFA verification page with state
-          navigate('/verify-mfa', { 
-            state: { 
-              userId: data.user.id,
-              email: data.user.email 
-            }
-          });
-          return;
-        }
+      if (!success) {
+        throw error;
       }
-      
-      // If no MFA required, proceed with normal login flow
-      toast({
-        title: "Login successful",
-        description: "Welcome back!"
-      });
-      
-      navigate('/shop');
+
     } catch (error: any) {
-      console.error('Sign in error:', error);
+      console.error("Sign in error:", error);
       toast({
         variant: "destructive",
-        title: "Login failed",
-        description: error.message || "Invalid credentials"
+        title: "Sign in failed",
+        description: error.message || "Invalid credentials. Please try again.",
       });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  };
+  }
 
-  const handleSkipSignIn = () => {
-    // Log the skip auth event if not in production
-    if (!import.meta.env.PROD) {
-      logAuditEvent(AuditLogType.SKIP_AUTH, {
-        email: email || 'anonymous',
-        timestamp: new Date().toISOString()
-      });
-      navigate('/shop');
-    } else {
+  const handlePasswordReset = async () => {
+    const email = form.getValues("email");
+    if (!email) {
       toast({
         variant: "destructive",
-        title: "Not available in production",
-        description: "Skip sign-in is only available in development mode."
+        title: "Email required",
+        description: "Please enter your email address to reset your password.",
       });
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const { success, error } = await resetPassword(email);
+      
+      if (!success) {
+        throw error;
+      }
+      
+      toast({
+        title: "Password reset email sent",
+        description: "Check your email for a link to reset your password.",
+      });
+      
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Reset failed",
+        description: error.message || "Failed to send reset email.",
+      });
+    } finally {
+      setIsResetting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSignIn}>
-      <CardContent className="space-y-4 pt-4">
-        <div className="space-y-2">
-          <Label htmlFor="signin-email">Email</Label>
-          <Input 
-            id="signin-email" 
-            type="email" 
-            placeholder="you@example.com" 
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={loading}
+    <div className="p-6">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input placeholder="email@example.com" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="signin-password">Password</Label>
-          <Input 
-            id="signin-password" 
-            type="password" 
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={loading}
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Password</FormLabel>
+                <FormControl>
+                  <Input type="password" placeholder="••••••••" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="remember-me" 
-            checked={rememberMe} 
-            onCheckedChange={(checked) => setRememberMe(!!checked)} 
-            disabled={loading}
+          <FormField
+            control={form.control}
+            name="rememberMe"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormLabel className="text-sm font-normal">Remember me</FormLabel>
+              </FormItem>
+            )}
           />
-          <label 
-            htmlFor="remember-me"
-            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-          >
-            Remember me
-          </label>
-        </div>
-        
-        <Button 
-          type="submit" 
-          className="w-full" 
-          disabled={loading}
-        >
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Signing in...
-            </>
-          ) : "Sign In"}
-        </Button>
-        
-        <div className="text-sm text-center text-gray-500">
-          <button
-            type="button"
-            className="text-primary hover:underline"
-            disabled={loading}
-            onClick={handleSkipSignIn}
-          >
-            Skip sign in & go to dashboard
-          </button>
-        </div>
-      </CardContent>
-    </form>
+          <div className="flex justify-between items-center">
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="px-0 font-normal text-blue-500"
+              onClick={handlePasswordReset}
+              disabled={isResetting}
+            >
+              {isResetting ? "Sending..." : "Forgot password?"}
+            </Button>
+          </div>
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? "Signing in..." : "Sign In"}
+          </Button>
+        </form>
+      </Form>
+      
+      <div className="mt-4 text-center text-sm">
+        <p className="text-gray-500">
+          Have an invitation? <Link to="/auth/invite" className="text-blue-500 hover:underline">Accept invitation</Link>
+        </p>
+      </div>
+    </div>
   );
 };
 

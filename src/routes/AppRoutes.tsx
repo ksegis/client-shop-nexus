@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/auth';
@@ -14,7 +13,9 @@ import NotFound from '@/pages/NotFound';
 import Unauthorized from '@/pages/Unauthorized';
 import { useAuth } from '@/contexts/auth';
 import AuthCallbackPage from '@/pages/auth/Callback';
-import VerifyMFA from '@/pages/VerifyMFA'; // Add this import
+import VerifyMFA from '@/pages/VerifyMFA';
+import InviteAccept from '@/pages/auth/InviteAccept';
+import ChangePassword from '@/pages/auth/ChangePassword';
 
 // Profile redirect component that checks the user role and redirects accordingly
 const ProfileRedirect = () => {
@@ -34,6 +35,23 @@ const ProfileRedirect = () => {
   }
 };
 
+// Check if user needs to change password
+const PasswordChangeRedirect = () => {
+  const { profile } = useAuth();
+  
+  if (!profile) {
+    return <div className="p-6">Loading profile...</div>;
+  }
+  
+  // If force_password_change is true, redirect to change password page
+  if (profile.force_password_change) {
+    return <Navigate to="/auth/change-password" replace />;
+  }
+  
+  // Otherwise continue to the requested page
+  return null;
+};
+
 const AppRoutes: React.FC = () => {
   // Add debug logging to verify routes are correctly set up
   console.log("AppRoutes component loading");
@@ -49,15 +67,35 @@ const AppRoutes: React.FC = () => {
             <Route path="/shop-login" element={<ShopLogin />} />
             <Route path="/customer-login" element={<CustomerLogin />} />
 
+            {/* Invitation and password change routes */}
+            <Route path="/auth/invite" element={<InviteAccept />} />
+            <Route path="/auth/change-password" element={<ChangePassword />} />
+
             {/* MFA verification route */}
             <Route path="/verify-mfa" element={<VerifyMFA />} />
 
             {/* Direct access to all routes */}
-            <Route path="/customer/*" element={<CustomerRoutes />} />
-            <Route path="/shop/*" element={<ShopRoutes />} />
+            <Route path="/customer/*" element={
+              <>
+                <PasswordChangeRedirect />
+                <CustomerRoutes />
+              </>
+            } />
+            
+            <Route path="/shop/*" element={
+              <>
+                <PasswordChangeRedirect />
+                <ShopRoutes />
+              </>
+            } />
             
             {/* Direct access to admin page at root level */}
-            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin" element={
+              <>
+                <PasswordChangeRedirect />
+                <AdminPage />
+              </>
+            } />
             
             {/* Unauthorized access page */}
             <Route path="/unauthorized" element={<Unauthorized />} />

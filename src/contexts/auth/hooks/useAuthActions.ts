@@ -60,14 +60,21 @@ export function useAuthActions() {
         // Get user profile to determine redirect path
         const { data: profileData } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, force_password_change')
           .eq('id', result.data.user.id)
           .single();
         
-        if (profileData?.role) {
+        if (profileData) {
+          // Check if password change is required
+          if (profileData.force_password_change) {
+            navigate('/auth/change-password', { replace: true });
+            return result;
+          }
+          
           // Log the detected role and intended redirect path
           const redirectPath = getRedirectPathByRole(profileData.role as UserRole);
           console.log(`User role: ${profileData.role}, redirecting to: ${redirectPath}`);
+          navigate(redirectPath, { replace: true });
         }
       }
       
@@ -105,7 +112,7 @@ export function useAuthActions() {
   const resetPassword = async (email: string): Promise<AuthResult> => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/customer/reset-password'
+        redirectTo: window.location.origin + '/auth/change-password'
       });
       
       if (error) throw error;
@@ -125,8 +132,16 @@ export function useAuthActions() {
       
       if (error) throw error;
       
-      // Log the password update
+      // Update force_password_change flag to false
       if (data?.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ force_password_change: false })
+          .eq('id', data.user.id);
+          
+        if (profileError) throw profileError;
+        
+        // Log the password update
         await logAuthEvent('password_update', data.user);
       }
       

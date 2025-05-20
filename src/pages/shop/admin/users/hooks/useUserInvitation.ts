@@ -93,17 +93,31 @@ export const useUserInvitation = (refetchUsers: () => Promise<void>) => {
         // Continue anyway since the user was created
       }
       
+      // Get the application's base URL
+      const baseUrl = window.location.origin;
+      
+      // Construct the invitation URL
+      const inviteUrl = `${baseUrl}/auth/invite?token=${inviteToken}`;
+      
       // Log the invitation event
       await logAuthEvent('user_invited', currentUser.id, {
         invited_user_email: email,
         invited_user_role: role,
-        invite_token: inviteToken
+        invite_token: inviteToken,
+        invite_url: inviteUrl
       });
 
-      // Simulate sending invitation email
+      // Show invitation information with the URL
       toast({
-        title: "Invitation Sent",
-        description: `An invitation has been sent to ${email}`,
+        title: "Invitation Created",
+        description: "Send this link to the user to complete their registration",
+        action: (
+          <div className="mt-2 p-2 bg-gray-100 rounded text-sm overflow-hidden">
+            <div className="font-medium mb-1">Invitation Link:</div>
+            <div className="text-xs break-all">{inviteUrl}</div>
+          </div>
+        ),
+        duration: 10000, // Show for longer so they can copy the link
       });
       
       await refetchUsers();
