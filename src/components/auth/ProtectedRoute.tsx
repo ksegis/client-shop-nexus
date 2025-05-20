@@ -13,18 +13,20 @@ const ProtectedRoute = ({
   children, 
   allowedRoles 
 }: ProtectedRouteProps) => {
-  const { user, profile, isLoading } = useAuth();
+  const { user, profile, isLoading, isAuthenticated } = useAuth();
   const location = useLocation();
 
   // For debugging - log auth state
   useEffect(() => {
     console.log('Protected route auth state:', { 
       isLoading, 
-      isAuthenticated: !!user, 
+      isAuthenticated, 
+      user: !!user,
       userRole: profile?.role,
-      requiredRoles: allowedRoles
+      requiredRoles: allowedRoles,
+      path: location.pathname
     });
-  }, [isLoading, user, profile, allowedRoles]);
+  }, [isLoading, isAuthenticated, user, profile, allowedRoles, location.pathname]);
 
   // If still loading auth state, show loading indicator
   if (isLoading) {
@@ -39,7 +41,8 @@ const ProtectedRoute = ({
   }
   
   // If no user, redirect to login
-  if (!user) {
+  if (!user || !isAuthenticated) {
+    console.log('No authenticated user, redirecting to login');
     return <Navigate to="/shop-login" state={{ from: location }} replace />;
   }
   
@@ -54,6 +57,7 @@ const ProtectedRoute = ({
   
   // If not authorized, redirect to unauthorized page
   if (!hasRequiredRole) {
+    console.log('User does not have required role, redirecting to unauthorized');
     return <Navigate to="/unauthorized" state={{ from: location }} replace />;
   }
   

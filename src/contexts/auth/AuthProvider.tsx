@@ -14,6 +14,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Check for development user on mount and on localStorage changes
   useEffect(() => {
     const checkForDevUser = () => {
+      console.log('Checking for development user...');
+      
       // Check if we have a dev user in localStorage
       const devUserString = localStorage.getItem('dev-customer-user');
       
@@ -42,6 +44,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // No dev user found
         setUser(null);
         setIsAuthenticated(false);
+        console.log('No development user found');
       }
       
       setIsLoading(false);
@@ -75,18 +78,67 @@ export function AuthProvider({ children }: AuthProviderProps) {
     session: user ? { user } : null,
     isLoading,
     isAuthenticated,
-    signUp: async () => ({ success: true }),
-    signIn: async () => ({ success: true }),
+    signUp: async (email, password, metadata) => {
+      console.log('Creating development user:', email);
+      // Create a mock user object
+      const devUser = {
+        id: 'dev-' + Date.now(),
+        email,
+        user_metadata: {
+          ...metadata,
+          first_name: metadata?.first_name || '',
+          last_name: metadata?.last_name || '',
+          role: email === 'customer@example.com' ? 'admin' : (metadata?.role || 'customer')
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Store in localStorage
+      localStorage.setItem('dev-customer-user', JSON.stringify(devUser));
+      
+      // Update state
+      setUser(devUser);
+      setIsAuthenticated(true);
+      
+      return { success: true, error: null };
+    },
+    signIn: async (email, password) => {
+      console.log('Signing in development user:', email);
+      
+      // Create a mock user object
+      const devUser = {
+        id: 'dev-' + Date.now(),
+        email,
+        user_metadata: {
+          first_name: 'Dev',
+          last_name: 'User',
+          role: email === 'customer@example.com' ? 'admin' : 'customer'
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Store in localStorage
+      localStorage.setItem('dev-customer-user', JSON.stringify(devUser));
+      
+      // Update state
+      setUser(devUser);
+      setIsAuthenticated(true);
+      
+      return { success: true, error: null };
+    },
     signOut: async () => {
+      console.log('Signing out development user');
       // Clear development user
       localStorage.removeItem('dev-customer-user');
       setUser(null);
       setIsAuthenticated(false);
-      return { success: true };
+      return { success: true, error: null };
     },
-    resetPassword: async () => ({ success: true }),
-    updatePassword: async () => ({ success: true }),
-    updateProfile: async () => ({ success: true }),
+    resetPassword: async () => ({ success: true, error: null }),
+    updatePassword: async () => ({ success: true, error: null }),
+    updateProfile: async () => ({ success: true, error: null }),
     validateAccess: () => isAuthenticated,
   };
   

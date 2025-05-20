@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/auth';
 import { MessagingProvider } from '@/contexts/messaging';
@@ -55,6 +54,36 @@ const PasswordChangeRedirect = () => {
   return null;
 };
 
+// Auth checker for shop routes
+const ShopRoutesWrapper = () => {
+  const { user, isLoading } = useAuth();
+  
+  // If loading, show loading
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+          <p className="text-sm text-muted-foreground">Loading authentication state...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // If not authenticated, redirect to login
+  if (!user) {
+    return <Navigate to="/shop-login" replace />;
+  }
+  
+  // User is authenticated, show shop routes
+  return (
+    <>
+      <PasswordChangeRedirect />
+      <ShopRoutes />
+    </>
+  );
+};
+
 const AppRoutes: React.FC = () => {
   // Add debug logging to verify routes are correctly set up
   console.log("AppRoutes component loading");
@@ -92,12 +121,7 @@ const AppRoutes: React.FC = () => {
             } />
             
             {/* Shop portal routes - everything under /shop prefix */}
-            <Route path="/shop/*" element={
-              <>
-                <PasswordChangeRedirect />
-                <ShopRoutes />
-              </>
-            } />
+            <Route path="/shop/*" element={<ShopRoutesWrapper />} />
             
             {/* Admin routes now properly under /shop/admin */}
             <Route path="/shop/admin/*" element={

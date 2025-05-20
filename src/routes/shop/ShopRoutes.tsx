@@ -26,35 +26,133 @@ const ShopRoutes = () => {
   return (
     <Layout portalType="shop">
       <Routes>
-        {/* Shop main dashboard */}
-        <Route index element={<Dashboard />} />
-        <Route path="dashboard" element={<Dashboard />} />
+        {/* Wrap all shop routes in ProtectedRoute */}
+        <Route
+          index
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
         
         {/* Shop user profile */}
-        <Route path="profile" element={<Profile />} />
+        <Route
+          path="profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
         
         {/* Customer management */}
-        <Route path="customers" element={<Customers />} />
+        <Route
+          path="customers"
+          element={
+            <ProtectedRoute>
+              <Customers />
+            </ProtectedRoute>
+          }
+        />
         
         {/* Document management */}
-        <Route path="estimates" element={<Estimates />} />
-        <Route path="work-orders" element={<WorkOrders />} />
-        <Route path="work-orders/:id" element={<WorkOrderDetailPage />} />
-        <Route path="invoices" element={<Invoices />} />
+        <Route
+          path="estimates"
+          element={
+            <ProtectedRoute>
+              <Estimates />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="work-orders"
+          element={
+            <ProtectedRoute>
+              <WorkOrders />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="work-orders/:id"
+          element={
+            <ProtectedRoute>
+              <WorkOrderDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="invoices"
+          element={
+            <ProtectedRoute>
+              <Invoices />
+            </ProtectedRoute>
+          }
+        />
         
         {/* Reporting */}
-        <Route path="reports" element={<Reports />} />
+        <Route
+          path="reports"
+          element={
+            <ProtectedRoute>
+              <Reports />
+            </ProtectedRoute>
+          }
+        />
         
         {/* Inventory management */}
-        <Route path="parts" element={<Parts />} />
-        <Route path="inventory" element={<Inventory />} />
+        <Route
+          path="parts"
+          element={
+            <ProtectedRoute>
+              <Parts />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="inventory"
+          element={
+            <ProtectedRoute>
+              <Inventory />
+            </ProtectedRoute>
+          }
+        />
         
         {/* Service management */}
-        <Route path="service-desk" element={<ServiceDesk />} />
-        <Route path="service-appointments" element={<ServiceAppointments />} />
+        <Route
+          path="service-desk"
+          element={
+            <ProtectedRoute>
+              <ServiceDesk />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="service-appointments"
+          element={
+            <ProtectedRoute>
+              <ServiceAppointments />
+            </ProtectedRoute>
+          }
+        />
         
         {/* Employee management */}
-        <Route path="employees" element={<Employees />} />
+        <Route
+          path="employees"
+          element={
+            <ProtectedRoute>
+              <Employees />
+            </ProtectedRoute>
+          }
+        />
         
         {/* Admin section */}
         <Route path="admin" element={
