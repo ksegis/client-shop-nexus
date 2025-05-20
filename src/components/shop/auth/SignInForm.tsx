@@ -30,7 +30,7 @@ const formSchema = z.object({
 });
 
 const SignInForm = () => {
-  const { signIn } = useAuth();
+  const { signIn, resetPassword } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -49,20 +49,16 @@ const SignInForm = () => {
     if (isLoading) return; // Prevent multiple submissions
     
     setIsLoading(true);
+    
     try {
-      console.log("Attempting to sign in with:", values.email);
-      
-      // Call signIn from auth context
       const result = await signIn(values.email, values.password, values.rememberMe);
       
-      // The result handling is done within the signIn function
-      // This includes navigation, toasts, and error handling
-      
+      // If login was not successful, reset password field
       if (!result.success) {
-        // If not successful, reset the password field
         form.setValue("password", "");
       }
       
+      // Note: Navigation is handled inside signIn function if successful
     } catch (error: any) {
       console.error("Sign in error:", error);
       toast({
@@ -70,8 +66,6 @@ const SignInForm = () => {
         title: "Sign in failed",
         description: error.message || "Authentication error occurred.",
       });
-      
-      // Reset the form's password field on failure
       form.setValue("password", "");
     } finally {
       setIsLoading(false);
@@ -90,19 +84,15 @@ const SignInForm = () => {
     }
 
     setIsResetting(true);
+    
     try {
-      const { signIn, resetPassword } = useAuth();
-      const { success, error } = await resetPassword(email);
+      const result = await resetPassword(email);
       
-      if (!success) {
-        throw error;
+      if (!result.success) {
+        throw result.error;
       }
       
-      toast({
-        title: "Password reset email sent",
-        description: "Check your email for a link to reset your password.",
-      });
-      
+      // Success toast is shown in resetPassword function
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -129,7 +119,7 @@ const SignInForm = () => {
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input placeholder="email@example.com" {...field} />
+                  <Input placeholder="email@example.com" {...field} disabled={isLoading} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -147,6 +137,7 @@ const SignInForm = () => {
                       type={showPassword ? "text" : "password"} 
                       placeholder="••••••••" 
                       {...field} 
+                      disabled={isLoading}
                     />
                   </FormControl>
                   <Button
@@ -156,6 +147,7 @@ const SignInForm = () => {
                     className="absolute right-0 top-0 h-full px-3 py-2"
                     onClick={togglePasswordVisibility}
                     tabIndex={-1}
+                    disabled={isLoading}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
@@ -173,6 +165,7 @@ const SignInForm = () => {
                   <Checkbox
                     checked={field.value}
                     onCheckedChange={field.onChange}
+                    disabled={isLoading}
                   />
                 </FormControl>
                 <FormLabel className="text-sm font-normal">Remember me</FormLabel>

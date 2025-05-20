@@ -42,7 +42,7 @@ export function useAuthMethods() {
         password 
       });
       
-      // If there's an error from Supabase, throw it to be caught below
+      // If there's an error from Supabase, throw it
       if (error) {
         console.error('Authentication error:', error);
         throw error;
@@ -54,13 +54,11 @@ export function useAuthMethods() {
         throw new Error('Authentication failed');
       }
       
-      // Authentication succeeded, log success but don't show toast yet
-      // Toast will be shown by useAuthActions after profile is loaded
       console.log('Authentication successful for:', data.user.email);
       
       return { success: true, data };
     } catch (error) {
-      // Log the error details for debugging
+      // Log the error for debugging
       console.error('Sign in failed:', error);
       
       // Show error toast to user
@@ -98,6 +96,32 @@ export function useAuthMethods() {
     }
   };
 
+  const resetPassword = async (email) => {
+    try {
+      const redirectTo = `${window.location.origin}/auth/change-password`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Password reset email sent",
+        description: "Check your email for instructions to reset your password."
+      });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Password reset error:', error);
+      toast({
+        variant: "destructive",
+        title: "Password reset failed",
+        description: error.message || "Failed to send reset email"
+      });
+      return { success: false, error };
+    }
+  };
+
   const impersonateCustomer = () => {
     // This is a development-only function to create a mock customer user
     const mockCustomerUser = {
@@ -129,6 +153,7 @@ export function useAuthMethods() {
     signUp,
     signIn,
     signOut,
+    resetPassword,
     impersonateCustomer
   };
 }

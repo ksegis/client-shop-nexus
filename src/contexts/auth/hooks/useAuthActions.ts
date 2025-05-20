@@ -1,4 +1,3 @@
-
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { AuthResult, UserRole } from '../types';
@@ -12,7 +11,8 @@ export function useAuthActions() {
   const { 
     signUp: authSignUp, 
     signIn: authSignIn, 
-    signOut: authSignOut 
+    signOut: authSignOut,
+    resetPassword: authResetPassword 
   } = useAuthMethods();
   const { logAuthEvent } = useAuthLogging();
 
@@ -177,26 +177,7 @@ export function useAuthActions() {
   };
 
   const resetPassword = async (email: string): Promise<AuthResult> => {
-    try {
-      // Get the current origin and specify the exact path to redirect to
-      const redirectTo = `${window.location.origin}/auth/change-password`;
-      
-      console.log(`Resetting password for ${email}, redirect to: ${redirectTo}`);
-      
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: redirectTo
-      });
-      
-      if (error) throw error;
-      
-      // Log the password reset request (we don't have a user object here)
-      await logAuthEvent('password_reset', null, { email });
-      
-      return { success: true };
-    } catch (error: any) {
-      console.error('Password reset error:', error);
-      return { success: false, error };
-    }
+    return await authResetPassword(email);
   };
 
   const updatePassword = async (password: string): Promise<AuthResult> => {

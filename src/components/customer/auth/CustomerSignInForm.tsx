@@ -35,14 +35,9 @@ const CustomerSignInForm = () => {
     setLoading(true);
     
     try {
-      console.log('Customer attempting to sign in with:', email);
-      
-      // Call the auth context's signIn method
       const result = await signIn(email, password);
       
-      // Result handling (navigation and toasts) is done inside the signIn function
-      // We only need to handle additional errors here
-      
+      // Navigation is handled in signIn function if successful
       if (!result.success) {
         // Clear password on error
         setPassword('');
@@ -79,12 +74,8 @@ const CustomerSignInForm = () => {
     try {
       const result = await resetPassword(email);
       
-      if (result.success) {
-        toast({
-          title: "Password reset email sent",
-          description: "Check your email for a link to reset your password"
-        });
-      } else {
+      // Success toast is handled in resetPassword function
+      if (!result.success) {
         throw result.error;
       }
     } catch (error: any) {
@@ -131,6 +122,7 @@ const CustomerSignInForm = () => {
               className="absolute right-0 top-0 h-full px-3 py-2"
               onClick={togglePasswordVisibility}
               tabIndex={-1}
+              disabled={loading}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>

@@ -1,9 +1,9 @@
-
 import React, { useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import EgisLoginButton from "@/components/auth/EgisLoginButton";
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from "@/contexts/auth";
 
 /**
  * This page serves as a redirect handler for authentication flows
@@ -12,11 +12,19 @@ const Auth = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
   
   const error = searchParams.get("error");
   const type = searchParams.get("type");
   
   useEffect(() => {
+    // First check if user is already authenticated
+    if (isAuthenticated) {
+      console.log("User is already authenticated, redirecting to dashboard");
+      navigate("/", { replace: true });
+      return;
+    }
+    
     // Check for password reset flow
     if (type === "recovery") {
       console.log("Password recovery flow detected, redirecting to change password page");
@@ -25,11 +33,15 @@ const Auth = () => {
       return;
     }
     
-    // Check if we need to show this page or redirect to homepage
-    if (!error && !type) {
-      console.log("No error parameter, showing portal selection");
+    // If there's an error, we'll stay on this page to display it
+    if (error) {
+      console.log(`Authentication error detected: ${error}`);
+      return;
     }
-  }, [error, type, navigate]);
+    
+    // Otherwise just show the portal selection
+    console.log("Showing portal selection");
+  }, [error, type, navigate, isAuthenticated]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
