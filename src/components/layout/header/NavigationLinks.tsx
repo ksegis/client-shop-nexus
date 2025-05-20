@@ -25,7 +25,7 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
   
   // Group shop links into categories with dropdowns
   const shopLinks: NavigationLink[] = [
-    { name: 'Dashboard', path: '/shop/dashboard' },  // Updated to include 'dashboard'
+    { name: 'Dashboard', path: '/shop/dashboard' },
     { 
       name: 'Customers', 
       path: '/shop/customers',
@@ -54,17 +54,16 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
     { name: 'Reports', path: '/shop/reports' }
   ];
   
-  // Admin-only links - now properly under /shop/admin
+  // Admin-only links with proper structure
   const adminLinks: NavigationLink[] = [
     { 
       name: 'Admin', 
-      path: '/shop/admin', 
+      path: '#', 
       adminOnly: true,
       children: [
         { name: 'User Management', path: '/shop/admin/user-management', adminOnly: true },
         { name: 'Employees', path: '/shop/employees', adminOnly: true },
-        { name: 'Session Management', path: '/shop/admin/session-management', adminOnly: true },
-        { name: 'Security Dashboard', path: '/shop/admin/security-dashboard', adminOnly: true }
+        { name: 'Settings', path: '/shop/admin', adminOnly: true },
       ]
     }
   ];

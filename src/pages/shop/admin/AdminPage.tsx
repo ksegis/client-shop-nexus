@@ -39,7 +39,7 @@ const AdminPage = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Admin Controls</h2>
+        <h2 className="text-3xl font-bold tracking-tight">Admin Settings</h2>
         <p className="text-muted-foreground">
           System administration and configuration settings
         </p>
