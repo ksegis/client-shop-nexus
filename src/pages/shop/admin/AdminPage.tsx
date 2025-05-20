@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ApiConnectionsManager from './ApiConnectionsManager';
 import TestUsers from './TestUsers';
@@ -7,44 +7,15 @@ import AuthLogs from './AuthLogs';
 import AuditLogsViewer from '@/components/admin/AuditLogsViewer';
 import SessionManagement from './SessionManagement';
 import { useAuth } from "@/contexts/auth";
-import { useNavigate } from "react-router-dom";
 
 const AdminPage = () => {
-  const { profile, user } = useAuth();
-  const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
+  const { profile, isLoading } = useAuth();
   
-  // Add console logging to verify we're hitting this component
-  useEffect(() => {
-    console.log("AdminPage component loaded", { profile, user });
-    setIsLoading(false);
-  }, [profile, user]);
+  // Determine if user has admin access based on profile role
+  const isAdmin = profile?.role === 'admin';
   
-  // Check for admin access - either admin role or dev customer with override
-  // We need to check both the profile role and for development mode users
-  const isAdmin = profile?.role === 'admin' || user?.email === 'customer@example.com';
-  
-  // If no profile or not an admin, redirect to dashboard
-  useEffect(() => {
-    // Only redirect if we're finished loading and the user is not an admin
-    if (!isLoading && profile && !isAdmin) {
-      console.log("Not an admin, redirecting to dashboard");
-      navigate("/shop", { replace: true });
-    }
-  }, [profile, isAdmin, navigate, isLoading]);
-  
-  // Add additional debug logging to help troubleshoot
-  useEffect(() => {
-    console.log("Admin access check:", { 
-      isAdmin, 
-      profileRole: profile?.role,
-      isDevCustomer: user?.email === 'customer@example.com',
-      isLoading
-    });
-  }, [isAdmin, profile, user, isLoading]);
-  
-  // Show message while checking authorization
-  if (isLoading || !profile) {
+  // Show loading state while auth is being checked
+  if (isLoading) {
     return (
       <div className="p-6">
         <h2 className="text-2xl font-bold mb-4">Loading Admin Panel...</h2>
@@ -53,17 +24,18 @@ const AdminPage = () => {
     );
   }
   
-  // If we have a profile but not an admin, show access denied (the redirect should happen)
+  // If not an admin, show access denied
   if (!isAdmin) {
     return (
       <div className="p-6 bg-red-50 border border-red-200 rounded-md">
         <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
         <p>You do not have permission to view this page.</p>
-        <p className="mt-2">User role: {profile.role}</p>
+        <p className="mt-2">Current role: {profile?.role || 'Not authenticated'}</p>
       </div>
     );
   }
   
+  // User is admin, show admin panel
   return (
     <div className="space-y-6">
       <div>

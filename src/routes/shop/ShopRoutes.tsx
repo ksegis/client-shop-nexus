@@ -56,8 +56,12 @@ const ShopRoutes = () => {
         {/* Employee management */}
         <Route path="employees" element={<Employees />} />
         
-        {/* Admin section - all admin routes now under /shop/admin/ */}
-        <Route path="admin" element={<AdminPage />} />
+        {/* Admin section */}
+        <Route path="admin" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminPage />
+          </ProtectedRoute>
+        } />
         
         <Route path="admin/user-management" element={
           <ProtectedRoute allowedRoles={['admin']}>
