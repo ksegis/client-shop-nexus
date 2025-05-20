@@ -11,15 +11,22 @@ export const useUserQuery = () => {
     queryKey: ['admin-users'],
     queryFn: async () => {
       try {
+        console.log('Fetching users from profiles table');
+        
         const { data, error: queryError } = await supabase
           .from('profiles')
           .select('*')
           .order('created_at', { ascending: false });
           
-        if (queryError) throw queryError;
+        if (queryError) {
+          console.error('Error fetching users:', queryError);
+          throw queryError;
+        }
         
+        console.log('Users fetched:', data?.length || 0);
         return (data || []) as User[];
       } catch (error: any) {
+        console.error('Error in useUserQuery:', error);
         setError(error);
         throw error;
       }
@@ -27,6 +34,7 @@ export const useUserQuery = () => {
   });
 
   const refetchUsers = async () => {
+    console.log('Refetching users...');
     await refetch();
   };
 

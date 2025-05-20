@@ -32,7 +32,9 @@ interface UserManagementContextType {
 const UserManagementContext = createContext<UserManagementContextType | undefined>(undefined);
 
 export function UserManagementProvider({ children }: { children: ReactNode }) {
-  // Use our custom hooks
+  // Use our custom hooks with added console logging
+  console.log('Initializing UserManagementProvider');
+  
   const { users, employees, customers, isLoading, error, refetchUsers } = useUserQuery();
   const { inviteUser } = useUserInvitation(refetchUsers);
   const { resetPassword } = usePasswordReset(refetchUsers);
@@ -45,6 +47,14 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
     isImpersonationActive,
     getImpersonatedUser
   } = useUserImpersonation();
+
+  console.log('UserManagementProvider state:', {
+    userCount: users.length,
+    employeeCount: employees.length,
+    customerCount: customers.length,
+    isLoading,
+    hasError: !!error
+  });
 
   return (
     <UserManagementContext.Provider

@@ -8,13 +8,7 @@ import { ResetPasswordDialog } from './ResetPasswordDialog';
 import { ProfileDialog } from './ProfileDialog';
 import { DeleteUserDialog } from './components/DeleteUserDialog';
 
-interface UsersTableProps {
-  onResetPassword: (userId: string, email: string) => void;
-  onEditProfile: (userId: string, email: string) => void;
-  onImpersonate: (userId: string, email: string) => void;
-}
-
-export function UsersTable({ onResetPassword, onEditProfile, onImpersonate }: UsersTableProps) {
+export function UsersTable() {
   const { users, isLoading } = useUserManagement();
   const { 
     impersonationLoading, 
@@ -50,6 +44,11 @@ export function UsersTable({ onResetPassword, onEditProfile, onImpersonate }: Us
     setDeleteDialogOpen(true);
   };
 
+  console.log('UsersTable rendering with:', {
+    userCount: users?.length || 0,
+    isLoading
+  });
+
   if (isLoading) {
     return (
       <div className="w-full py-10 flex justify-center">
@@ -74,7 +73,7 @@ export function UsersTable({ onResetPassword, onEditProfile, onImpersonate }: Us
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.length === 0 ? (
+            {!users || users.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                   No users found

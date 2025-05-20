@@ -10,7 +10,10 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<Error | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   
+  console.log('Initializing EmployeesProvider');
   const { data: employees = [], isLoading, refetch } = useEmployeesQuery();
+  
+  console.log('Employees fetched:', employees.length);
   
   // Set error from the query if it fails
   React.useEffect(() => {
@@ -20,6 +23,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refetchEmployees = async () => {
+    console.log('Refetching employees...');
     await refetch();
   };
 

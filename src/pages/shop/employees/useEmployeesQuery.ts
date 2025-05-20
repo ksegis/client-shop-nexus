@@ -14,8 +14,7 @@ export const useEmployeesQuery = () => {
           'staff', 'admin', 'inactive_staff', 'inactive_admin'
         ];
         
-        // Use FilterOperator type with any to bypass TypeScript's strict checking
-        // This is safe because we know these role values are valid in our database
+        // Cast to DatabaseUserRole[] to satisfy TypeScript
         const { data, error: queryError } = await supabase
           .from('profiles')
           .select('*')
@@ -25,6 +24,7 @@ export const useEmployeesQuery = () => {
         
         return (data || []) as Employee[];
       } catch (error) {
+        console.error('Error fetching employees:', error);
         throw error;
       }
     },

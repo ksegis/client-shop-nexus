@@ -1,4 +1,3 @@
-
 import { Database } from './types'
 
 // Define types for message tables (which were just added to the database)
