@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/auth';
@@ -79,7 +78,7 @@ const AppRoutes: React.FC = () => {
             {/* MFA verification route */}
             <Route path="/verify-mfa" element={<VerifyMFA />} />
 
-            {/* Direct access to all routes */}
+            {/* Customer portal routes - clearly labeled */}
             <Route path="/customer/*" element={
               <>
                 <PasswordChangeRedirect />
@@ -87,6 +86,7 @@ const AppRoutes: React.FC = () => {
               </>
             } />
             
+            {/* Shop portal routes - everything under /shop prefix */}
             <Route path="/shop/*" element={
               <>
                 <PasswordChangeRedirect />
@@ -94,8 +94,8 @@ const AppRoutes: React.FC = () => {
               </>
             } />
             
-            {/* Direct access to admin page at root level */}
-            <Route path="/admin" element={
+            {/* Admin routes now properly under /shop/admin */}
+            <Route path="/shop/admin/*" element={
               <>
                 <PasswordChangeRedirect />
                 <AdminPage />
@@ -114,6 +114,9 @@ const AppRoutes: React.FC = () => {
             {/* Legacy auth paths redirects */}
             <Route path="/auth" element={<Navigate to="/" replace />} />
             <Route path="/auth/*" element={<Navigate to="/" replace />} />
+            
+            {/* Redirect old /admin route to /shop/admin */}
+            <Route path="/admin/*" element={<Navigate to="/shop/admin" replace />} />
             
             {/* Catch all route for any direct /dashboard attempts */}
             <Route path="/dashboard" element={<Navigate to="/customer/dashboard" replace />} />

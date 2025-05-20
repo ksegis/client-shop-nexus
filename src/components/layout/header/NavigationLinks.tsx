@@ -13,7 +13,7 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
   const isAdmin = profile?.role === 'admin';
   
   const customerLinks: NavigationLink[] = [
-    { name: 'Dashboard', path: '/customer' },
+    { name: 'Dashboard', path: '/customer/dashboard' },
     { name: 'Estimates', path: '/customer/estimates' },
     { name: 'Invoices', path: '/customer/invoices' },
     { name: 'Work Orders', path: '/customer/work-orders' },
@@ -25,7 +25,7 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
   
   // Group shop links into categories with dropdowns
   const shopLinks: NavigationLink[] = [
-    { name: 'Dashboard', path: '/shop' },
+    { name: 'Dashboard', path: '/shop/dashboard' },  // Updated to include 'dashboard'
     { 
       name: 'Customers', 
       path: '/shop/customers',
@@ -54,16 +54,17 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
     { name: 'Reports', path: '/shop/reports' }
   ];
   
-  // Admin-only links
+  // Admin-only links - now properly under /shop/admin
   const adminLinks: NavigationLink[] = [
     { 
       name: 'Admin', 
-      path: '#', 
+      path: '/shop/admin', 
       adminOnly: true,
       children: [
-        { name: 'User Management', path: '/shop/user-management', adminOnly: true },
+        { name: 'User Management', path: '/shop/admin/user-management', adminOnly: true },
         { name: 'Employees', path: '/shop/employees', adminOnly: true },
-        { name: 'Settings', path: '/admin', adminOnly: true }
+        { name: 'Session Management', path: '/shop/admin/session-management', adminOnly: true },
+        { name: 'Security Dashboard', path: '/shop/admin/security-dashboard', adminOnly: true }
       ]
     }
   ];

@@ -1,4 +1,3 @@
-
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { AuthResult, UserRole } from '../types';
@@ -255,10 +254,10 @@ export function useAuthActions() {
   const getRedirectPathByRole = (role: UserRole) => {
     switch (role) {
       case 'customer':
-        return '/customer';
+        return '/customer/dashboard';
       case 'admin':
       case 'staff':
-        return '/shop';
+        return '/shop/dashboard';
       default:
         return '/';
     }
