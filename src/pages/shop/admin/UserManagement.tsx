@@ -40,7 +40,6 @@ const UserManagement = () => {
           </CardContent>
         </Card>
         
-        {/* Add User Dialog */}
         <UserDialog 
           open={dialogOpen} 
           onOpenChange={setDialogOpen} 
