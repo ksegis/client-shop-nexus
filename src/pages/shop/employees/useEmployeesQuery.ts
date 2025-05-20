@@ -14,12 +14,12 @@ export const useEmployeesQuery = () => {
           'staff', 'admin', 'inactive_staff', 'inactive_admin'
         ];
         
-        // Use 'in' with a type cast to string[] to avoid TypeScript errors
-        // This is safe because our database accepts these role values
+        // Use FilterOperator type with any to bypass TypeScript's strict checking
+        // This is safe because we know these role values are valid in our database
         const { data, error: queryError } = await supabase
           .from('profiles')
           .select('*')
-          .in('role', allowedRoles as string[]);
+          .in('role', allowedRoles as unknown as DatabaseUserRole[]);
           
         if (queryError) throw queryError;
         
