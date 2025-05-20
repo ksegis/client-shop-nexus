@@ -1,11 +1,10 @@
 
+import React from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from '@/hooks/use-toast';
 import { logAuthEvent } from '@/integrations/supabase/client';
 
 export const useUserInvitation = (refetchUsers: () => Promise<void>) => {
-  const { toast } = useToast();
-
   const inviteUser = async (email: string, firstName: string, lastName: string, role: "admin" | "staff", password: string) => {
     try {
       // Get current user id to track who sent the invitation
@@ -107,7 +106,8 @@ export const useUserInvitation = (refetchUsers: () => Promise<void>) => {
         invite_url: inviteUrl
       });
 
-      // Show invitation information with the URL
+      // Show invitation information with the URL - using a string template for the content
+      // instead of JSX to avoid issues in case the file is ever converted back to .ts
       toast({
         title: "Invitation Created",
         description: "Send this link to the user to complete their registration",
