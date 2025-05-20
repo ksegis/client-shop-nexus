@@ -49,6 +49,7 @@ const SignInForm = () => {
     if (isLoading) return; // Prevent multiple submissions
     
     setIsLoading(true);
+    console.log('Attempting to sign in with:', values.email);
     
     try {
       const result = await signIn(values.email, values.password, values.rememberMe);
@@ -56,9 +57,15 @@ const SignInForm = () => {
       // If login was not successful, reset password field
       if (!result.success) {
         form.setValue("password", "");
+        console.error("Sign in failed:", result.error);
+        toast({
+          variant: "destructive",
+          title: "Sign in failed",
+          description: result.error?.message || "Authentication error occurred.",
+        });
+      } else {
+        console.log("Sign in successful, redirection should happen in signIn function");
       }
-      
-      // Note: Navigation is handled inside signIn function if successful
     } catch (error: any) {
       console.error("Sign in error:", error);
       toast({

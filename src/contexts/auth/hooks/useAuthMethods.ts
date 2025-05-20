@@ -56,6 +56,8 @@ export function useAuthMethods() {
       
       console.log('Authentication successful for:', data.user.email);
       
+      // Don't show success toast here, it will be shown after profile checks and role detection
+      
       return { success: true, data };
     } catch (error) {
       // Log the error for debugging

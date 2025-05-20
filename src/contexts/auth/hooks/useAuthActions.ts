@@ -1,3 +1,4 @@
+
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { AuthResult, UserRole } from '../types';
@@ -112,7 +113,7 @@ export function useAuthActions() {
             const redirectPath = getRedirectPathByRole(profileData.role as UserRole);
             console.log(`User role: ${profileData.role}, redirecting to: ${redirectPath}`);
             
-            // Show success toast and redirect
+            // Show success toast
             toast({
               title: "Login successful",
               description: `Welcome to your ${profileData.role} portal!`

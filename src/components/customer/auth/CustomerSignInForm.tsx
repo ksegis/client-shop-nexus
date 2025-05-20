@@ -33,14 +33,22 @@ const CustomerSignInForm = () => {
     }
     
     setLoading(true);
+    console.log('Customer attempting to sign in with:', email);
     
     try {
       const result = await signIn(email, password);
       
-      // Navigation is handled in signIn function if successful
       if (!result.success) {
+        console.error('Customer sign in failed:', result.error);
         // Clear password on error
         setPassword('');
+        toast({
+          variant: "destructive",
+          title: "Login failed",
+          description: result.error?.message || "Authentication failed"
+        });
+      } else {
+        console.log('Customer sign in successful, redirection should occur in signIn function');
       }
     } catch (error: any) {
       console.error('Customer sign in error:', error);
