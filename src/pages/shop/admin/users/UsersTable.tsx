@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
 import { useUserTableActions } from './hooks/useUserTableActions';
 import { useUserManagement } from './UserManagementContext';
 import { UserTableRow } from './components/UserTableRow';
@@ -16,7 +15,7 @@ interface UsersTableProps {
 }
 
 export function UsersTable({ onResetPassword, onEditProfile, onImpersonate }: UsersTableProps) {
-  const { employees, customers, isLoading } = useUserManagement();
+  const { users, isLoading } = useUserManagement();
   const { 
     impersonationLoading, 
     activationLoading,
@@ -59,11 +58,6 @@ export function UsersTable({ onResetPassword, onEditProfile, onImpersonate }: Us
     );
   }
 
-  // Combine employees and customers
-  const allUsers = [...employees, ...customers].sort((a, b) => {
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
-
   return (
     <div className="space-y-4">
       <div className="rounded-md border">
@@ -80,14 +74,14 @@ export function UsersTable({ onResetPassword, onEditProfile, onImpersonate }: Us
             </TableRow>
           </TableHeader>
           <TableBody>
-            {allUsers.length === 0 ? (
+            {users.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                   No users found
                 </TableCell>
               </TableRow>
             ) : (
-              allUsers.map((user) => (
+              users.map((user) => (
                 <UserTableRow
                   key={user.id}
                   user={user}

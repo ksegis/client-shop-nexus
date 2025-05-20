@@ -54,24 +54,15 @@ export function UserTableRow({
   
   const getRoleBadge = (role: string) => {
     let baseRole = role.replace('inactive_', '');
-    let color;
-    
-    switch(baseRole) {
-      case 'admin':
-        color = 'bg-purple-100 text-purple-800';
-        break;
-      case 'staff':
-        color = 'bg-blue-100 text-blue-800';
-        break;
-      case 'customer':
-      default:
-        color = 'bg-green-100 text-green-800';
-    }
     
     return (
-      <Badge variant="outline" className={color}>
+      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+        baseRole === 'admin' ? 'bg-purple-100 text-purple-800' : 
+        baseRole === 'staff' ? 'bg-blue-100 text-blue-800' : 
+        'bg-green-100 text-green-800'
+      }`}>
         {baseRole}
-      </Badge>
+      </span>
     );
   };
   
@@ -79,15 +70,19 @@ export function UserTableRow({
     const isInactive = isRoleInactive(role);
     
     return (
-      <Badge variant="outline" className={isInactive ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}>
+      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+        isInactive ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+      }`}>
         {isInactive ? 'inactive' : 'active'}
-      </Badge>
+      </span>
     );
   };
   
   const getTimeAgo = (dateStr: string) => {
     try {
-      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      // For the design purposes, just show the date in a simpler format
+      const date = new Date(dateStr);
+      return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     } catch (e) {
       return 'unknown';
     }
@@ -111,38 +106,20 @@ export function UserTableRow({
             <RotateCw className="h-4 w-4 animate-spin" />
           </Button>
         ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Open menu</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => onEditProfile(user.id, user.email)}>
-                <UserCog className="mr-2 h-4 w-4" /> Edit profile
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onResetPassword(user.id, user.email)}>
-                <KeyRound className="mr-2 h-4 w-4" /> Reset password
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onImpersonate(user.id, user.email)}>
-                <UserX className="mr-2 h-4 w-4" /> Impersonate
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onToggleActive(user.id, user.role)}>
-                <RotateCw className="mr-2 h-4 w-4" /> {isInactive ? 'Activate' : 'Deactivate'}
-              </DropdownMenuItem>
-              {onDelete && (
-                <DropdownMenuItem 
-                  className="text-red-600 focus:text-red-600"
-                  onClick={() => onDelete(user.id, user.email)}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete user
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex justify-end space-x-1">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEditProfile(user.id, user.email)}>
+              <UserCog className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onImpersonate(user.id, user.email)}>
+              <UserX className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onResetPassword(user.id, user.email)}>
+              <KeyRound className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onToggleActive(user.id, user.role)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         )}
       </TableCell>
     </TableRow>
