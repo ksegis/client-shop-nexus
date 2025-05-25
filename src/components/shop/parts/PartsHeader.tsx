@@ -98,14 +98,23 @@ export function PartsHeader({
             )}
           </Button>
           
-          <Button 
-            variant="outline" 
-            className="text-xs"
-            onClick={() => setCoreReturnOpen(true)}
-          >
-            <ArrowLeftRight className="h-4 w-4 mr-2" />
-            Core Return
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="text-xs"
+                  onClick={() => setCoreReturnOpen(true)}
+                >
+                  <ArrowLeftRight className="h-4 w-4 mr-2" />
+                  Core Return
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Process core returns for parts with core charges
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           
           <Button 
             variant="outline" 

@@ -12,11 +12,13 @@ export function useCoreReturnHandler() {
   } = useCoreReturns();
   
   const handleOpenCoreReturnDialog = (part: Part) => {
+    console.log('Opening core return dialog for part:', part);
     openCoreReturnDialog(part);
   };
   
   // Process a core return
   const handleProcessCoreReturn = (refundAmount: number, condition: string) => {
+    console.log('Processing core return:', { refundAmount, condition, selectedPart });
     if (selectedPart) {
       processCoreReturn(selectedPart.id, {
         reason: "Customer return",

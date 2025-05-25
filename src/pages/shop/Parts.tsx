@@ -49,18 +49,6 @@ const ShopParts = () => {
     });
   }, []);
   
-  // Create a wrapper function to handle the type mismatch
-  // This converts from the boolean parameter to the Part parameter
-  const handleCoreReturnOpenChange = (open: boolean) => {
-    if (open && coreReturn.selectedPartForCoreReturn) {
-      // If opening the dialog, we use the currently selected part
-      coreReturn.handleOpenCoreReturnDialog(coreReturn.selectedPartForCoreReturn);
-    } else if (!open) {
-      // If closing, we just update the dialog state
-      coreReturn.setCoreReturnDialogOpen(false);
-    }
-  };
-  
   return (
     <div className="space-y-6">
       <PartsHeader 
@@ -75,7 +63,7 @@ const ShopParts = () => {
         onSelectPart={catalog.handleQuickPartSelect}
         selectedPartForCoreReturn={coreReturn.selectedPartForCoreReturn}
         isCoreReturnOpen={coreReturn.isCoreReturnDialogOpen}
-        setCoreReturnOpen={handleCoreReturnOpenChange}
+        setCoreReturnOpen={coreReturn.setCoreReturnDialogOpen}
         onProcessCoreReturn={coreReturn.handleProcessCoreReturn}
       />
       

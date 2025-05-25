@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import {
   Dialog,
@@ -12,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
-import { CoreCharge, Part } from "@/types/parts";
+import { Part } from "@/types/parts";
 
 interface CoreChargeHandlerProps {
   part: Part | null;
@@ -25,6 +26,15 @@ export function CoreChargeHandler({ part, open, onOpenChange, onProcessReturn }:
   const [condition, setCondition] = useState<'new' | 'used' | 'damaged'>('new');
   const [receiptNumber, setReceiptNumber] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
+  
+  // Reset form when dialog opens/closes
+  useState(() => {
+    if (open) {
+      setCondition('new');
+      setReceiptNumber('');
+      setAcceptTerms(false);
+    }
+  });
   
   // Calculate refund amount based on condition
   const calculateRefundAmount = () => {
@@ -48,7 +58,16 @@ export function CoreChargeHandler({ part, open, onOpenChange, onProcessReturn }:
     if (!receiptNumber || !acceptTerms) {
       toast({
         title: "Missing information",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields and accept the terms",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!part?.core_charge) {
+      toast({
+        title: "No core charge",
+        description: "This part does not have a core charge",
         variant: "destructive"
       });
       return;
@@ -59,16 +78,24 @@ export function CoreChargeHandler({ part, open, onOpenChange, onProcessReturn }:
       onProcessReturn(refundAmount, condition);
     }
     
-    toast({
-      title: "Core return processed",
-      description: `Refund amount: $${refundAmount.toFixed(2)}`,
-    });
-    
+    // Reset form and close dialog
+    setCondition('new');
+    setReceiptNumber('');
+    setAcceptTerms(false);
     onOpenChange(false);
   };
   
+  const handleClose = () => {
+    setCondition('new');
+    setReceiptNumber('');
+    setAcceptTerms(false);
+    onOpenChange(false);
+  };
+  
+  if (!part) return null;
+  
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Process Core Return</DialogTitle>
@@ -79,14 +106,17 @@ export function CoreChargeHandler({ part, open, onOpenChange, onProcessReturn }:
         
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <h3 className="text-lg font-medium">{part?.name}</h3>
+            <h3 className="text-lg font-medium">{part.name}</h3>
             <p className="text-sm text-muted-foreground">
-              Original core charge: ${part?.core_charge?.toFixed(2)}
+              SKU: {part.sku}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Original core charge: ${part.core_charge?.toFixed(2) || '0.00'}
             </p>
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="receipt">Receipt/Invoice Number</Label>
+            <Label htmlFor="receipt">Receipt/Invoice Number *</Label>
             <Input 
               id="receipt" 
               value={receiptNumber} 
@@ -96,7 +126,7 @@ export function CoreChargeHandler({ part, open, onOpenChange, onProcessReturn }:
           </div>
           
           <div className="space-y-2">
-            <Label>Part Condition</Label>
+            <Label>Part Condition *</Label>
             <RadioGroup 
               value={condition} 
               onValueChange={(value) => setCondition(value as 'new' | 'used' | 'damaged')}
@@ -124,32 +154,37 @@ export function CoreChargeHandler({ part, open, onOpenChange, onProcessReturn }:
             />
             <Label htmlFor="terms" className="text-sm leading-tight">
               I confirm that this core part is being returned in the condition stated above and 
-              was originally purchased from this shop.
+              was originally purchased from this shop. *
             </Label>
           </div>
           
           <div className="rounded-md bg-muted p-4">
-            <div className="text-sm font-medium">Refund Summary</div>
-            <div className="mt-2 flex justify-between">
-              <span>Core charge:</span>
-              <span>${part?.core_charge?.toFixed(2) || '0.00'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Condition adjustment:</span>
-              <span>{condition === 'new' ? '100%' : condition === 'used' ? '75%' : '25%'}</span>
-            </div>
-            <div className="mt-2 flex justify-between font-medium border-t pt-2">
-              <span>Refund amount:</span>
-              <span>${refundAmount.toFixed(2)}</span>
+            <div className="text-sm font-medium mb-2">Refund Summary</div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-sm">
+                <span>Original core charge:</span>
+                <span>${part.core_charge?.toFixed(2) || '0.00'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Condition adjustment:</span>
+                <span>{condition === 'new' ? '100%' : condition === 'used' ? '75%' : '25%'}</span>
+              </div>
+              <div className="flex justify-between font-medium border-t pt-1">
+                <span>Refund amount:</span>
+                <span className="text-green-600">${refundAmount.toFixed(2)}</span>
+              </div>
             </div>
           </div>
         </div>
         
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
-          <Button onClick={handleProcessReturn}>
+          <Button 
+            onClick={handleProcessReturn}
+            disabled={!receiptNumber || !acceptTerms}
+          >
             Process Return
           </Button>
         </div>
