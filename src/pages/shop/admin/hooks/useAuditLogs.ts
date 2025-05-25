@@ -15,43 +15,47 @@ export const useAuditLogs = (userId?: string) => {
       
       let query = supabase
         .from('audit_logs')
-        .select(`
-          *,
-          target_profiles:profiles!target_user_id(email),
-          performed_by_profiles:profiles!performed_by(email)
-        `)
+        .select('*')
         .order('timestamp', { ascending: false });
 
       if (userId) {
         query = query.eq('target_user_id', userId);
       }
 
-      const { data, error } = await query;
+      const { data: auditData, error } = await query;
 
       if (error) {
         console.error('Audit logs query error:', error);
-        // Fallback to simple query without joins if the relation fails
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('audit_logs')
-          .select('*')
-          .order('timestamp', { ascending: false });
-          
-        if (fallbackError) throw fallbackError;
-        
-        const logsWithEmails = fallbackData?.map(log => ({
-          ...log,
-          target_user_email: 'Unknown',
-          performed_by_email: 'System'
-        })) || [];
-        
-        setAuditLogs(logsWithEmails);
-        return;
+        throw error;
       }
 
-      const logsWithEmails = data?.map(log => ({
+      // Fetch user emails separately to avoid foreign key issues
+      const userIds = new Set<string>();
+      auditData?.forEach(log => {
+        if (log.performed_by) userIds.add(log.performed_by);
+        if (log.target_user_id) userIds.add(log.target_user_id);
+      });
+
+      let userEmails: Record<string, string> = {};
+      
+      if (userIds.size > 0) {
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .in('id', Array.from(userIds));
+
+        if (!profilesError && profiles) {
+          userEmails = profiles.reduce((acc, profile) => {
+            acc[profile.id] = profile.email;
+            return acc;
+          }, {} as Record<string, string>);
+        }
+      }
+
+      const logsWithEmails = auditData?.map(log => ({
         ...log,
-        target_user_email: (log as any).target_profiles?.email || 'Unknown',
-        performed_by_email: (log as any).performed_by_profiles?.email || 'System'
+        target_user_email: log.target_user_id ? (userEmails[log.target_user_id] || 'Unknown') : undefined,
+        performed_by_email: log.performed_by ? (userEmails[log.performed_by] || 'System') : 'System'
       })) || [];
 
       setAuditLogs(logsWithEmails);
