@@ -10,7 +10,6 @@ import Parts from "@/pages/shop/Parts";
 import Reports from "@/pages/shop/Reports";
 import ServiceDesk from "@/pages/shop/ServiceDesk";
 import ServiceAppointments from "@/pages/shop/ServiceAppointments";
-import Employees from "@/pages/shop/Employees";
 import WorkOrders from "@/pages/shop/WorkOrders";
 import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
 import NotFound from "@/pages/NotFound";
@@ -135,16 +134,6 @@ const ShopRoutes = () => {
           element={
             <ProtectedRoute>
               <ServiceAppointments />
-            </ProtectedRoute>
-          }
-        />
-        
-        {/* Employee management */}
-        <Route
-          path="employees"
-          element={
-            <ProtectedRoute>
-              <Employees />
             </ProtectedRoute>
           }
         />
