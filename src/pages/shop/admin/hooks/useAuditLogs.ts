@@ -17,8 +17,8 @@ export const useAuditLogs = (userId?: string) => {
         .from('audit_logs')
         .select(`
           *,
-          target_profiles:profiles!audit_logs_target_user_id_fkey(email),
-          performed_by_profiles:profiles!audit_logs_performed_by_fkey(email)
+          target_profiles:profiles!target_user_id(email),
+          performed_by_profiles:profiles!performed_by(email)
         `)
         .order('timestamp', { ascending: false });
 
@@ -28,12 +28,30 @@ export const useAuditLogs = (userId?: string) => {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('Audit logs query error:', error);
+        // Fallback to simple query without joins if the relation fails
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('audit_logs')
+          .select('*')
+          .order('timestamp', { ascending: false });
+          
+        if (fallbackError) throw fallbackError;
+        
+        const logsWithEmails = fallbackData?.map(log => ({
+          ...log,
+          target_user_email: 'Unknown',
+          performed_by_email: 'System'
+        })) || [];
+        
+        setAuditLogs(logsWithEmails);
+        return;
+      }
 
       const logsWithEmails = data?.map(log => ({
         ...log,
-        target_user_email: log.target_profiles?.email,
-        performed_by_email: log.performed_by_profiles?.email
+        target_user_email: log.target_profiles?.email || 'Unknown',
+        performed_by_email: log.performed_by_profiles?.email || 'System'
       })) || [];
 
       setAuditLogs(logsWithEmails);

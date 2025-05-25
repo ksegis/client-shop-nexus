@@ -46,7 +46,18 @@ export const CreateUserDialog = ({ open, onOpenChange }: CreateUserDialogProps) 
 
   const onSubmit = async (data: CreateUserFormData) => {
     try {
-      await createUser(data);
+      // Ensure all required fields are present
+      const userData = {
+        email: data.email,
+        password: data.password,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        phone: data.phone || '',
+        role: data.role,
+        sendWelcomeEmail: data.sendWelcomeEmail,
+      };
+      
+      await createUser(userData);
       form.reset();
       onOpenChange(false);
     } catch (error) {

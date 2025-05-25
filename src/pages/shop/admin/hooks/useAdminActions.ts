@@ -1,7 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useAdminUserManagement } from './useAdminUserManagement';
 
 interface CreateUserData {
   email: string;
