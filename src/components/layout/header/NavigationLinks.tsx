@@ -21,7 +21,7 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
     { name: 'Profile', path: '/customer/profile' }
   ];
   
-  // Shop links without admin functionality
+  // Shop links with admin functionality for admin users
   const shopLinks: NavigationLink[] = [
     { name: 'Dashboard', path: '/shop/dashboard' },
     { 
@@ -51,9 +51,20 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
     },
     { name: 'Reports', path: '/shop/reports' }
   ];
+
+  // Add admin section for admin users
+  if (profile?.role === 'admin') {
+    shopLinks.push({
+      name: 'Admin',
+      path: '#',
+      children: [
+        { name: 'User Management', path: '/shop/admin/user-management' }
+      ]
+    });
+  }
   
   return {
     links: portalType === 'customer' ? customerLinks : shopLinks,
-    isAdmin: false // Remove admin role tracking
+    isAdmin: profile?.role === 'admin'
   };
 };

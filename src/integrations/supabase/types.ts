@@ -39,6 +39,39 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          performed_by: string
+          target_user_id: string | null
+          timestamp: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          performed_by: string
+          target_user_id?: string | null
+          timestamp?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          performed_by?: string
+          target_user_id?: string | null
+          timestamp?: string
+        }
+        Relationships: []
+      }
       auth_flow_logs: {
         Row: {
           access_granted: boolean | null
@@ -537,6 +570,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          active: boolean | null
           avatar_url: string | null
           created_at: string
           email: string
@@ -547,6 +581,7 @@ export type Database = {
           instagram_url: string | null
           invite_token: string | null
           invited_by: string | null
+          last_login: string | null
           last_name: string | null
           linkedin_url: string | null
           mfa_enabled: boolean | null
@@ -558,6 +593,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          active?: boolean | null
           avatar_url?: string | null
           created_at?: string
           email: string
@@ -568,6 +604,7 @@ export type Database = {
           instagram_url?: string | null
           invite_token?: string | null
           invited_by?: string | null
+          last_login?: string | null
           last_name?: string | null
           linkedin_url?: string | null
           mfa_enabled?: boolean | null
@@ -579,6 +616,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          active?: boolean | null
           avatar_url?: string | null
           created_at?: string
           email?: string
@@ -589,6 +627,7 @@ export type Database = {
           instagram_url?: string | null
           invite_token?: string | null
           invited_by?: string | null
+          last_login?: string | null
           last_name?: string | null
           linkedin_url?: string | null
           mfa_enabled?: boolean | null
@@ -1234,6 +1273,15 @@ export type Database = {
       is_staff_or_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      log_audit_event: {
+        Args: {
+          p_action: string
+          p_target_user_id: string
+          p_description?: string
+          p_metadata?: Json
+        }
+        Returns: string
       }
       store_webauthn_challenge: {
         Args: {

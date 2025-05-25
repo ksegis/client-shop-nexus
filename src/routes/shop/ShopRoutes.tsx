@@ -12,6 +12,7 @@ import ServiceDesk from "@/pages/shop/ServiceDesk";
 import ServiceAppointments from "@/pages/shop/ServiceAppointments";
 import WorkOrders from "@/pages/shop/WorkOrders";
 import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
+import UserManagement from "@/pages/shop/admin/UserManagement";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -54,6 +55,16 @@ const ShopRoutes = () => {
           element={
             <ProtectedRoute>
               <Customers />
+            </ProtectedRoute>
+          }
+        />
+        
+        {/* Admin routes */}
+        <Route
+          path="admin/user-management"
+          element={
+            <ProtectedRoute>
+              <UserManagement />
             </ProtectedRoute>
           }
         />
