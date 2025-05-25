@@ -19,7 +19,7 @@ const Header = ({ portalType }: HeaderProps) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { links, isAdmin } = useNavigationLinks(portalType);
+  const { links } = useNavigationLinks(portalType);
   
   const { isHeaderMounted, setHeaderMounted } = useHeaderContext();
   
@@ -76,7 +76,6 @@ const Header = ({ portalType }: HeaderProps) => {
         {mobileMenuOpen && (
           <MobileMenu 
             links={links} 
-            isAdmin={isAdmin} 
             portalType={portalType} 
             closeMenu={closeMobileMenu}
           />

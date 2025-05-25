@@ -4,13 +4,11 @@ import { useAuth } from "@/contexts/auth";
 export interface NavigationLink {
   name: string;
   path: string;
-  adminOnly?: boolean;
   children?: NavigationLink[];
 }
 
 export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
   const { user, profile } = useAuth();
-  const isAdmin = profile?.role === 'admin';
   
   const customerLinks: NavigationLink[] = [
     { name: 'Dashboard', path: '/customer/dashboard' },
@@ -23,7 +21,7 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
     { name: 'Profile', path: '/customer/profile' }
   ];
   
-  // Group shop links into categories with dropdowns
+  // Shop links without admin functionality
   const shopLinks: NavigationLink[] = [
     { name: 'Dashboard', path: '/shop/dashboard' },
     { 
@@ -54,24 +52,8 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
     { name: 'Reports', path: '/shop/reports' }
   ];
   
-  // Admin-only links with proper structure
-  const adminLinks: NavigationLink[] = [
-    { 
-      name: 'Admin', 
-      path: '#', 
-      adminOnly: true,
-      children: [
-        { name: 'User Management', path: '/shop/admin/user-management', adminOnly: true },
-        { name: 'Employees', path: '/shop/employees', adminOnly: true },
-        { name: 'Settings', path: '/shop/admin', adminOnly: true },
-      ]
-    }
-  ];
-  
-  const allShopLinks = isAdmin ? [...shopLinks, ...adminLinks] : shopLinks;
-  
   return {
-    links: portalType === 'customer' ? customerLinks : allShopLinks,
-    isAdmin
+    links: portalType === 'customer' ? customerLinks : shopLinks,
+    isAdmin: false // Remove admin role tracking
   };
 };

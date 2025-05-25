@@ -11,12 +11,11 @@ interface NavigationLink {
 
 interface MobileMenuProps {
   links: NavigationLink[];
-  isAdmin: boolean;
   portalType: 'customer' | 'shop';
   closeMenu: () => void;
 }
 
-export const MobileMenu = ({ links, isAdmin, portalType, closeMenu }: MobileMenuProps) => {
+export const MobileMenu = ({ links, portalType, closeMenu }: MobileMenuProps) => {
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
   
   const toggleSubmenu = (menuName: string) => {

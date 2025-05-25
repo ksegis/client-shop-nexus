@@ -1,6 +1,5 @@
 
 import { User } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
 
 // Define valid auth event types
 export type AuthEventType = 
@@ -8,9 +7,7 @@ export type AuthEventType =
   | 'sign_out' 
   | 'sign_up' 
   | 'password_reset'
-  | 'password_update'
-  | 'impersonate_test_user'
-  | 'stop_impersonation';
+  | 'password_update';
 
 export function useAuthLogging() {
   const logAuthEvent = async (eventType: AuthEventType, user: User | null, extraData: Record<string, any> = {}) => {
@@ -27,28 +24,7 @@ export function useAuthLogging() {
       
       console.log('Auth event:', eventData);
       
-      // In a production environment, we would store this in a database
-      // For now, we'll just log to console
-      // The auth_logs table doesn't exist, so we're commenting out this code
-      /*
-      try {
-        const { error } = await supabase
-          .from('auth_logs')
-          .insert({ 
-            event_type: eventType,
-            user_id: user?.id, 
-            email: user?.email,
-            metadata: { ...extraData, user_metadata: user?.user_metadata }
-          });
-        
-        if (error) {
-          console.error('Error logging auth event:', error);
-        }
-      } catch (err) {
-        // Silently catch if auth_logs table doesn't exist
-      }
-      */
-      
+      // Basic logging only - admin functionality removed
       console.log('Auth event logged:', eventType);
     } catch (err) {
       console.error('Error logging auth event:', err);

@@ -1,46 +1,37 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Shield, UserCheck } from 'lucide-react';
-import { UserManagementProvider } from './users/UserManagementContext';
-import { UsersTable } from './users/UsersTable';
-import { UserHeader } from './users/UserHeader';
-import { UserDialog } from './users/UserDialog';
+import { Shield } from 'lucide-react';
 
 const UserManagement = () => {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  
   return (
-    <UserManagementProvider>
-      <div className="space-y-6">
-        <UserHeader onAddUser={() => setDialogOpen(true)} />
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" /> 
-              User Management
-            </CardTitle>
-            <CardDescription>
-              Manage user accounts and their permissions.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <UsersTable />
-          </CardContent>
-        </Card>
-        
-        {/* Add User Dialog */}
-        <UserDialog 
-          open={dialogOpen} 
-          onOpenChange={setDialogOpen} 
-          onSuccess={() => {
-            setDialogOpen(false);
-          }}
-          userData={null}
-        />
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">User Management</h1>
+          <p className="text-muted-foreground">
+            This feature has been deprecated and is no longer available
+          </p>
+        </div>
       </div>
-    </UserManagementProvider>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" /> 
+            Feature Deprecated
+          </CardTitle>
+          <CardDescription>
+            User management functionality has been removed from this application.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            If you need to manage users, please contact your system administrator.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

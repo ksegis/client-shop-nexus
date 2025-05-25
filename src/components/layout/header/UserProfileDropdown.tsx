@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { LogOut, User, Settings } from 'lucide-react';
+import { LogOut, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { UserAvatar } from '@/components/shared/profile/UserAvatar';
 
@@ -19,9 +19,6 @@ export function UserProfileDropdown() {
   const navigate = useNavigate();
 
   if (!user) return null;
-
-  // Check if user is staff or admin
-  const isStaffOrAdmin = profile?.role === 'admin' || profile?.role === 'staff';
 
   return (
     <div className="flex items-center gap-2">
@@ -52,12 +49,6 @@ export function UserProfileDropdown() {
               <User className="mr-2 h-4 w-4" />
               <span>Profile</span>
             </DropdownMenuItem>
-            {profile?.role === 'admin' && (
-              <DropdownMenuItem onClick={() => navigate('/admin')}>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Admin Settings</span>
-              </DropdownMenuItem>
-            )}
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => signOut()}>
