@@ -8,6 +8,8 @@ export function useUserQuery() {
     queryKey: ['admin-users'],
     queryFn: async () => {
       try {
+        console.log('useUserQuery: Attempting to fetch users from Supabase...');
+        
         // For development mode, return mock users if Supabase query fails
         const { data, error: queryError } = await supabase
           .from('profiles')
@@ -17,17 +19,24 @@ export function useUserQuery() {
         if (queryError) {
           console.warn('Supabase query failed, using mock data:', queryError);
           // Return mock users for development
-          return getMockUsers();
+          const mockUsers = getMockUsers();
+          console.log('useUserQuery: Returning mock users:', mockUsers);
+          return mockUsers;
         }
         
+        console.log('useUserQuery: Successfully fetched users from Supabase:', data);
         return (data || []) as User[];
       } catch (error: any) {
         console.warn('Database query failed, using mock data:', error);
         // Return mock users for development
-        return getMockUsers();
+        const mockUsers = getMockUsers();
+        console.log('useUserQuery: Returning mock users due to error:', mockUsers);
+        return mockUsers;
       }
     },
   });
+
+  console.log('useUserQuery: Current state - users:', users, 'isLoading:', isLoading, 'error:', error);
 
   // Separate users by role
   const employees = users.filter(user => user.role === 'admin' || user.role === 'staff');

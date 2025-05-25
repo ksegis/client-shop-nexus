@@ -2,14 +2,14 @@
 import React, { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useUserTableActions } from './hooks/useUserTableActions';
-import { useUserManagement } from './UserManagementContext';
+import { useUserQuery } from './hooks/useUserQuery';
 import { UserTableRow } from './components/UserTableRow';
 import { ResetPasswordDialog } from './ResetPasswordDialog';
 import { ProfileDialog } from './ProfileDialog';
 import { DeleteUserDialog } from './components/DeleteUserDialog';
 
 export function UsersTable() {
-  const { users, isLoading } = useUserManagement();
+  const { users, isLoading } = useUserQuery();
   const { 
     impersonationLoading, 
     activationLoading,
@@ -51,6 +51,8 @@ export function UsersTable() {
       </div>
     );
   }
+
+  console.log('UsersTable: users data', users);
 
   return (
     <div className="space-y-4">
