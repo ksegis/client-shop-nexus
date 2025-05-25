@@ -7,6 +7,8 @@ import { User } from '../types';
 export const useUserQuery = () => {
   const [error, setError] = useState<Error | null>(null);
   
+  console.log('useUserQuery: Hook initialized');
+  
   const { data: users = [], isLoading, refetch } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
@@ -20,25 +22,41 @@ export const useUserQuery = () => {
           
         if (queryError) {
           console.error('useUserQuery: Error fetching users:', queryError);
+          setError(queryError);
           throw queryError;
         }
         
+        console.log('useUserQuery: Raw data from Supabase:', data);
         console.log('useUserQuery: Users fetched successfully:', {
           count: data?.length || 0,
           data: data
         });
         
-        return (data || []) as User[];
+        const typedUsers = (data || []) as User[];
+        console.log('useUserQuery: Typed users:', typedUsers);
+        
+        return typedUsers;
       } catch (error: any) {
         console.error('useUserQuery: Error in query function:', error);
         setError(error);
         throw error;
       }
     },
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
+
+  console.log('useUserQuery: Current query state:', {
+    users,
+    usersLength: users?.length,
+    isLoading,
+    hasError: !!error,
+    usersIsArray: Array.isArray(users)
   });
 
   const refetchUsers = async () => {
     console.log('useUserQuery: Manual refetch triggered...');
+    setError(null);
     await refetch();
   };
 
@@ -60,7 +78,8 @@ export const useUserQuery = () => {
     employees: employees.length,
     customers: customers.length,
     isLoading,
-    hasError: !!error
+    hasError: !!error,
+    errorMessage: error?.message
   });
 
   return {

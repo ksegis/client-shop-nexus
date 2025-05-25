@@ -32,10 +32,12 @@ interface UserManagementContextType {
 const UserManagementContext = createContext<UserManagementContextType | undefined>(undefined);
 
 export function UserManagementProvider({ children }: { children: ReactNode }) {
-  // Use our custom hooks with added console logging
-  console.log('Initializing UserManagementProvider');
+  console.log('UserManagementProvider: Initializing provider');
   
-  const { users, employees, customers, isLoading, error, refetchUsers } = useUserQuery();
+  const queryResult = useUserQuery();
+  console.log('UserManagementProvider: Query result:', queryResult);
+  
+  const { users, employees, customers, isLoading, error, refetchUsers } = queryResult;
   const { inviteUser } = useUserInvitation(refetchUsers);
   const { resetPassword } = usePasswordReset(refetchUsers);
   const { updateUserProfile } = useProfileManagement(refetchUsers);
@@ -48,14 +50,16 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
     getImpersonatedUser
   } = useUserImpersonation();
 
-  console.log('UserManagementProvider state:', {
-    userCount: users.length,
-    employeeCount: employees.length,
-    customerCount: customers.length,
+  console.log('UserManagementProvider: Provider state:', {
+    userCount: users?.length || 0,
+    employeeCount: employees?.length || 0,
+    customerCount: customers?.length || 0,
     isLoading,
     hasError: !!error,
     actualUsers: users,
-    errorDetails: error?.message
+    errorDetails: error?.message,
+    usersType: typeof users,
+    usersIsArray: Array.isArray(users)
   });
 
   return (
@@ -89,5 +93,12 @@ export function useUserManagement() {
   if (context === undefined) {
     throw new Error('useUserManagement must be used within a UserManagementProvider');
   }
+  
+  console.log('useUserManagement: Context accessed:', {
+    hasUsers: !!context.users,
+    userCount: context.users?.length || 0,
+    isLoading: context.isLoading
+  });
+  
   return context;
 }

@@ -7,6 +7,7 @@ import { UserTableRow } from './components/UserTableRow';
 import { ResetPasswordDialog } from './ResetPasswordDialog';
 import { ProfileDialog } from './ProfileDialog';
 import { DeleteUserDialog } from './components/DeleteUserDialog';
+import { UserTableDebug } from './components/UserTableDebug';
 
 export function UsersTable() {
   const { users, isLoading } = useUserManagement();
@@ -70,6 +71,8 @@ export function UsersTable() {
 
   return (
     <div className="space-y-4">
+      <UserTableDebug />
+      
       <div className="rounded-md border">
         <Table>
           <TableHeader>
