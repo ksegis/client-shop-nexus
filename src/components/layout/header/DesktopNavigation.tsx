@@ -1,4 +1,3 @@
-
 import { Link } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import {
@@ -37,12 +36,7 @@ export const DesktopNavigation = ({ links, currentPath }: DesktopNavigationProps
                     {link.name}
                   </span>
                 </NavigationMenuTrigger>
-                <NavigationMenuContent 
-                  className="min-w-[200px] left-0 top-full"
-                  align="start"
-                  alignOffset={0}
-                  sideOffset={0}
-                >
+                <NavigationMenuContent className="min-w-[200px]">
                   <ul className="grid w-full gap-2 p-2 md:w-[200px] lg:w-[220px]">
                     {link.children.map((child) => (
                       <li key={child.name}>
