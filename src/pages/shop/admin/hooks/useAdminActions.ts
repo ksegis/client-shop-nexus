@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -141,13 +140,18 @@ export const useAdminActions = () => {
     }
   };
 
-  const sendPasswordReset = async (email: string) => {
+  const sendPasswordReset = async (email: string, targetUserId?: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/change-password`
       });
 
       if (error) throw error;
+
+      // Log the password reset action
+      if (targetUserId) {
+        await logAuditEvent('reset_password', targetUserId, `Password reset email sent to ${email}`);
+      }
 
       toast({
         title: "Success",
