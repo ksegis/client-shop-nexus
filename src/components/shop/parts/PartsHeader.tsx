@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { 
   Package2, 
@@ -60,12 +59,17 @@ export function PartsHeader({
 }: PartsHeaderProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [specialOrderOpen, setSpecialOrderOpen] = useState(false);
+  const [quotationDialogOpen, setQuotationDialogOpen] = useState(false);
   
   const cartCount = getCartItemCount();
   const quotationCount = getQuotationItemCount();
 
   const handleCoreReturnClick = () => {
     setCoreReturnOpen(true);
+  };
+
+  const handleQuotationClick = () => {
+    setQuotationDialogOpen(true);
   };
   
   return (
@@ -91,7 +95,7 @@ export function PartsHeader({
           <Button 
             variant="outline" 
             className="text-xs relative"
-            onClick={() => setQuotationOpen(true)}
+            onClick={handleQuotationClick}
           >
             <FileBarChart className="h-4 w-4 mr-2" />
             Quotation
@@ -178,8 +182,8 @@ export function PartsHeader({
       />
       
       <PartQuotationDialog
-        open={quotationItems.length > 0 && setQuotationOpen !== undefined}
-        onOpenChange={setQuotationOpen}
+        open={quotationDialogOpen}
+        onOpenChange={setQuotationDialogOpen}
         items={quotationItems}
         onRemoveItem={onRemoveQuotationItem}
       />
