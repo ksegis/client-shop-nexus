@@ -14,6 +14,13 @@ export function usePart(partId: string | null) {
     }
   }, [partId]);
   
+  // Handle quantity changes without stock restrictions
+  const handleQuantityChange = (newQuantity: number) => {
+    if (newQuantity >= 1) {
+      setQuantity(newQuantity);
+    }
+  };
+  
   // Fetch the part details if we have a partId
   const { data: part, isLoading } = useQuery({
     queryKey: ['part-detail', partId],
@@ -56,6 +63,6 @@ export function usePart(partId: string | null) {
     part,
     isLoading,
     quantity,
-    setQuantity
+    setQuantity: handleQuantityChange
   };
 }

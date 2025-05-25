@@ -10,6 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 import { Part } from "@/types/parts";
 
 interface QuantityDialogProps {
@@ -51,12 +53,6 @@ export function QuantityDialog({
       return;
     }
     
-    // Check stock limit if available
-    if (part && part.quantity > 0 && num > part.quantity) {
-      setQuantity(part.quantity);
-      return;
-    }
-    
     setQuantity(num);
   };
   
@@ -81,6 +77,11 @@ export function QuantityDialog({
   const coreChargeTotal = partCoreCharge * quantity;
   const grandTotal = total + coreChargeTotal;
   
+  // Calculate backlog quantity
+  const availableStock = part.quantity || 0;
+  const backlogQuantity = quantity > availableStock ? quantity - availableStock : 0;
+  const isBackorder = backlogQuantity > 0;
+  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[400px]">
@@ -101,11 +102,9 @@ export function QuantityDialog({
                 </span>
               )}
             </div>
-            {part.quantity > 0 && (
-              <div className="text-sm text-muted-foreground">
-                Stock available: {part.quantity}
-              </div>
-            )}
+            <div className="text-sm text-muted-foreground">
+              Stock available: {availableStock}
+            </div>
           </div>
           
           <div className="space-y-2">
@@ -119,6 +118,15 @@ export function QuantityDialog({
               placeholder="Enter quantity"
             />
           </div>
+          
+          {isBackorder && (
+            <Alert className="border-orange-200 bg-orange-50">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription className="text-orange-800">
+                <strong>{backlogQuantity} item(s)</strong> will be backordered as they exceed available stock.
+              </AlertDescription>
+            </Alert>
+          )}
           
           <div className="space-y-1 bg-muted p-3 rounded-lg">
             <div className="flex justify-between text-sm">
@@ -135,6 +143,12 @@ export function QuantityDialog({
               <span>Total:</span>
               <span>${grandTotal.toFixed(2)}</span>
             </div>
+            {isBackorder && (
+              <div className="flex justify-between text-sm text-orange-600">
+                <span>Backorder qty:</span>
+                <span>{backlogQuantity}</span>
+              </div>
+            )}
           </div>
         </div>
         
@@ -143,7 +157,7 @@ export function QuantityDialog({
             Cancel
           </Button>
           <Button onClick={handleConfirm}>
-            Confirm
+            {isBackorder ? "Confirm with Backorder" : "Confirm"}
           </Button>
         </div>
       </DialogContent>

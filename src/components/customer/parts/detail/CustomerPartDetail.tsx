@@ -8,7 +8,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, ChevronLeft } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ShoppingCart, ChevronLeft, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { Part } from "@/types/parts";
 import { getStockStatus, getStockBadge } from "@/components/shared/parts/detail";
@@ -33,7 +34,7 @@ export function CustomerPartDetail({
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newQuantity = parseInt(e.target.value);
     if (!isNaN(newQuantity) && newQuantity > 0) {
-      setQuantity(Math.min(newQuantity, selectedPart.quantity));
+      setQuantity(newQuantity);
     }
   };
 
@@ -43,6 +44,9 @@ export function CustomerPartDetail({
 
   // Get stock status details for the current part
   const stockStatus = getStockStatus(selectedPart.quantity);
+  const availableStock = selectedPart.quantity || 0;
+  const backlogQuantity = quantity > availableStock ? quantity - availableStock : 0;
+  const isBackorder = backlogQuantity > 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -118,7 +122,7 @@ export function CustomerPartDetail({
                 )}
               </div>
 
-              <div className="flex items-center gap-4">
+              <div className="space-y-4">
                 <div className="w-20">
                   <label htmlFor="quantity" className="sr-only">
                     Quantity
@@ -127,20 +131,27 @@ export function CustomerPartDetail({
                     id="quantity"
                     type="number"
                     min="1"
-                    max={selectedPart.quantity}
                     value={quantity}
                     onChange={handleQuantityChange}
                     className="w-full border rounded px-2 py-1 text-center"
                   />
                 </div>
 
+                {isBackorder && (
+                  <Alert className="border-orange-200 bg-orange-50">
+                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                    <AlertDescription className="text-orange-800">
+                      <strong>{backlogQuantity} item(s)</strong> will be backordered as they exceed available stock.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <Button
                   onClick={handleAddToCart}
-                  className="flex-1"
-                  disabled={selectedPart.quantity < 1}
+                  className="w-full"
                 >
                   <ShoppingCart className="h-4 w-4 mr-2" />
-                  Add to Cart
+                  {isBackorder ? "Add to Cart (with Backorder)" : "Add to Cart"}
                 </Button>
               </div>
             </div>
