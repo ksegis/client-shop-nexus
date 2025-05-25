@@ -50,8 +50,8 @@ export const useAuditLogs = (userId?: string) => {
 
       const logsWithEmails = data?.map(log => ({
         ...log,
-        target_user_email: log.target_profiles?.email || 'Unknown',
-        performed_by_email: log.performed_by_profiles?.email || 'System'
+        target_user_email: (log as any).target_profiles?.email || 'Unknown',
+        performed_by_email: (log as any).performed_by_profiles?.email || 'System'
       })) || [];
 
       setAuditLogs(logsWithEmails);
