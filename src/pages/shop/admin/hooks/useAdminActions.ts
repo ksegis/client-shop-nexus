@@ -167,12 +167,28 @@ export const useAdminActions = () => {
 
   const deleteUser = async (userId: string) => {
     try {
-      // Delete user using Supabase Admin API
-      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+      // Get the current session
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (authError) throw authError;
+      if (!session) {
+        throw new Error('No active session');
+      }
 
-      await logAuditEvent('delete_user', userId, 'Deleted user account');
+      // Call the Edge Function instead of using admin API directly
+      const response = await fetch(`https://vqkxrbflwhunvbotjdds.supabase.co/functions/v1/delete-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ userId }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to delete user');
+      }
 
       toast({
         title: "Success",
