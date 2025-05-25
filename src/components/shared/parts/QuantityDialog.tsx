@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -32,17 +32,33 @@ export function QuantityDialog({
 }: QuantityDialogProps) {
   const [quantity, setQuantity] = useState(1);
   
+  // Reset quantity when dialog opens/closes or part changes
+  useEffect(() => {
+    if (open && part) {
+      setQuantity(1);
+    }
+  }, [open, part]);
+  
   const handleQuantityChange = (value: string) => {
-    const num = parseInt(value) || 1;
-    setQuantity(Math.max(1, num));
+    const num = parseInt(value) || 0;
+    const validQuantity = Math.max(1, num);
+    setQuantity(validQuantity);
   };
   
   const incrementQuantity = () => {
-    setQuantity(prev => prev + 1);
+    if (!part) return;
+    const newQuantity = quantity + 1;
+    // Check against available stock if it exists
+    if (part.quantity > 0 && newQuantity > part.quantity) {
+      return; // Don't exceed available stock
+    }
+    setQuantity(newQuantity);
   };
   
   const decrementQuantity = () => {
-    setQuantity(prev => Math.max(1, prev - 1));
+    if (quantity > 1) {
+      setQuantity(quantity - 1);
+    }
   };
   
   const handleConfirm = () => {
@@ -58,8 +74,12 @@ export function QuantityDialog({
   
   if (!part) return null;
   
-  const total = part.price * quantity;
-  const coreChargeTotal = (part.core_charge || 0) * quantity;
+  // Calculate totals - ensure we have valid numbers
+  const partPrice = typeof part.price === 'number' ? part.price : 0;
+  const partCoreCharge = typeof part.core_charge === 'number' ? part.core_charge : 0;
+  
+  const total = partPrice * quantity;
+  const coreChargeTotal = partCoreCharge * quantity;
   const grandTotal = total + coreChargeTotal;
   
   return (
@@ -75,10 +95,10 @@ export function QuantityDialog({
             <h4 className="font-medium">{part.name}</h4>
             <p className="text-sm text-muted-foreground">{part.description}</p>
             <div className="text-sm">
-              <span className="font-medium">Price: ${part.price.toFixed(2)} each</span>
-              {part.core_charge && part.core_charge > 0 && (
+              <span className="font-medium">Price: ${partPrice.toFixed(2)} each</span>
+              {partCoreCharge > 0 && (
                 <span className="text-muted-foreground ml-2">
-                  (Core: ${part.core_charge.toFixed(2)})
+                  (Core: ${partCoreCharge.toFixed(2)})
                 </span>
               )}
             </div>
@@ -108,7 +128,7 @@ export function QuantityDialog({
                 onChange={(e) => handleQuantityChange(e.target.value)}
                 className="text-center"
                 min="1"
-                max={part.quantity || undefined}
+                max={part.quantity > 0 ? part.quantity : undefined}
               />
               <Button
                 type="button"
