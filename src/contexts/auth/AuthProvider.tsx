@@ -118,6 +118,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
         description: `Logged in as ${email}`,
       });
       
+      // Handle redirect based on user role
+      const userRole = devUser.user_metadata.role;
+      let redirectPath = '/shop/dashboard'; // Default to shop dashboard
+      
+      if (userRole === 'customer') {
+        redirectPath = '/customer/dashboard';
+      } else if (userRole === 'admin' || userRole === 'staff') {
+        redirectPath = '/shop/dashboard';
+      }
+      
+      console.log(`Redirecting ${userRole} to ${redirectPath}`);
+      
+      // Use setTimeout to ensure state updates complete before navigation
+      setTimeout(() => {
+        navigate(redirectPath, { replace: true });
+      }, 100);
+      
       return { success: true, error: null };
     },
     signOut: async () => {
@@ -131,6 +148,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         title: "Signed out",
         description: "You have been logged out",
       });
+      
+      // Redirect to home page after logout
+      setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 100);
       
       return { success: true, error: null };
     },
