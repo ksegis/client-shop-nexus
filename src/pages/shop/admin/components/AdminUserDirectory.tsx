@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import { UserTable } from './UserTable';
+import { DeletedUsersTable } from './DeletedUsersTable';
 import { useAdminUserManagement } from '../hooks/useAdminUserManagement';
 
 export const AdminUserDirectory = () => {
@@ -47,10 +48,17 @@ export const AdminUserDirectory = () => {
           <TabsTrigger value="staff">Staff</TabsTrigger>
           <TabsTrigger value="admins">Admins</TabsTrigger>
           <TabsTrigger value="deactivated">Deactivated</TabsTrigger>
+          <TabsTrigger value="deleted">Deleted</TabsTrigger>
         </TabsList>
         
+        <TabsContent value="deleted">
+          <DeletedUsersTable searchTerm={searchTerm} />
+        </TabsContent>
+        
         <TabsContent value={activeFilter}>
-          <UserTable users={filteredUsers} isLoading={isLoading} />
+          {activeFilter !== 'deleted' && (
+            <UserTable users={filteredUsers} isLoading={isLoading} />
+          )}
         </TabsContent>
       </Tabs>
     </div>
