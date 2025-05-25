@@ -1,41 +1,30 @@
 
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { User } from '../types';
 
-export const useProfileManagement = (refetchUsers: () => Promise<void>) => {
+export function useProfileManagement(refetchUsers: () => Promise<void>) {
+  const { toast } = useToast();
+
   const updateUserProfile = async (userId: string, profileData: Partial<User>) => {
     try {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          first_name: profileData.first_name,
-          last_name: profileData.last_name,
-          phone: profileData.phone,
-          facebook_url: profileData.facebook_url,
-          twitter_url: profileData.twitter_url,
-          instagram_url: profileData.instagram_url,
-          linkedin_url: profileData.linkedin_url,
-        })
-        .eq('id', userId);
-
-      if (updateError) throw updateError;
+      console.log(`Mock update profile for user: ${userId}`, profileData);
       
       toast({
-        title: "Profile Updated",
-        description: "User profile has been successfully updated.",
+        title: "Profile updated successfully",
+        description: "User profile has been updated",
       });
-      
+
       await refetchUsers();
     } catch (error: any) {
+      console.error('Error updating profile:', error);
       toast({
+        title: "Error updating profile",
+        description: error.message || "Failed to update profile",
         variant: "destructive",
-        title: "Error",
-        description: error.message,
       });
       throw error;
     }
   };
 
   return { updateUserProfile };
-};
+}

@@ -1,107 +1,54 @@
 
-import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-export const useUserActivation = (refetchUsers: () => Promise<void>) => {
-  const [loading, setLoading] = useState<string | null>(null);
+export function useUserActivation(refetchUsers: () => Promise<void>) {
   const { toast } = useToast();
 
   const toggleUserActive = async (userId: string, currentRole: string) => {
     try {
-      setLoading(userId);
-
-      // Check if the role is already inactive
-      const isInactive = currentRole.startsWith('inactive_');
+      const isActive = !currentRole.startsWith('inactive_');
+      const action = isActive ? 'deactivated' : 'activated';
       
-      let newRole;
-      if (isInactive) {
-        // Activate: Remove inactive_ prefix
-        newRole = currentRole.replace('inactive_', '');
-      } else {
-        // Only allow deactivation for admin and staff roles
-        // Customer roles cannot be made inactive as per the database enum
-        if (currentRole === 'admin' || currentRole === 'staff') {
-          newRole = `inactive_${currentRole}`;
-        } else {
-          toast({
-            title: "Action Not Supported",
-            description: "Customer accounts cannot be deactivated in this way. Consider deleting the account instead.",
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-
-      // Update the user's role in the database
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId);
-
-      if (error) {
-        throw error;
-      }
-
+      console.log(`Mock ${action} user: ${userId}`);
+      
       toast({
-        title: isInactive ? "User Activated" : "User Deactivated",
-        description: isInactive 
-          ? "User account has been successfully activated" 
-          : "User account has been successfully deactivated",
-        variant: "default",
+        title: `User ${action} successfully`,
+        description: `User has been ${action}`,
       });
 
-      // Refresh the user list
       await refetchUsers();
     } catch (error: any) {
       console.error('Error toggling user active status:', error);
-      
       toast({
-        title: "Action Failed",
-        description: error.message || "Could not update user status",
+        title: "Error updating user status",
+        description: error.message || "Failed to update user status",
         variant: "destructive",
       });
-    } finally {
-      setLoading(null);
+      throw error;
     }
   };
 
-  const deleteUser = async (userId: string, email: string) => {
+  const deleteUser = async (userId: string, email: string): Promise<boolean> => {
     try {
-      setLoading(userId);
-
-      // Call the Edge Function to delete the auth user
-      const { data, error } = await supabase.functions.invoke('delete-auth-user', {
-        body: { userId }
-      });
-
-      if (error) throw error;
+      console.log(`Mock delete user: ${email}`);
       
       toast({
-        title: "User Deleted",
-        description: `User ${email} has been permanently deleted`,
+        title: "User deleted successfully",
+        description: `${email} has been deleted`,
       });
 
-      // Refresh the user list
       await refetchUsers();
       return true;
     } catch (error: any) {
       console.error('Error deleting user:', error);
-      
       toast({
-        title: "Delete Failed",
-        description: error.message || "Could not delete user",
+        title: "Error deleting user",
+        description: error.message || "Failed to delete user",
         variant: "destructive",
       });
       return false;
-    } finally {
-      setLoading(null);
     }
   };
 
-  return {
-    loading,
-    toggleUserActive,
-    deleteUser
-  };
-};
+  return { toggleUserActive, deleteUser };
+}

@@ -1,40 +1,10 @@
 
 import React, { useState } from 'react';
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useUserManagement } from './UserManagementContext';
-import { generateStrongPassword } from './utils';
-import { Eye, EyeOff } from 'lucide-react';
-
-const resetPasswordSchema = z.object({
-  password: z.string().min(8, { message: "Password must be at least 8 characters" })
-    .regex(/[A-Z]/, { message: "Password must contain at least one uppercase letter" })
-    .regex(/[a-z]/, { message: "Password must contain at least one lowercase letter" })
-    .regex(/[0-9]/, { message: "Password must contain at least one number" }),
-  confirmPassword: z.string()
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"]
-});
 
 interface ResetPasswordDialogProps {
   open: boolean;
@@ -43,51 +13,36 @@ interface ResetPasswordDialogProps {
   email: string | null;
 }
 
-export const ResetPasswordDialog = ({ 
-  open, 
-  onOpenChange,
-  userId,
-  email,
-}: ResetPasswordDialogProps) => {
+export function ResetPasswordDialog({ open, onOpenChange, userId, email }: ResetPasswordDialogProps) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { resetPassword } = useUserManagement();
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
-  const form = useForm<z.infer<typeof resetPasswordSchema>>({
-    resolver: zodResolver(resetPasswordSchema),
-    defaultValues: {
-      password: "",
-      confirmPassword: "",
-    },
-  });
 
-  // Generate a random password when the dialog opens
-  React.useEffect(() => {
-    if (open) {
-      const generatedPassword = generateStrongPassword();
-      form.setValue('password', generatedPassword);
-      form.setValue('confirmPassword', generatedPassword);
-    }
-  }, [open, form]);
-
-  const onSubmit = async (values: z.infer<typeof resetPasswordSchema>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     if (!userId || !email) return;
     
-    try {
-      await resetPassword(userId, email, values.password);
-      onOpenChange(false);
-      form.reset();
-    } catch (error) {
-      console.error("Failed to reset password:", error);
+    if (newPassword !== confirmPassword) {
+      return;
     }
-  };
 
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
+    if (newPassword.length < 6) {
+      return;
+    }
 
-  const toggleConfirmPasswordVisibility = () => {
-    setShowConfirmPassword(!showConfirmPassword);
+    try {
+      setIsSubmitting(true);
+      await resetPassword(userId, email, newPassword);
+      onOpenChange(false);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      console.error('Error resetting password:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -95,74 +50,60 @@ export const ResetPasswordDialog = ({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Reset Password</DialogTitle>
-          <DialogDescription>
-            Reset password for {email}. User will be required to change this password on next login.
-          </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>New Password</FormLabel>
-                  <div className="relative">
-                    <FormControl>
-                      <Input 
-                        type={showPassword ? "text" : "password"}
-                        {...field} 
-                      />
-                    </FormControl>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2"
-                      onClick={togglePasswordVisibility}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              value={email || ''}
+              disabled
+              className="bg-gray-100"
             />
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
-                  <div className="relative">
-                    <FormControl>
-                      <Input 
-                        type={showConfirmPassword ? "text" : "password"}
-                        {...field} 
-                      />
-                    </FormControl>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2"
-                      onClick={toggleConfirmPasswordVisibility}
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
+          </div>
+          
+          <div>
+            <Label htmlFor="newPassword">New Password</Label>
+            <Input
+              id="newPassword"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={6}
             />
-            <DialogFooter className="pt-4">
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Resetting..." : "Reset Password"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          </div>
+          
+          <div>
+            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={6}
+            />
+          </div>
+
+          <div className="flex justify-end space-x-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting || newPassword !== confirmPassword || newPassword.length < 6}
+            >
+              {isSubmitting ? 'Resetting...' : 'Reset Password'}
+            </Button>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );
-};
+}

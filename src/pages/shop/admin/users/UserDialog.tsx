@@ -1,8 +1,8 @@
 
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { UserForm } from '@/pages/shop/users/UserForm'; // Importing from shop/users
-import { User } from '@/pages/shop/users/types'; // Importing from shop/users
+import { UserForm } from './UserForm';
+import { User } from './types';
 
 interface UserDialogProps {
   open: boolean;
