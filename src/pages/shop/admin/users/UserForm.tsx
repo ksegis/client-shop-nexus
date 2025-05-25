@@ -112,6 +112,7 @@ export function UserForm({ userData, onCancel, onSuccess }: UserFormProps) {
 
   const updateUser = async (id: string, values: UpdateUserValues) => {
     try {
+      // Update profile record
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -123,6 +124,26 @@ export function UserForm({ userData, onCancel, onSuccess }: UserFormProps) {
         .eq('id', id);
 
       if (error) throw error;
+
+      // Update password if provided
+      if (values.password && values.password.trim() !== '') {
+        const { error: passwordError } = await supabase.functions.invoke('update-user-password', {
+          body: { 
+            userId: id, 
+            password: values.password 
+          }
+        });
+
+        if (passwordError) {
+          console.error('Password update error:', passwordError);
+          toast({
+            title: "Password update failed",
+            description: passwordError.message || "Failed to update password",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
 
       toast({
         title: "User updated",
