@@ -7,9 +7,11 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { useUserManagement } from './UserManagementContext';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { User } from './types';
 
+// Form validation schema
 const createUserSchema = z.object({
   first_name: z.string().min(1, "First name is required"),
   last_name: z.string().min(1, "Last name is required"),
@@ -38,7 +40,7 @@ interface UserFormProps {
 }
 
 export function UserForm({ userData, onCancel, onSuccess }: UserFormProps) {
-  const { inviteUser, updateUserProfile } = useUserManagement();
+  const { toast } = useToast();
   const isEditing = !!userData;
   
   const form = useForm<CreateUserValues | UpdateUserValues>({
@@ -62,18 +64,71 @@ export function UserForm({ userData, onCancel, onSuccess }: UserFormProps) {
         },
   });
 
+  const createUser = async (values: CreateUserValues) => {
+    try {
+      // For now, just add to profiles table - in production you'd create auth user first
+      const { error } = await supabase
+        .from('profiles')
+        .insert({
+          email: values.email,
+          first_name: values.first_name,
+          last_name: values.last_name,
+          phone: values.phone,
+          role: values.role,
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "User created",
+        description: `User ${values.email} has been created successfully.`,
+      });
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      toast({
+        title: "Error creating user",
+        description: error.message || "Failed to create user",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
+  const updateUser = async (id: string, values: UpdateUserValues) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          first_name: values.first_name,
+          last_name: values.last_name,
+          phone: values.phone,
+          role: values.role,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "User updated",
+        description: `User has been updated successfully.`,
+      });
+    } catch (error: any) {
+      console.error('Error updating user:', error);
+      toast({
+        title: "Error updating user",
+        description: error.message || "Failed to update user",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
   const onSubmit = async (values: CreateUserValues | UpdateUserValues) => {
     try {
       if (isEditing && userData) {
-        await updateUserProfile(userData.id, values);
+        await updateUser(userData.id, values as UpdateUserValues);
       } else {
-        await inviteUser(
-          values.email,
-          values.first_name,
-          values.last_name,
-          values.role as "admin" | "staff",
-          (values as CreateUserValues).password
-        );
+        await createUser(values as CreateUserValues);
       }
       form.reset();
       onSuccess();

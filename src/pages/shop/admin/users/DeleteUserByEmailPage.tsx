@@ -7,7 +7,6 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { UserManagementProvider, useUserManagement } from './UserManagementContext';
 import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -21,7 +20,6 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const DeleteUserForm = () => {
-  const { deleteUser } = useUserManagement();
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -34,6 +32,21 @@ const DeleteUserForm = () => {
       email: '',
     },
   });
+
+  const deleteUser = async (userId: string, email: string) => {
+    try {
+      // Call the Edge Function to delete the auth user
+      const { data, error } = await supabase.functions.invoke('delete-auth-user', {
+        body: { userId }
+      });
+
+      if (error) throw error;
+      
+      return true;
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to delete user');
+    }
+  };
 
   const onSubmit = async (data: FormValues) => {
     setIsDeleting(true);
@@ -195,21 +208,19 @@ const DeleteUserByEmailPage = () => {
   
   // Authorized user view
   return (
-    <UserManagementProvider>
-      <div className="container mx-auto py-10">
-        <Card>
-          <CardHeader>
-            <CardTitle>Delete User by Email</CardTitle>
-            <CardDescription>
-              Enter the email address of the user you want to delete. This action cannot be undone.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DeleteUserForm />
-          </CardContent>
-        </Card>
-      </div>
-    </UserManagementProvider>
+    <div className="container mx-auto py-10">
+      <Card>
+        <CardHeader>
+          <CardTitle>Delete User by Email</CardTitle>
+          <CardDescription>
+            Enter the email address of the user you want to delete. This action cannot be undone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DeleteUserForm />
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 
