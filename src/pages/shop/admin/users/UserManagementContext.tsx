@@ -9,6 +9,7 @@ import {
   useUserActivation
 } from './hooks';
 import { useUserImpersonation } from './hooks/useUserImpersonation';
+import { useAuth } from '@/contexts/auth';
 
 interface UserManagementContextType {
   users: User[];
@@ -34,6 +35,18 @@ const UserManagementContext = createContext<UserManagementContextType | undefine
 export function UserManagementProvider({ children }: { children: ReactNode }) {
   console.log('UserManagementProvider: Initializing provider');
   
+  // Get auth state to debug authentication issues
+  const { user, profile, isLoading: authLoading } = useAuth();
+  
+  console.log('UserManagementProvider: Auth state:', {
+    user: user ? { id: user.id, email: user.email } : null,
+    profile: profile ? { id: profile.id, email: profile.email, role: profile.role } : null,
+    authLoading,
+    hasUser: !!user,
+    hasProfile: !!profile,
+    userRole: profile?.role
+  });
+  
   const queryResult = useUserQuery();
   console.log('UserManagementProvider: Query result:', queryResult);
   
@@ -55,12 +68,44 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
     employeeCount: employees?.length || 0,
     customerCount: customers?.length || 0,
     isLoading,
+    authLoading,
     hasError: !!error,
     actualUsers: users,
     errorDetails: error?.message,
     usersType: typeof users,
-    usersIsArray: Array.isArray(users)
+    usersIsArray: Array.isArray(users),
+    authUser: user ? { id: user.id, email: user.email } : null,
+    profileRole: profile?.role
   });
+
+  // Don't render children if auth is still loading
+  if (authLoading) {
+    console.log('UserManagementProvider: Auth still loading, showing spinner');
+    return (
+      <div className="w-full py-10 flex justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Show auth error if no user or not admin
+  if (!user || !profile) {
+    console.log('UserManagementProvider: No authenticated user or profile');
+    return (
+      <div className="w-full py-10 text-center">
+        <p className="text-red-500">Authentication required. Please log in as an admin.</p>
+      </div>
+    );
+  }
+
+  if (profile.role !== 'admin') {
+    console.log('UserManagementProvider: User is not admin, role:', profile.role);
+    return (
+      <div className="w-full py-10 text-center">
+        <p className="text-red-500">Admin access required. Current role: {profile.role}</p>
+      </div>
+    );
+  }
 
   return (
     <UserManagementContext.Provider
