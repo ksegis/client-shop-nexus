@@ -13,7 +13,7 @@ export function UserDisplay() {
     : 'User';
 
   return (
-    <div className="flex flex-col text-right text-sm">
+    <div className="hidden md:flex flex-col text-right text-sm">
       <span className="font-medium text-gray-900">{displayName}</span>
       <span className="text-gray-500">{user.email}</span>
     </div>
