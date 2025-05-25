@@ -15,56 +15,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // Auto-login as customer@example.com on mount
+  // Check for existing dev user on mount, but don't auto-login
   useEffect(() => {
-    const autoLogin = async () => {
-      console.log('Auto-logging in as customer@example.com...');
-      
-      // Create a mock admin user
-      const devUser = {
-        id: 'dev-' + Date.now(),
-        email: 'customer@example.com',
-        user_metadata: {
-          first_name: 'Dev',
-          last_name: 'Admin',
-          role: 'admin',
-          phone: '555-1234'
-        },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      
-      // Store in localStorage
-      localStorage.setItem('dev-customer-user', JSON.stringify(devUser));
-      
-      // Update state
-      setUser(devUser);
-      setIsAuthenticated(true);
-      setIsLoading(false);
-      
-      // Show toast notification
-      toast({
-        title: "Auto-login successful",
-        description: "Logged in as customer@example.com with admin privileges",
-      });
-      
-      // Redirect to dashboard if on login page
-      const currentPath = window.location.pathname;
-      if (currentPath.includes('login')) {
-        setTimeout(() => {
-          navigate('/shop/dashboard', { replace: true });
-        }, 500);
+    const checkExistingUser = async () => {
+      try {
+        // Check if there's already a dev user stored
+        const storedUser = localStorage.getItem('dev-customer-user');
+        
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          console.log('Found existing dev user:', parsedUser.email);
+          
+          // Set the user without forcing login
+          setUser(parsedUser);
+          setIsAuthenticated(true);
+        } else {
+          console.log('No existing dev user found');
+        }
+        
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error checking existing user:', error);
+        setIsLoading(false);
       }
     };
     
-    // Execute auto-login
-    autoLogin();
-    
-    // Clean up function
-    return () => {
-      // Nothing to clean up for now
-    };
-  }, [navigate, toast]);
+    checkExistingUser();
+  }, []);
   
   // Create simplified auth context value with development authentication
   const value = {
@@ -106,6 +83,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(devUser);
       setIsAuthenticated(true);
       
+      toast({
+        title: "Account created",
+        description: `Development account created for ${email}`,
+      });
+      
       return { success: true, error: null };
     },
     signIn: async (email, password) => {
@@ -131,6 +113,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(devUser);
       setIsAuthenticated(true);
       
+      toast({
+        title: "Signed in successfully",
+        description: `Logged in as ${email}`,
+      });
+      
       return { success: true, error: null };
     },
     signOut: async () => {
@@ -139,6 +126,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       localStorage.removeItem('dev-customer-user');
       setUser(null);
       setIsAuthenticated(false);
+      
+      toast({
+        title: "Signed out",
+        description: "You have been logged out",
+      });
+      
       return { success: true, error: null };
     },
     resetPassword: async () => ({ success: true, error: null }),
