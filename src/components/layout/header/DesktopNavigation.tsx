@@ -31,13 +31,13 @@ export const DesktopNavigation = ({ links, currentPath }: DesktopNavigationProps
           // If link has children, render a dropdown
           if (link.children && link.children.length > 0) {
             return (
-              <NavigationMenuItem key={link.name}>
+              <NavigationMenuItem key={link.name} className="relative">
                 <NavigationMenuTrigger className="bg-transparent hover:bg-gray-100">
                   <span className="text-gray-600 hover:text-shop-primary font-medium">
                     {link.name}
                   </span>
                 </NavigationMenuTrigger>
-                <NavigationMenuContent className="min-w-[200px] bg-white border shadow-lg">
+                <NavigationMenuContent className="absolute top-full left-0 min-w-[200px] bg-white border shadow-lg rounded-md z-50">
                   <ul className="grid w-full gap-2 p-2 md:w-[200px] lg:w-[220px]">
                     {link.children.map((child) => (
                       <li key={child.name}>
