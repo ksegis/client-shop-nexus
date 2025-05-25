@@ -52,7 +52,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       first_name: user?.user_metadata?.first_name || '',
       last_name: user?.user_metadata?.last_name || '',
       phone: user?.user_metadata?.phone || '',
-      role: user?.email === 'customer@example.com' ? 'admin' : (user?.user_metadata?.role || 'customer'),
+      role: user?.user_metadata?.role || 'customer',
       created_at: user?.created_at,
       updated_at: user?.created_at,
     } : null,
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           ...metadata,
           first_name: metadata?.first_name || '',
           last_name: metadata?.last_name || '',
-          role: email === 'customer@example.com' ? 'admin' : (metadata?.role || 'customer')
+          role: metadata?.role || 'customer'
         },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -93,14 +93,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signIn: async (email, password) => {
       console.log('Signing in development user:', email);
       
+      // Determine role based on email - kevin.shelton@egisdynamics.com should be admin
+      let userRole = 'customer'; // default
+      if (email === 'kevin.shelton@egisdynamics.com') {
+        userRole = 'admin';
+      } else if (email === 'customer@example.com') {
+        userRole = 'admin';
+      } else if (email.includes('admin') || email.includes('staff')) {
+        userRole = 'admin';
+      }
+      
       // Create a mock user object
       const devUser = {
         id: 'dev-' + Date.now(),
         email,
         user_metadata: {
-          first_name: 'Dev',
-          last_name: 'User',
-          role: email === 'customer@example.com' ? 'admin' : 'customer'
+          first_name: userRole === 'admin' ? 'Kevin' : 'Dev',
+          last_name: userRole === 'admin' ? 'Shelton' : 'User',
+          role: userRole
         },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -119,7 +129,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
       
       // Handle redirect based on user role
-      const userRole = devUser.user_metadata.role;
       let redirectPath = '/shop/dashboard'; // Default to shop dashboard
       
       if (userRole === 'customer') {
@@ -128,7 +137,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         redirectPath = '/shop/dashboard';
       }
       
-      console.log(`Redirecting ${userRole} to ${redirectPath}`);
+      console.log(`Redirecting ${userRole} user ${email} to ${redirectPath}`);
       
       // Use setTimeout to ensure state updates complete before navigation
       setTimeout(() => {
