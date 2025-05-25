@@ -77,12 +77,20 @@ serve(async (req) => {
       throw deleteError
     }
 
-    // Log the deletion event
-    await supabaseAdmin.rpc('log_audit_event', {
-      p_action: 'delete_user',
-      p_target_user_id: userId,
-      p_description: 'User account deleted by admin'
-    })
+    // Log the deletion event manually since we're using service role
+    const { error: auditError } = await supabaseAdmin
+      .from('audit_logs')
+      .insert({
+        action: 'delete_user',
+        target_user_id: userId,
+        performed_by: user.id,
+        description: 'User account deleted by admin',
+        metadata: {}
+      })
+
+    if (auditError) {
+      console.error('Failed to log audit event:', auditError)
+    }
 
     return new Response(
       JSON.stringify({ success: true, message: 'User deleted successfully' }),
