@@ -39,7 +39,13 @@ export function QuantityDialog({
   }, [open, part]);
   
   const handleQuantityChange = (value: string) => {
-    const num = parseInt(value) || 0;
+    // Allow empty string for user to clear and retype
+    if (value === '') {
+      setQuantity(1);
+      return;
+    }
+    
+    const num = parseInt(value) || 1;
     if (num < 1) {
       setQuantity(1);
       return;
@@ -106,12 +112,10 @@ export function QuantityDialog({
             <Label htmlFor="quantity">Quantity</Label>
             <Input
               id="quantity"
-              type="text"
+              type="number"
               value={quantity}
               onChange={(e) => handleQuantityChange(e.target.value)}
               className="text-center"
-              min="1"
-              max={part.quantity > 0 ? part.quantity : undefined}
               placeholder="Enter quantity"
             />
           </div>
