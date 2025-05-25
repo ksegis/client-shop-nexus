@@ -5,7 +5,6 @@ import { MessagingProvider } from '@/contexts/messaging';
 import { PartsCartProvider } from '@/contexts/parts/PartsCartContext';
 import CustomerRoutes from './CustomerRoutes';
 import ShopRoutes from './shop/ShopRoutes';
-import AdminPage from '@/pages/shop/admin/AdminPage';
 import Index from '@/pages/Index';
 import ShopLogin from '@/pages/shop/Login';
 import CustomerLogin from '@/pages/customer/Login';
@@ -17,7 +16,6 @@ import VerifyMFA from '@/pages/VerifyMFA';
 import InviteAccept from '@/pages/auth/InviteAccept';
 import ChangePassword from '@/pages/auth/ChangePassword';
 import AccountRecovery from '@/pages/AccountRecovery';
-import DeleteUserPage from '@/pages/DeleteUserPage';
 
 // Profile redirect component that checks the user role and redirects accordingly
 const ProfileRedirect = () => {
@@ -109,9 +107,6 @@ const AppRoutes: React.FC = () => {
             {/* MFA verification route */}
             <Route path="/verify-mfa" element={<VerifyMFA />} />
 
-            {/* Special routes */}
-            <Route path="/delete-user" element={<DeleteUserPage />} />
-
             {/* Customer portal routes - clearly labeled */}
             <Route path="/customer/*" element={
               <>
@@ -122,14 +117,6 @@ const AppRoutes: React.FC = () => {
             
             {/* Shop portal routes - everything under /shop prefix */}
             <Route path="/shop/*" element={<ShopRoutesWrapper />} />
-            
-            {/* Admin routes now properly under /shop/admin */}
-            <Route path="/shop/admin/*" element={
-              <>
-                <PasswordChangeRedirect />
-                <AdminPage />
-              </>
-            } />
             
             {/* Unauthorized access page */}
             <Route path="/unauthorized" element={<Unauthorized />} />
@@ -143,9 +130,6 @@ const AppRoutes: React.FC = () => {
             {/* Legacy auth paths redirects */}
             <Route path="/auth" element={<Navigate to="/" replace />} />
             <Route path="/auth/*" element={<Navigate to="/" replace />} />
-            
-            {/* Redirect old /admin route to /shop/admin */}
-            <Route path="/admin/*" element={<Navigate to="/shop/admin" replace />} />
             
             {/* Catch all route for any direct /dashboard attempts */}
             <Route path="/dashboard" element={<Navigate to="/customer/dashboard" replace />} />

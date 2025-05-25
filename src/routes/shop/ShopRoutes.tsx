@@ -15,12 +15,7 @@ import WorkOrders from "@/pages/shop/WorkOrders";
 import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
-import UserManagement from "@/pages/shop/admin/UserManagement";
-import SessionManagement from "@/pages/shop/admin/SessionManagement";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import SecurityDashboard from "@/pages/shop/admin/components/SecurityDashboard";
-import AdminPage from "@/pages/shop/admin/AdminPage";
-import DeleteUserByEmailPage from "@/pages/shop/admin/users/DeleteUserByEmailPage";
 
 const ShopRoutes = () => {
   return (
@@ -153,37 +148,6 @@ const ShopRoutes = () => {
             </ProtectedRoute>
           }
         />
-        
-        {/* Admin section */}
-        <Route path="admin" element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <AdminPage />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="admin/user-management" element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <UserManagement />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="admin/delete-user" element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <DeleteUserByEmailPage />
-          </ProtectedRoute>
-        } />
-
-        <Route path="admin/session-management" element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <SessionManagement />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="admin/security-dashboard" element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <SecurityDashboard />
-          </ProtectedRoute>
-        } />
         
         {/* Catch all undefined routes */}
         <Route path="*" element={<NotFound />} />
