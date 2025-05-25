@@ -47,6 +47,7 @@ export type Database = {
           id: string
           metadata: Json | null
           performed_by: string
+          target_user_email: string | null
           target_user_id: string | null
           timestamp: string
         }
@@ -57,6 +58,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           performed_by: string
+          target_user_email?: string | null
           target_user_id?: string | null
           timestamp?: string
         }
@@ -67,6 +69,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           performed_by?: string
+          target_user_email?: string | null
           target_user_id?: string | null
           timestamp?: string
         }

@@ -29,20 +29,19 @@ export const useAuditLogs = (userId?: string) => {
         throw error;
       }
 
-      // Fetch user emails separately to avoid foreign key issues
-      const userIds = new Set<string>();
+      // Fetch user emails for performed_by users (only for those that don't have target_user_email)
+      const performedByUserIds = new Set<string>();
       auditData?.forEach(log => {
-        if (log.performed_by) userIds.add(log.performed_by);
-        if (log.target_user_id) userIds.add(log.target_user_id);
+        if (log.performed_by) performedByUserIds.add(log.performed_by);
       });
 
       let userEmails: Record<string, string> = {};
       
-      if (userIds.size > 0) {
+      if (performedByUserIds.size > 0) {
         const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
           .select('id, email')
-          .in('id', Array.from(userIds));
+          .in('id', Array.from(performedByUserIds));
 
         if (!profilesError && profiles) {
           userEmails = profiles.reduce((acc, profile) => {
@@ -54,7 +53,8 @@ export const useAuditLogs = (userId?: string) => {
 
       const logsWithEmails = auditData?.map(log => ({
         ...log,
-        target_user_email: log.target_user_id ? (userEmails[log.target_user_id] || 'Unknown') : undefined,
+        // Use target_user_email if available, otherwise fall back to lookup
+        target_user_email: log.target_user_email || (log.target_user_id ? (userEmails[log.target_user_id] || 'Unknown') : undefined),
         performed_by_email: log.performed_by ? (userEmails[log.performed_by] || 'System') : 'System'
       })) || [];
 

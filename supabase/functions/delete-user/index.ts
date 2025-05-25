@@ -70,6 +70,15 @@ serve(async (req) => {
       throw new Error('Cannot delete your own account')
     }
 
+    // Get the target user's email before deletion
+    const { data: targetUser, error: targetUserError } = await supabaseAdmin
+      .from('profiles')
+      .select('email')
+      .eq('id', userId)
+      .single()
+
+    const targetUserEmail = targetUser?.email || 'Unknown'
+
     // Delete the user using admin privileges
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)
 
@@ -77,12 +86,13 @@ serve(async (req) => {
       throw deleteError
     }
 
-    // Log the deletion event manually since we're using service role
+    // Log the deletion event manually with the captured email
     const { error: auditError } = await supabaseAdmin
       .from('audit_logs')
       .insert({
         action: 'delete_user',
         target_user_id: userId,
+        target_user_email: targetUserEmail,
         performed_by: user.id,
         description: 'User account deleted by admin',
         metadata: {}
