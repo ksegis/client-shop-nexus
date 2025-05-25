@@ -20,7 +20,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { PartQuotationDialog } from "@/components/shared/parts/PartQuotationDialog";
-import { CoreChargeHandler } from "@/components/shared/parts/CoreChargeHandler";
+import { CoreReturnDialog } from "@/components/shared/parts/CoreReturnDialog";
 import { Part } from "@/types/parts";
 
 interface PartsHeaderProps {
@@ -63,6 +63,10 @@ export function PartsHeader({
   
   const cartCount = getCartItemCount();
   const quotationCount = getQuotationItemCount();
+
+  const handleCoreReturnClick = () => {
+    setCoreReturnOpen(true);
+  };
   
   return (
     <div className="flex flex-col space-y-4">
@@ -104,7 +108,7 @@ export function PartsHeader({
                 <Button 
                   variant="outline" 
                   className="text-xs"
-                  onClick={() => setCoreReturnOpen(true)}
+                  onClick={handleCoreReturnClick}
                 >
                   <ArrowLeftRight className="h-4 w-4 mr-2" />
                   Core Return
@@ -180,8 +184,7 @@ export function PartsHeader({
         onRemoveItem={onRemoveQuotationItem}
       />
       
-      <CoreChargeHandler
-        part={selectedPartForCoreReturn}
+      <CoreReturnDialog
         open={isCoreReturnOpen}
         onOpenChange={setCoreReturnOpen}
         onProcessReturn={onProcessCoreReturn}
