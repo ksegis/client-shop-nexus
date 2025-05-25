@@ -66,18 +66,34 @@ export function UserForm({ userData, onCancel, onSuccess }: UserFormProps) {
 
   const createUser = async (values: CreateUserValues) => {
     try {
-      // For now, just add to profiles table - in production you'd create auth user first
-      const { error } = await supabase
-        .from('profiles')
-        .insert({
-          email: values.email,
-          first_name: values.first_name,
-          last_name: values.last_name,
-          phone: values.phone,
-          role: values.role,
-        });
+      // Create auth user first
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: values.email,
+        password: values.password,
+        options: {
+          data: {
+            first_name: values.first_name,
+            last_name: values.last_name
+          }
+        }
+      });
 
-      if (error) throw error;
+      if (authError) throw authError;
+
+      // If auth user was created, update the profile
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            first_name: values.first_name,
+            last_name: values.last_name,
+            phone: values.phone || null,
+            role: values.role,
+          })
+          .eq('id', authData.user.id);
+
+        if (profileError) throw profileError;
+      }
 
       toast({
         title: "User created",
@@ -101,7 +117,7 @@ export function UserForm({ userData, onCancel, onSuccess }: UserFormProps) {
         .update({
           first_name: values.first_name,
           last_name: values.last_name,
-          phone: values.phone,
+          phone: values.phone || null,
           role: values.role,
         })
         .eq('id', id);
