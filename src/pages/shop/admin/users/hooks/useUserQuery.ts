@@ -11,7 +11,7 @@ export const useUserQuery = () => {
     queryKey: ['admin-users'],
     queryFn: async () => {
       try {
-        console.log('Fetching users from profiles table');
+        console.log('useUserQuery: Starting to fetch users from profiles table');
         
         const { data, error: queryError } = await supabase
           .from('profiles')
@@ -19,14 +19,18 @@ export const useUserQuery = () => {
           .order('created_at', { ascending: false });
           
         if (queryError) {
-          console.error('Error fetching users:', queryError);
+          console.error('useUserQuery: Error fetching users:', queryError);
           throw queryError;
         }
         
-        console.log('Users fetched:', data?.length || 0);
+        console.log('useUserQuery: Users fetched successfully:', {
+          count: data?.length || 0,
+          data: data
+        });
+        
         return (data || []) as User[];
       } catch (error: any) {
-        console.error('Error in useUserQuery:', error);
+        console.error('useUserQuery: Error in query function:', error);
         setError(error);
         throw error;
       }
@@ -34,7 +38,7 @@ export const useUserQuery = () => {
   });
 
   const refetchUsers = async () => {
-    console.log('Refetching users...');
+    console.log('useUserQuery: Manual refetch triggered...');
     await refetch();
   };
 
@@ -50,6 +54,14 @@ export const useUserQuery = () => {
   const customers = users.filter(user => 
     user.role === 'customer' || user.role === 'test_customer'
   );
+
+  console.log('useUserQuery: Final state:', {
+    totalUsers: users.length,
+    employees: employees.length,
+    customers: customers.length,
+    isLoading,
+    hasError: !!error
+  });
 
   return {
     users,

@@ -47,16 +47,26 @@ export function UsersTable() {
   console.log('UsersTable rendering with:', {
     userCount: users?.length || 0,
     isLoading,
-    users: users
+    users: users,
+    hasUsers: !!users,
+    usersArray: Array.isArray(users)
   });
 
   if (isLoading) {
+    console.log('UsersTable: Still loading...');
     return (
       <div className="w-full py-10 flex justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
+
+  console.log('UsersTable: Not loading, checking users data:', {
+    usersExists: !!users,
+    usersLength: users?.length,
+    usersType: typeof users,
+    firstUser: users?.[0]
+  });
 
   return (
     <div className="space-y-4">
@@ -81,21 +91,24 @@ export function UsersTable() {
                 </TableCell>
               </TableRow>
             ) : (
-              users.map((user) => (
-                <UserTableRow
-                  key={user.id}
-                  user={user}
-                  impersonationLoading={impersonationLoading}
-                  activationLoading={activationLoading}
-                  deleteLoading={deleteLoading}
-                  onResetPassword={handleResetPassword}
-                  onEditProfile={handleEditProfile}
-                  onImpersonate={handleImpersonate}
-                  onToggleActive={handleToggleActive}
-                  onDelete={handleConfirmDelete}
-                  getInviterName={getInviterName}
-                />
-              ))
+              users.map((user) => {
+                console.log('Rendering user:', user);
+                return (
+                  <UserTableRow
+                    key={user.id}
+                    user={user}
+                    impersonationLoading={impersonationLoading}
+                    activationLoading={activationLoading}
+                    deleteLoading={deleteLoading}
+                    onResetPassword={handleResetPassword}
+                    onEditProfile={handleEditProfile}
+                    onImpersonate={handleImpersonate}
+                    onToggleActive={handleToggleActive}
+                    onDelete={handleConfirmDelete}
+                    getInviterName={getInviterName}
+                  />
+                );
+              })
             )}
           </TableBody>
         </Table>

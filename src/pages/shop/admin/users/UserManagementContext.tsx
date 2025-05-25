@@ -53,7 +53,9 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
     employeeCount: employees.length,
     customerCount: customers.length,
     isLoading,
-    hasError: !!error
+    hasError: !!error,
+    actualUsers: users,
+    errorDetails: error?.message
   });
 
   return (
