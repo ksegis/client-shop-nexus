@@ -12,7 +12,7 @@ export function useUserTableActions() {
   const activationLoading = null; // For mock implementation
   const deleteLoading = null; // For mock implementation
 
-  const getInviterName = (inviterId: string | null): string => {
+  const getInviterName = async (inviterId: string | null): Promise<string> => {
     if (!inviterId) return 'System';
     return 'Admin'; // Mock implementation
   };
