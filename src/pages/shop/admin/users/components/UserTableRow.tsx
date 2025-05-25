@@ -106,20 +106,45 @@ export function UserTableRow({
             <RotateCw className="h-4 w-4 animate-spin" />
           </Button>
         ) : (
-          <div className="flex justify-end space-x-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEditProfile(user.id, user.email)}>
-              <UserCog className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onImpersonate(user.id, user.email)}>
-              <UserX className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onResetPassword(user.id, user.email)}>
-              <KeyRound className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onToggleActive(user.id, user.role)}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onEditProfile(user.id, user.email)}>
+                <UserCog className="mr-2 h-4 w-4" />
+                Edit Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onImpersonate(user.id, user.email)}>
+                <UserX className="mr-2 h-4 w-4" />
+                Impersonate
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onResetPassword(user.id, user.email)}>
+                <KeyRound className="mr-2 h-4 w-4" />
+                Reset Password
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onToggleActive(user.id, user.role)}>
+                <UserX className="mr-2 h-4 w-4" />
+                {isInactive ? 'Activate' : 'Deactivate'}
+              </DropdownMenuItem>
+              {onDelete && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => onDelete(user.id, user.email)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete User
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </TableCell>
     </TableRow>
