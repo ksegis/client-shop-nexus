@@ -95,8 +95,9 @@ export function QuantityDialog({
   const coreChargeTotal = partCoreCharge * quantity;
   const grandTotal = total + coreChargeTotal;
   
-  // Check if we can increment (stock availability)
-  const canIncrement = part.quantity <= 0 || quantity < part.quantity;
+  // Fix the disabled state logic - buttons should be enabled when stock allows it
+  const hasStock = part.quantity <= 0; // No stock limit (unlimited) or has stock
+  const canIncrement = hasStock || quantity < part.quantity;
   const canDecrement = quantity > 1;
   
   return (
@@ -141,7 +142,7 @@ export function QuantityDialog({
               </Button>
               <Input
                 id="quantity"
-                type="number"
+                type="text"
                 value={quantity}
                 onChange={(e) => handleQuantityChange(e.target.value)}
                 className="text-center flex-1"
