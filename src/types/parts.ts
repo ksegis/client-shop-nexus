@@ -18,6 +18,8 @@ export interface Part {
   manufacturer?: string;
   compatibility?: string[];
   images?: string[];
+  markup_percentage?: number; // New field for markup calculation
+  list_price?: number; // New field for list price
   created_at: string;
   updated_at: string;
 }
@@ -27,6 +29,7 @@ export interface PartCategory {
   name: string;
   description?: string;
   parent_id?: string;
+  markup_percentage?: number; // Category-level markup
 }
 
 export interface PartSearchFilters {

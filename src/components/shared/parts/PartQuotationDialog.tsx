@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import {
   Dialog,
@@ -6,176 +7,220 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, Plus, Minus } from "lucide-react";
+import { QuotationItem } from "@/hooks/parts/usePartsQuotation";
 import { toast } from "@/hooks/use-toast";
-import { PartQuotationForm } from './PartQuotationForm';
-import { Part, PartOrderItem, PartQuotation } from '@/types/parts';
-import { Button } from '@/components/ui/button';
-import { Check, Download, Send } from 'lucide-react';
 
 interface PartQuotationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  items: (PartOrderItem & { part: Part })[];
+  items: QuotationItem[];
   onRemoveItem: (partId: string) => void;
 }
 
-export function PartQuotationDialog({ 
-  open, 
+export function PartQuotationDialog({
+  open,
   onOpenChange,
   items,
   onRemoveItem
 }: PartQuotationDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [quotation, setQuotation] = useState<PartQuotation | null>(null);
-
-  const handleSubmit = async (data: any) => {
-    setIsSubmitting(true);
-    
-    try {
-      // In a real application, we would save this to the database
-      // For now, we'll just simulate it with a timeout
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const now = new Date();
-      const validUntil = new Date();
-      validUntil.setDate(now.getDate() + data.validDays);
-      
-      // Calculate total
-      const total = items.reduce((sum, item) => {
-        const itemTotal = item.price * item.quantity;
-        const coreCharge = (item.core_charge || 0) * item.quantity;
-        return sum + itemTotal + coreCharge;
-      }, 0);
-      
-      // Add tax
-      const taxRate = 0.07; // 7% tax
-      const totalWithTax = total + (total * taxRate);
-      
-      const newQuotation: PartQuotation = {
-        id: `QT-${Math.floor(Math.random() * 10000)}`,
-        customer_name: data.customerName,
-        items: items.map(item => ({
-          part_id: item.part_id,
-          quantity: item.quantity,
-          price: item.price,
-          core_charge: item.core_charge
-        })),
-        status: 'draft',
-        total: totalWithTax,
-        valid_until: validUntil.toISOString(),
-        notes: data.notes || '',
-        created_at: now.toISOString(),
-        updated_at: now.toISOString()
-      };
-      
-      setQuotation(newQuotation);
-      
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [notes, setNotes] = useState('');
+  
+  const subtotal = items.reduce((total, item) => total + (item.price * item.quantity), 0);
+  const coreCharges = items.reduce((total, item) => total + ((item.core_charge || 0) * item.quantity), 0);
+  const grandTotal = subtotal + coreCharges;
+  
+  const handleSaveQuotation = () => {
+    if (!customerName.trim()) {
       toast({
-        title: "Quotation created",
-        description: `Quotation #${newQuotation.id} has been created successfully.`
+        title: "Customer name required",
+        description: "Please enter a customer name for the quotation",
+        variant: "destructive"
       });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error creating quotation",
-        description: "There was an error creating the quotation."
-      });
-    } finally {
-      setIsSubmitting(false);
+      return;
     }
-  };
-  
-  const handleSendQuotation = () => {
-    toast({
-      title: "Quotation sent",
-      description: `Quotation #${quotation?.id} has been sent to ${quotation?.customer_name}.`
+    
+    if (items.length === 0) {
+      toast({
+        title: "No items in quotation",
+        description: "Please add some parts to the quotation before saving",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Here you would typically save to database
+    console.log('Saving quotation:', {
+      customerName,
+      customerEmail,
+      items,
+      notes,
+      total: grandTotal
     });
-  };
-  
-  const handleDownloadQuotation = () => {
+    
     toast({
-      title: "Quotation downloaded",
-      description: `Quotation #${quotation?.id} has been prepared for download.`
+      title: "Quotation saved",
+      description: `Quotation for ${customerName} has been saved successfully`,
     });
-  };
-  
-  const handleReset = () => {
-    setQuotation(null);
-  };
-  
-  const handleClose = () => {
+    
+    // Reset form
+    setCustomerName('');
+    setCustomerEmail('');
+    setNotes('');
     onOpenChange(false);
-    setTimeout(() => {
-      setQuotation(null);
-    }, 300);
   };
-
+  
+  const handlePrintQuotation = () => {
+    // Here you would implement print functionality
+    toast({
+      title: "Print quotation",
+      description: "Print functionality would be implemented here",
+    });
+  };
+  
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[700px]">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Parts Quotation</DialogTitle>
+          <DialogTitle>Parts Quotation</DialogTitle>
           <DialogDescription>
-            Generate a quotation for parts that can be sent to customers.
+            Create a quotation for parts and services
           </DialogDescription>
         </DialogHeader>
-
-        {quotation ? (
-          <div className="space-y-6 py-4">
-            <div className="bg-green-50 text-green-700 p-4 rounded-md flex items-center gap-2">
-              <Check className="h-5 w-5" />
-              <div>
-                <h3 className="font-medium text-lg">Quotation Created!</h3>
-                <p>Quotation #{quotation.id} is ready to send or download.</p>
+        
+        <div className="space-y-6">
+          {/* Customer Information */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Customer Information</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="customer-name">Customer Name *</Label>
+                <Input
+                  id="customer-name"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Enter customer name"
+                />
               </div>
-            </div>
-            
-            <div className="space-y-2">
-              <h3 className="font-medium">Customer</h3>
-              <p>{quotation.customer_name}</p>
-            </div>
-            
-            <div className="space-y-2">
-              <h3 className="font-medium">Quotation Details</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Quotation #:</span> {quotation.id}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Date:</span> {new Date(quotation.created_at).toLocaleDateString()}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Valid Until:</span> {new Date(quotation.valid_until).toLocaleDateString()}
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Total:</span> ${quotation.total.toFixed(2)}
-                </div>
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={handleReset}>
-                  Create New
-                </Button>
-                <Button variant="outline" onClick={handleDownloadQuotation} className="flex items-center gap-1">
-                  <Download className="h-4 w-4" /> Download
-                </Button>
-                <Button onClick={handleSendQuotation} className="flex items-center gap-1">
-                  <Send className="h-4 w-4" /> Send to Customer
-                </Button>
+              <div className="space-y-2">
+                <Label htmlFor="customer-email">Customer Email</Label>
+                <Input
+                  id="customer-email"
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  placeholder="Enter customer email"
+                />
               </div>
             </div>
           </div>
-        ) : (
-          <PartQuotationForm
-            items={items}
-            onSubmit={handleSubmit}
-            onCancel={handleClose}
-            onRemoveItem={onRemoveItem}
-            isSubmitting={isSubmitting}
-          />
-        )}
+          
+          <Separator />
+          
+          {/* Quotation Items */}
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-medium">Quotation Items</h3>
+              <Badge variant="secondary">{items.length} items</Badge>
+            </div>
+            
+            {items.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No items in quotation yet.</p>
+                <p className="text-sm">Add parts from the catalog to get started.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {items.map((item) => (
+                  <div key={item.part_id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex-1">
+                      <div className="font-medium">{item.name || `Part ${item.part_id}`}</div>
+                      <div className="text-sm text-muted-foreground">
+                        SKU: {item.sku || 'N/A'} • ${item.price.toFixed(2)} each
+                        {item.core_charge && item.core_charge > 0 && (
+                          <span> • Core: ${item.core_charge.toFixed(2)}</span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <div className="text-sm">
+                        Qty: {item.quantity}
+                      </div>
+                      <div className="text-sm font-medium">
+                        ${(item.price * item.quantity + (item.core_charge || 0) * item.quantity).toFixed(2)}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemoveItem(item.part_id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <Separator />
+          
+          {/* Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes</Label>
+            <textarea
+              id="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add any additional notes or special instructions..."
+              className="w-full h-20 px-3 py-2 border border-input rounded-md resize-none"
+            />
+          </div>
+          
+          {/* Totals */}
+          {items.length > 0 && (
+            <div className="space-y-2 bg-muted p-4 rounded-lg">
+              <div className="flex justify-between text-sm">
+                <span>Subtotal:</span>
+                <span>${subtotal.toFixed(2)}</span>
+              </div>
+              {coreCharges > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span>Core Charges:</span>
+                  <span>${coreCharges.toFixed(2)}</span>
+                </div>
+              )}
+              <Separator />
+              <div className="flex justify-between font-medium">
+                <span>Total:</span>
+                <span>${grandTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex justify-end gap-2 pt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          {items.length > 0 && (
+            <Button variant="outline" onClick={handlePrintQuotation}>
+              Print
+            </Button>
+          )}
+          <Button onClick={handleSaveQuotation} disabled={items.length === 0}>
+            Save Quotation
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
