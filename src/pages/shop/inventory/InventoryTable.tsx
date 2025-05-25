@@ -12,6 +12,7 @@ import { StockStatusProgress } from './components/StockStatusProgress';
 import { TableActions } from './components/TableActions';
 import { EmptyTableRow } from './components/EmptyTableRow';
 import { SortableTableHeader } from './components/SortableTableHeader';
+import { CoreIndicatorBadge } from './components/CoreIndicatorBadge';
 
 interface InventoryTableProps {
   onEdit: (item: InventoryItem) => void;
@@ -70,11 +71,12 @@ export const InventoryTable = ({ onEdit }: InventoryTableProps) => {
               <TableHead>Quantity</TableHead>
               <TableHead>Price</TableHead>
               <TableHead>Stock Status</TableHead>
+              <TableHead>Core</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            <EmptyTableRow colSpan={6} message="No inventory items found" />
+            <EmptyTableRow colSpan={7} message="No inventory items found" />
           </TableBody>
         </Table>
       </div>
@@ -106,6 +108,7 @@ export const InventoryTable = ({ onEdit }: InventoryTableProps) => {
               onSort={handleSort} 
             />
             <TableHead>Stock Status</TableHead>
+            <TableHead>Core</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -147,6 +150,9 @@ export const InventoryTable = ({ onEdit }: InventoryTableProps) => {
                     </div>
                     <StockStatusBadge status={stockStatus} />
                   </div>
+                </TableCell>
+                <TableCell>
+                  <CoreIndicatorBadge coreCharge={item.core_charge} size="sm" />
                 </TableCell>
                 <TableCell className="text-right">
                   <TableActions 

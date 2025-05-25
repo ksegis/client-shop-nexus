@@ -12,6 +12,7 @@ export interface InventoryItem {
   category: string | null;
   supplier: string | null;
   reorder_level: number | null;
+  core_charge: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +27,7 @@ export const inventoryFormSchema = z.object({
   category: z.string().optional().nullable(),
   supplier: z.string().optional().nullable(),
   reorder_level: z.number().min(0, 'Reorder level cannot be negative').optional().nullable(),
+  core_charge: z.number().min(0, 'Core charge cannot be negative').optional().nullable(),
 });
 
 export type InventoryFormValues = z.infer<typeof inventoryFormSchema>;
