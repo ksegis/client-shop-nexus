@@ -19,8 +19,18 @@ export const useUserActivation = (refetchUsers: () => Promise<void>) => {
         // Activate: Remove inactive_ prefix
         newRole = currentRole.replace('inactive_', '');
       } else {
-        // Deactivate: Add inactive_ prefix
-        newRole = `inactive_${currentRole}`;
+        // Only allow deactivation for admin and staff roles
+        // Customer roles cannot be made inactive as per the database enum
+        if (currentRole === 'admin' || currentRole === 'staff') {
+          newRole = `inactive_${currentRole}`;
+        } else {
+          toast({
+            title: "Action Not Supported",
+            description: "Customer accounts cannot be deactivated in this way. Consider deleting the account instead.",
+            variant: "destructive",
+          });
+          return;
+        }
       }
 
       // Update the user's role in the database
