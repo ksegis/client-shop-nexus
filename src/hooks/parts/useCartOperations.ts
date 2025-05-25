@@ -13,15 +13,26 @@ export function useCartOperations() {
   } = usePartsCart();
   
   const [cartOpen, setCartOpen] = useState(false);
+  const [quantityDialogOpen, setQuantityDialogOpen] = useState(false);
+  const [selectedPartForQuantity, setSelectedPartForQuantity] = useState<Part | null>(null);
   
   // Simple adapter function to handle single-parameter calls from PartCard
   const handleAddToCart = (part: Part) => {
-    addToCart(part, 1);  // Default to quantity of 1
-    
-    toast({
-      title: "Added to cart",
-      description: `${part.name} has been added to your cart.`
-    });
+    setSelectedPartForQuantity(part);
+    setQuantityDialogOpen(true);
+  };
+  
+  // Handle quantity confirmation from dialog
+  const handleQuantityConfirm = (quantity: number) => {
+    if (selectedPartForQuantity) {
+      addToCart(selectedPartForQuantity, quantity);
+      
+      toast({
+        title: "Added to cart",
+        description: `${quantity}x ${selectedPartForQuantity.name} added to cart.`
+      });
+    }
+    setSelectedPartForQuantity(null);
   };
   
   // Modified to match the expected signature in PartDetailDialog
@@ -30,7 +41,7 @@ export function useCartOperations() {
     
     toast({
       title: "Added to cart",
-      description: `${part.name} has been added to your cart.`
+      description: `${quantity}x ${part.name} added to cart.`
     });
   };
   
@@ -55,6 +66,10 @@ export function useCartOperations() {
     getCartItemCount,
     handleAddToCart,
     handleAddToCartFromDialog,
-    handleProcessTransaction
+    handleProcessTransaction,
+    quantityDialogOpen,
+    setQuantityDialogOpen,
+    selectedPartForQuantity,
+    handleQuantityConfirm
   };
 }

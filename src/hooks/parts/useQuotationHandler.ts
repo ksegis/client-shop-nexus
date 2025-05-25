@@ -15,26 +15,38 @@ export function useQuotationHandler() {
   } = usePartsQuotation();
   
   const [isQuotationDialogOpen, setQuotationDialogOpen] = useState(false);
+  const [quantityDialogOpen, setQuantityDialogOpen] = useState(false);
+  const [selectedPartForQuantity, setSelectedPartForQuantity] = useState<Part | null>(null);
   
-  // Add a part to the quotation
+  // Add a part to the quotation with quantity dialog
   const handleAddToQuotation = (part: Part) => {
-    console.log('Adding part to quotation:', part);
-    addToQuotation({
-      part_id: part.id,
-      quantity: 1,
-      price: part.price,
-      core_charge: part.core_charge || 0,
-      special_order: part.is_special_order || false,
-      notes: ''
-    });
-    
-    toast({
-      title: "Part added to quotation",
-      description: `${part.name} has been added to your quotation.`,
-    });
+    console.log('Opening quantity dialog for quotation:', part);
+    setSelectedPartForQuantity(part);
+    setQuantityDialogOpen(true);
   };
   
-  // Add part from dialog with custom quantity
+  // Handle quantity confirmation from dialog
+  const handleQuotationQuantityConfirm = (quantity: number) => {
+    if (selectedPartForQuantity) {
+      console.log('Adding part to quotation with quantity:', selectedPartForQuantity, quantity);
+      addToQuotation({
+        part_id: selectedPartForQuantity.id,
+        quantity,
+        price: selectedPartForQuantity.price,
+        core_charge: selectedPartForQuantity.core_charge || 0,
+        special_order: selectedPartForQuantity.is_special_order || false,
+        notes: ''
+      });
+      
+      toast({
+        title: "Part added to quotation",
+        description: `${quantity}x ${selectedPartForQuantity.name} added to quotation.`,
+      });
+    }
+    setSelectedPartForQuantity(null);
+  };
+  
+  // Add part from dialog with custom quantity (for detail dialog)
   const handleAddToQuotationFromDialog = (part: Part, quantity: number = 1) => {
     console.log('Adding part to quotation from dialog:', part, 'quantity:', quantity);
     addToQuotation({
@@ -65,6 +77,10 @@ export function useQuotationHandler() {
     removeFromQuotation,
     clearQuotation,
     getQuotationItemCount,
-    getQuotationTotal
+    getQuotationTotal,
+    quantityDialogOpen,
+    setQuantityDialogOpen,
+    selectedPartForQuantity,
+    handleQuotationQuantityConfirm
   };
 }

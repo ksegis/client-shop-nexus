@@ -6,6 +6,7 @@ import { PartsCart } from '@/components/shared/parts/PartsCart';
 import { PartsHeader } from '@/components/shop/parts/PartsHeader';
 import { PartsInventorySummary } from '@/components/shop/parts/PartsInventorySummary';
 import { SpecialOrdersTracker } from '@/components/shop/parts/SpecialOrdersTracker';
+import { QuantityDialog } from '@/components/shared/parts/QuantityDialog';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { useEffect, useState } from 'react';
@@ -131,6 +132,26 @@ const ShopParts = () => {
         isOpen={cart.cartOpen}
         onClose={() => cart.setCartOpen(false)}
         onCheckout={cart.handleProcessTransaction}
+      />
+      
+      {/* Cart Quantity Dialog */}
+      <QuantityDialog
+        open={cart.quantityDialogOpen}
+        onOpenChange={cart.setQuantityDialogOpen}
+        part={cart.selectedPartForQuantity}
+        onConfirm={cart.handleQuantityConfirm}
+        title="Add to Cart"
+        description="Select the quantity to add to your cart."
+      />
+      
+      {/* Quotation Quantity Dialog */}
+      <QuantityDialog
+        open={quotation.quantityDialogOpen}
+        onOpenChange={quotation.setQuantityDialogOpen}
+        part={quotation.selectedPartForQuantity}
+        onConfirm={quotation.handleQuotationQuantityConfirm}
+        title="Add to Quotation"
+        description="Select the quantity to add to your quotation."
       />
     </div>
   );
