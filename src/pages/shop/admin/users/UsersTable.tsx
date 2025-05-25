@@ -46,7 +46,8 @@ export function UsersTable() {
 
   console.log('UsersTable rendering with:', {
     userCount: users?.length || 0,
-    isLoading
+    isLoading,
+    users: users
   });
 
   if (isLoading) {
