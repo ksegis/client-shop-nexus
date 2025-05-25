@@ -1,58 +1,56 @@
 
-import {
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-} from '@/components/ui/form';
+import { UseFormReturn } from 'react-hook-form';
+import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useFormContext } from 'react-hook-form';
-import { InventoryFormValues } from '../types';
+import { ComponentType } from 'react';
 
 interface FormFieldInputProps {
-  name: keyof InventoryFormValues;
+  form: UseFormReturn<any>;
+  name: string;
   label: string;
-  placeholder: string;
+  placeholder?: string;
   type?: string;
   step?: string;
-  onChange?: (value: any) => void;
+  min?: string;
+  required?: boolean;
+  component?: ComponentType<any>;
 }
 
 export const FormFieldInput = ({ 
+  form, 
   name, 
   label, 
   placeholder, 
-  type = 'text',
+  type = "text",
   step,
-  onChange 
+  min,
+  required = false,
+  component: Component = Input
 }: FormFieldInputProps) => {
-  const form = useFormContext<InventoryFormValues>();
-  
   return (
     <FormField
       control={form.control}
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{label}</FormLabel>
+          <FormLabel>
+            {label}
+            {required && <span className="text-red-500 ml-1">*</span>}
+          </FormLabel>
           <FormControl>
-            <Input 
-              type={type} 
-              placeholder={placeholder} 
-              {...field} 
-              onChange={(e) => {
-                if (onChange) {
-                  onChange(type === 'number' ? 
-                    (type === 'number' && step === '0.01' ? parseFloat(e.target.value) : parseInt(e.target.value)) || 0 
-                    : e.target.value
-                  );
-                } else {
-                  field.onChange(e);
-                }
-              }}
-              value={field.value || ''}
+            <Component 
+              placeholder={placeholder}
+              type={type}
               step={step}
+              min={min}
+              {...field}
+              value={field.value || ''}
+              onChange={(e: any) => {
+                const value = type === 'number' ? 
+                  (e.target.value === '' ? 0 : Number(e.target.value)) : 
+                  e.target.value;
+                field.onChange(value);
+              }}
             />
           </FormControl>
           <FormMessage />

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -152,7 +151,7 @@ export const InventoryTable = ({ onEdit }: InventoryTableProps) => {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <CoreIndicatorBadge coreCharge={item.core_charge} size="sm" />
+                  <CoreIndicatorBadge coreCharge={item.core_charge} />
                 </TableCell>
                 <TableCell className="text-right">
                   <TableActions 

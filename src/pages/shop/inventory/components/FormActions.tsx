@@ -1,27 +1,18 @@
 
 import { Button } from '@/components/ui/button';
-import { DialogFooter } from '@/components/ui/dialog';
+import { InventoryItem } from '../types';
 
 interface FormActionsProps {
-  onCancel: () => void;
-  isSubmitting: boolean;
-  isEditing: boolean;
+  isSubmitting?: boolean;
+  editingItem?: InventoryItem | null;
 }
 
-export const FormActions = ({ onCancel, isSubmitting, isEditing }: FormActionsProps) => {
+export const FormActions = ({ isSubmitting, editingItem }: FormActionsProps) => {
   return (
-    <DialogFooter>
-      <Button 
-        type="button" 
-        variant="outline" 
-        onClick={onCancel}
-        disabled={isSubmitting}
-      >
-        Cancel
-      </Button>
+    <div className="flex justify-end gap-2">
       <Button type="submit" disabled={isSubmitting}>
-        {isEditing ? 'Update Item' : 'Add Item'}
+        {isSubmitting ? 'Saving...' : editingItem ? 'Update Item' : 'Add Item'}
       </Button>
-    </DialogFooter>
+    </div>
   );
 };

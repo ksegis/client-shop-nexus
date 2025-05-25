@@ -4,10 +4,9 @@ import { Repeat } from "lucide-react";
 
 interface CoreIndicatorBadgeProps {
   coreCharge: number | null;
-  size?: "sm" | "default";
 }
 
-export const CoreIndicatorBadge = ({ coreCharge, size = "default" }: CoreIndicatorBadgeProps) => {
+export const CoreIndicatorBadge = ({ coreCharge }: CoreIndicatorBadgeProps) => {
   if (!coreCharge || coreCharge <= 0) {
     return null;
   }
@@ -15,8 +14,7 @@ export const CoreIndicatorBadge = ({ coreCharge, size = "default" }: CoreIndicat
   return (
     <Badge 
       variant="outline" 
-      className="border-blue-500 text-blue-700 bg-blue-50"
-      size={size}
+      className="border-blue-500 text-blue-700 bg-blue-50 text-xs"
     >
       <Repeat className="h-3 w-3 mr-1" />
       Core: ${coreCharge.toFixed(2)}

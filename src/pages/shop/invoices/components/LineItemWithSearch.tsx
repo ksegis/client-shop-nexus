@@ -1,120 +1,163 @@
 
 import { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Trash2, Search } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { supabase } from '@/integrations/supabase/client';
 import { InvoiceLineItem } from '../types';
-import { Trash } from 'lucide-react';
-import { InventoryItem } from '@/pages/shop/inventory/types';
-import { PartNumberField } from './PartNumberField';
-import { DescriptionField } from './DescriptionField';
-import { updateLineItemFromInventoryItem } from '../utils/inventoryItemHelpers';
+import { CoreIndicatorBadge } from '@/pages/shop/inventory/components/CoreIndicatorBadge';
 
 interface LineItemWithSearchProps {
   item: InvoiceLineItem;
   index: number;
-  vendors: { name: string }[];
-  onUpdate: (index: number, field: keyof InvoiceLineItem, value: any) => void;
+  onUpdate: (index: number, field: string, value: any) => void;
   onRemove: (index: number) => void;
+  vendors: {name: string}[];
 }
 
-export const LineItemWithSearch = ({ 
-  item, 
-  index, 
-  vendors, 
-  onUpdate, 
-  onRemove 
-}: LineItemWithSearchProps) => {
-  const [description, setDescription] = useState(item.description);
+interface InventoryItem {
+  id: string;
+  name: string;
+  sku: string;
+  price: number;
+  core_charge: number | null;
+}
 
-  // Sync description with parent component
+export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }: LineItemWithSearchProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
+
   useEffect(() => {
-    setDescription(item.description);
-  }, [item.description]);
-
-  const handleSelectInventoryItem = (inventoryItem: InventoryItem) => {
-    console.log("Selected inventory item:", inventoryItem);
-    
-    const updatedLineItem = updateLineItemFromInventoryItem(item, inventoryItem);
-    
-    // Update all fields with explicit field names
-    onUpdate(index, 'part_number', updatedLineItem.part_number);
-    onUpdate(index, 'description', updatedLineItem.description);
-    onUpdate(index, 'price', updatedLineItem.price);
-    if (updatedLineItem.vendor) {
-      onUpdate(index, 'vendor', updatedLineItem.vendor);
+    if (searchQuery.length > 2) {
+      searchInventory();
+    } else {
+      setSearchResults([]);
     }
-    
-    // Update local state
-    setDescription(updatedLineItem.description);
+  }, [searchQuery]);
+
+  const searchInventory = async () => {
+    setIsSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('id, name, sku, price, core_charge')
+        .or(`name.ilike.%${searchQuery}%,sku.ilike.%${searchQuery}%`)
+        .limit(10);
+
+      if (error) throw error;
+      setSearchResults(data || []);
+    } catch (error) {
+      console.error('Error searching inventory:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
-  const handleDescriptionChange = (value: string) => {
-    setDescription(value);
-    onUpdate(index, 'description', value);
-  };
-
-  const handlePartNumberChange = (value: string) => {
-    onUpdate(index, 'part_number', value);
+  const selectInventoryItem = (inventoryItem: InventoryItem) => {
+    setSelectedInventoryItem(inventoryItem);
+    onUpdate(index, 'description', inventoryItem.name);
+    onUpdate(index, 'price', inventoryItem.price);
+    onUpdate(index, 'part_number', inventoryItem.sku || '');
+    onUpdate(index, 'core_charge', inventoryItem.core_charge || 0);
+    setSearchQuery('');
+    setSearchResults([]);
   };
 
   return (
-    <div className="grid grid-cols-12 gap-2 p-3 border-t">
-      {/* Part Number with search */}
+    <div className="grid grid-cols-12 gap-2 items-start">
+      <div className="col-span-4">
+        <Popover>
+          <PopoverTrigger asChild>
+            <div className="relative">
+              <Input
+                placeholder="Search or enter description"
+                value={searchQuery || item.description}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSearchQuery(value);
+                  onUpdate(index, 'description', value);
+                }}
+                className="pr-8"
+              />
+              <Search className="absolute right-2 top-2.5 h-4 w-4 text-gray-400" />
+            </div>
+          </PopoverTrigger>
+          {searchResults.length > 0 && (
+            <PopoverContent className="w-80 p-2">
+              <div className="space-y-1">
+                {searchResults.map((result) => (
+                  <div
+                    key={result.id}
+                    className="p-2 hover:bg-gray-100 cursor-pointer rounded flex justify-between items-center"
+                    onClick={() => selectInventoryItem(result)}
+                  >
+                    <div>
+                      <div className="font-medium">{result.name}</div>
+                      <div className="text-sm text-gray-500">
+                        SKU: {result.sku} | ${result.price.toFixed(2)}
+                      </div>
+                    </div>
+                    {result.core_charge && result.core_charge > 0 && (
+                      <CoreIndicatorBadge coreCharge={result.core_charge} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          )}
+        </Popover>
+        {selectedInventoryItem && selectedInventoryItem.core_charge && selectedInventoryItem.core_charge > 0 && (
+          <div className="mt-1">
+            <CoreIndicatorBadge coreCharge={selectedInventoryItem.core_charge} />
+          </div>
+        )}
+      </div>
+
       <div className="col-span-2">
-        <PartNumberField
+        <Input
+          type="number"
+          placeholder="Qty"
+          min="1"
+          value={item.quantity}
+          onChange={(e) => onUpdate(index, 'quantity', parseInt(e.target.value) || 1)}
+        />
+      </div>
+
+      <div className="col-span-2">
+        <Input
+          type="number"
+          placeholder="Price"
+          step="0.01"
+          min="0"
+          value={item.price}
+          onChange={(e) => onUpdate(index, 'price', parseFloat(e.target.value) || 0)}
+        />
+      </div>
+
+      <div className="col-span-2">
+        <Input
+          placeholder="Part #"
           value={item.part_number || ''}
-          onChange={handlePartNumberChange}
-          onSelectItem={handleSelectInventoryItem}
-        />
-      </div>
-      
-      {/* Description with search */}
-      <div className="col-span-3">
-        <DescriptionField
-          value={description}
-          onChange={handleDescriptionChange}
-          onSelectItem={handleSelectInventoryItem}
+          onChange={(e) => onUpdate(index, 'part_number', e.target.value)}
         />
       </div>
 
-      {/* Quantity - increased width */}
-      <div className="col-span-2">
-        <Input 
-          type="number" 
-          min="1" 
-          value={item.quantity} 
-          onChange={(e) => onUpdate(index, 'quantity', Number(e.target.value))}
-        />
-      </div>
-
-      {/* Price - increased width */}
-      <div className="col-span-2">
-        <Input 
-          type="text" 
-          inputMode="decimal"
-          value={item.price} 
-          onChange={(e) => {
-            const value = e.target.value.replace(/[^0-9.]/g, '');
-            onUpdate(index, 'price', value === '' ? 0 : parseFloat(value));
-          }}
-          placeholder="0.00"
-          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-        />
-      </div>
-
-      {/* Vendor - maintained width */}
-      <div className="col-span-2">
-        <Select
-          value={item.vendor || ''}
+      <div className="col-span-1">
+        <Select 
+          value={item.vendor || ''} 
           onValueChange={(value) => onUpdate(index, 'vendor', value)}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Select vendor" />
+            <SelectValue placeholder="Vendor" />
           </SelectTrigger>
           <SelectContent>
-            {vendors.map((vendor, i) => (
-              <SelectItem key={i} value={vendor.name || ''}>
+            {vendors.map((vendor) => (
+              <SelectItem key={vendor.name} value={vendor.name}>
                 {vendor.name}
               </SelectItem>
             ))}
@@ -122,17 +165,17 @@ export const LineItemWithSearch = ({
         </Select>
       </div>
 
-      {/* Remove button - maintained small width */}
-      <div className="col-span-1 flex items-center justify-end">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-8 w-8" 
+      <div className="col-span-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
           onClick={() => onRemove(index)}
+          className="h-10 w-10 p-0"
         >
-          <Trash className="h-4 w-4" />
+          <Trash2 className="h-4 w-4" />
         </Button>
       </div>
     </div>
   );
-};
+}

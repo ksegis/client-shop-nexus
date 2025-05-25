@@ -25,18 +25,6 @@ export const InventoryDialog = ({
   isSubmitting,
 }: InventoryDialogProps) => {
   const isEditing = !!editingItem;
-  
-  const defaultValues = editingItem ? {
-    name: editingItem.name,
-    description: editingItem.description || '',
-    sku: editingItem.sku || '',
-    quantity: editingItem.quantity,
-    price: editingItem.price,
-    cost: editingItem.cost || 0,
-    category: editingItem.category || '',
-    supplier: editingItem.supplier || '',
-    reorder_level: editingItem.reorder_level || 10,
-  } : undefined;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -52,11 +40,9 @@ export const InventoryDialog = ({
         </DialogHeader>
         
         <InventoryForm
-          defaultValues={defaultValues}
           onSubmit={onSubmit}
-          onCancel={() => onOpenChange(false)}
+          editingItem={editingItem}
           isSubmitting={isSubmitting}
-          isEditing={isEditing}
         />
       </DialogContent>
     </Dialog>

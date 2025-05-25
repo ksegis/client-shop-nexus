@@ -8,6 +8,7 @@ export type InvoiceLineItem = {
   price: number;
   part_number?: string;
   vendor?: string;
+  core_charge?: number;
 };
 
 export interface Invoice {
