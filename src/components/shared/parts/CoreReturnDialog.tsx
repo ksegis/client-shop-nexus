@@ -8,14 +8,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Part } from "@/types/parts";
 import { usePartsCatalog } from "@/hooks/parts/usePartsCatalog";
+import { PartSelector } from "./core-return/PartSelector";
+import { PartDetails } from "./core-return/PartDetails";
+import { ReceiptInput } from "./core-return/ReceiptInput";
+import { ReturnCondition } from "./core-return/ReturnCondition";
+import { TermsCheckbox } from "./core-return/TermsCheckbox";
+import { RefundSummary } from "./core-return/RefundSummary";
 
 interface CoreReturnDialogProps {
   open: boolean;
@@ -104,11 +105,7 @@ export function CoreReturnDialog({ open, onOpenChange, onProcessReturn }: CoreRe
     });
     
     // Reset form and close dialog
-    setSelectedPartId('');
-    setCondition('new');
-    setReceiptNumber('');
-    setAcceptTerms(false);
-    onOpenChange(false);
+    handleClose();
   };
   
   const handleClose = () => {
@@ -130,100 +127,36 @@ export function CoreReturnDialog({ open, onOpenChange, onProcessReturn }: CoreRe
         </DialogHeader>
         
         <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="part-select">Select Part *</Label>
-            <Select value={selectedPartId} onValueChange={setSelectedPartId}>
-              <SelectTrigger id="part-select">
-                <SelectValue placeholder="Choose a part with core charge..." />
-              </SelectTrigger>
-              <SelectContent>
-                {partsWithCoreCharges.length === 0 ? (
-                  <SelectItem value="no-parts" disabled>
-                    No parts with core charges found
-                  </SelectItem>
-                ) : (
-                  partsWithCoreCharges.map((part) => (
-                    <SelectItem key={part.id} value={part.id}>
-                      {part.name} - ${part.core_charge?.toFixed(2)} core charge
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+          <PartSelector 
+            partsWithCoreCharges={partsWithCoreCharges}
+            selectedPartId={selectedPartId}
+            onPartSelect={setSelectedPartId}
+          />
           
           {selectedPart && (
             <>
-              <div className="space-y-2">
-                <h3 className="text-lg font-medium">{selectedPart.name}</h3>
-                <p className="text-sm text-muted-foreground">
-                  SKU: {selectedPart.sku}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Original core charge: ${selectedPart.core_charge?.toFixed(2) || '0.00'}
-                </p>
-              </div>
+              <PartDetails selectedPart={selectedPart} />
               
-              <div className="space-y-2">
-                <Label htmlFor="receipt">Receipt/Invoice Number *</Label>
-                <Input 
-                  id="receipt" 
-                  value={receiptNumber} 
-                  onChange={(e) => setReceiptNumber(e.target.value)}
-                  placeholder="Enter receipt or invoice number"
-                />
-              </div>
+              <ReceiptInput 
+                receiptNumber={receiptNumber}
+                onReceiptChange={setReceiptNumber}
+              />
               
-              <div className="space-y-2">
-                <Label>Part Condition *</Label>
-                <RadioGroup 
-                  value={condition} 
-                  onValueChange={(value) => setCondition(value as 'new' | 'used' | 'damaged')}
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="new" id="condition-new" />
-                    <Label htmlFor="condition-new">New/Like New (100% refund)</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="used" id="condition-used" />
-                    <Label htmlFor="condition-used">Used/Working (75% refund)</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="damaged" id="condition-damaged" />
-                    <Label htmlFor="condition-damaged">Damaged/Partial (25% refund)</Label>
-                  </div>
-                </RadioGroup>
-              </div>
+              <ReturnCondition 
+                condition={condition}
+                onConditionChange={setCondition}
+              />
               
-              <div className="flex items-start space-x-2 pt-2">
-                <Checkbox 
-                  id="terms" 
-                  checked={acceptTerms} 
-                  onCheckedChange={(checked) => setAcceptTerms(checked as boolean)}
-                />
-                <Label htmlFor="terms" className="text-sm leading-tight">
-                  I confirm that this core part is being returned in the condition stated above and 
-                  was originally purchased from this shop. *
-                </Label>
-              </div>
+              <TermsCheckbox 
+                acceptTerms={acceptTerms}
+                onTermsChange={setAcceptTerms}
+              />
               
-              <div className="rounded-md bg-muted p-4">
-                <div className="text-sm font-medium mb-2">Refund Summary</div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>Original core charge:</span>
-                    <span>${selectedPart.core_charge?.toFixed(2) || '0.00'}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Condition adjustment:</span>
-                    <span>{condition === 'new' ? '100%' : condition === 'used' ? '75%' : '25%'}</span>
-                  </div>
-                  <div className="flex justify-between font-medium border-t pt-1">
-                    <span>Refund amount:</span>
-                    <span className="text-green-600">${refundAmount.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
+              <RefundSummary 
+                selectedPart={selectedPart}
+                condition={condition}
+                refundAmount={refundAmount}
+              />
             </>
           )}
         </div>
