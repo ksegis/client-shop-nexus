@@ -10,7 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Minus } from "lucide-react";
 import { Part } from "@/types/parts";
 
 interface QuantityDialogProps {
@@ -55,25 +54,6 @@ export function QuantityDialog({
     setQuantity(num);
   };
   
-  const incrementQuantity = () => {
-    if (!part) return;
-    
-    const newQuantity = quantity + 1;
-    
-    // Check against available stock if it exists
-    if (part.quantity > 0 && newQuantity > part.quantity) {
-      return; // Don't exceed available stock
-    }
-    
-    setQuantity(newQuantity);
-  };
-  
-  const decrementQuantity = () => {
-    if (quantity > 1) {
-      setQuantity(quantity - 1);
-    }
-  };
-  
   const handleConfirm = () => {
     onConfirm(quantity);
     setQuantity(1); // Reset for next time
@@ -94,11 +74,6 @@ export function QuantityDialog({
   const total = partPrice * quantity;
   const coreChargeTotal = partCoreCharge * quantity;
   const grandTotal = total + coreChargeTotal;
-  
-  // Fix the disabled state logic - buttons should be enabled when stock allows it
-  const hasStock = part.quantity <= 0; // No stock limit (unlimited) or has stock
-  const canIncrement = hasStock || quantity < part.quantity;
-  const canDecrement = quantity > 1;
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -129,37 +104,16 @@ export function QuantityDialog({
           
           <div className="space-y-2">
             <Label htmlFor="quantity">Quantity</Label>
-            <div className="flex items-center space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={decrementQuantity}
-                disabled={!canDecrement}
-                className="h-10 w-10"
-              >
-                <Minus className="h-4 w-4" />
-              </Button>
-              <Input
-                id="quantity"
-                type="text"
-                value={quantity}
-                onChange={(e) => handleQuantityChange(e.target.value)}
-                className="text-center flex-1"
-                min="1"
-                max={part.quantity > 0 ? part.quantity : undefined}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={incrementQuantity}
-                disabled={!canIncrement}
-                className="h-10 w-10"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
+            <Input
+              id="quantity"
+              type="text"
+              value={quantity}
+              onChange={(e) => handleQuantityChange(e.target.value)}
+              className="text-center"
+              min="1"
+              max={part.quantity > 0 ? part.quantity : undefined}
+              placeholder="Enter quantity"
+            />
           </div>
           
           <div className="space-y-1 bg-muted p-3 rounded-lg">
