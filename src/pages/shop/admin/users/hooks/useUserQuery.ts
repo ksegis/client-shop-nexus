@@ -9,30 +9,14 @@ export const useUserQuery = () => {
   const [error, setError] = useState<Error | null>(null);
   const { user, profile } = useAuth();
   
-  console.log('useUserQuery: Hook initialized with auth state:', {
-    hasUser: !!user,
-    hasProfile: !!profile,
-    userRole: profile?.role,
-    userId: user?.id
-  });
-  
   const { data: users = [], isLoading, refetch } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
       try {
-        console.log('useUserQuery: Starting to fetch users from profiles table');
-        console.log('useUserQuery: Current auth state:', {
-          user: user ? { id: user.id, email: user.email } : null,
-          profile: profile ? { id: profile.id, role: profile.role } : null
-        });
+        console.log('useUserQuery: Fetching users from profiles table');
         
         // Get current session to ensure we're authenticated
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        console.log('useUserQuery: Session check:', { 
-          hasSession: !!sessionData.session,
-          sessionError,
-          accessToken: sessionData.session?.access_token ? 'present' : 'missing'
-        });
         
         if (!sessionData.session) {
           throw new Error('No active session found');
@@ -49,15 +33,9 @@ export const useUserQuery = () => {
           throw queryError;
         }
         
-        console.log('useUserQuery: Raw data from Supabase:', data);
-        console.log('useUserQuery: Users fetched successfully:', {
-          count: data?.length || 0,
-          data: data
-        });
+        console.log('useUserQuery: Successfully fetched', data?.length || 0, 'users');
         
         const typedUsers = (data || []) as User[];
-        console.log('useUserQuery: Typed users:', typedUsers);
-        
         return typedUsers;
       } catch (error: any) {
         console.error('useUserQuery: Error in query function:', error);
@@ -71,22 +49,8 @@ export const useUserQuery = () => {
     enabled: !!(user && profile && profile.role === 'admin'),
   });
 
-  console.log('useUserQuery: Current query state:', {
-    users,
-    usersLength: users?.length,
-    isLoading,
-    hasError: !!error,
-    usersIsArray: Array.isArray(users),
-    queryEnabled: !!(user && profile && profile.role === 'admin'),
-    authState: {
-      hasUser: !!user,
-      hasProfile: !!profile,
-      userRole: profile?.role
-    }
-  });
-
   const refetchUsers = async () => {
-    console.log('useUserQuery: Manual refetch triggered...');
+    console.log('useUserQuery: Manual refetch triggered');
     setError(null);
     await refetch();
   };
@@ -103,16 +67,6 @@ export const useUserQuery = () => {
   const customers = users.filter(user => 
     user.role === 'customer' || user.role === 'test_customer'
   );
-
-  console.log('useUserQuery: Final state:', {
-    totalUsers: users.length,
-    employees: employees.length,
-    customers: customers.length,
-    isLoading,
-    hasError: !!error,
-    errorMessage: error?.message,
-    queryEnabled: !!(user && profile && profile.role === 'admin')
-  });
 
   return {
     users,

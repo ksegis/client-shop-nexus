@@ -33,23 +33,10 @@ interface UserManagementContextType {
 const UserManagementContext = createContext<UserManagementContextType | undefined>(undefined);
 
 export function UserManagementProvider({ children }: { children: ReactNode }) {
-  console.log('UserManagementProvider: Initializing provider');
-  
-  // Get auth state to debug authentication issues
+  // Get auth state
   const { user, profile, isLoading: authLoading } = useAuth();
   
-  console.log('UserManagementProvider: Auth state:', {
-    user: user ? { id: user.id, email: user.email } : null,
-    profile: profile ? { id: profile.id, email: profile.email, role: profile.role } : null,
-    authLoading,
-    hasUser: !!user,
-    hasProfile: !!profile,
-    userRole: profile?.role
-  });
-  
   const queryResult = useUserQuery();
-  console.log('UserManagementProvider: Query result:', queryResult);
-  
   const { users, employees, customers, isLoading, error, refetchUsers } = queryResult;
   const { inviteUser } = useUserInvitation(refetchUsers);
   const { resetPassword } = usePasswordReset(refetchUsers);
@@ -63,24 +50,8 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
     getImpersonatedUser
   } = useUserImpersonation();
 
-  console.log('UserManagementProvider: Provider state:', {
-    userCount: users?.length || 0,
-    employeeCount: employees?.length || 0,
-    customerCount: customers?.length || 0,
-    isLoading,
-    authLoading,
-    hasError: !!error,
-    actualUsers: users,
-    errorDetails: error?.message,
-    usersType: typeof users,
-    usersIsArray: Array.isArray(users),
-    authUser: user ? { id: user.id, email: user.email } : null,
-    profileRole: profile?.role
-  });
-
   // Don't render children if auth is still loading
   if (authLoading) {
-    console.log('UserManagementProvider: Auth still loading, showing spinner');
     return (
       <div className="w-full py-10 flex justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -90,7 +61,6 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
 
   // Show auth error if no user or not admin
   if (!user || !profile) {
-    console.log('UserManagementProvider: No authenticated user or profile');
     return (
       <div className="w-full py-10 text-center">
         <p className="text-red-500">Authentication required. Please log in as an admin.</p>
@@ -99,7 +69,6 @@ export function UserManagementProvider({ children }: { children: ReactNode }) {
   }
 
   if (profile.role !== 'admin') {
-    console.log('UserManagementProvider: User is not admin, role:', profile.role);
     return (
       <div className="w-full py-10 text-center">
         <p className="text-red-500">Admin access required. Current role: {profile.role}</p>
@@ -138,12 +107,6 @@ export function useUserManagement() {
   if (context === undefined) {
     throw new Error('useUserManagement must be used within a UserManagementProvider');
   }
-  
-  console.log('useUserManagement: Context accessed:', {
-    hasUsers: !!context.users,
-    userCount: context.users?.length || 0,
-    isLoading: context.isLoading
-  });
   
   return context;
 }
