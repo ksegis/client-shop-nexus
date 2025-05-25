@@ -41,17 +41,30 @@ export function QuantityDialog({
   
   const handleQuantityChange = (value: string) => {
     const num = parseInt(value) || 0;
-    const validQuantity = Math.max(1, num);
-    setQuantity(validQuantity);
+    if (num < 1) {
+      setQuantity(1);
+      return;
+    }
+    
+    // Check stock limit if available
+    if (part && part.quantity > 0 && num > part.quantity) {
+      setQuantity(part.quantity);
+      return;
+    }
+    
+    setQuantity(num);
   };
   
   const incrementQuantity = () => {
     if (!part) return;
+    
     const newQuantity = quantity + 1;
+    
     // Check against available stock if it exists
     if (part.quantity > 0 && newQuantity > part.quantity) {
       return; // Don't exceed available stock
     }
+    
     setQuantity(newQuantity);
   };
   
@@ -81,6 +94,10 @@ export function QuantityDialog({
   const total = partPrice * quantity;
   const coreChargeTotal = partCoreCharge * quantity;
   const grandTotal = total + coreChargeTotal;
+  
+  // Check if we can increment (stock availability)
+  const canIncrement = part.quantity <= 0 || quantity < part.quantity;
+  const canDecrement = quantity > 1;
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,7 +134,8 @@ export function QuantityDialog({
                 variant="outline"
                 size="icon"
                 onClick={decrementQuantity}
-                disabled={quantity <= 1}
+                disabled={!canDecrement}
+                className="h-10 w-10"
               >
                 <Minus className="h-4 w-4" />
               </Button>
@@ -126,7 +144,7 @@ export function QuantityDialog({
                 type="number"
                 value={quantity}
                 onChange={(e) => handleQuantityChange(e.target.value)}
-                className="text-center"
+                className="text-center flex-1"
                 min="1"
                 max={part.quantity > 0 ? part.quantity : undefined}
               />
@@ -135,7 +153,8 @@ export function QuantityDialog({
                 variant="outline"
                 size="icon"
                 onClick={incrementQuantity}
-                disabled={part.quantity > 0 && quantity >= part.quantity}
+                disabled={!canIncrement}
+                className="h-10 w-10"
               >
                 <Plus className="h-4 w-4" />
               </Button>
