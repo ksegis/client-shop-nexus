@@ -106,13 +106,13 @@ const handler = async (req: Request): Promise<Response> => {
       </html>
     `;
 
-    // Send the email using Resend's verified domain
+    // Send the email using your verified domain
     console.log('Attempting to send email via Resend...');
-    console.log('Using from address: ModWorx <onboarding@resend.dev>');
+    console.log('Using from address: ModWorx <noreply@modworx.online>');
     console.log('Resend API Key configured:', !!resendApiKey);
     
     const emailResult = await resend.emails.send({
-      from: 'ModWorx <onboarding@resend.dev>',
+      from: 'ModWorx <noreply@modworx.online>',
       to: [email],
       subject: emailSubject,
       html: emailHtml,
