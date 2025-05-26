@@ -105,10 +105,12 @@ const handler = async (req: Request): Promise<Response> => {
       </html>
     `;
 
-    // Send the email using your verified domain
+    // Send the email - try different from address formats
     console.log('Attempting to send email via Resend...');
-    const emailResult = await resend.emails.send({
-      from: 'ModWorx System <noreply@modworx.online>',
+    
+    // First try with the subdomain format
+    let emailResult = await resend.emails.send({
+      from: 'ModWorx <noreply@modworx.online>',
       to: [email],
       subject: emailSubject,
       html: emailHtml,
