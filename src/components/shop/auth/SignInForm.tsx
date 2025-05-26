@@ -107,23 +107,11 @@ const SignInForm = () => {
     
     try {
       console.log('Attempting password reset for:', email);
-      const result = await resetPassword(email);
-      
-      if (result.success) {
-        toast({
-          title: "Password reset email sent",
-          description: "Check your email for instructions to reset your password.",
-        });
-      } else {
-        throw result.error || new Error('Password reset failed');
-      }
+      // The resetPassword function now handles all messaging, including success and error cases
+      await resetPassword(email);
     } catch (error: any) {
       console.error('Password reset error:', error);
-      toast({
-        variant: "destructive",
-        title: "Reset failed",
-        description: error.message || "Failed to send reset email.",
-      });
+      // Don't show additional error toast since resetPassword handles messaging
     } finally {
       setIsResetting(false);
     }
