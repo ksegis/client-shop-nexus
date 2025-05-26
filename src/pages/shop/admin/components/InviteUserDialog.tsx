@@ -123,7 +123,6 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
           token: tokenData,
           invited_by: currentUser.id,
           expires_at: new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString(), // 36 hours
-          status: 'pending', // Track invitation status
         });
 
       if (inviteError) {
@@ -151,16 +150,6 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
 
       if (emailError) {
         console.error('Email function error:', emailError);
-        // Update invitation status to failed
-        await supabase
-          .from('shop_invites')
-          .update({ 
-            status: 'failed',
-            error_message: emailError.message,
-            last_attempt_at: timestamp
-          })
-          .eq('token', tokenData);
-
         setInviteStatus({
           success: false,
           message: `Invitation created but email failed to send: ${emailError.message}. Please use the manual link below.`,
@@ -168,16 +157,6 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
           timestamp
         });
       } else if (emailResponse?.success) {
-        // Update invitation status to sent
-        await supabase
-          .from('shop_invites')
-          .update({ 
-            status: 'sent',
-            email_id: emailResponse.emailId,
-            sent_at: timestamp
-          })
-          .eq('token', tokenData);
-
         setInviteStatus({
           success: true,
           message: `Invitation email sent successfully to ${values.email}`,
@@ -192,16 +171,6 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
           description: `Email successfully sent to ${values.email}`,
         });
       } else {
-        // Update invitation status to failed
-        await supabase
-          .from('shop_invites')
-          .update({ 
-            status: 'failed',
-            error_message: emailResponse?.error || 'Unknown error',
-            last_attempt_at: timestamp
-          })
-          .eq('token', tokenData);
-
         setInviteStatus({
           success: false,
           message: emailResponse?.error || 'Failed to send invitation email',

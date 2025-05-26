@@ -861,30 +861,45 @@ export type Database = {
         Row: {
           created_at: string
           email: string
+          email_id: string | null
+          error_message: string | null
           expires_at: string
           id: string
           invited_by: string
+          last_attempt_at: string | null
           role: Database["public"]["Enums"]["user_role"]
+          sent_at: string | null
+          status: string | null
           token: string
           used_at: string | null
         }
         Insert: {
           created_at?: string
           email: string
+          email_id?: string | null
+          error_message?: string | null
           expires_at?: string
           id?: string
           invited_by: string
+          last_attempt_at?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          sent_at?: string | null
+          status?: string | null
           token: string
           used_at?: string | null
         }
         Update: {
           created_at?: string
           email?: string
+          email_id?: string | null
+          error_message?: string | null
           expires_at?: string
           id?: string
           invited_by?: string
+          last_attempt_at?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          sent_at?: string | null
+          status?: string | null
           token?: string
           used_at?: string | null
         }
