@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Header from './Header';
 import { HeaderProvider, useHeaderContext } from './HeaderContext';
+import { ImpersonationBanner } from '@/components/shared/ImpersonationBanner';
 
 interface LayoutProps {
   portalType: 'shop' | 'customer';
@@ -33,6 +34,7 @@ const LayoutContent: React.FC<LayoutProps> = ({ portalType, children }) => {
       {!isStandalonePage && <Header portalType={portalType} />}
       
       <main className="flex-1 overflow-auto p-4 md:p-6">
+        <ImpersonationBanner />
         {children || <Outlet />}
       </main>
     </div>

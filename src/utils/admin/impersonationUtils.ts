@@ -6,6 +6,21 @@ import { useToast } from "@/hooks/use-toast";
 export const useImpersonation = () => {
   const { toast } = useToast();
 
+  const isImpersonating = (): boolean => {
+    return localStorage.getItem('impersonation-session') !== null;
+  };
+
+  const getImpersonatedUser = () => {
+    const impersonationData = localStorage.getItem('impersonation-session');
+    if (!impersonationData) return null;
+    
+    try {
+      return JSON.parse(impersonationData);
+    } catch {
+      return null;
+    }
+  };
+
   const impersonateUser = async (userId: string, userName: string): Promise<boolean> => {
     try {
       // In a real production app, this would use admin API 
@@ -21,6 +36,11 @@ export const useImpersonation = () => {
         
       if (profileError) {
         console.error('Error fetching user profile:', profileError);
+        toast({
+          title: "Error",
+          description: "Failed to fetch user profile for impersonation",
+          variant: "destructive"
+        });
         return false;
       }
       
@@ -49,6 +69,11 @@ export const useImpersonation = () => {
       return true;
     } catch (error) {
       console.error('Impersonation error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start impersonation session",
+        variant: "destructive"
+      });
       return false;
     }
   };
@@ -68,6 +93,8 @@ export const useImpersonation = () => {
 
   return {
     impersonateUser,
-    exitImpersonation
+    exitImpersonation,
+    isImpersonating,
+    getImpersonatedUser
   };
 };
