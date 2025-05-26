@@ -1,5 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
@@ -51,7 +52,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const resend = new Resend(resendApiKey);
 
-    // Create the invitation URL - using the current preview URL
+    // Create the invitation URL
     const inviteUrl = `https://id-preview--6dd8b04d-be77-46f2-b1a0-1037f4165d18.lovable.app/auth/invite-accept?token=${token}`;
     
     console.log('Invitation URL generated:', inviteUrl);
@@ -105,9 +106,10 @@ const handler = async (req: Request): Promise<Response> => {
       </html>
     `;
 
-    // Send the email using your verified domain format
+    // Send the email using your verified domain
     console.log('Attempting to send email via Resend...');
     console.log('Using from address: noreply@modworx.online');
+    console.log('Resend API Key configured:', !!resendApiKey);
     
     const emailResult = await resend.emails.send({
       from: 'noreply@modworx.online',
