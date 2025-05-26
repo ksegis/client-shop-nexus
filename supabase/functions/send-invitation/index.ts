@@ -57,13 +57,13 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('Invitation URL generated:', inviteUrl);
 
     // Create email content
-    const emailSubject = `You've been invited to join our system as ${role}`;
+    const emailSubject = `You've been invited to join ModWorx as ${role}`;
     const emailHtml = `
       <!DOCTYPE html>
       <html>
         <head>
           <meta charset="utf-8">
-          <title>System Invitation</title>
+          <title>ModWorx Invitation</title>
           <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -84,11 +84,11 @@ const handler = async (req: Request): Promise<Response> => {
         <body>
           <div class="container">
             <div class="header">
-              <h1>Welcome to Our System!</h1>
+              <h1>Welcome to ModWorx!</h1>
             </div>
             <div class="content">
               <p>Hello ${firstName} ${lastName},</p>
-              <p>You have been invited to join our system with the role of <strong>${role}</strong>.</p>
+              <p>You have been invited to join ModWorx with the role of <strong>${role}</strong>.</p>
               <p>To complete your account setup, please click the button below:</p>
               <a href="${inviteUrl}" class="button">Accept Invitation</a>
               <p>Or copy and paste this link in your browser:</p>
@@ -105,10 +105,10 @@ const handler = async (req: Request): Promise<Response> => {
       </html>
     `;
 
-    // Send the email
+    // Send the email using your verified domain
     console.log('Attempting to send email via Resend...');
     const emailResult = await resend.emails.send({
-      from: 'System <onboarding@resend.dev>',
+      from: 'ModWorx System <noreply@modworx.online>',
       to: [email],
       subject: emailSubject,
       html: emailHtml,
