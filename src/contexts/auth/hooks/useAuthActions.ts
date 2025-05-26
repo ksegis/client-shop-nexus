@@ -1,3 +1,4 @@
+
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { AuthResult, UserRole } from '../types';
@@ -77,10 +78,10 @@ export function useAuthActions() {
           await logAuthEvent('sign_in', result.data.user);
           console.log(`Sign in successful for user: ${result.data.user.id}`);
           
-          // Get user profile to determine redirect path
+          // Get user profile to determine redirect path - force a fresh fetch
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
-            .select('role, force_password_change')
+            .select('role, force_password_change, email')
             .eq('id', result.data.user.id)
             .single();
           
@@ -95,6 +96,11 @@ export function useAuthActions() {
           }
           
           if (profileData) {
+            console.log(`Profile data fetched for ${profileData.email}:`, {
+              role: profileData.role,
+              force_password_change: profileData.force_password_change
+            });
+            
             // Check if password change is required
             if (profileData.force_password_change) {
               console.log('Password change required, redirecting to change-password page');
@@ -115,12 +121,12 @@ export function useAuthActions() {
             
             // Log the detected role and intended redirect path
             const redirectPath = getRedirectPathByRole(profileData.role as UserRole);
-            console.log(`User role: ${profileData.role}, redirecting to: ${redirectPath}`);
+            console.log(`User ${profileData.email} has role: ${profileData.role}, redirecting to: ${redirectPath}`);
             
             // Show success toast
             toast({
               title: "Login successful",
-              description: `Welcome to your ${profileData.role} portal!`
+              description: `Welcome to your ${getPortalDisplayName(profileData.role as UserRole)} portal!`
             });
             
             // Add debug logging
@@ -128,7 +134,7 @@ export function useAuthActions() {
             
             // Use consistent navigation approach with delay to ensure toast is shown
             setTimeout(() => {
-              console.log(`Executing navigation to ${redirectPath}`);
+              console.log(`Executing navigation to ${redirectPath} for user with role ${profileData.role}`);
               navigate(redirectPath, { replace: true });
             }, 500);
             
@@ -252,6 +258,7 @@ export function useAuthActions() {
   };
 
   const getRedirectPathByRole = (role: UserRole) => {
+    console.log(`Determining redirect path for role: ${role}`);
     switch (role) {
       case 'customer':
         return '/customer/dashboard';
@@ -259,7 +266,20 @@ export function useAuthActions() {
       case 'staff':
         return '/shop/dashboard';
       default:
-        return '/';
+        console.warn(`Unknown role: ${role}, defaulting to customer portal`);
+        return '/customer/dashboard';
+    }
+  };
+
+  const getPortalDisplayName = (role: UserRole) => {
+    switch (role) {
+      case 'customer':
+        return 'customer';
+      case 'admin':
+      case 'staff':
+        return 'shop management';
+      default:
+        return 'customer';
     }
   };
 

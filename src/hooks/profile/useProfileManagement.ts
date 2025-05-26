@@ -20,6 +20,7 @@ export function useProfileManagement() {
     try {
       console.log("Checking profile for user:", userId);
       
+      // Use a fresh query without caching to ensure we get the latest role
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -45,7 +46,7 @@ export function useProfileManagement() {
       const newPortalType = getPortalType(userProfile);
       setPortalType(newPortalType);
       
-      console.info(`Profile loaded: ${userProfile.role} Portal type: ${newPortalType}`);
+      console.info(`Profile loaded for ${userProfile.email}: Role=${userProfile.role}, Portal type=${newPortalType}`);
       
       return userProfile;
     } catch (err) {
@@ -128,7 +129,15 @@ export function useProfileManagement() {
       // Update the local profile state with the changes
       setProfile(prevProfile => {
         if (!prevProfile) return null;
-        return { ...prevProfile, ...validUpdates };
+        const updatedProfile = { ...prevProfile, ...validUpdates };
+        
+        // Update portal type if role changed
+        if (validUpdates.role) {
+          const newPortalType = getPortalType(updatedProfile);
+          setPortalType(newPortalType);
+        }
+        
+        return updatedProfile;
       });
 
       return { success: true };
@@ -143,6 +152,7 @@ export function useProfileManagement() {
     if (!userProfile) return null;
     
     const role = userProfile.role;
+    console.log(`Determining portal type for role: ${role}`);
     
     if (role === 'customer') {
       return 'customer';
@@ -150,7 +160,8 @@ export function useProfileManagement() {
       return 'shop';
     }
     
-    return null;
+    console.warn(`Unknown role: ${role}, defaulting to customer portal`);
+    return 'customer';
   }, []);
   
   return {
