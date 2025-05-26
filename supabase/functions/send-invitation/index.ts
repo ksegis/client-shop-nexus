@@ -105,12 +105,12 @@ const handler = async (req: Request): Promise<Response> => {
       </html>
     `;
 
-    // Send the email - try different from address formats
+    // Send the email using your verified domain format
     console.log('Attempting to send email via Resend...');
+    console.log('Using from address: noreply@modworx.online');
     
-    // First try with the subdomain format
-    let emailResult = await resend.emails.send({
-      from: 'ModWorx <noreply@modworx.online>',
+    const emailResult = await resend.emails.send({
+      from: 'noreply@modworx.online',
       to: [email],
       subject: emailSubject,
       html: emailHtml,
@@ -119,7 +119,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('Resend API response:', emailResult);
 
     if (emailResult.error) {
-      console.error('Resend error:', emailResult.error);
+      console.error('Resend error details:', JSON.stringify(emailResult.error, null, 2));
       return new Response(
         JSON.stringify({ 
           success: false, 
