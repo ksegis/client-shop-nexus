@@ -1,6 +1,10 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+
+// Simple rate limiting storage
+const resetAttempts = new Map<string, { count: number; lastAttempt: number }>();
+const RATE_LIMIT = 3; // Max attempts per email
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
 
 export function useAuthMethods() {
   const { toast } = useToast();
@@ -98,11 +102,48 @@ export function useAuthMethods() {
     }
   };
 
+  const checkRateLimit = (email: string): boolean => {
+    const now = Date.now();
+    const emailKey = email.toLowerCase();
+    const attempts = resetAttempts.get(emailKey);
+    
+    if (!attempts) {
+      resetAttempts.set(emailKey, { count: 1, lastAttempt: now });
+      return true;
+    }
+    
+    // Reset counter if window has passed
+    if (now - attempts.lastAttempt > RATE_LIMIT_WINDOW) {
+      resetAttempts.set(emailKey, { count: 1, lastAttempt: now });
+      return true;
+    }
+    
+    // Check if under rate limit
+    if (attempts.count < RATE_LIMIT) {
+      attempts.count++;
+      attempts.lastAttempt = now;
+      return true;
+    }
+    
+    return false;
+  };
+
   const resetPassword = async (email) => {
     try {
       console.log('=== PASSWORD RESET DEBUG START ===');
       console.log('Email requested for reset:', email);
       console.log('Current timestamp:', new Date().toISOString());
+      
+      // Check rate limiting
+      if (!checkRateLimit(email)) {
+        console.log('Rate limit exceeded for email:', email);
+        toast({
+          variant: "destructive",
+          title: "Too many requests",
+          description: "Please wait 15 minutes before requesting another password reset."
+        });
+        return { success: false, error: new Error('Rate limit exceeded') };
+      }
       
       // Use the correct redirect URL that points directly to the change password page
       const redirectTo = `${window.location.origin}/auth/change-password`;
@@ -117,22 +158,24 @@ export function useAuthMethods() {
       console.log('Supabase response data:', data);
       console.log('Supabase response error:', error);
       
+      // Always show success message for security (don't reveal if email exists)
+      toast({
+        title: "Password reset requested",
+        description: "If your email address is registered with us, you will receive password reset instructions within a few minutes. Please check your inbox and spam folder."
+      });
+      
       if (error) {
         console.error('Supabase resetPasswordForEmail error:', error);
         console.error('Error code:', error.code);
         console.error('Error message:', error.message);
         console.error('Error status:', error.status);
-        throw error;
+        // Don't throw error to user - always show success message for security
       }
       
-      console.log('Password reset request completed successfully');
+      console.log('Password reset request completed');
       console.log('=== PASSWORD RESET DEBUG END ===');
       
-      toast({
-        title: "Password reset email sent",
-        description: "Check your email for instructions to reset your password."
-      });
-      
+      // Always return success to prevent email enumeration
       return { success: true };
     } catch (error) {
       console.error('=== PASSWORD RESET ERROR ===');
@@ -142,12 +185,13 @@ export function useAuthMethods() {
       console.error('Full error object:', JSON.stringify(error, null, 2));
       console.error('=== PASSWORD RESET ERROR END ===');
       
+      // Still show success message for security
       toast({
-        variant: "destructive",
-        title: "Password reset failed",
-        description: error.message || "Failed to send reset email"
+        title: "Password reset requested",
+        description: "If your email address is registered with us, you will receive password reset instructions within a few minutes. Please check your inbox and spam folder."
       });
-      return { success: false, error };
+      
+      return { success: true }; // Always return success for security
     }
   };
 
