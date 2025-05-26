@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -97,6 +96,15 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
     try {
       console.log('Starting invitation process for:', values.email);
 
+      // Check if user is authenticated first
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !currentUser) {
+        console.error('Authentication error:', authError);
+        throw new Error('You must be logged in to send invitations');
+      }
+
+      console.log('Current user authenticated:', currentUser.id);
+
       // Generate invitation token
       const { data: tokenData, error: tokenError } = await supabase
         .rpc('generate_invite_token');
@@ -107,12 +115,6 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
       }
 
       console.log('Generated token:', tokenData);
-
-      // Get current user
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) {
-        throw new Error('Not authenticated');
-      }
 
       // Create invitation record with pending status
       const { error: inviteError } = await supabase
@@ -132,7 +134,14 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
 
       console.log('Invitation record created, sending email...');
 
-      // Send invitation email via edge function
+      // Get the current session to ensure we have a valid token for the edge function
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error('Session error:', sessionError);
+        throw new Error('Session expired. Please refresh and try again.');
+      }
+
+      // Send invitation email via edge function with proper authentication
       const { data: emailResponse, error: emailError } = await supabase.functions.invoke('send-invitation', {
         body: {
           email: values.email,
@@ -140,6 +149,9 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
           lastName: values.lastName,
           role: values.role,
           token: tokenData,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
         },
       });
 
