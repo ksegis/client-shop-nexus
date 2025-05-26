@@ -4,10 +4,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, UserX, UserCheck, Key, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Edit, UserX, UserCheck, Key, Trash2, UserCog } from 'lucide-react';
 import { AdminUser } from '../types/adminTypes';
 import { UserProfileDialog } from './UserProfileDialog';
 import { useAdminActions } from '../hooks/useAdminActions';
+import { useImpersonation } from '@/utils/admin/impersonationUtils';
 import { formatDistance } from 'date-fns';
 
 interface UserTableProps {
@@ -19,10 +20,22 @@ export const UserTable = ({ users, isLoading }: UserTableProps) => {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const { toggleUserStatus, sendPasswordReset, deleteUser } = useAdminActions();
+  const { impersonateUser } = useImpersonation();
 
   const handleEditUser = (user: AdminUser) => {
     setSelectedUser(user);
     setProfileDialogOpen(true);
+  };
+
+  const handleImpersonateUser = async (user: AdminUser) => {
+    const userName = `${user.first_name} ${user.last_name}`;
+    const success = await impersonateUser(user.id, userName);
+    
+    if (success) {
+      // Redirect to the appropriate portal based on user role
+      const redirectPath = user.role === 'customer' ? '/customer/dashboard' : '/shop/dashboard';
+      window.location.href = redirectPath;
+    }
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -86,6 +99,10 @@ export const UserTable = ({ users, isLoading }: UserTableProps) => {
                       <DropdownMenuItem onClick={() => handleEditUser(user)}>
                         <Edit className="mr-2 h-4 w-4" />
                         Edit Profile
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleImpersonateUser(user)}>
+                        <UserCog className="mr-2 h-4 w-4" />
+                        Impersonate User
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => toggleUserStatus(user.id, user.active)}>
                         {user.active ? (

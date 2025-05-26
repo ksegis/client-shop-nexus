@@ -2,19 +2,21 @@
 import React, { useState } from 'react';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { UserCheck, UserX } from 'lucide-react';
+import { UserCheck, UserX, UserCog } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUserManagement } from './UserManagementContext';
 import { UserDialog } from './UserDialog';
 import { isRoleInactive } from './types';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useImpersonation } from '@/utils/admin/impersonationUtils';
 
 export const UsersTable = () => {
   const { toast } = useToast();
   const { users, isLoading, error, selectedUserId, setSelectedUserId, refetchUsers, toggleUserActive } = useUserManagement();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const { impersonateUser } = useImpersonation();
 
   const handleSelectUser = (id: string) => {
     setSelectedUserId(selectedUserId === id ? null : id);
@@ -23,6 +25,18 @@ export const UsersTable = () => {
   const handleEditUser = (user: any) => {
     setSelectedUser(user);
     setEditDialogOpen(true);
+  };
+
+  const handleImpersonateUser = async (user: any) => {
+    const userName = `${user.first_name} ${user.last_name}`;
+    const success = await impersonateUser(user.id, userName);
+    
+    if (success) {
+      // Redirect to the appropriate portal based on user role
+      const userRole = user.role.replace('inactive_', ''); // Remove inactive prefix if present
+      const redirectPath = userRole === 'customer' ? '/customer/dashboard' : '/shop/dashboard';
+      window.location.href = redirectPath;
+    }
   };
 
   const handleToggleUserActive = async (user: any) => {
@@ -119,6 +133,24 @@ export const UsersTable = () => {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Edit user profile</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleImpersonateUser(user);
+                        }}
+                      >
+                        <UserCog className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Impersonate user</p>
                     </TooltipContent>
                   </Tooltip>
                   
