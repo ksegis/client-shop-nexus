@@ -30,6 +30,8 @@ const passwordSchema = z.object({
 
 type FormValues = z.infer<typeof passwordSchema>;
 
+type UserRole = 'customer' | 'staff' | 'admin';
+
 const InviteAccept = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -37,7 +39,7 @@ const InviteAccept = () => {
   const [loading, setLoading] = useState(false);
   const [inviteData, setInviteData] = useState<{
     email: string;
-    role: string;
+    role: UserRole;
     firstName: string;
     lastName: string;
     token: string;
@@ -101,7 +103,7 @@ const InviteAccept = () => {
 
         setInviteData({
           email: data.email,
-          role: data.role,
+          role: data.role as UserRole,
           firstName: '', // These will be populated from the invite email
           lastName: '',
           token: data.token,
@@ -232,7 +234,7 @@ const InviteAccept = () => {
     return null; // We'll be redirected by the useEffect
   }
 
-  const getRoleDisplayName = (role: string) => {
+  const getRoleDisplayName = (role: UserRole) => {
     switch (role) {
       case 'customer': return 'Customer';
       case 'staff': return 'Staff Member';
