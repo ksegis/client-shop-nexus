@@ -100,13 +100,33 @@ export function useAuthMethods() {
 
   const resetPassword = async (email) => {
     try {
+      console.log('=== PASSWORD RESET DEBUG START ===');
+      console.log('Email requested for reset:', email);
+      console.log('Current timestamp:', new Date().toISOString());
+      
       // Use the correct redirect URL that points directly to the change password page
       const redirectTo = `${window.location.origin}/auth/change-password`;
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      console.log('Redirect URL configured:', redirectTo);
+      console.log('Window location origin:', window.location.origin);
+      
+      console.log('Calling Supabase resetPasswordForEmail...');
+      const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo
       });
       
-      if (error) throw error;
+      console.log('Supabase response data:', data);
+      console.log('Supabase response error:', error);
+      
+      if (error) {
+        console.error('Supabase resetPasswordForEmail error:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        console.error('Error status:', error.status);
+        throw error;
+      }
+      
+      console.log('Password reset request completed successfully');
+      console.log('=== PASSWORD RESET DEBUG END ===');
       
       toast({
         title: "Password reset email sent",
@@ -115,7 +135,13 @@ export function useAuthMethods() {
       
       return { success: true };
     } catch (error) {
+      console.error('=== PASSWORD RESET ERROR ===');
       console.error('Password reset error:', error);
+      console.error('Error type:', typeof error);
+      console.error('Error constructor:', error.constructor.name);
+      console.error('Full error object:', JSON.stringify(error, null, 2));
+      console.error('=== PASSWORD RESET ERROR END ===');
+      
       toast({
         variant: "destructive",
         title: "Password reset failed",
