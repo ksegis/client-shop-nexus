@@ -97,7 +97,7 @@ const AppRoutes: React.FC = () => {
             <Route path="/shop-login" element={<ShopLogin />} />
             <Route path="/customer-login" element={<CustomerLogin />} />
 
-            {/* Invitation and password change routes */}
+            {/* Invitation and password change routes - these should be accessible without authentication */}
             <Route path="/auth/invite" element={<InviteAccept />} />
             <Route path="/auth/change-password" element={<ChangePassword />} />
             
@@ -129,7 +129,6 @@ const AppRoutes: React.FC = () => {
             
             {/* Legacy auth paths redirects */}
             <Route path="/auth" element={<Navigate to="/" replace />} />
-            <Route path="/auth/*" element={<Navigate to="/" replace />} />
             
             {/* Catch all route for any direct /dashboard attempts */}
             <Route path="/dashboard" element={<Navigate to="/customer/dashboard" replace />} />

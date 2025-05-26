@@ -100,6 +100,7 @@ export function useAuthMethods() {
 
   const resetPassword = async (email) => {
     try {
+      // Use the correct redirect URL that points directly to the change password page
       const redirectTo = `${window.location.origin}/auth/change-password`;
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo

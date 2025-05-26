@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -142,6 +143,7 @@ export const useAdminActions = () => {
 
   const sendPasswordReset = async (email: string, targetUserId?: string) => {
     try {
+      // Use the correct redirect URL that points directly to the change password page
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/change-password`
       });
