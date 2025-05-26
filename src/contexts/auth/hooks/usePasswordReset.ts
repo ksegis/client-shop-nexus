@@ -37,6 +37,24 @@ export function usePasswordReset() {
       console.log('Supabase response data:', data);
       console.log('Supabase response error:', error);
       
+      // Try to send custom password reset email via our edge function
+      try {
+        const { data: emailResponse, error: emailError } = await supabase.functions.invoke('send-password-reset', {
+          body: {
+            email,
+            resetUrl: `${redirectTo}?email=${encodeURIComponent(email)}`
+          }
+        });
+        
+        if (emailError) {
+          console.warn('Custom email service failed, falling back to Supabase default:', emailError);
+        } else {
+          console.log('Custom password reset email sent:', emailResponse);
+        }
+      } catch (customEmailError) {
+        console.warn('Custom email service unavailable, using Supabase default:', customEmailError);
+      }
+      
       // Always show success message for security (don't reveal if email exists)
       toast({
         title: "Password reset requested",
