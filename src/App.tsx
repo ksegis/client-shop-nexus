@@ -8,6 +8,7 @@ import { setupAudioCleanupOnNavigation } from "@/utils/audioUtils";
 import { HeaderProvider } from "./components/layout/HeaderContext";
 import { DevModeIndicator } from "./components/shared/DevModeIndicator";
 import { useSessionTracking } from "./utils/sessionService";
+import { AuthProvider } from "@/contexts/auth";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -36,11 +37,13 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProviderWrapper>
-        <HeaderProvider>
-          <AppRoutes />
-          <Toaster />
-          <DevModeIndicator />
-        </HeaderProvider>
+        <AuthProvider>
+          <HeaderProvider>
+            <AppRoutes />
+            <Toaster />
+            <DevModeIndicator />
+          </HeaderProvider>
+        </AuthProvider>
       </TooltipProviderWrapper>
     </QueryClientProvider>
   );
