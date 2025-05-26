@@ -106,27 +106,92 @@ const handler = async (req: Request): Promise<Response> => {
       </html>
     `;
 
-    // Send the email using your verified domain
+    // Send the email with improved error handling
     console.log('Attempting to send email via Resend...');
     console.log('Using from address: ModWorx <noreply@modworx.online>');
     console.log('Resend API Key configured:', !!resendApiKey);
     
-    const emailResult = await resend.emails.send({
-      from: 'ModWorx <noreply@modworx.online>',
-      to: [email],
-      subject: emailSubject,
-      html: emailHtml,
-    });
+    try {
+      const emailResult = await resend.emails.send({
+        from: 'ModWorx <noreply@modworx.online>',
+        to: [email],
+        subject: emailSubject,
+        html: emailHtml,
+      });
 
-    console.log('Resend API response:', emailResult);
+      console.log('Resend API response:', emailResult);
 
-    if (emailResult.error) {
-      console.error('Resend error details:', JSON.stringify(emailResult.error, null, 2));
+      if (emailResult.error) {
+        console.error('Resend error details:', JSON.stringify(emailResult.error, null, 2));
+        
+        // Check if it's a domain verification issue
+        if (emailResult.error.message?.includes('domain') && emailResult.error.message?.includes('verified')) {
+          console.log('Domain verification issue detected, falling back to onboarding domain');
+          
+          // Fallback to the verified onboarding domain
+          const fallbackResult = await resend.emails.send({
+            from: 'ModWorx <onboarding@resend.dev>',
+            to: [email],
+            subject: emailSubject,
+            html: emailHtml,
+          });
+          
+          if (fallbackResult.error) {
+            throw new Error(`Fallback email also failed: ${fallbackResult.error.message}`);
+          }
+          
+          console.log('Fallback email sent successfully. Email ID:', fallbackResult.data?.id);
+          
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: `Invitation email sent successfully to ${email} (via fallback domain)`,
+              emailId: fallbackResult.data?.id,
+              inviteUrl,
+              warning: 'Used fallback domain due to verification issues'
+            }), 
+            {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
+        }
+        
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to send invitation email: ' + emailResult.error.message,
+            details: emailResult.error,
+            inviteUrl // Still return the URL for manual sharing
+          }), 
+          {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      console.log('Email sent successfully. Email ID:', emailResult.data?.id);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: `Invitation email sent successfully to ${email}`,
+          emailId: emailResult.data?.id,
+          inviteUrl // Return URL for admin reference
+        }), 
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+      
+    } catch (emailError: any) {
+      console.error('Email sending error:', emailError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Failed to send invitation email: ' + emailResult.error.message,
-          details: emailResult.error,
+          error: 'Failed to send email: ' + emailError.message,
           inviteUrl // Still return the URL for manual sharing
         }), 
         {
@@ -135,21 +200,6 @@ const handler = async (req: Request): Promise<Response> => {
         }
       );
     }
-
-    console.log('Email sent successfully. Email ID:', emailResult.data?.id);
-
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: `Invitation email sent successfully to ${email}`,
-        emailId: emailResult.data?.id,
-        inviteUrl // Return URL for admin reference
-      }), 
-      {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
 
   } catch (error: any) {
     console.error('Error in send-invitation function:', error);
