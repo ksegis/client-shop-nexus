@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth';
+import { z } from 'zod';
 
 const CustomerSignInForm = () => {
   const [email, setEmail] = useState('');
@@ -69,7 +70,7 @@ const CustomerSignInForm = () => {
   };
   
   const handleForgotPassword = async () => {
-    if (!email.trim()) {
+    if (!email || !email.trim()) {
       toast({
         variant: "destructive",
         title: "Email required",
@@ -78,15 +79,33 @@ const CustomerSignInForm = () => {
       return;
     }
     
+    // Validate email format
+    try {
+      z.string().email().parse(email);
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Invalid email",
+        description: "Please enter a valid email address."
+      });
+      return;
+    }
+    
     setLoading(true);
     try {
+      console.log('Attempting password reset for:', email);
       const result = await resetPassword(email);
       
-      // Success toast is handled in resetPassword function
-      if (!result.success) {
-        throw result.error;
+      if (result.success) {
+        toast({
+          title: "Password reset email sent",
+          description: "Check your email for instructions to reset your password.",
+        });
+      } else {
+        throw result.error || new Error('Password reset failed');
       }
     } catch (error: any) {
+      console.error('Password reset error:', error);
       toast({
         variant: "destructive",
         title: "Password reset failed",
@@ -145,7 +164,12 @@ const CustomerSignInForm = () => {
             onClick={handleForgotPassword}
             disabled={loading}
           >
-            Forgot password?
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : "Forgot password?"}
           </Button>
         </div>
         

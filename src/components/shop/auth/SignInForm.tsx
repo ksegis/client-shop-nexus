@@ -81,7 +81,8 @@ const SignInForm = () => {
 
   const handlePasswordReset = async () => {
     const email = form.getValues("email");
-    if (!email) {
+    
+    if (!email || !email.trim()) {
       toast({
         variant: "destructive",
         title: "Email required",
@@ -90,17 +91,34 @@ const SignInForm = () => {
       return;
     }
 
+    // Validate email format
+    try {
+      z.string().email().parse(email);
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Invalid email",
+        description: "Please enter a valid email address.",
+      });
+      return;
+    }
+
     setIsResetting(true);
     
     try {
+      console.log('Attempting password reset for:', email);
       const result = await resetPassword(email);
       
-      if (!result.success) {
-        throw result.error;
+      if (result.success) {
+        toast({
+          title: "Password reset email sent",
+          description: "Check your email for instructions to reset your password.",
+        });
+      } else {
+        throw result.error || new Error('Password reset failed');
       }
-      
-      // Success toast is shown in resetPassword function
     } catch (error: any) {
+      console.error('Password reset error:', error);
       toast({
         variant: "destructive",
         title: "Reset failed",
@@ -126,7 +144,7 @@ const SignInForm = () => {
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input placeholder="email@example.com" {...field} disabled={isLoading} />
+                  <Input placeholder="email@example.com" {...field} disabled={isLoading || isResetting} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -144,7 +162,7 @@ const SignInForm = () => {
                       type={showPassword ? "text" : "password"} 
                       placeholder="••••••••" 
                       {...field} 
-                      disabled={isLoading}
+                      disabled={isLoading || isResetting}
                     />
                   </FormControl>
                   <Button
@@ -154,7 +172,7 @@ const SignInForm = () => {
                     className="absolute right-0 top-0 h-full px-3 py-2"
                     onClick={togglePasswordVisibility}
                     tabIndex={-1}
-                    disabled={isLoading}
+                    disabled={isLoading || isResetting}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
@@ -172,7 +190,7 @@ const SignInForm = () => {
                   <Checkbox
                     checked={field.value}
                     onCheckedChange={field.onChange}
-                    disabled={isLoading}
+                    disabled={isLoading || isResetting}
                   />
                 </FormControl>
                 <FormLabel className="text-sm font-normal">Remember me</FormLabel>
@@ -188,14 +206,19 @@ const SignInForm = () => {
               onClick={handlePasswordReset}
               disabled={isResetting || isLoading}
             >
-              {isResetting ? "Sending..." : "Forgot password?"}
+              {isResetting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : "Forgot password?"}
             </Button>
           </div>
           
           <Button 
             type="submit" 
             className="w-full mt-2" 
-            disabled={isLoading}
+            disabled={isLoading || isResetting}
           >
             {isLoading ? (
               <>
