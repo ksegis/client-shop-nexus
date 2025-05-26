@@ -31,7 +31,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { CheckCircle, AlertTriangle, Copy, ExternalLink } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Copy, ExternalLink, Clock, Mail } from 'lucide-react';
 
 const inviteSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -61,6 +61,7 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
     message: string;
     inviteUrl?: string;
     emailId?: string;
+    timestamp?: string;
   } | null>(null);
   const { toast } = useToast();
 
@@ -113,7 +114,7 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
         throw new Error('Not authenticated');
       }
 
-      // Create invitation record
+      // Create invitation record with pending status
       const { error: inviteError } = await supabase
         .from('shop_invites')
         .insert({
@@ -122,6 +123,7 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
           token: tokenData,
           invited_by: currentUser.id,
           expires_at: new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString(), // 36 hours
+          status: 'pending', // Track invitation status
         });
 
       if (inviteError) {
@@ -145,25 +147,66 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
       console.log('Email function response:', emailResponse);
       console.log('Email function error:', emailError);
 
+      const timestamp = new Date().toISOString();
+
       if (emailError) {
         console.error('Email function error:', emailError);
+        // Update invitation status to failed
+        await supabase
+          .from('shop_invites')
+          .update({ 
+            status: 'failed',
+            error_message: emailError.message,
+            last_attempt_at: timestamp
+          })
+          .eq('token', tokenData);
+
         setInviteStatus({
           success: false,
-          message: `Invitation created but email failed to send: ${emailError.message}. Please contact the user directly.`,
+          message: `Invitation created but email failed to send: ${emailError.message}. Please use the manual link below.`,
+          inviteUrl: `https://id-preview--6dd8b04d-be77-46f2-b1a0-1037f4165d18.lovable.app/auth/invite-accept?token=${tokenData}`,
+          timestamp
         });
       } else if (emailResponse?.success) {
+        // Update invitation status to sent
+        await supabase
+          .from('shop_invites')
+          .update({ 
+            status: 'sent',
+            email_id: emailResponse.emailId,
+            sent_at: timestamp
+          })
+          .eq('token', tokenData);
+
         setInviteStatus({
           success: true,
           message: `Invitation email sent successfully to ${values.email}`,
           inviteUrl: emailResponse.inviteUrl,
           emailId: emailResponse.emailId,
+          timestamp
         });
         onInviteSuccess();
+        
+        toast({
+          title: 'Invitation sent!',
+          description: `Email successfully sent to ${values.email}`,
+        });
       } else {
+        // Update invitation status to failed
+        await supabase
+          .from('shop_invites')
+          .update({ 
+            status: 'failed',
+            error_message: emailResponse?.error || 'Unknown error',
+            last_attempt_at: timestamp
+          })
+          .eq('token', tokenData);
+
         setInviteStatus({
           success: false,
           message: emailResponse?.error || 'Failed to send invitation email',
-          inviteUrl: emailResponse?.inviteUrl,
+          inviteUrl: emailResponse?.inviteUrl || `https://id-preview--6dd8b04d-be77-46f2-b1a0-1037f4165d18.lovable.app/auth/invite-accept?token=${tokenData}`,
+          timestamp
         });
       }
 
@@ -172,6 +215,13 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
       setInviteStatus({
         success: false,
         message: error.message || 'Failed to create invitation',
+        timestamp: new Date().toISOString()
+      });
+      
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create invitation',
+        variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
@@ -208,15 +258,27 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
               </div>
             </Alert>
 
-            {inviteStatus.emailId && (
-              <div className="text-sm text-gray-600">
-                <strong>Email ID:</strong> {inviteStatus.emailId}
+            {/* Email delivery tracking */}
+            <div className="bg-gray-50 p-3 rounded-md space-y-2">
+              <div className="flex items-center space-x-2">
+                <Clock className="h-4 w-4 text-gray-500" />
+                <span className="text-sm font-medium">Invitation Details</span>
               </div>
-            )}
+              <div className="text-xs text-gray-600 space-y-1">
+                <div><strong>Time:</strong> {inviteStatus.timestamp ? new Date(inviteStatus.timestamp).toLocaleString() : 'Unknown'}</div>
+                {inviteStatus.emailId && (
+                  <div><strong>Email ID:</strong> {inviteStatus.emailId}</div>
+                )}
+                <div><strong>Status:</strong> {inviteStatus.success ? 'Email sent successfully' : 'Email delivery failed'}</div>
+              </div>
+            </div>
 
             {inviteStatus.inviteUrl && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Manual Invitation Link:</label>
+                <label className="text-sm font-medium flex items-center space-x-2">
+                  <Mail className="h-4 w-4" />
+                  <span>Manual Invitation Link</span>
+                </label>
                 <div className="flex items-center space-x-2">
                   <Input 
                     value={inviteStatus.inviteUrl} 
@@ -241,7 +303,9 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
                   </Button>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Use this link if the email delivery failed. Share it securely with the user.
+                  {inviteStatus.success 
+                    ? 'Backup link in case the user needs it again.' 
+                    : 'Share this link securely with the user since email delivery failed.'}
                 </p>
               </div>
             )}

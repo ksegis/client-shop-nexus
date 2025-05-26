@@ -51,8 +51,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     const resend = new Resend(resendApiKey);
 
-    // Create the invitation URL
-    const inviteUrl = `${Deno.env.get('SUPABASE_URL')?.replace('//vqkxrbflwhunvbotjdds.supabase.co', '//id-preview--6dd8b04d-be77-46f2-b1a0-1037f4165d18.lovable.app')}/auth/invite-accept?token=${token}`;
+    // Create the invitation URL - using the current preview URL
+    const inviteUrl = `https://id-preview--6dd8b04d-be77-46f2-b1a0-1037f4165d18.lovable.app/auth/invite-accept?token=${token}`;
     
     console.log('Invitation URL generated:', inviteUrl);
 
@@ -122,7 +122,8 @@ const handler = async (req: Request): Promise<Response> => {
         JSON.stringify({ 
           success: false, 
           error: 'Failed to send invitation email: ' + emailResult.error.message,
-          details: emailResult.error 
+          details: emailResult.error,
+          inviteUrl // Still return the URL for manual sharing
         }), 
         {
           status: 500,
@@ -136,7 +137,7 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Invitation email sent successfully',
+        message: `Invitation email sent successfully to ${email}`,
         emailId: emailResult.data?.id,
         inviteUrl // Return URL for admin reference
       }), 
