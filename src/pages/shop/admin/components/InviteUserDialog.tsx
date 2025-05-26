@@ -28,8 +28,10 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { CheckCircle, AlertTriangle, Copy, ExternalLink } from 'lucide-react';
 
 const inviteSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -54,6 +56,12 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
   onInviteSuccess,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<{
+    success: boolean;
+    message: string;
+    inviteUrl?: string;
+    emailId?: string;
+  } | null>(null);
   const { toast } = useToast();
 
   const form = useForm<InviteFormValues>({
@@ -66,18 +74,44 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
     },
   });
 
+  const resetDialog = () => {
+    form.reset();
+    setInviteStatus(null);
+  };
+
+  const copyInviteUrl = () => {
+    if (inviteStatus?.inviteUrl) {
+      navigator.clipboard.writeText(inviteStatus.inviteUrl);
+      toast({
+        title: 'Copied!',
+        description: 'Invitation URL copied to clipboard',
+      });
+    }
+  };
+
   const onSubmit = async (values: InviteFormValues) => {
     setIsLoading(true);
+    setInviteStatus(null);
+    
     try {
+      console.log('Starting invitation process for:', values.email);
+
       // Generate invitation token
       const { data: tokenData, error: tokenError } = await supabase
         .rpc('generate_invite_token');
       
-      if (tokenError) throw tokenError;
+      if (tokenError) {
+        console.error('Token generation error:', tokenError);
+        throw new Error('Failed to generate invitation token: ' + tokenError.message);
+      }
+
+      console.log('Generated token:', tokenData);
 
       // Get current user
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) throw new Error('Not authenticated');
+      if (!currentUser) {
+        throw new Error('Not authenticated');
+      }
 
       // Create invitation record
       const { error: inviteError } = await supabase
@@ -90,10 +124,15 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
           expires_at: new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString(), // 36 hours
         });
 
-      if (inviteError) throw inviteError;
+      if (inviteError) {
+        console.error('Database insert error:', inviteError);
+        throw new Error('Failed to create invitation record: ' + inviteError.message);
+      }
+
+      console.log('Invitation record created, sending email...');
 
       // Send invitation email via edge function
-      const { error: emailError } = await supabase.functions.invoke('send-invitation', {
+      const { data: emailResponse, error: emailError } = await supabase.functions.invoke('send-invitation', {
         body: {
           email: values.email,
           firstName: values.firstName,
@@ -103,39 +142,50 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
         },
       });
 
+      console.log('Email function response:', emailResponse);
+      console.log('Email function error:', emailError);
+
       if (emailError) {
-        console.error('Email sending error:', emailError);
-        // Don't throw here - invitation was created successfully
-        toast({
-          title: 'Invitation created',
-          description: 'The invitation was created but email delivery may have failed. Please check with the user.',
-          variant: 'default',
+        console.error('Email function error:', emailError);
+        setInviteStatus({
+          success: false,
+          message: `Invitation created but email failed to send: ${emailError.message}. Please contact the user directly.`,
         });
+      } else if (emailResponse?.success) {
+        setInviteStatus({
+          success: true,
+          message: `Invitation email sent successfully to ${values.email}`,
+          inviteUrl: emailResponse.inviteUrl,
+          emailId: emailResponse.emailId,
+        });
+        onInviteSuccess();
       } else {
-        toast({
-          title: 'Invitation sent',
-          description: `Invitation email sent to ${values.email}`,
+        setInviteStatus({
+          success: false,
+          message: emailResponse?.error || 'Failed to send invitation email',
+          inviteUrl: emailResponse?.inviteUrl,
         });
       }
 
-      form.reset();
-      onOpenChange(false);
-      onInviteSuccess();
     } catch (error: any) {
-      console.error('Error creating invitation:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to create invitation',
-        variant: 'destructive',
+      console.error('Error in invitation process:', error);
+      setInviteStatus({
+        success: false,
+        message: error.message || 'Failed to create invitation',
       });
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleClose = () => {
+    resetDialog();
+    onOpenChange(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Invite New User</DialogTitle>
           <DialogDescription>
@@ -143,88 +193,159 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
         
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input placeholder="user@example.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="firstName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>First Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="John" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="lastName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Last Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Doe" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Role</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a role" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="customer">Customer</SelectItem>
-                      <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="admin">Administrator</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <DialogFooter>
+        {inviteStatus ? (
+          <div className="space-y-4">
+            <Alert className={inviteStatus.success ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}>
+              <div className="flex items-center space-x-2">
+                {inviteStatus.success ? (
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                )}
+                <AlertDescription className={inviteStatus.success ? 'text-green-800' : 'text-red-800'}>
+                  {inviteStatus.message}
+                </AlertDescription>
+              </div>
+            </Alert>
+
+            {inviteStatus.emailId && (
+              <div className="text-sm text-gray-600">
+                <strong>Email ID:</strong> {inviteStatus.emailId}
+              </div>
+            )}
+
+            {inviteStatus.inviteUrl && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Manual Invitation Link:</label>
+                <div className="flex items-center space-x-2">
+                  <Input 
+                    value={inviteStatus.inviteUrl} 
+                    readOnly 
+                    className="text-xs"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={copyInviteUrl}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(inviteStatus.inviteUrl, '_blank')}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Use this link if the email delivery failed. Share it securely with the user.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-between">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isLoading}
+                onClick={() => {
+                  resetDialog();
+                  setInviteStatus(null);
+                }}
               >
-                Cancel
+                Send Another Invitation
               </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Sending...' : 'Send Invitation'}
+              <Button onClick={handleClose}>
+                Close
               </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+            </div>
+          </div>
+        ) : (
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input placeholder="user@example.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="firstName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>First Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="John" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="lastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Doe" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="customer">Customer</SelectItem>
+                        <SelectItem value="staff">Staff</SelectItem>
+                        <SelectItem value="admin">Administrator</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleClose}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? 'Sending Invitation...' : 'Send Invitation'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        )}
       </DialogContent>
     </Dialog>
   );
