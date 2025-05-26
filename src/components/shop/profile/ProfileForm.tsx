@@ -9,10 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/auth';
 import { useImpersonation } from '@/utils/admin/impersonationUtils';
 
-const profileSchema = z.object({
+export const profileFormSchema = z.object({
   first_name: z.string().min(1, 'First name is required'),
   last_name: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
@@ -33,7 +32,7 @@ const profileSchema = z.object({
   path: ["confirm_password"],
 });
 
-type ProfileFormData = z.infer<typeof profileSchema>;
+export type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 interface ProfileFormProps {
   profile: any;
@@ -50,8 +49,8 @@ export const ProfileForm = ({ profile, onUpdate }: ProfileFormProps) => {
     handleSubmit,
     formState: { errors },
     watch,
-  } = useForm<ProfileFormData>({
-    resolver: zodResolver(profileSchema),
+  } = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileFormSchema),
     defaultValues: {
       first_name: profile?.first_name || '',
       last_name: profile?.last_name || '',
@@ -63,7 +62,7 @@ export const ProfileForm = ({ profile, onUpdate }: ProfileFormProps) => {
   const watchedPassword = watch('new_password');
   const showPasswordFields = !isImpersonating(); // Hide password fields during impersonation
 
-  const onSubmit = async (data: ProfileFormData) => {
+  const onSubmit = async (data: ProfileFormValues) => {
     setIsLoading(true);
     
     try {
@@ -125,16 +124,22 @@ export const ProfileForm = ({ profile, onUpdate }: ProfileFormProps) => {
               <Input
                 id="first_name"
                 {...register('first_name')}
-                error={errors.first_name?.message}
+                className={errors.first_name ? 'border-red-500' : ''}
               />
+              {errors.first_name && (
+                <p className="text-sm text-red-500 mt-1">{errors.first_name.message}</p>
+              )}
             </div>
             <div>
               <Label htmlFor="last_name">Last Name</Label>
               <Input
                 id="last_name"
                 {...register('last_name')}
-                error={errors.last_name?.message}
+                className={errors.last_name ? 'border-red-500' : ''}
               />
+              {errors.last_name && (
+                <p className="text-sm text-red-500 mt-1">{errors.last_name.message}</p>
+              )}
             </div>
           </div>
 
@@ -144,8 +149,11 @@ export const ProfileForm = ({ profile, onUpdate }: ProfileFormProps) => {
               id="email"
               type="email"
               {...register('email')}
-              error={errors.email?.message}
+              className={errors.email ? 'border-red-500' : ''}
             />
+            {errors.email && (
+              <p className="text-sm text-red-500 mt-1">{errors.email.message}</p>
+            )}
           </div>
 
           <div>
@@ -153,8 +161,11 @@ export const ProfileForm = ({ profile, onUpdate }: ProfileFormProps) => {
             <Input
               id="phone"
               {...register('phone')}
-              error={errors.phone?.message}
+              className={errors.phone ? 'border-red-500' : ''}
             />
+            {errors.phone && (
+              <p className="text-sm text-red-500 mt-1">{errors.phone.message}</p>
+            )}
           </div>
 
           {showPasswordFields && (
@@ -168,8 +179,11 @@ export const ProfileForm = ({ profile, onUpdate }: ProfileFormProps) => {
                     id="current_password"
                     type="password"
                     {...register('current_password')}
-                    error={errors.current_password?.message}
+                    className={errors.current_password ? 'border-red-500' : ''}
                   />
+                  {errors.current_password && (
+                    <p className="text-sm text-red-500 mt-1">{errors.current_password.message}</p>
+                  )}
                 </div>
 
                 <div>
@@ -178,8 +192,11 @@ export const ProfileForm = ({ profile, onUpdate }: ProfileFormProps) => {
                     id="new_password"
                     type="password"
                     {...register('new_password')}
-                    error={errors.new_password?.message}
+                    className={errors.new_password ? 'border-red-500' : ''}
                   />
+                  {errors.new_password && (
+                    <p className="text-sm text-red-500 mt-1">{errors.new_password.message}</p>
+                  )}
                 </div>
 
                 {watchedPassword && (
@@ -189,8 +206,11 @@ export const ProfileForm = ({ profile, onUpdate }: ProfileFormProps) => {
                       id="confirm_password"
                       type="password"
                       {...register('confirm_password')}
-                      error={errors.confirm_password?.message}
+                      className={errors.confirm_password ? 'border-red-500' : ''}
                     />
+                    {errors.confirm_password && (
+                      <p className="text-sm text-red-500 mt-1">{errors.confirm_password.message}</p>
+                    )}
                   </div>
                 )}
               </div>
