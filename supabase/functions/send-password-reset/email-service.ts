@@ -13,7 +13,7 @@ export const sendPasswordResetEmail = async (emailData: PasswordResetEmailData):
     console.log('Sending password reset email to:', emailData.to);
     
     const { data, error } = await resend.emails.send({
-      from: 'Shop Management <noreply@yourdomain.com>', // Replace with your verified domain
+      from: 'Acme <onboarding@resend.dev>', // Using Resend's verified domain for testing
       to: [emailData.to],
       subject: 'Reset Your Password',
       html: generatePasswordResetEmailHTML(emailData),
@@ -44,12 +44,12 @@ const generatePasswordResetEmailHTML = (emailData: PasswordResetEmailData): stri
     </head>
     <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-        <h1 style="color: white; margin: 0; font-size: 28px;">Password Reset</h1>
+        <h1 style="color: white; margin: 0; font-size: 28px;">Reset Your Password</h1>
         <p style="color: #f0f0f0; margin: 10px 0 0 0; font-size: 16px;">Shop Management System</p>
       </div>
       
       <div style="background: #ffffff; padding: 30px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 10px 10px;">
-        <h2 style="color: #333; margin-top: 0;">Reset Your Password</h2>
+        <h2 style="color: #333; margin-top: 0;">Password Reset Request</h2>
         
         <p>We received a request to reset your password for your Shop Management System account.</p>
         
@@ -71,12 +71,8 @@ const generatePasswordResetEmailHTML = (emailData: PasswordResetEmailData): stri
         
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
         
-        <p style="color: #666; font-size: 14px;">
-          <strong>Security Notice:</strong> This password reset link will expire in 1 hour for security reasons.
-        </p>
-        
         <p style="color: #666; font-size: 14px; margin-bottom: 0;">
-          If you didn't request this password reset, you can safely ignore this email. Your password will remain unchanged.
+          This password reset link will expire in 1 hour. If you didn't request this password reset, please ignore this email.
         </p>
       </div>
     </body>
@@ -93,9 +89,7 @@ We received a request to reset your password for your Shop Management System acc
 To reset your password, please visit the following link:
 ${emailData.resetUrl}
 
-This password reset link will expire in 1 hour for security reasons.
-
-If you didn't request this password reset, you can safely ignore this email. Your password will remain unchanged.
+This password reset link will expire in 1 hour. If you didn't request this password reset, please ignore this email.
 
 Thank you!
 Shop Management Team
