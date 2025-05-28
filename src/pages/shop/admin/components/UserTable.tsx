@@ -10,6 +10,7 @@ import { UserProfileDialog } from './UserProfileDialog';
 import { useAdminActions } from '../hooks/useAdminActions';
 import { useImpersonation } from '@/utils/admin/impersonationUtils';
 import { formatDistance } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 interface UserTableProps {
   users: AdminUser[];
@@ -19,8 +20,10 @@ interface UserTableProps {
 export const UserTable = ({ users, isLoading }: UserTableProps) => {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const { toggleUserStatus, sendPasswordReset, deleteUser } = useAdminActions();
   const { impersonateUser } = useImpersonation();
+  const { toast } = useToast();
 
   const handleEditUser = (user: AdminUser) => {
     setSelectedUser(user);
@@ -35,6 +38,29 @@ export const UserTable = ({ users, isLoading }: UserTableProps) => {
       // Redirect to the appropriate portal based on user role
       const redirectPath = user.role === 'customer' ? '/customer/dashboard' : '/shop/dashboard';
       window.location.href = redirectPath;
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setDeletingUserId(userId);
+      await deleteUser(userId);
+      toast({
+        title: "Success",
+        description: "User deleted successfully"
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user",
+        variant: "destructive"
+      });
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -122,11 +148,12 @@ export const UserTable = ({ users, isLoading }: UserTableProps) => {
                         Reset Password
                       </DropdownMenuItem>
                       <DropdownMenuItem 
-                        onClick={() => deleteUser(user.id)}
+                        onClick={() => handleDeleteUser(user.id)}
                         className="text-red-600"
+                        disabled={deletingUserId === user.id}
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Delete User
+                        {deletingUserId === user.id ? 'Deleting...' : 'Delete User'}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
