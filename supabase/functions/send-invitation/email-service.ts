@@ -16,7 +16,7 @@ export const sendInvitationEmail = async (emailData: EmailData): Promise<{ succe
     console.log('Sending invitation email to:', emailData.to);
     
     const { data, error } = await resend.emails.send({
-      from: 'Acme <onboarding@resend.dev>', // Using Resend's verified domain for testing
+      from: 'CTC <CTC@noreply.modworx.online>',
       to: [emailData.to],
       subject: `You're invited to join as ${emailData.role}`,
       html: generateInvitationEmailHTML(emailData),

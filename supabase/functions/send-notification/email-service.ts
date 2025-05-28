@@ -18,7 +18,7 @@ export const sendNotificationEmail = async (emailData: NotificationEmailData): P
     console.log('Sending notification email to:', emailData.to);
     
     const { data, error } = await resend.emails.send({
-      from: 'Acme <onboarding@resend.dev>', // Using Resend's verified domain for testing
+      from: 'CTC <CTC@noreply.modworx.online>',
       to: [emailData.to],
       subject: emailData.subject,
       html: generateNotificationEmailHTML(emailData),
