@@ -1,5 +1,5 @@
 
-import { useSupabaseAuth } from '../SupabaseAuthProvider';
+import { useSupabaseAuth } from './SupabaseAuthProvider';
 
 export function useAuth() {
   return useSupabaseAuth();
