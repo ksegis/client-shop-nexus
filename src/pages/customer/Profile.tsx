@@ -13,7 +13,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useProfileData } from '@/hooks/profile';
 import { useAuth } from '@/contexts/auth';
 import { ProfilePicture } from '@/components/shared/profile/ProfilePicture';
-import { CustomerApiKeysManager } from '@/components/customer/api-keys/CustomerApiKeysManager';
+import CustomerApiKeysManager from '@/components/customer/api-keys/CustomerApiKeysManager';
 
 const profileFormSchema = z.object({
   firstName: z.string().min(2, { message: "First name must be at least 2 characters." }),

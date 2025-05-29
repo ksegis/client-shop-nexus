@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/auth';
 
 export interface CustomerApiKey {
   id: string;
@@ -19,6 +20,7 @@ export const useCustomerApiKeys = () => {
   const [apiKeys, setApiKeys] = useState<CustomerApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const fetchApiKeys = async () => {
     try {
@@ -52,6 +54,15 @@ export const useCustomerApiKeys = () => {
       });
       return null;
     }
+
+    if (!user?.id) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "User not authenticated",
+      });
+      return null;
+    }
     
     try {
       // Generate the API key using the database function
@@ -67,6 +78,7 @@ export const useCustomerApiKeys = () => {
       const { data, error } = await supabase
         .from('customer_api_keys')
         .insert({
+          customer_id: user.id,
           key_name: keyName.trim(),
           api_key: keyData,
           expires_at: expiresAt,
