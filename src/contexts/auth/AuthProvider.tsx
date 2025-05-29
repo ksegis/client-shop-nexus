@@ -1,4 +1,3 @@
-
 import { ReactNode, useState, useEffect } from 'react';
 import { AuthContext } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -94,12 +93,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signIn: async (email, password) => {
       console.log('Signing in development user:', email);
       
-      // Enhanced role determination logic
-      let userRole = 'customer'; // default
+      // Default values
+      let userRole = 'customer';
       let firstName = 'Dev';
       let lastName = 'User';
       
-      // First check for invitation data - this takes highest priority
+      // Check for invitation data - this is the only source of role/name info
       const inviteData = getInvitationData(email);
       if (inviteData) {
         userRole = inviteData.role;
@@ -109,28 +108,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         // Clear the invitation data after use to prevent reuse
         clearInvitationData(email);
-      } else {
-        // Fallback to hardcoded admin accounts
-        if (email === 'kevin.shelton@egisdynamics.com') {
-          userRole = 'admin';
-          firstName = 'Kevin';
-          lastName = 'Shelton';
-        } else if (email === 'customer@example.com') {
-          userRole = 'admin';
-          firstName = 'Admin';
-          lastName = 'User';
-        } else {
-          // Check for role-based emails as last resort
-          if (email.includes('admin')) {
-            userRole = 'admin';
-            firstName = 'Admin';
-            lastName = 'User';
-          } else if (email.includes('staff')) {
-            userRole = 'staff';
-            firstName = 'Staff';
-            lastName = 'Member';
-          }
-        }
       }
       
       // Create a mock user object
@@ -158,11 +135,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         description: `Logged in as ${email}`,
       });
       
-      // Handle redirect based on user role - admins and staff always go to shop portal
-      let redirectPath = '/shop/dashboard'; // Default for admin and staff
+      // Handle redirect based on user role - admin and staff go to shop portal
+      let redirectPath = '/customer/dashboard'; // Default for customers
       
-      if (userRole === 'customer') {
-        redirectPath = '/customer/dashboard';
+      if (userRole === 'admin' || userRole === 'staff') {
+        redirectPath = '/shop/dashboard';
       }
       
       console.log(`Redirecting ${userRole} user ${email} to ${redirectPath}`);
