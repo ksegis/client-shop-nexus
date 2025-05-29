@@ -4,6 +4,7 @@ import { AuthContext } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { getInvitationData, clearInvitationData } from '@/utils/invitationStorage';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -211,7 +212,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       return { success: true, error: null };
     },
-    resetPassword: async () => ({ success: true, error: null }),
+    resetPassword: async (email) => {
+      console.log('=== DEV PASSWORD RESET START ===');
+      console.log('Email for password reset:', email);
+      
+      try {
+        // In development mode, we'll use Supabase's password reset
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/change-password`
+        });
+        
+        if (error) {
+          console.error('Password reset error:', error);
+          // Don't show the actual error for security
+        }
+        
+        // Always show success message for security
+        toast({
+          title: "Password reset requested",
+          description: "If your email address is registered with us, you will receive password reset instructions within a few minutes. Please check your inbox and spam folder."
+        });
+        
+        console.log('=== DEV PASSWORD RESET END ===');
+        return { success: true, error: null };
+      } catch (error) {
+        console.error('Password reset error:', error);
+        
+        // Still show success message for security
+        toast({
+          title: "Password reset requested",
+          description: "If your email address is registered with us, you will receive password reset instructions within a few minutes. Please check your inbox and spam folder."
+        });
+        
+        return { success: true, error: null };
+      }
+    },
     updatePassword: async () => ({ success: true, error: null }),
     updateProfile: async () => ({ success: true, error: null }),
     validateAccess: () => isAuthenticated,
