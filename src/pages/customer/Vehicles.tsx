@@ -12,7 +12,7 @@ import { useVehicleManagement } from '@/hooks/vehicles/useVehicleManagement';
 
 const Vehicles = () => {
   const { user } = useAuth();
-  const { vehicles, loading, createVehicle, deleteVehicle } = useVehicleManagement();
+  const { vehicles, loading, createVehicle, deleteVehicle, updateVehicle } = useVehicleManagement();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
 
@@ -30,6 +30,18 @@ const Vehicles = () => {
 
   const handleEditVehicle = (vehicle: Vehicle) => {
     setEditingVehicle(vehicle);
+  };
+
+  const handleUpdateVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at'>) => {
+    if (!editingVehicle) return;
+    await updateVehicle(editingVehicle.id, vehicleData);
+    setEditingVehicle(null);
+  };
+
+  const handleDeleteVehicle = async () => {
+    if (!editingVehicle) return;
+    await deleteVehicle(editingVehicle.id);
+    setEditingVehicle(null);
   };
 
   const handleRemoveVehicle = async (vehicleId: string) => {
@@ -77,7 +89,6 @@ const Vehicles = () => {
       ) : (
         <VehiclesList
           vehicles={userVehicles}
-          onEdit={handleEditVehicle}
           onRemove={handleRemoveVehicle}
         />
       )}
@@ -92,6 +103,10 @@ const Vehicles = () => {
         vehicle={editingVehicle}
         open={!!editingVehicle}
         onOpenChange={(open) => !open && setEditingVehicle(null)}
+        onSubmit={handleUpdateVehicle}
+        onDelete={handleDeleteVehicle}
+        onImageUpload={async () => {}}
+        uploadingImage={false}
       />
     </div>
   );
