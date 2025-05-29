@@ -102,67 +102,100 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signIn: async (email, password) => {
       console.log('Signing in development user:', email);
       
-      // Check for invitation data - this is required for role and name info
+      // First check for invitation data
       const inviteData = getInvitationData(email);
       
-      if (!inviteData) {
-        console.log('No invitation data found for', email);
+      // If there's invitation data, use it
+      if (inviteData) {
+        const { role: userRole, firstName, lastName } = inviteData;
+        console.log('Using invitation data for', email, '- Role:', userRole, 'Name:', firstName, lastName);
+        
+        // Clear the invitation data after use
+        clearInvitationData(email);
+        
+        // Create a mock user object with the invitation data
+        const devUser = {
+          id: 'dev-' + Date.now(),
+          email,
+          user_metadata: {
+            first_name: firstName,
+            last_name: lastName,
+            role: userRole
+          },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        
+        console.log('Created dev user object:', devUser);
+        
+        // Store in localStorage
+        localStorage.setItem('dev-customer-user', JSON.stringify(devUser));
+        
+        // Update state
+        setUser(devUser);
+        setIsAuthenticated(true);
+        
         toast({
-          title: "Sign in failed",
-          description: "No invitation found for this email. Please contact an administrator.",
-          variant: "destructive"
+          title: "Signed in successfully",
+          description: `Logged in as ${firstName} ${lastName} (${userRole})`,
         });
-        return { success: false, error: new Error('No invitation found') };
+        
+        // Handle redirect based on user role
+        let redirectPath = '/customer/dashboard'; // Default for customers
+        
+        if (userRole === 'admin' || userRole === 'staff') {
+          redirectPath = '/shop/dashboard';
+        }
+        
+        console.log(`Redirecting ${userRole} user ${email} to ${redirectPath}`);
+        
+        // Use setTimeout to ensure state updates complete before navigation
+        setTimeout(() => {
+          navigate(redirectPath, { replace: true });
+        }, 100);
+        
+        return { success: true, error: null };
+      } else {
+        // No invitation data - this might be a regular user or existing user
+        // For development mode, we'll create a basic customer account
+        console.log('No invitation data found, creating basic customer account for', email);
+        
+        // Extract name from email for display
+        const [emailName] = email.split('@');
+        const firstName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+        const lastName = 'User';
+        
+        const devUser = {
+          id: 'dev-' + Date.now(),
+          email,
+          user_metadata: {
+            first_name: firstName,
+            last_name: lastName,
+            role: 'customer'
+          },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        
+        // Store in localStorage
+        localStorage.setItem('dev-customer-user', JSON.stringify(devUser));
+        
+        // Update state
+        setUser(devUser);
+        setIsAuthenticated(true);
+        
+        toast({
+          title: "Signed in successfully",
+          description: `Logged in as ${firstName} ${lastName}`,
+        });
+        
+        // Default to customer dashboard
+        setTimeout(() => {
+          navigate('/customer/dashboard', { replace: true });
+        }, 100);
+        
+        return { success: true, error: null };
       }
-      
-      const { role: userRole, firstName, lastName } = inviteData;
-      console.log('Using invitation data for', email, '- Role:', userRole, 'Name:', firstName, lastName);
-      
-      // Clear the invitation data after use
-      clearInvitationData(email);
-      
-      // Create a mock user object with the invitation data
-      const devUser = {
-        id: 'dev-' + Date.now(),
-        email,
-        user_metadata: {
-          first_name: firstName,
-          last_name: lastName,
-          role: userRole
-        },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      
-      console.log('Created dev user object:', devUser);
-      
-      // Store in localStorage
-      localStorage.setItem('dev-customer-user', JSON.stringify(devUser));
-      
-      // Update state
-      setUser(devUser);
-      setIsAuthenticated(true);
-      
-      toast({
-        title: "Signed in successfully",
-        description: `Logged in as ${firstName} ${lastName} (${userRole})`,
-      });
-      
-      // Handle redirect based on user role
-      let redirectPath = '/customer/dashboard'; // Default for customers
-      
-      if (userRole === 'admin' || userRole === 'staff') {
-        redirectPath = '/shop/dashboard';
-      }
-      
-      console.log(`Redirecting ${userRole} user ${email} to ${redirectPath}`);
-      
-      // Use setTimeout to ensure state updates complete before navigation
-      setTimeout(() => {
-        navigate(redirectPath, { replace: true });
-      }, 100);
-      
-      return { success: true, error: null };
     },
     signOut: async () => {
       console.log('Signing out development user');

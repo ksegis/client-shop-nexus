@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { storeInvitationData } from '@/utils/invitationStorage';
 
 // Password requirements schema
 const passwordSchema = z.object({
@@ -101,11 +102,16 @@ const InviteAccept = () => {
           return;
         }
 
+        // Set default first and last name based on email
+        const [emailName] = data.email.split('@');
+        const firstName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+        const lastName = 'User';
+
         setInviteData({
           email: data.email,
           role: data.role as UserRole,
-          firstName: '', // These will be populated from the invite email
-          lastName: '',
+          firstName,
+          lastName,
           token: data.token,
           valid: true
         });
@@ -130,6 +136,15 @@ const InviteAccept = () => {
     
     setLoading(true);
     try {
+      // Store invitation data in localStorage for the auth system
+      storeInvitationData({
+        email: inviteData.email,
+        firstName: inviteData.firstName,
+        lastName: inviteData.lastName,
+        role: inviteData.role,
+        token: inviteData.token
+      });
+
       // Create user account
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: inviteData.email,
@@ -144,37 +159,36 @@ const InviteAccept = () => {
       });
 
       if (authError) {
-        // If user already exists, try to sign them in
+        // If user already exists, they need to sign in instead
         if (authError.message.includes('already registered')) {
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-            email: inviteData.email,
-            password: values.password,
+          toast({
+            title: "Account exists",
+            description: "This email is already registered. You can now sign in with your password.",
           });
           
-          if (signInError) {
-            throw new Error('Account already exists but password is incorrect');
-          }
+          // Redirect to login with the invitation data stored
+          setTimeout(() => {
+            navigate('/shop-login');
+          }, 2000);
+          return;
         } else {
           throw authError;
         }
       }
 
       // Update the profile with the correct role
-      if (authData?.user || inviteData.role) {
-        const userId = authData?.user?.id;
-        if (userId) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .update({
-              role: inviteData.role,
-              first_name: inviteData.firstName,
-              last_name: inviteData.lastName,
-            })
-            .eq('id', userId);
-          
-          if (profileError) {
-            console.error('Error updating profile:', profileError);
-          }
+      if (authData?.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            role: inviteData.role,
+            first_name: inviteData.firstName,
+            last_name: inviteData.lastName,
+          })
+          .eq('id', authData.user.id);
+        
+        if (profileError) {
+          console.error('Error updating profile:', profileError);
         }
       }
 
