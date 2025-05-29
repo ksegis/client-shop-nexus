@@ -34,6 +34,7 @@ const ResetPassword = () => {
   const { updatePassword } = useSupabaseAuth();
   const [loading, setLoading] = useState(false);
   const [validToken, setValidToken] = useState(false);
+  const [checkingToken, setCheckingToken] = useState(true);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(passwordResetSchema),
@@ -43,28 +44,33 @@ const ResetPassword = () => {
     }
   });
 
-  // Check if we have valid reset tokens in the URL
+  // Check if we have valid reset tokens in the URL or session
   useEffect(() => {
     const checkTokens = async () => {
       console.log('[Supabase Auth] Reset password page - checking tokens');
       console.log('Current URL:', window.location.href);
       console.log('Search params:', Object.fromEntries(searchParams.entries()));
       
-      // Override any EGIS token checking
-      const blockEGIS = () => {
-        console.warn('[Supabase Auth] Blocking EGIS token validation');
-      };
-      
-      // Check for Supabase auth tokens
-      const accessToken = searchParams.get('access_token');
-      const refreshToken = searchParams.get('refresh_token');
-      const type = searchParams.get('type');
-      
-      console.log('[Supabase Auth] Tokens found:', { accessToken: !!accessToken, refreshToken: !!refreshToken, type });
-      
-      if (accessToken && refreshToken) {
-        console.log('[Supabase Auth] Setting session with tokens');
-        try {
+      try {
+        // First check if user is already authenticated (from callback)
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+          console.log('[Supabase Auth] User already has valid session for password reset');
+          setValidToken(true);
+          setCheckingToken(false);
+          return;
+        }
+        
+        // Check for tokens in URL parameters
+        const accessToken = searchParams.get('access_token');
+        const refreshToken = searchParams.get('refresh_token');
+        const type = searchParams.get('type');
+        
+        console.log('[Supabase Auth] URL tokens:', { accessToken: !!accessToken, refreshToken: !!refreshToken, type });
+        
+        if (accessToken && refreshToken) {
+          console.log('[Supabase Auth] Setting session with URL tokens');
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
@@ -82,8 +88,13 @@ const ResetPassword = () => {
             console.log('[Supabase Auth] Session set successfully');
             setValidToken(true);
           }
-        } catch (error) {
-          console.error('[Supabase Auth] Error in setSession:', error);
+        } else if (type === 'recovery') {
+          // Handle recovery type without tokens (should redirect through callback)
+          console.log('[Supabase Auth] Recovery type without tokens - redirecting to callback');
+          navigate('/auth/callback?' + searchParams.toString());
+          return;
+        } else {
+          console.log('[Supabase Auth] No valid tokens found');
           toast({
             title: "Invalid reset link",
             description: "This password reset link is invalid or has expired.",
@@ -91,18 +102,16 @@ const ResetPassword = () => {
           });
           navigate('/shop-login');
         }
-      } else if (type === 'recovery') {
-        // Handle Supabase recovery flow
-        console.log('[Supabase Auth] Recovery type detected');
-        setValidToken(true);
-      } else {
-        console.log('[Supabase Auth] No valid tokens found');
+      } catch (error) {
+        console.error('[Supabase Auth] Error in token check:', error);
         toast({
           title: "Invalid reset link",
           description: "This password reset link is invalid or has expired.",
           variant: "destructive",
         });
         navigate('/shop-login');
+      } finally {
+        setCheckingToken(false);
       }
     };
     
@@ -133,7 +142,7 @@ const ResetPassword = () => {
     }
   };
 
-  if (!validToken) {
+  if (checkingToken) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <Card className="w-full max-w-md">
@@ -143,6 +152,24 @@ const ResetPassword = () => {
           </CardHeader>
           <CardContent className="flex justify-center p-6">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!validToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Invalid Reset Link</CardTitle>
+            <CardDescription>This password reset link is invalid or has expired.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => navigate('/shop-login')} className="w-full">
+              Return to Login
+            </Button>
           </CardContent>
         </Card>
       </div>

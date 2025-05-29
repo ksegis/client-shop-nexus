@@ -14,15 +14,12 @@ const AuthCallback = () => {
       console.log('Current URL:', window.location.href);
       console.log('Search params:', Object.fromEntries(searchParams.entries()));
       
-      // Block any EGIS callback handling
-      const blockEGIS = () => {
-        console.warn('[Supabase Auth] Blocking EGIS callback handling');
-      };
-      
       // Check for Supabase auth callback parameters
       const code = searchParams.get('code');
       const error = searchParams.get('error');
       const type = searchParams.get('type');
+      const accessToken = searchParams.get('access_token');
+      const refreshToken = searchParams.get('refresh_token');
       
       if (error) {
         console.error('[Supabase Auth] Callback error:', error);
@@ -30,6 +27,32 @@ const AuthCallback = () => {
         return;
       }
       
+      // Handle password recovery flow with tokens
+      if (type === 'recovery' && accessToken && refreshToken) {
+        console.log('[Supabase Auth] Password recovery with tokens detected');
+        try {
+          const { data, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          
+          if (sessionError) {
+            console.error('[Supabase Auth] Session error:', sessionError);
+            navigate('/shop-login?error=auth_failed');
+            return;
+          }
+          
+          console.log('[Supabase Auth] Recovery session established, redirecting to reset password');
+          navigate('/auth/reset-password', { replace: true });
+          return;
+        } catch (error) {
+          console.error('[Supabase Auth] Recovery session exception:', error);
+          navigate('/shop-login?error=auth_failed');
+          return;
+        }
+      }
+      
+      // Handle standard auth code exchange
       if (code) {
         console.log('[Supabase Auth] Auth code found, exchanging for session');
         try {
@@ -53,8 +76,9 @@ const AuthCallback = () => {
         }
       }
       
+      // Handle recovery type without tokens (redirect to reset form)
       if (type === 'recovery') {
-        console.log('[Supabase Auth] Password recovery callback detected');
+        console.log('[Supabase Auth] Password recovery type detected, redirecting to reset form');
         navigate('/auth/reset-password?' + searchParams.toString(), { replace: true });
         return;
       }
