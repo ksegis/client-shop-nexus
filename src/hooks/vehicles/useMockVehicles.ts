@@ -1,5 +1,5 @@
 
-import { Vehicle, NewVehicleData } from '@/types/vehicle';
+import { Vehicle } from '@/types/vehicle';
 
 export const useMockVehicles = () => {
   const getMockVehicles = (): Vehicle[] => {
@@ -37,7 +37,7 @@ export const useMockVehicles = () => {
     ];
   };
 
-  const createMockVehicle = (vehicleData: NewVehicleData, ownerId: string): Vehicle => {
+  const createMockVehicle = (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at'>, ownerId: string): Vehicle => {
     return {
       id: `mock-vehicle-${Date.now()}`,
       ...vehicleData,
@@ -45,9 +45,6 @@ export const useMockVehicles = () => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       images: vehicleData.images || [],
-      color: vehicleData.color,
-      license_plate: vehicleData.license_plate || '',
-      vin: vehicleData.vin || ''
     };
   };
 

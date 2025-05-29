@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Vehicle, NewVehicleData } from '@/types/vehicle';
+import { Vehicle } from '@/types/vehicle';
 import { useVehicles } from './useFetchVehicles';
 import { useAddVehicle } from './useAddVehicle';
 import { useUpdateVehicle } from './useUpdateVehicle';

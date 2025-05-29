@@ -21,6 +21,7 @@ const vehicleFormSchema = z.object({
   license_plate: z.string().optional(),
   vehicle_type: z.enum(['car', 'truck', 'motorcycle', 'other']),
   owner_id: z.string().min(1, 'Customer is required'),
+  mileage: z.number().optional(),
 });
 
 type VehicleFormData = z.infer<typeof vehicleFormSchema>;
@@ -49,19 +50,32 @@ export function VehicleForm({ vehicle, customerId, onCancel, onSuccess }: Vehicl
       license_plate: vehicle?.license_plate || '',
       vehicle_type: vehicle?.vehicle_type || 'car',
       owner_id: vehicle?.owner_id || customerId,
+      mileage: vehicle?.mileage || undefined,
     },
   });
 
   const onSubmit = async (data: VehicleFormData) => {
     try {
+      const vehicleData = {
+        owner_id: data.owner_id,
+        make: data.make,
+        model: data.model,
+        year: data.year,
+        color: data.color,
+        vin: data.vin,
+        license_plate: data.license_plate,
+        vehicle_type: data.vehicle_type,
+        mileage: data.mileage,
+      };
+
       if (isEditing && vehicle) {
-        await updateVehicle(vehicle.id, data);
+        await updateVehicle(vehicle.id, vehicleData);
         toast({
           title: "Success",
           description: "Vehicle updated successfully",
         });
       } else {
-        await createVehicle(data);
+        await createVehicle(vehicleData);
         toast({
           title: "Success",
           description: "Vehicle created successfully",
@@ -188,6 +202,16 @@ export function VehicleForm({ vehicle, customerId, onCancel, onSuccess }: Vehicl
             placeholder="Enter license plate"
           />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="mileage">Mileage</Label>
+        <Input
+          id="mileage"
+          type="number"
+          {...form.register('mileage', { valueAsNumber: true })}
+          placeholder="Enter current mileage"
+        />
       </div>
 
       <div className="flex justify-end space-x-2 pt-4">

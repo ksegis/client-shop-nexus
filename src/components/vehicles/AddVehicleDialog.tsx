@@ -4,13 +4,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { vehicleSchema, VehicleFormValues, getDefaultVehicleFormValues } from './VehicleFormSchema';
-import { NewVehicleData } from '@/types/vehicle';
+import { Vehicle } from '@/types/vehicle';
 import { VehicleForm } from './form/VehicleForm';
 
 interface AddVehicleDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: NewVehicleData) => Promise<void>;
+  onSubmit: (data: Omit<Vehicle, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
 }
 
 export const AddVehicleDialog: React.FC<AddVehicleDialogProps> = ({ 
@@ -29,6 +29,7 @@ export const AddVehicleDialog: React.FC<AddVehicleDialogProps> = ({
     try {
       setIsSubmitting(true);
       await onSubmit({
+        owner_id: '', // This should be set by the parent component
         make: data.make,
         model: data.model,
         year: Number(data.year),
