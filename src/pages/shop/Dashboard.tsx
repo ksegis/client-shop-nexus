@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, CheckCircle, XCircle, Clock, AlertTriangle, Package, TrendingDown } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
@@ -13,6 +14,8 @@ const Dashboard = () => {
   const { estimates, workOrders, inventory, customerCount, loading, error } = useDashboardData();
   const { inventoryItems } = useInventoryData();
   const [selectedInventoryCard, setSelectedInventoryCard] = useState<string | null>(null);
+  const [selectedEstimatesDialog, setSelectedEstimatesDialog] = useState<boolean>(false);
+  const [selectedWorkOrdersDialog, setSelectedWorkOrdersDialog] = useState<boolean>(false);
   const navigate = useNavigate();
 
   // Metric card icons mapping
@@ -166,6 +169,18 @@ const Dashboard = () => {
     setSelectedInventoryCard(null); // Close the dialog
   };
 
+  // Handle clicking on an estimate to navigate to estimates page
+  const handleEstimateClick = (estimateId: string) => {
+    navigate(`/shop/estimates?estimate=${estimateId}`);
+    setSelectedEstimatesDialog(false);
+  };
+
+  // Handle clicking on a work order to navigate to work orders page
+  const handleWorkOrderClick = (workOrderId: string) => {
+    navigate(`/shop/work-orders/${workOrderId}`);
+    setSelectedWorkOrdersDialog(false);
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -210,26 +225,25 @@ const Dashboard = () => {
         <AppointmentsOverview />
       </div>
 
-      {/* Current Activity Section */}
+      {/* Current Activity Section - Now Interactive */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="col-span-1">
+        <Card 
+          className="col-span-1 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => setSelectedEstimatesDialog(true)}
+        >
           <CardHeader>
-            <CardTitle>Recent Estimates</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              Recent Estimates
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               {estimates.recent.length > 0 ? (
-                estimates.recent.map((estimate) => (
-                  <div key={estimate.id} className="flex items-center justify-between border-b last:border-0 py-2">
-                    <div>
-                      <p className="font-medium">Estimate #{estimate.id.substring(0, 8)}</p>
-                      <p className="text-sm text-gray-500">{estimate.customer_name}</p>
-                    </div>
-                    <div className="text-sm font-medium">
-                      ${estimate.total_amount.toFixed(2)}
-                    </div>
-                  </div>
-                ))
+                <div>
+                  <div className="text-2xl font-bold">{estimates.recent.length}</div>
+                  <p className="text-xs text-muted-foreground">Click to view all estimates</p>
+                </div>
               ) : (
                 <div className="text-center py-4 text-gray-500">
                   No recent estimates available
@@ -239,24 +253,23 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <Card className="col-span-1">
+        <Card 
+          className="col-span-1 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => setSelectedWorkOrdersDialog(true)}
+        >
           <CardHeader>
-            <CardTitle>Active Work Orders</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              Active Work Orders
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               {workOrders.recent.length > 0 ? (
-                workOrders.recent.map((workOrder) => (
-                  <div key={workOrder.id} className="flex items-center justify-between border-b last:border-0 py-2">
-                    <div>
-                      <p className="font-medium">WO #{workOrder.id.substring(0, 8)}</p>
-                      <p className="text-sm text-gray-500">{workOrder.customer_name} - {workOrder.title}</p>
-                    </div>
-                    <div className="text-sm font-medium text-yellow-600">
-                      {workOrder.status === 'in_progress' ? 'In Progress' : workOrder.status}
-                    </div>
-                  </div>
-                ))
+                <div>
+                  <div className="text-2xl font-bold">{workOrders.recent.length}</div>
+                  <p className="text-xs text-muted-foreground">Click to view all work orders</p>
+                </div>
               ) : (
                 <div className="text-center py-4 text-gray-500">
                   No active work orders at the moment
@@ -302,6 +315,111 @@ const Dashboard = () => {
           })}
         </div>
       </div>
+
+      {/* Estimates Details Dialog */}
+      <Dialog open={selectedEstimatesDialog} onOpenChange={setSelectedEstimatesDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Recent Estimates</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {estimates.recent.length > 0 ? (
+              estimates.recent.map((estimate) => (
+                <Card 
+                  key={estimate.id} 
+                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => handleEstimateClick(estimate.id)}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">Estimate #{estimate.id.substring(0, 8)}</h4>
+                        <p className="text-sm text-gray-500">{estimate.customer_name}</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-semibold">${estimate.total_amount.toFixed(2)}</div>
+                        <Badge variant="outline">Estimate</Badge>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="font-medium">Created:</p>
+                        <p className="text-gray-600">{new Date(estimate.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium">Title:</p>
+                        <p className="text-gray-600">{estimate.title}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="text-xs text-blue-600 hover:underline">
+                      Click to view estimate details →
+                    </div>
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                No recent estimates found
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Work Orders Details Dialog */}
+      <Dialog open={selectedWorkOrdersDialog} onOpenChange={setSelectedWorkOrdersDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Active Work Orders</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {workOrders.recent.length > 0 ? (
+              workOrders.recent.map((workOrder) => (
+                <Card 
+                  key={workOrder.id} 
+                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => handleWorkOrderClick(workOrder.id)}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">WO #{workOrder.id.substring(0, 8)}</h4>
+                        <p className="text-sm text-gray-500">{workOrder.customer_name}</p>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant={workOrder.status === 'in_progress' ? 'default' : 'outline'}>
+                          {workOrder.status === 'in_progress' ? 'In Progress' : workOrder.status}
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="font-medium">Created:</p>
+                        <p className="text-gray-600">{new Date(workOrder.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium">Title:</p>
+                        <p className="text-gray-600">{workOrder.title}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="text-xs text-blue-600 hover:underline">
+                      Click to view work order details →
+                    </div>
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                No active work orders found
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Inventory Details Dialog */}
       <Dialog open={!!selectedInventoryCard} onOpenChange={() => setSelectedInventoryCard(null)}>
