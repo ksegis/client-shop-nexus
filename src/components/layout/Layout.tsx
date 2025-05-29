@@ -41,16 +41,8 @@ const LayoutContent: React.FC<LayoutProps> = ({ portalType, children }) => {
   );
 };
 
-// Wrapper component that ensures HeaderProvider is only applied once
+// Single HeaderProvider wrapper - no nested providers
 const Layout: React.FC<LayoutProps> = (props) => {
-  // Check if we're already inside a HeaderProvider
-  const existingContext = React.useContext(React.createContext<boolean>(false));
-  
-  // If we're already inside a HeaderProvider, don't create another one
-  if (existingContext) {
-    return <LayoutContent {...props} />;
-  }
-  
   return (
     <HeaderProvider>
       <LayoutContent {...props} />

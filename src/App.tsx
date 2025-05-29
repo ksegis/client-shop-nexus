@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AppRoutes from "./routes/AppRoutes";
 import { useEffect } from "react";
 import { setupAudioCleanupOnNavigation } from "@/utils/audioUtils";
-import { HeaderProvider } from "./components/layout/HeaderContext";
 import { DevModeIndicator } from "./components/shared/DevModeIndicator";
 import { useSessionTracking } from "./utils/sessionService";
 import { SupabaseAuthProvider } from "@/contexts/auth/SupabaseAuthProvider";
@@ -114,11 +113,9 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProviderWrapper>
         <SupabaseAuthProvider>
-          <HeaderProvider>
-            <AppRoutes />
-            <Toaster />
-            <DevModeIndicator />
-          </HeaderProvider>
+          <AppRoutes />
+          <Toaster />
+          <DevModeIndicator />
         </SupabaseAuthProvider>
       </TooltipProviderWrapper>
     </QueryClientProvider>
