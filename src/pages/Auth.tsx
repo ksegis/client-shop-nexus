@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import EgisLoginButton from "@/components/auth/EgisLoginButton";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from "@/contexts/auth";
 
@@ -70,11 +69,6 @@ const Auth = () => {
                   Login with Email & Password
                 </Button>
               </Link>
-              
-              <EgisLoginButton 
-                redirectPath="/shop"
-                className="w-full"
-              />
               
               <div className="mt-4 text-center">
                 <Link to="/" className="text-sm text-blue-600 hover:text-blue-800">
