@@ -157,20 +157,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { success: true, error: null };
       } else {
         // No invitation data - this might be a regular user or existing user
-        // For development mode, we'll create a basic customer account
+        // For development mode, we'll create a basic customer account with empty names
         console.log('No invitation data found, creating basic customer account for', email);
-        
-        // Extract name from email for display
-        const [emailName] = email.split('@');
-        const firstName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-        const lastName = 'User';
         
         const devUser = {
           id: 'dev-' + Date.now(),
           email,
           user_metadata: {
-            first_name: firstName,
-            last_name: lastName,
+            first_name: '',
+            last_name: '',
             role: 'customer'
           },
           created_at: new Date().toISOString(),
@@ -186,7 +181,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         toast({
           title: "Signed in successfully",
-          description: `Logged in as ${firstName} ${lastName}`,
+          description: `Logged in as ${email}`,
         });
         
         // Default to customer dashboard
