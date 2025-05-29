@@ -17,6 +17,7 @@ import UserManagement from "@/pages/shop/admin/UserManagement";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import { CustomersProvider } from "@/pages/shop/customers/CustomersContext";
 
 const ShopRoutes = () => {
   return (
@@ -65,7 +66,9 @@ const ShopRoutes = () => {
           path="vehicles"
           element={
             <ProtectedRoute>
-              <VehicleManagement />
+              <CustomersProvider>
+                <VehicleManagement />
+              </CustomersProvider>
             </ProtectedRoute>
           }
         />

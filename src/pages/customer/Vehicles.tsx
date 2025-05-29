@@ -1,146 +1,100 @@
 
 import React, { useState } from 'react';
-import { PlusCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/components/ui/use-toast';
-import { useVehicleManagement } from '@/hooks/vehicles';
-import { useVehicleImages } from '@/hooks/vehicles/useVehicleImages';
-import { Vehicle, NewVehicleData } from '@/types/vehicle';
+import { Plus } from 'lucide-react';
 import { VehiclesList } from '@/components/vehicles/VehiclesList';
 import { AddVehicleDialog } from '@/components/vehicles/AddVehicleDialog';
 import { EditVehicleDialog } from '@/components/vehicles/EditVehicleDialog';
+import { Vehicle } from '@/types/vehicle';
+import { useAuth } from '@/contexts/auth';
+import { useVehicleManagement } from '@/hooks/vehicles/useVehicleManagement';
 
-const CustomerVehicles = () => {
-  const { vehicles, loading, addVehicle, updateVehicle, removeVehicle } = useVehicleManagement();
-  const { uploadVehicleImage } = useVehicleImages();
-  const { toast } = useToast();
+const Vehicles = () => {
+  const { user } = useAuth();
+  const { vehicles, loading, createVehicle, deleteVehicle } = useVehicleManagement();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  
-  // Handle file upload
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, vehicleId: string) => {
-    if (!e.target.files || e.target.files.length === 0) return;
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+
+  const handleAddVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at'>) => {
+    if (!user) return;
     
-    const file = e.target.files[0];
-    try {
-      setUploadingImage(true);
-      await uploadVehicleImage(vehicleId, file);
-      toast({
-        title: "Image uploaded",
-        description: "Vehicle image has been uploaded successfully.",
-      });
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      toast({
-        variant: "destructive",
-        title: "Upload failed",
-        description: "There was a problem uploading your image.",
-      });
-    } finally {
-      setUploadingImage(false);
-    }
+    const newVehicleData = {
+      ...vehicleData,
+      owner_id: user.id,
+    };
+    
+    await createVehicle(newVehicleData);
+    setIsAddDialogOpen(false);
   };
-  
-  // Handle opening add dialog
-  const openAddDialog = () => {
-    setIsAddDialogOpen(true);
+
+  const handleEditVehicle = (vehicle: Vehicle) => {
+    setEditingVehicle(vehicle);
   };
-  
-  // Handle opening edit dialog
-  const openEditDialog = (vehicle: Vehicle) => {
-    setSelectedVehicle(vehicle);
-    setIsEditDialogOpen(true);
+
+  const handleRemoveVehicle = async (vehicleId: string) => {
+    await deleteVehicle(vehicleId);
   };
-  
-  // Handle adding a vehicle
-  const handleAddVehicle = async (data: NewVehicleData) => {
-    try {
-      await addVehicle(data);
-      toast({
-        title: "Vehicle added",
-        description: "Your vehicle has been added successfully.",
-      });
-    } catch (error) {
-      console.error('Error adding vehicle:', error);
-      toast({
-        variant: "destructive",
-        title: "Add failed",
-        description: "There was a problem adding your vehicle.",
-      });
-    }
-  };
-  
-  // Handle updating a vehicle
-  const handleUpdateVehicle = async (id: string, data: Partial<NewVehicleData>) => {
-    try {
-      await updateVehicle(id, data);
-      toast({
-        title: "Vehicle updated",
-        description: "Your vehicle has been updated successfully.",
-      });
-    } catch (error) {
-      console.error('Error updating vehicle:', error);
-      toast({
-        variant: "destructive",
-        title: "Update failed",
-        description: "There was a problem updating your vehicle.",
-      });
-    }
-  };
-  
-  // Handle deleting a vehicle
-  const handleDeleteVehicle = async (id: string) => {
-    try {
-      await removeVehicle(id);
-      toast({
-        title: "Vehicle removed",
-        description: "Your vehicle has been removed successfully.",
-      });
-    } catch (error) {
-      console.error('Error deleting vehicle:', error);
-      toast({
-        variant: "destructive",
-        title: "Delete failed",
-        description: "There was a problem removing your vehicle.",
-      });
-    }
-  };
-  
+
+  const userVehicles = vehicles.filter(vehicle => vehicle.owner_id === user?.id);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">My Vehicles</h1>
-        <Button onClick={openAddDialog} className="flex items-center gap-2">
-          <PlusCircle className="h-4 w-4" /> Add Vehicle
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">My Vehicles</h1>
+          <p className="text-muted-foreground">Manage your vehicle information</p>
+        </div>
+        <Button onClick={() => setIsAddDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Vehicle
         </Button>
       </div>
-      
-      <VehiclesList
-        vehicles={vehicles}
-        loading={loading}
-        onManage={openEditDialog}
-        onAddNew={openAddDialog}
-      />
-      
+
+      {userVehicles.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>No vehicles found</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">
+              You haven't added any vehicles yet. Add your first vehicle to get started.
+            </p>
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Your First Vehicle
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <VehiclesList
+          vehicles={userVehicles}
+          onEdit={handleEditVehicle}
+          onRemove={handleRemoveVehicle}
+        />
+      )}
+
       <AddVehicleDialog
         open={isAddDialogOpen}
         onOpenChange={setIsAddDialogOpen}
         onSubmit={handleAddVehicle}
       />
-      
+
       <EditVehicleDialog
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
-        vehicle={selectedVehicle}
-        onSubmit={handleUpdateVehicle}
-        onDelete={handleDeleteVehicle}
-        onImageUpload={handleFileUpload}
-        uploadingImage={uploadingImage}
+        vehicle={editingVehicle}
+        open={!!editingVehicle}
+        onOpenChange={(open) => !open && setEditingVehicle(null)}
       />
     </div>
   );
 };
 
-export default CustomerVehicles;
+export default Vehicles;
