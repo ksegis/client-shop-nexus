@@ -13,8 +13,8 @@ const AuthCallback = () => {
       console.log('Current URL:', window.location.href);
       console.log('Search params:', Object.fromEntries(searchParams.entries()));
       
-      // No specific callback handling - just redirect to shop login
-      console.log('No specific authentication parameters found, redirecting to shop login');
+      // Simple redirect to shop login - no specific callback handling needed
+      console.log('Redirecting to shop login');
       navigate('/shop-login');
     };
     
