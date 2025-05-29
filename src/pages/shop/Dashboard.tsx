@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { Skeleton } from '@/components/ui/skeleton';
+import AppointmentsOverview from '@/components/shop/dashboard/AppointmentsOverview';
 
 const Dashboard = () => {
   const { estimates, workOrders, inventory, customerCount, loading, error } = useDashboardData();
@@ -148,6 +149,12 @@ const Dashboard = () => {
             </Card>
           );
         })}
+      </div>
+
+      {/* Appointments Overview */}
+      <div>
+        <h2 className="text-lg font-semibold mb-4">Service Appointments</h2>
+        <AppointmentsOverview />
       </div>
 
       {/* Current Activity Section */}

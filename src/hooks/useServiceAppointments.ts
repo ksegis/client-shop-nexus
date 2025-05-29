@@ -22,15 +22,22 @@ export const useServiceAppointments = () => {
     queryKey: ['service-appointments'],
     queryFn: async () => {
       try {
+        console.log('Fetching all service appointments...');
         const { data, error } = await supabase
           .from('service_appointments')
           .select('*, profiles(first_name, last_name, email), vehicles(make, model, year)')
           .order('appointment_date', { ascending: true })
           .order('appointment_time', { ascending: true });
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error fetching appointments:', error);
+          throw error;
+        }
+        
+        console.log('Fetched appointments:', data);
         return data || [];
       } catch (error: any) {
+        console.error('Service appointments fetch error:', error);
         toast({
           variant: "destructive",
           title: "Error fetching appointments",
@@ -39,7 +46,7 @@ export const useServiceAppointments = () => {
         return [];
       }
     },
-    enabled: !!user && (user.user_metadata?.role === 'admin' || user.user_metadata?.role === 'staff'),
+    enabled: !!user,
   });
 
   // Fetch customer appointments (for customer portal)
@@ -95,6 +102,8 @@ export const useServiceAppointments = () => {
   const createAppointment = async (appointmentData: NewAppointmentData) => {
     setIsLoading(true);
     try {
+      console.log('Creating appointment with data:', appointmentData);
+      
       // For dev customer mode, return mock data
       if (isDevCustomer) {
         const mockAppointment = {
@@ -139,18 +148,25 @@ export const useServiceAppointments = () => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating appointment:', error);
+        throw error;
+      }
+
+      console.log('Appointment created successfully:', data);
 
       toast({
         title: "Appointment scheduled",
         description: "Your service appointment has been successfully scheduled.",
       });
 
+      // Invalidate both queries to refresh the data
       queryClient.invalidateQueries({ queryKey: ['service-appointments'] });
       queryClient.invalidateQueries({ queryKey: ['customer-appointments', user?.id] });
       
       return data;
     } catch (error: any) {
+      console.error('Create appointment error:', error);
       toast({
         variant: "destructive",
         title: "Failed to schedule appointment",

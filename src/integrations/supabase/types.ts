@@ -750,6 +750,8 @@ export type Database = {
         Row: {
           appointment_date: string
           appointment_time: string
+          contact_email: string | null
+          contact_phone: string | null
           created_at: string
           customer_id: string
           description: string | null
@@ -762,6 +764,8 @@ export type Database = {
         Insert: {
           appointment_date: string
           appointment_time: string
+          contact_email?: string | null
+          contact_phone?: string | null
           created_at?: string
           customer_id: string
           description?: string | null
@@ -774,6 +778,8 @@ export type Database = {
         Update: {
           appointment_date?: string
           appointment_time?: string
+          contact_email?: string | null
+          contact_phone?: string | null
           created_at?: string
           customer_id?: string
           description?: string | null
