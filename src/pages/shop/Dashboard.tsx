@@ -1,6 +1,8 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, CheckCircle, XCircle, Clock, AlertTriangle, Package, TrendingDown } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { useInventoryData } from '@/hooks/useInventoryData';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState } from 'react';
 import AppointmentsOverview from '@/components/shop/dashboard/AppointmentsOverview';
@@ -9,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 
 const Dashboard = () => {
   const { estimates, workOrders, inventory, customerCount, loading, error } = useDashboardData();
+  const { inventoryItems } = useInventoryData();
   const [selectedInventoryCard, setSelectedInventoryCard] = useState<string | null>(null);
 
   // Metric card icons mapping
@@ -116,33 +119,40 @@ const Dashboard = () => {
     rejected: 'negative',
   };
 
+  // Process inventory items for cards
+  const lowStockItems = inventoryItems.filter(item => 
+    item.quantity > 0 && item.quantity <= (item.reorder_level || 10)
+  );
+
+  const criticalAlerts = inventoryItems.filter(item => 
+    item.quantity === 0 || item.quantity < 5
+  );
+
   // Prepare inventory card data with detailed items
   const inventoryCards = [
     {
       id: 'total',
       title: 'Total Parts',
-      count: inventory.totalParts,
+      count: inventoryItems.length,
       icon: Package,
       color: 'border-gray-200',
-      items: inventory.items || []
+      items: inventoryItems
     },
     {
       id: 'lowStock',
       title: 'Low Stock Items',
-      count: inventory.lowStock,
+      count: lowStockItems.length,
       icon: TrendingDown,
-      color: inventory.lowStock > 0 ? 'border-orange-300' : 'border-gray-200',
-      items: (inventory.items || []).filter(item => 
-        item.quantity > 0 && item.quantity <= (item.min_stock || 10)
-      )
+      color: lowStockItems.length > 0 ? 'border-orange-300' : 'border-gray-200',
+      items: lowStockItems
     },
     {
       id: 'alerts',
       title: 'Critical Alerts',
-      count: inventory.alerts.length,
+      count: criticalAlerts.length,
       icon: AlertTriangle,
-      color: inventory.alerts.length > 0 ? 'border-red-300' : 'border-gray-200',
-      items: inventory.alerts
+      color: criticalAlerts.length > 0 ? 'border-red-300' : 'border-gray-200',
+      items: criticalAlerts
     }
   ];
 
@@ -298,9 +308,9 @@ const Dashboard = () => {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-medium">{item.part_name || item.name}</h4>
-                        {item.part_number && (
-                          <p className="text-sm text-gray-500">Part #: {item.part_number}</p>
+                        <h4 className="font-medium">{item.name}</h4>
+                        {item.sku && (
+                          <p className="text-sm text-gray-500">SKU: {item.sku}</p>
                         )}
                       </div>
                       <div className="text-right">
@@ -317,11 +327,11 @@ const Dashboard = () => {
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <p className="font-medium">Current Stock:</p>
-                        <p className="text-gray-600">{item.current_stock || item.quantity || 0}</p>
+                        <p className="text-gray-600">{item.quantity || 0}</p>
                       </div>
                       <div>
                         <p className="font-medium">Minimum Stock:</p>
-                        <p className="text-gray-600">{item.min_stock || item.reorder_level || 10}</p>
+                        <p className="text-gray-600">{item.reorder_level || 10}</p>
                       </div>
                     </div>
                     
