@@ -32,15 +32,13 @@ const Vehicles = () => {
     setEditingVehicle(vehicle);
   };
 
-  const handleUpdateVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at'>) => {
-    if (!editingVehicle) return;
-    await updateVehicle(editingVehicle.id, vehicleData);
+  const handleUpdateVehicle = async (id: string, vehicleData: Partial<Vehicle>) => {
+    await updateVehicle(id, vehicleData);
     setEditingVehicle(null);
   };
 
-  const handleDeleteVehicle = async () => {
-    if (!editingVehicle) return;
-    await deleteVehicle(editingVehicle.id);
+  const handleDeleteVehicle = async (id: string) => {
+    await deleteVehicle(id);
     setEditingVehicle(null);
   };
 
@@ -89,7 +87,9 @@ const Vehicles = () => {
       ) : (
         <VehiclesList
           vehicles={userVehicles}
-          onRemove={handleRemoveVehicle}
+          loading={false}
+          onManage={handleEditVehicle}
+          onAddNew={() => setIsAddDialogOpen(true)}
         />
       )}
 
