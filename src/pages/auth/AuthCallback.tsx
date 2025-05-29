@@ -18,8 +18,7 @@ const AuthCallback = () => {
       const error = searchParams.get('error');
       const errorCode = searchParams.get('error_code');
       const errorDescription = searchParams.get('error_description');
-      const accessToken = searchParams.get('access_token');
-      const refreshToken = searchParams.get('refresh_token');
+      const token = searchParams.get('token');
       const type = searchParams.get('type');
       
       if (error || errorCode) {
@@ -28,32 +27,35 @@ const AuthCallback = () => {
         return;
       }
       
-      // Handle password recovery flow with direct tokens in URL
-      if (type === 'recovery' && accessToken && refreshToken) {
-        console.log('[Supabase Auth] Password recovery with tokens detected');
+      // Handle password recovery flow with token from email
+      if (type === 'recovery' && token) {
+        console.log('[Supabase Auth] Password recovery with token detected');
         try {
-          const { data, error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
+          // Verify the recovery token and get session
+          const { data, error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'recovery'
           });
           
-          if (sessionError) {
-            console.error('[Supabase Auth] Session error:', sessionError);
-            navigate('/shop-login?error=auth_failed');
+          if (verifyError) {
+            console.error('[Supabase Auth] Token verification error:', verifyError);
+            navigate('/shop-login?error=invalid_reset_link');
             return;
           }
           
-          console.log('[Supabase Auth] Recovery session established, redirecting to reset password');
-          navigate('/auth/reset-password', { replace: true });
-          return;
+          if (data.session) {
+            console.log('[Supabase Auth] Recovery session established, redirecting to reset password');
+            navigate('/auth/reset-password', { replace: true });
+            return;
+          }
         } catch (error) {
-          console.error('[Supabase Auth] Recovery session exception:', error);
+          console.error('[Supabase Auth] Recovery token verification exception:', error);
           navigate('/shop-login?error=auth_failed');
           return;
         }
       }
       
-      // Handle recovery type without tokens (verify with current session)
+      // Handle recovery type without token (check current session)
       if (type === 'recovery') {
         console.log('[Supabase Auth] Password recovery type detected');
         try {

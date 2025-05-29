@@ -34,23 +34,43 @@ const App = () => {
   // Track user sessions
   useSessionTracking();
 
-  // Override any EGIS initialization
+  // Block any conflicting auth systems completely
   useEffect(() => {
-    console.log('[Supabase Auth] App component loading - blocking EGIS initialization');
+    console.log('[Supabase Auth] App component loading - blocking all conflicting auth systems');
     
-    // Block EGIS logging
+    // Block all EGIS and other auth system logs and operations
     const originalConsoleLog = console.log;
+    const originalConsoleWarn = console.warn;
+    const originalConsoleError = console.error;
+    
     console.log = (...args) => {
       const argString = args.join(' ');
-      if (argString.includes('EGIS Dynamics Auth') || argString.includes('[EGIS')) {
-        console.warn('[Supabase Auth] Blocked EGIS log:', ...args);
-        return;
+      if (argString.includes('EGIS') || argString.includes('[EGIS') || argString.includes('Missing code or state parameter')) {
+        return; // Completely block these logs
       }
       originalConsoleLog(...args);
     };
 
+    console.warn = (...args) => {
+      const argString = args.join(' ');
+      if (argString.includes('EGIS') || argString.includes('[EGIS')) {
+        return; // Block EGIS warnings
+      }
+      originalConsoleWarn(...args);
+    };
+
+    console.error = (...args) => {
+      const argString = args.join(' ');
+      if (argString.includes('EGIS') || argString.includes('[EGIS') || argString.includes('Missing code or state parameter')) {
+        return; // Block EGIS errors
+      }
+      originalConsoleError(...args);
+    };
+
     return () => {
       console.log = originalConsoleLog;
+      console.warn = originalConsoleWarn;
+      console.error = originalConsoleError;
     };
   }, []);
   
