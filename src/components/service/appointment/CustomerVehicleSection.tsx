@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,17 +28,12 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
   // Watch for form values to get current customer selection
   const selectedCustomerId = form.watch('customer_id') || customerId;
 
-  // Memoize the vehicles loaded callback to prevent infinite re-renders
-  const handleVehiclesLoaded = useCallback((vehicles: Vehicle[], contact: {email: string, phone: string | null}) => {
-    onVehiclesLoaded(vehicles, contact);
-  }, [onVehiclesLoaded]);
-
   // Fetch vehicles when customer changes
   useEffect(() => {
     const fetchVehicles = async () => {
       if (!selectedCustomerId) {
         setCustomerVehicles([]);
-        handleVehiclesLoaded([], { email: '', phone: null });
+        onVehiclesLoaded([], { email: '', phone: null });
         return;
       }
 
@@ -55,7 +50,7 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
         if (vehiclesError) {
           console.error('Error fetching vehicles:', vehiclesError);
           setCustomerVehicles([]);
-          handleVehiclesLoaded([], { email: '', phone: null });
+          onVehiclesLoaded([], { email: '', phone: null });
           return;
         }
         
@@ -72,7 +67,7 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
 
         if (customerError) {
           console.error('Error fetching customer data:', customerError);
-          handleVehiclesLoaded(vehicles, { email: '', phone: null });
+          onVehiclesLoaded(vehicles, { email: '', phone: null });
           return;
         }
         
@@ -81,18 +76,18 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
           phone: customerData?.phone || null
         };
 
-        handleVehiclesLoaded(vehicles, customerContact);
+        onVehiclesLoaded(vehicles, customerContact);
       } catch (error) {
         console.error('Error fetching customer data:', error);
         setCustomerVehicles([]);
-        handleVehiclesLoaded([], { email: '', phone: null });
+        onVehiclesLoaded([], { email: '', phone: null });
       } finally {
         setIsLoadingVehicles(false);
       }
     };
 
     fetchVehicles();
-  }, [selectedCustomerId, handleVehiclesLoaded]);
+  }, [selectedCustomerId]); // Only depend on selectedCustomerId
 
   // Handle customer change
   const handleCustomerChange = (customerId: string) => {
