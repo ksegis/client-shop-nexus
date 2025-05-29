@@ -82,9 +82,9 @@ const App = () => {
       (window as any).EGISAuth = null;
       (window as any).egisAuth = null;
       
-      // Block any auth-related global functions
+      // Block any auth-related global functions - fix the TypeScript error
       const originalSetTimeout = window.setTimeout;
-      window.setTimeout = (callback: any, delay?: number, ...args: any[]) => {
+      const blockedSetTimeout = (callback: TimerHandler, delay?: number, ...args: any[]): number => {
         if (typeof callback === 'function') {
           const callbackStr = callback.toString();
           if (callbackStr.includes('EGIS') || callbackStr.includes('egis')) {
@@ -94,6 +94,13 @@ const App = () => {
         }
         return originalSetTimeout(callback, delay, ...args);
       };
+      
+      // Use Object.defineProperty to properly override setTimeout
+      Object.defineProperty(window, 'setTimeout', {
+        value: blockedSetTimeout,
+        writable: true,
+        configurable: true
+      });
     }
 
     return () => {
