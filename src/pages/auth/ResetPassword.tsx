@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -44,32 +43,22 @@ const ResetPassword = () => {
     }
   });
 
-  // Check if we have valid reset tokens in the URL or session
+  // Check if we have valid reset tokens directly from the URL
   useEffect(() => {
     const checkTokens = async () => {
-      console.log('[Supabase Auth] Reset password page - checking tokens');
+      console.log('[Supabase Auth] Reset password page - checking tokens from URL');
       console.log('Current URL:', window.location.href);
       console.log('Search params:', Object.fromEntries(searchParams.entries()));
       
       try {
-        // First check if user is already authenticated (from callback)
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-          console.log('[Supabase Auth] User already has valid session for password reset');
-          setValidToken(true);
-          setCheckingToken(false);
-          return;
-        }
-        
-        // Check for tokens in URL parameters
+        // Get tokens directly from URL parameters
         const accessToken = searchParams.get('access_token');
         const refreshToken = searchParams.get('refresh_token');
         const type = searchParams.get('type');
         
         console.log('[Supabase Auth] URL tokens:', { accessToken: !!accessToken, refreshToken: !!refreshToken, type });
         
-        if (accessToken && refreshToken) {
+        if (accessToken && refreshToken && type === 'recovery') {
           console.log('[Supabase Auth] Setting session with URL tokens');
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -85,16 +74,11 @@ const ResetPassword = () => {
             });
             navigate('/shop-login');
           } else {
-            console.log('[Supabase Auth] Session set successfully');
+            console.log('[Supabase Auth] Session set successfully for password reset');
             setValidToken(true);
           }
-        } else if (type === 'recovery') {
-          // Handle recovery type without tokens (should redirect through callback)
-          console.log('[Supabase Auth] Recovery type without tokens - redirecting to callback');
-          navigate('/auth/callback?' + searchParams.toString());
-          return;
         } else {
-          console.log('[Supabase Auth] No valid tokens found');
+          console.log('[Supabase Auth] No valid reset tokens found in URL');
           toast({
             title: "Invalid reset link",
             description: "This password reset link is invalid or has expired.",

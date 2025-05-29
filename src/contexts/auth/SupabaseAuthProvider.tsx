@@ -182,8 +182,8 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
     try {
       console.log('[Supabase Auth] Requesting password reset for:', email);
       
-      // Use your correct domain for the redirect URL
-      const redirectTo = `https://CTC.MODWORX.ONLINE/auth/callback`;
+      // Use the direct URL to the reset password page
+      const redirectTo = `https://ctc.modworx.online/auth/reset-password`;
       console.log('[Supabase Auth] Reset redirect URL:', redirectTo);
       
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
