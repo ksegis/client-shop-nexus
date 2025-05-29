@@ -15,19 +15,20 @@ const AuthCallback = () => {
       console.log('Search params:', Object.fromEntries(searchParams.entries()));
       
       // Check for Supabase auth callback parameters
-      const code = searchParams.get('code');
       const error = searchParams.get('error');
-      const type = searchParams.get('type');
+      const errorCode = searchParams.get('error_code');
+      const errorDescription = searchParams.get('error_description');
       const accessToken = searchParams.get('access_token');
       const refreshToken = searchParams.get('refresh_token');
+      const type = searchParams.get('type');
       
-      if (error) {
-        console.error('[Supabase Auth] Callback error:', error);
-        navigate('/shop-login?error=' + encodeURIComponent(error));
+      if (error || errorCode) {
+        console.error('[Supabase Auth] Callback error:', { error, errorCode, errorDescription });
+        navigate('/shop-login?error=' + encodeURIComponent(errorDescription || error || 'Authentication failed'));
         return;
       }
       
-      // Handle password recovery flow with tokens
+      // Handle password recovery flow with direct tokens in URL
       if (type === 'recovery' && accessToken && refreshToken) {
         console.log('[Supabase Auth] Password recovery with tokens detected');
         try {
@@ -52,40 +53,42 @@ const AuthCallback = () => {
         }
       }
       
-      // Handle standard auth code exchange
-      if (code) {
-        console.log('[Supabase Auth] Auth code found, exchanging for session');
+      // Handle recovery type without tokens (verify with current session)
+      if (type === 'recovery') {
+        console.log('[Supabase Auth] Password recovery type detected');
         try {
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
           
-          if (exchangeError) {
-            console.error('[Supabase Auth] Code exchange error:', exchangeError);
-            navigate('/shop-login?error=auth_failed');
+          if (sessionError || !session) {
+            console.error('[Supabase Auth] No valid session for recovery:', sessionError);
+            navigate('/shop-login?error=invalid_reset_link');
             return;
           }
           
-          if (data.session) {
-            console.log('[Supabase Auth] Session established, redirecting to dashboard');
-            navigate('/shop/dashboard', { replace: true });
-            return;
-          }
+          console.log('[Supabase Auth] Valid recovery session found, redirecting to reset password');
+          navigate('/auth/reset-password', { replace: true });
+          return;
         } catch (error) {
-          console.error('[Supabase Auth] Code exchange exception:', error);
+          console.error('[Supabase Auth] Recovery session check exception:', error);
           navigate('/shop-login?error=auth_failed');
           return;
         }
       }
       
-      // Handle recovery type without tokens (redirect to reset form)
-      if (type === 'recovery') {
-        console.log('[Supabase Auth] Password recovery type detected, redirecting to reset form');
-        navigate('/auth/reset-password?' + searchParams.toString(), { replace: true });
-        return;
+      // Default fallback - check if user has a valid session
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log('[Supabase Auth] Valid session found, redirecting to dashboard');
+          navigate('/shop/dashboard', { replace: true });
+        } else {
+          console.log('[Supabase Auth] No session found, redirecting to login');
+          navigate('/shop-login');
+        }
+      } catch (error) {
+        console.error('[Supabase Auth] Session check error:', error);
+        navigate('/shop-login');
       }
-      
-      // Default fallback
-      console.log('[Supabase Auth] No specific callback handling needed, redirecting to login');
-      navigate('/shop-login');
     };
     
     handleAuthCallback();
