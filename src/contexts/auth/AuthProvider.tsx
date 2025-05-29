@@ -3,6 +3,7 @@ import { ReactNode, useState, useEffect } from 'react';
 import { AuthContext } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { getInvitationData, clearInvitationData } from '@/utils/invitationStorage';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -98,38 +99,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
       let firstName = 'Dev';
       let lastName = 'User';
       
-      // Check for specific admin email
-      if (email === 'kevin.shelton@egisdynamics.com') {
-        userRole = 'admin';
-        firstName = 'Kevin';
-        lastName = 'Shelton';
-      } else if (email === 'customer@example.com') {
-        userRole = 'admin';
-        firstName = 'Admin';
-        lastName = 'User';
+      // First check for invitation data - this takes highest priority
+      const inviteData = getInvitationData(email);
+      if (inviteData) {
+        userRole = inviteData.role;
+        firstName = inviteData.firstName;
+        lastName = inviteData.lastName;
+        console.log('Using invitation data for', email, 'with role:', userRole, 'name:', firstName, lastName);
+        
+        // Clear the invitation data after use to prevent reuse
+        clearInvitationData(email);
       } else {
-        // Check for role-based emails or existing invitation data
-        if (email.includes('admin')) {
+        // Fallback to hardcoded admin accounts
+        if (email === 'kevin.shelton@egisdynamics.com') {
+          userRole = 'admin';
+          firstName = 'Kevin';
+          lastName = 'Shelton';
+        } else if (email === 'customer@example.com') {
           userRole = 'admin';
           firstName = 'Admin';
           lastName = 'User';
-        } else if (email.includes('staff')) {
-          userRole = 'staff';
-          firstName = 'Staff';
-          lastName = 'Member';
-        }
-        
-        // Check localStorage for invitation data that might contain role and name info
-        const inviteData = localStorage.getItem(`invite_${email}`);
-        if (inviteData) {
-          try {
-            const parsed = JSON.parse(inviteData);
-            if (parsed.role) userRole = parsed.role;
-            if (parsed.firstName) firstName = parsed.firstName;
-            if (parsed.lastName) lastName = parsed.lastName;
-            console.log('Found invitation data for', email, 'with role:', userRole);
-          } catch (e) {
-            console.error('Error parsing invitation data:', e);
+        } else {
+          // Check for role-based emails as last resort
+          if (email.includes('admin')) {
+            userRole = 'admin';
+            firstName = 'Admin';
+            lastName = 'User';
+          } else if (email.includes('staff')) {
+            userRole = 'staff';
+            firstName = 'Staff';
+            lastName = 'Member';
           }
         }
       }
