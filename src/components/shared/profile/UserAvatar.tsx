@@ -17,11 +17,20 @@ export const UserAvatar = ({
   size = 'md',
   className = '',
 }: UserAvatarProps) => {
-  // Get initials from name
+  // Get initials from name, with better fallback logic
   const getInitials = () => {
-    const firstInitial = firstName?.[0] || '';
-    const lastInitial = lastName?.[0] || '';
-    return (firstInitial + lastInitial).toUpperCase() || 'U';
+    // Only use name initials if both first and last name are present and not empty
+    const hasValidFirstName = firstName && firstName.trim() !== '';
+    const hasValidLastName = lastName && lastName.trim() !== '';
+    
+    if (hasValidFirstName && hasValidLastName) {
+      const firstInitial = firstName.trim()[0] || '';
+      const lastInitial = lastName.trim()[0] || '';
+      return (firstInitial + lastInitial).toUpperCase();
+    }
+    
+    // Fall back to generic user icon
+    return 'U';
   };
 
   // Get avatar size class

@@ -20,16 +20,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const checkExistingUser = async () => {
       try {
-        // Check if there's already a dev user stored
+        // Clear any old dev user data that might have "Dev User" values
         const storedUser = localStorage.getItem('dev-customer-user');
         
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
-          console.log('Found existing dev user:', parsedUser.email);
           
-          // Set the user without forcing login
-          setUser(parsedUser);
-          setIsAuthenticated(true);
+          // If the stored user has the old "Dev User" values, clear it
+          if (parsedUser.user_metadata?.first_name === 'Dev' && 
+              parsedUser.user_metadata?.last_name === 'User') {
+            console.log('Clearing old dev user with "Dev User" values');
+            localStorage.removeItem('dev-customer-user');
+          } else {
+            console.log('Found existing dev user:', parsedUser.email);
+            setUser(parsedUser);
+            setIsAuthenticated(true);
+          }
         } else {
           console.log('No existing dev user found');
         }
@@ -37,6 +43,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setIsLoading(false);
       } catch (error) {
         console.error('Error checking existing user:', error);
+        // Clear corrupted data
+        localStorage.removeItem('dev-customer-user');
         setIsLoading(false);
       }
     };

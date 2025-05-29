@@ -8,9 +8,13 @@ export function UserDisplay() {
     return null;
   }
 
-  const displayName = profile.first_name && profile.last_name 
+  // Only show display name if both first and last name are present and not empty
+  const hasValidName = profile.first_name && profile.last_name && 
+                      profile.first_name.trim() !== '' && profile.last_name.trim() !== '';
+  
+  const displayName = hasValidName 
     ? `${profile.first_name} ${profile.last_name}`.trim()
-    : 'User';
+    : user.email; // Fall back to email if no valid name
 
   return (
     <div className="hidden md:flex flex-col text-right text-sm">
