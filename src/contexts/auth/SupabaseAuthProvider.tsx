@@ -1,12 +1,23 @@
+
 import { ReactNode, useState, useEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, handleAuthError, logAuthEvent } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
+interface Profile {
+  id: string;
+  role: string;
+  first_name?: string;
+  last_name?: string;
+  avatar_url?: string;
+  phone?: string;
+}
+
 interface SupabaseAuthContextType {
   user: User | null;
   session: Session | null;
+  profile: Profile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -25,9 +36,37 @@ interface SupabaseAuthProviderProps {
 export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Fetch user profile when user changes
+  useEffect(() => {
+    if (user) {
+      const fetchProfile = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+          if (error) {
+            console.error('Error fetching profile:', error);
+          } else {
+            setProfile(data);
+          }
+        } catch (error) {
+          console.error('Error fetching profile:', error);
+        }
+      };
+
+      fetchProfile();
+    } else {
+      setProfile(null);
+    }
+  }, [user]);
 
   useEffect(() => {
     console.log('[Supabase Auth] Initializing auth provider');
@@ -252,6 +291,7 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
   const value = {
     user,
     session,
+    profile,
     isLoading,
     isAuthenticated: !!user,
     signIn,
@@ -275,3 +315,5 @@ export function useSupabaseAuth() {
   }
   return context;
 }
+
+export type { SupabaseAuthContextType };
