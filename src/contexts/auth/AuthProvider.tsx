@@ -94,25 +94,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signIn: async (email, password) => {
       console.log('Signing in development user:', email);
       
-      // Check for invitation data first
+      // Check for invitation data - this is required for role and name info
       const inviteData = getInvitationData(email);
-      let userRole = 'customer';
-      let firstName = 'Dev';
-      let lastName = 'User';
       
-      if (inviteData) {
-        userRole = inviteData.role;
-        firstName = inviteData.firstName;
-        lastName = inviteData.lastName;
-        console.log('Using invitation data for', email, '- Role:', userRole, 'Name:', firstName, lastName);
-        
-        // Clear the invitation data after use
-        clearInvitationData(email);
-      } else {
-        console.log('No invitation data found for', email, '- using defaults');
+      if (!inviteData) {
+        console.log('No invitation data found for', email);
+        toast({
+          title: "Sign in failed",
+          description: "No invitation found for this email. Please contact an administrator.",
+          variant: "destructive"
+        });
+        return { success: false, error: new Error('No invitation found') };
       }
       
-      // Create a mock user object with the correct data
+      const { role: userRole, firstName, lastName } = inviteData;
+      console.log('Using invitation data for', email, '- Role:', userRole, 'Name:', firstName, lastName);
+      
+      // Clear the invitation data after use
+      clearInvitationData(email);
+      
+      // Create a mock user object with the invitation data
       const devUser = {
         id: 'dev-' + Date.now(),
         email,
