@@ -1,12 +1,16 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Clock, AlertTriangle, ChevronDown, ChevronUp, Package, TrendingDown, TrendingUp } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useState } from 'react';
 import AppointmentsOverview from '@/components/shop/dashboard/AppointmentsOverview';
 
 const Dashboard = () => {
   const { estimates, workOrders, inventory, customerCount, loading, error } = useDashboardData();
+  const [inventoryAlertsOpen, setInventoryAlertsOpen] = useState(false);
 
   // Metric card icons mapping
   const metricIcons = {
@@ -214,55 +218,117 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Bottom Section */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="col-span-1">
-          <CardHeader>
-            <CardTitle>Inventory Alerts</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {inventory.alerts.length > 0 ? (
-                inventory.alerts.map((alert) => (
-                  <div 
-                    key={alert.id} 
-                    className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-md"
-                  >
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4" />
-                      <p className="font-medium">{alert.part_name} is low on stock</p>
-                    </div>
-                    <p className="text-sm mt-1">
-                      Current: {alert.current_stock} / Minimum: {alert.min_stock}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-4 text-gray-500">
-                  No inventory alerts at this time
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Inventory Overview with Summary Cards */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Inventory Overview</h2>
+        
+        {/* Inventory Summary Cards */}
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Parts</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{inventory.totalParts}</div>
+              <p className="text-xs text-muted-foreground">Items in inventory</p>
+            </CardContent>
+          </Card>
 
-        <Card className="col-span-1">
-          <CardHeader>
-            <CardTitle>Employee Performance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-md text-blue-700">
-              <p className="font-medium">Staff Performance Summary</p>
-              <p className="text-sm mt-1">Employee performance data is now available in the Reports section</p>
-            </div>
-            <div className="mt-2 flex justify-center">
-              <a href="/shop/reports" className="text-sm text-blue-600 hover:underline">
-                View detailed performance reports →
-              </a>
-            </div>
-          </CardContent>
+          <Card className={inventory.lowStock > 0 ? "border-orange-300" : ""}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
+              <TrendingDown className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${inventory.lowStock > 0 ? "text-orange-600" : ""}`}>
+                {inventory.lowStock}
+              </div>
+              <p className="text-xs text-muted-foreground">Need attention</p>
+            </CardContent>
+          </Card>
+
+          <Card className={inventory.alerts.length > 0 ? "border-red-300" : ""}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Critical Alerts</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${inventory.alerts.length > 0 ? "text-red-600" : ""}`}>
+                {inventory.alerts.length}
+              </div>
+              <p className="text-xs text-muted-foreground">Require action</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Collapsible Inventory Alerts */}
+        <Card>
+          <Collapsible open={inventoryAlertsOpen} onOpenChange={setInventoryAlertsOpen}>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-red-500" />
+                    Inventory Alerts ({inventory.alerts.length})
+                  </CardTitle>
+                  <Button variant="ghost" size="sm">
+                    {inventoryAlertsOpen ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <div className="space-y-2">
+                  {inventory.alerts.length > 0 ? (
+                    inventory.alerts.map((alert) => (
+                      <div 
+                        key={alert.id} 
+                        className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-md"
+                      >
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4" />
+                          <p className="font-medium">{alert.part_name} is low on stock</p>
+                        </div>
+                        <p className="text-sm mt-1">
+                          Current: {alert.current_stock} / Minimum: {alert.min_stock}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-4 text-gray-500">
+                      No inventory alerts at this time
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
         </Card>
       </div>
+
+      {/* Employee Performance */}
+      <Card className="col-span-1">
+        <CardHeader>
+          <CardTitle>Employee Performance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-md text-blue-700">
+            <p className="font-medium">Staff Performance Summary</p>
+            <p className="text-sm mt-1">Employee performance data is now available in the Reports section</p>
+          </div>
+          <div className="mt-2 flex justify-center">
+            <a href="/shop/reports" className="text-sm text-blue-600 hover:underline">
+              View detailed performance reports →
+            </a>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
