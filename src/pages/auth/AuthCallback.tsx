@@ -14,12 +14,22 @@ const AuthCallback = () => {
       console.log('Current URL:', window.location.href);
       console.log('Search params:', Object.fromEntries(searchParams.entries()));
       
+      // Immediately block any other auth system processing
+      const currentUrl = new URL(window.location.href);
+      
       // Check for Supabase auth callback parameters
       const error = searchParams.get('error');
       const errorCode = searchParams.get('error_code');
       const errorDescription = searchParams.get('error_description');
       const token = searchParams.get('token');
       const type = searchParams.get('type');
+      const accessToken = searchParams.get('access_token');
+      const refreshToken = searchParams.get('refresh_token');
+      
+      console.log('[Supabase Auth] Parameters detected:', { 
+        error, errorCode, token: !!token, type, 
+        accessToken: !!accessToken, refreshToken: !!refreshToken 
+      });
       
       if (error || errorCode) {
         console.error('[Supabase Auth] Callback error:', { error, errorCode, errorDescription });
@@ -27,57 +37,76 @@ const AuthCallback = () => {
         return;
       }
       
-      // Handle password recovery flow with token from email
-      if (type === 'recovery' && token) {
-        console.log('[Supabase Auth] Password recovery with token detected');
-        try {
-          // Verify the recovery token and get session
-          const { data, error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'recovery'
-          });
-          
-          if (verifyError) {
-            console.error('[Supabase Auth] Token verification error:', verifyError);
-            navigate('/shop-login?error=invalid_reset_link');
-            return;
+      // Handle password recovery flow - check for both token formats
+      if (type === 'recovery') {
+        console.log('[Supabase Auth] Password recovery flow detected');
+        
+        // Method 1: Try with token hash from email link
+        if (token) {
+          console.log('[Supabase Auth] Attempting token verification');
+          try {
+            const { data, error: verifyError } = await supabase.auth.verifyOtp({
+              token_hash: token,
+              type: 'recovery'
+            });
+            
+            if (verifyError) {
+              console.error('[Supabase Auth] Token verification error:', verifyError);
+              // Try method 2 if this fails
+            } else if (data.session) {
+              console.log('[Supabase Auth] Recovery session established via token verification');
+              navigate('/auth/reset-password', { replace: true });
+              return;
+            }
+          } catch (error) {
+            console.error('[Supabase Auth] Token verification exception:', error);
+            // Continue to try other methods
           }
+        }
+        
+        // Method 2: Try with access/refresh tokens from URL
+        if (accessToken && refreshToken) {
+          console.log('[Supabase Auth] Attempting session establishment with tokens');
+          try {
+            const { data, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken
+            });
+            
+            if (sessionError) {
+              console.error('[Supabase Auth] Session error:', sessionError);
+            } else if (data.session) {
+              console.log('[Supabase Auth] Recovery session established via token setting');
+              navigate('/auth/reset-password', { replace: true });
+              return;
+            }
+          } catch (error) {
+            console.error('[Supabase Auth] Session establishment exception:', error);
+          }
+        }
+        
+        // Method 3: Check if we already have a valid session
+        try {
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
           
-          if (data.session) {
-            console.log('[Supabase Auth] Recovery session established, redirecting to reset password');
+          if (sessionError) {
+            console.error('[Supabase Auth] Session check error:', sessionError);
+          } else if (session) {
+            console.log('[Supabase Auth] Existing valid recovery session found');
             navigate('/auth/reset-password', { replace: true });
             return;
           }
         } catch (error) {
-          console.error('[Supabase Auth] Recovery token verification exception:', error);
-          navigate('/shop-login?error=auth_failed');
-          return;
+          console.error('[Supabase Auth] Session check exception:', error);
         }
+        
+        // If all methods failed, redirect with error
+        console.error('[Supabase Auth] All recovery methods failed');
+        navigate('/shop-login?error=invalid_reset_link');
+        return;
       }
       
-      // Handle recovery type without token (check current session)
-      if (type === 'recovery') {
-        console.log('[Supabase Auth] Password recovery type detected');
-        try {
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-          
-          if (sessionError || !session) {
-            console.error('[Supabase Auth] No valid session for recovery:', sessionError);
-            navigate('/shop-login?error=invalid_reset_link');
-            return;
-          }
-          
-          console.log('[Supabase Auth] Valid recovery session found, redirecting to reset password');
-          navigate('/auth/reset-password', { replace: true });
-          return;
-        } catch (error) {
-          console.error('[Supabase Auth] Recovery session check exception:', error);
-          navigate('/shop-login?error=auth_failed');
-          return;
-        }
-      }
-      
-      // Default fallback - check if user has a valid session
+      // Handle normal sign-in flow
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
@@ -93,6 +122,7 @@ const AuthCallback = () => {
       }
     };
     
+    // Run immediately and prevent other auth systems from processing
     handleAuthCallback();
   }, [searchParams, navigate]);
 

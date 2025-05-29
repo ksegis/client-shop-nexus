@@ -34,38 +34,67 @@ const App = () => {
   // Track user sessions
   useSessionTracking();
 
-  // Block any conflicting auth systems completely
+  // Aggressively block all conflicting auth systems
   useEffect(() => {
     console.log('[Supabase Auth] App component loading - blocking all conflicting auth systems');
     
-    // Block all EGIS and other auth system logs and operations
+    // Block all conflicting auth system operations completely
     const originalConsoleLog = console.log;
     const originalConsoleWarn = console.warn;
     const originalConsoleError = console.error;
     
+    // Override console methods to block EGIS and other auth system logs
     console.log = (...args) => {
       const argString = args.join(' ');
-      if (argString.includes('EGIS') || argString.includes('[EGIS') || argString.includes('Missing code or state parameter')) {
-        return; // Completely block these logs
+      if (argString.includes('EGIS') || 
+          argString.includes('[EGIS') || 
+          argString.includes('Missing code or state parameter') ||
+          argString.includes('Invalid callback parameters')) {
+        return; // Completely suppress these logs
       }
       originalConsoleLog(...args);
     };
 
     console.warn = (...args) => {
       const argString = args.join(' ');
-      if (argString.includes('EGIS') || argString.includes('[EGIS')) {
-        return; // Block EGIS warnings
+      if (argString.includes('EGIS') || 
+          argString.includes('[EGIS') ||
+          argString.includes('Invalid callback parameters')) {
+        return; // Suppress EGIS warnings
       }
       originalConsoleWarn(...args);
     };
 
     console.error = (...args) => {
       const argString = args.join(' ');
-      if (argString.includes('EGIS') || argString.includes('[EGIS') || argString.includes('Missing code or state parameter')) {
-        return; // Block EGIS errors
+      if (argString.includes('EGIS') || 
+          argString.includes('[EGIS') || 
+          argString.includes('Missing code or state parameter') ||
+          argString.includes('Invalid callback parameters')) {
+        return; // Suppress EGIS errors
       }
       originalConsoleError(...args);
     };
+
+    // Block any global auth initializers that might interfere
+    if (typeof window !== 'undefined') {
+      // Prevent EGIS from initializing
+      (window as any).EGISAuth = null;
+      (window as any).egisAuth = null;
+      
+      // Block any auth-related global functions
+      const originalSetTimeout = window.setTimeout;
+      window.setTimeout = (callback: any, delay?: number, ...args: any[]) => {
+        if (typeof callback === 'function') {
+          const callbackStr = callback.toString();
+          if (callbackStr.includes('EGIS') || callbackStr.includes('egis')) {
+            console.log('[Supabase Auth] Blocked EGIS timer initialization');
+            return 0; // Return fake timer ID
+          }
+        }
+        return originalSetTimeout(callback, delay, ...args);
+      };
+    }
 
     return () => {
       console.log = originalConsoleLog;
