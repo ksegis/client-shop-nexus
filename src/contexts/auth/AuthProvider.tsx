@@ -217,9 +217,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('Email for password reset:', email);
       
       try {
-        // In development mode, we'll use Supabase's password reset
+        // Use the correct redirect URL that points directly to our reset password page
+        const redirectTo = `${window.location.origin}/auth/reset-password`;
+        console.log('Using redirect URL:', redirectTo);
+        
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth/reset-password`
+          redirectTo: redirectTo
         });
         
         if (error) {
