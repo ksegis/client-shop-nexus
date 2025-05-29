@@ -24,29 +24,27 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
   const { customers, isLoading: isLoadingCustomers } = useCustomers();
   const [customerVehicles, setCustomerVehicles] = useState<Vehicle[]>([]);
   const [isLoadingVehicles, setIsLoadingVehicles] = useState(false);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(customerId);
 
   // Watch for form values to get current customer selection
-  const formCustomerId = form.watch('customer_id');
-  const currentCustomerId = selectedCustomerId || formCustomerId;
+  const selectedCustomerId = form.watch('customer_id') || customerId;
 
   // Fetch vehicles when customer changes
   useEffect(() => {
     const fetchVehicles = async () => {
-      if (!currentCustomerId) {
+      if (!selectedCustomerId) {
         setCustomerVehicles([]);
         onVehiclesLoaded([], { email: '', phone: null });
         return;
       }
 
-      console.log('Fetching vehicles for customer:', currentCustomerId);
+      console.log('Fetching vehicles for customer:', selectedCustomerId);
       setIsLoadingVehicles(true);
       try {
         // Fetch vehicles
         const { data: vehiclesData, error: vehiclesError } = await supabase
           .from('vehicles')
           .select('*')
-          .eq('owner_id', currentCustomerId);
+          .eq('owner_id', selectedCustomerId);
         
         if (vehiclesError) {
           console.error('Error fetching vehicles:', vehiclesError);
@@ -61,7 +59,7 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
         const { data: customerData, error: customerError } = await supabase
           .from('profiles')
           .select('email, phone')
-          .eq('id', currentCustomerId)
+          .eq('id', selectedCustomerId)
           .single();
 
         if (customerError) {
@@ -85,12 +83,11 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
     };
 
     fetchVehicles();
-  }, [currentCustomerId, form, onVehiclesLoaded]);
+  }, [selectedCustomerId, onVehiclesLoaded]);
 
   // Handle customer change
   const handleCustomerChange = (customerId: string) => {
     console.log('Customer changed to:', customerId);
-    setSelectedCustomerId(customerId);
     onCustomerChange(customerId);
     // Clear vehicle selection when customer changes
     form.setValue('vehicle_id', '');
@@ -141,12 +138,12 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
             <Select 
               onValueChange={field.onChange}
               value={field.value}
-              disabled={!currentCustomerId || isLoadingVehicles}
+              disabled={!selectedCustomerId || isLoadingVehicles}
             >
               <FormControl>
                 <SelectTrigger>
                   <SelectValue placeholder={
-                    !currentCustomerId 
+                    !selectedCustomerId 
                       ? "Select customer first" 
                       : isLoadingVehicles 
                         ? "Loading vehicles..." 
