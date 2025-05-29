@@ -1,4 +1,3 @@
-
 import { ReactNode, useState, useEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, handleAuthError, logAuthEvent } from '@/integrations/supabase/client';
@@ -192,25 +191,27 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
 
       if (error) {
         const errorMessage = handleAuthError(error);
+        console.error('[Supabase Auth] Reset password error:', error);
         // Still show success message for security (don't reveal if email exists)
         toast({
           title: "Password reset requested",
-          description: "If your email address is registered with us, you will receive password reset instructions within a few minutes.",
+          description: "If your email address is registered with us, you will receive password reset instructions within a few minutes. Please check your email and click the reset link.",
         });
         return { success: true }; // Always return success for security
       }
 
       toast({
         title: "Password reset requested",
-        description: "If your email address is registered with us, you will receive password reset instructions within a few minutes.",
+        description: "If your email address is registered with us, you will receive password reset instructions within a few minutes. Please check your email and click the reset link.",
       });
 
       return { success: true };
     } catch (error: any) {
+      console.error('[Supabase Auth] Reset password exception:', error);
       // Still show success message for security
       toast({
-        title: "Password reset requested",
-        description: "If your email address is registered with us, you will receive password reset instructions within a few minutes.",
+        title: "Password reset requested", 
+        description: "If your email address is registered with us, you will receive password reset instructions within a few minutes. Please check your email and click the reset link.",
       });
       return { success: true };
     }
