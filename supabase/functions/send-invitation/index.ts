@@ -17,7 +17,7 @@ const handler = async (req: Request): Promise<Response> => {
 
   try {
     const invitationRequest: InvitationRequest = await req.json();
-    const result = processInvitation(invitationRequest);
+    const result = await processInvitation(invitationRequest);
 
     return new Response(
       JSON.stringify(result), 
