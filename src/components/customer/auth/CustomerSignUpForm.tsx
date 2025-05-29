@@ -42,20 +42,28 @@ const CustomerSignUpForm = () => {
     setLoading(true);
     
     try {
-      // Call signUp with separate arguments to match the expected signature
-      await signUp(email, password, firstName, lastName);
+      // Call signUp with correct number of arguments
+      const result = await signUp(email, password, firstName, lastName);
       
-      toast({
-        title: "Account created",
-        description: "Please check your email to confirm your account",
-      });
-      
-      // Clear form
-      setEmail('');
-      setPassword('');
-      setFirstName('');
-      setLastName('');
-      
+      if (result.success) {
+        toast({
+          title: "Account created",
+          description: "Please check your email to confirm your account",
+        });
+        
+        // Clear form
+        setEmail('');
+        setPassword('');
+        setFirstName('');
+        setLastName('');
+      } else {
+        setError(result.error || "An unexpected error occurred");
+        toast({
+          title: "Sign up failed",
+          description: result.error || "An unexpected error occurred",
+          variant: "destructive",
+        });
+      }
     } catch (error: any) {
       console.error("CustomerSignUp error:", error);
       setError(error.message || "An unexpected error occurred");

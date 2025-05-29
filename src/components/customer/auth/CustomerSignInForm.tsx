@@ -46,7 +46,7 @@ const CustomerSignInForm = () => {
         toast({
           variant: "destructive",
           title: "Login failed",
-          description: result.error?.message || "Authentication failed"
+          description: result.error || "Authentication failed"
         });
       } else {
         console.log('Customer sign in successful, redirection should occur in signIn function');

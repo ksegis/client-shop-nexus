@@ -52,7 +52,8 @@ const SignInForm = () => {
     console.log('Attempting to sign in with:', values.email);
     
     try {
-      const result = await signIn(values.email, values.password, values.rememberMe);
+      // signIn only takes email and password, rememberMe is optional
+      const result = await signIn(values.email, values.password);
       
       // If login was not successful, reset password field
       if (!result.success) {
@@ -61,7 +62,7 @@ const SignInForm = () => {
         toast({
           variant: "destructive",
           title: "Sign in failed",
-          description: result.error?.message || "Authentication error occurred.",
+          description: result.error || "Authentication error occurred.",
         });
       } else {
         console.log("Sign in successful, redirection should happen in signIn function");

@@ -1,9 +1,9 @@
-
 import { ReactNode, useState, useEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, handleAuthError, logAuthEvent } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import type { UserRole } from './types';
 
 interface Profile {
   id: string;
@@ -20,11 +20,13 @@ interface SupabaseAuthContextType {
   profile: Profile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (email: string, password: string, metadata?: any) => Promise<{ success: boolean; error?: string }>;
+  portalType: 'shop' | 'customer' | null;
+  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, firstName?: string, lastName?: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<{ success: boolean; error?: string }>;
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (password: string) => Promise<{ success: boolean; error?: string }>;
+  validateAccess: (allowedRoles?: UserRole[]) => boolean;
 }
 
 const SupabaseAuthContext = createContext<SupabaseAuthContextType | undefined>(undefined);
@@ -40,6 +42,16 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Determine portal type based on user role
+  const portalType = profile?.role === 'customer' ? 'customer' : 'shop';
+
+  // Validate access based on user role
+  const validateAccess = (allowedRoles?: UserRole[]) => {
+    if (!allowedRoles || allowedRoles.length === 0) return true;
+    if (!profile?.role) return false;
+    return allowedRoles.includes(profile.role as UserRole);
+  };
 
   // Fetch user profile when user changes
   useEffect(() => {
@@ -115,7 +127,7 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, rememberMe?: boolean) => {
     try {
       console.log('[Supabase Auth] Signing in user:', email);
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -152,9 +164,13 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
     }
   };
 
-  const signUp = async (email: string, password: string, metadata?: any) => {
+  const signUp = async (email: string, password: string, firstName?: string, lastName?: string) => {
     try {
       console.log('[Supabase Auth] Signing up user:', email);
+      const metadata: any = {};
+      if (firstName) metadata.first_name = firstName;
+      if (lastName) metadata.last_name = lastName;
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -294,11 +310,13 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
     profile,
     isLoading,
     isAuthenticated: !!user,
+    portalType,
     signIn,
     signUp,
     signOut,
     resetPassword,
     updatePassword,
+    validateAccess,
   };
 
   return (
