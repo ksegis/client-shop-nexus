@@ -27,23 +27,26 @@ export const RevenueChart = ({ data }: RevenueChartProps) => {
   const [revenueView, setRevenueView] = useState("revenue");
 
   return (
-    <Card className="col-span-2">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle>Revenue Overview</CardTitle>
-        <div className="flex items-center space-x-2">
+    <Card className="col-span-2 shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
+      <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-gray-100">
+        <CardTitle className="text-xl font-semibold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+          Revenue Overview
+        </CardTitle>
+        <div className="flex items-center space-x-3">
           <ToggleGroup 
             type="single" 
             value={chartType} 
             onValueChange={(value) => value && setChartType(value)}
             size="sm"
+            className="bg-gray-100 rounded-lg p-1"
           >
-            <ToggleGroupItem value="bar" aria-label="Bar chart">
+            <ToggleGroupItem value="bar" className="data-[state=on]:bg-white data-[state=on]:shadow-sm">
               Bar
             </ToggleGroupItem>
-            <ToggleGroupItem value="line" aria-label="Line chart">
+            <ToggleGroupItem value="line" className="data-[state=on]:bg-white data-[state=on]:shadow-sm">
               Line
             </ToggleGroupItem>
-            <ToggleGroupItem value="area" aria-label="Area chart">
+            <ToggleGroupItem value="area" className="data-[state=on]:bg-white data-[state=on]:shadow-sm">
               Area
             </ToggleGroupItem>
           </ToggleGroup>
@@ -53,85 +56,161 @@ export const RevenueChart = ({ data }: RevenueChartProps) => {
             value={revenueView} 
             onValueChange={(value) => value && setRevenueView(value)}
             size="sm"
+            className="bg-gray-100 rounded-lg p-1"
           >
-            <ToggleGroupItem value="revenue" aria-label="Show revenue">
+            <ToggleGroupItem value="revenue" className="data-[state=on]:bg-white data-[state=on]:shadow-sm">
               Revenue
             </ToggleGroupItem>
-            <ToggleGroupItem value="expenses" aria-label="Show expenses">
+            <ToggleGroupItem value="expenses" className="data-[state=on]:bg-white data-[state=on]:shadow-sm">
               Expenses
             </ToggleGroupItem>
-            <ToggleGroupItem value="profit" aria-label="Show profit">
+            <ToggleGroupItem value="profit" className="data-[state=on]:bg-white data-[state=on]:shadow-sm">
               Profit
             </ToggleGroupItem>
-            <ToggleGroupItem value="all" aria-label="Show all">
+            <ToggleGroupItem value="all" className="data-[state=on]:bg-white data-[state=on]:shadow-sm">
               All
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <ChartContainer 
           config={chartConfig} 
           className="aspect-[4/2] w-full"
         >
           <ResponsiveContainer width="100%" height="100%">
             {chartType === 'bar' ? (
-              <BarChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
+              <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.9}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.6}/>
+                  </linearGradient>
+                  <linearGradient id="expensesGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.9}/>
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0.6}/>
+                  </linearGradient>
+                  <linearGradient id="profitGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.9}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.6}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis 
+                  dataKey="month" 
+                  tick={{ fontSize: 12, fill: '#6b7280' }}
+                  axisLine={{ stroke: '#d1d5db' }}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12, fill: '#6b7280' }}
+                  axisLine={{ stroke: '#d1d5db' }}
+                />
                 <ChartTooltip
                   content={<ChartTooltipContent />}
+                  cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }}
                 />
                 <Legend />
                 {(revenueView === 'revenue' || revenueView === 'all') && (
-                  <Bar dataKey="revenue" name="Revenue" />
+                  <Bar 
+                    dataKey="revenue" 
+                    name="Revenue" 
+                    fill="url(#revenueGrad)"
+                    radius={[4, 4, 0, 0]}
+                  />
                 )}
                 {(revenueView === 'expenses' || revenueView === 'all') && (
-                  <Bar dataKey="expenses" name="Expenses" />
+                  <Bar 
+                    dataKey="expenses" 
+                    name="Expenses" 
+                    fill="url(#expensesGrad)"
+                    radius={[4, 4, 0, 0]}
+                  />
                 )}
                 {(revenueView === 'profit' || revenueView === 'all') && (
-                  <Bar dataKey="profit" name="Profit" />
+                  <Bar 
+                    dataKey="profit" 
+                    name="Profit" 
+                    fill="url(#profitGrad)"
+                    radius={[4, 4, 0, 0]}
+                  />
                 )}
               </BarChart>
             ) : chartType === 'line' ? (
-              <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
+              <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis 
+                  dataKey="month" 
+                  tick={{ fontSize: 12, fill: '#6b7280' }}
+                  axisLine={{ stroke: '#d1d5db' }}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12, fill: '#6b7280' }}
+                  axisLine={{ stroke: '#d1d5db' }}
+                />
                 <ChartTooltip
                   content={<ChartTooltipContent />}
                 />
                 <Legend />
                 {(revenueView === 'revenue' || revenueView === 'all') && (
-                  <Line type="monotone" dataKey="revenue" activeDot={{ r: 8 }} name="Revenue" />
+                  <Line 
+                    type="monotone" 
+                    dataKey="revenue" 
+                    stroke="#3b82f6" 
+                    strokeWidth={3}
+                    dot={{ fill: '#3b82f6', strokeWidth: 2, r: 6 }}
+                    activeDot={{ r: 8, stroke: '#3b82f6', strokeWidth: 2 }} 
+                    name="Revenue" 
+                  />
                 )}
                 {(revenueView === 'expenses' || revenueView === 'all') && (
-                  <Line type="monotone" dataKey="expenses" activeDot={{ r: 8 }} name="Expenses" />
+                  <Line 
+                    type="monotone" 
+                    dataKey="expenses" 
+                    stroke="#ef4444" 
+                    strokeWidth={3}
+                    dot={{ fill: '#ef4444', strokeWidth: 2, r: 6 }}
+                    activeDot={{ r: 8, stroke: '#ef4444', strokeWidth: 2 }} 
+                    name="Expenses" 
+                  />
                 )}
                 {(revenueView === 'profit' || revenueView === 'all') && (
-                  <Line type="monotone" dataKey="profit" activeDot={{ r: 8 }} name="Profit" />
+                  <Line 
+                    type="monotone" 
+                    dataKey="profit" 
+                    stroke="#10b981" 
+                    strokeWidth={3}
+                    dot={{ fill: '#10b981', strokeWidth: 2, r: 6 }}
+                    activeDot={{ r: 8, stroke: '#10b981', strokeWidth: 2 }} 
+                    name="Profit" 
+                  />
                 )}
               </LineChart>
             ) : (
-              <AreaChart data={data}>
+              <AreaChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-revenue)" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="var(--color-revenue)" stopOpacity={0.1}/>
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
                   </linearGradient>
                   <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-expenses)" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="var(--color-expenses)" stopOpacity={0.1}/>
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
                   </linearGradient>
                   <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-profit)" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="var(--color-profit)" stopOpacity={0.1}/>
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis 
+                  dataKey="month" 
+                  tick={{ fontSize: 12, fill: '#6b7280' }}
+                  axisLine={{ stroke: '#d1d5db' }}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12, fill: '#6b7280' }}
+                  axisLine={{ stroke: '#d1d5db' }}
+                />
                 <ChartTooltip
                   content={<ChartTooltipContent />}
                 />
@@ -140,7 +219,8 @@ export const RevenueChart = ({ data }: RevenueChartProps) => {
                   <Area 
                     type="monotone" 
                     dataKey="revenue" 
-                    stroke="var(--color-revenue)" 
+                    stroke="#3b82f6" 
+                    strokeWidth={2}
                     fillOpacity={1} 
                     fill="url(#colorRevenue)"
                     name="Revenue"
@@ -150,7 +230,8 @@ export const RevenueChart = ({ data }: RevenueChartProps) => {
                   <Area 
                     type="monotone" 
                     dataKey="expenses" 
-                    stroke="var(--color-expenses)" 
+                    stroke="#ef4444" 
+                    strokeWidth={2}
                     fillOpacity={1} 
                     fill="url(#colorExpenses)"
                     name="Expenses"
@@ -160,7 +241,8 @@ export const RevenueChart = ({ data }: RevenueChartProps) => {
                   <Area 
                     type="monotone" 
                     dataKey="profit" 
-                    stroke="var(--color-profit)" 
+                    stroke="#10b981" 
+                    strokeWidth={2}
                     fillOpacity={1} 
                     fill="url(#colorProfit)"
                     name="Profit"
