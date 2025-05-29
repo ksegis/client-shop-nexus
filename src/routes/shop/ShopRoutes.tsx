@@ -4,6 +4,7 @@ import Layout from "@/components/layout/Layout";
 import Dashboard from "@/pages/shop/Dashboard";
 import Profile from "@/pages/shop/Profile";
 import Customers from "@/pages/shop/Customers";
+import VehicleManagement from "@/pages/shop/VehicleManagement";
 import Estimates from "@/pages/shop/Estimates";
 import Inventory from "@/pages/shop/Inventory";
 import Parts from "@/pages/shop/Parts";
@@ -55,6 +56,16 @@ const ShopRoutes = () => {
           element={
             <ProtectedRoute>
               <Customers />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Vehicle management */}
+        <Route
+          path="vehicles"
+          element={
+            <ProtectedRoute>
+              <VehicleManagement />
             </ProtectedRoute>
           }
         />

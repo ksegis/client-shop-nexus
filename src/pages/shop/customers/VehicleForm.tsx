@@ -3,26 +3,27 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { useVehicleManagement } from '@/hooks/vehicles/useVehicleManagement';
-import { Vehicle, VehicleType } from '@/types/vehicle';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { Vehicle } from '@/types/vehicle';
+import { useVehicleManagement } from '@/hooks/vehicles/useVehicleManagement';
+import { useCustomers } from './CustomersContext';
 
-const vehicleSchema = z.object({
-  make: z.string().min(1, "Make is required"),
-  model: z.string().min(1, "Model is required"),
-  year: z.number().min(1900, "Invalid year").max(new Date().getFullYear() + 1, "Year cannot be in the future"),
+const vehicleFormSchema = z.object({
+  make: z.string().min(1, 'Make is required'),
+  model: z.string().min(1, 'Model is required'),
+  year: z.number().min(1900, 'Year must be valid').max(new Date().getFullYear() + 1, 'Year cannot be in the future'),
   color: z.string().optional(),
   vin: z.string().optional(),
   license_plate: z.string().optional(),
-  vehicle_type: z.enum(['car', 'truck', 'motorcycle', 'other'] as const),
-  mileage: z.number().min(0, "Mileage cannot be negative").optional(),
+  vehicle_type: z.enum(['car', 'truck', 'motorcycle', 'other']),
+  owner_id: z.string().min(1, 'Customer is required'),
 });
 
-type VehicleFormValues = z.infer<typeof vehicleSchema>;
+type VehicleFormData = z.infer<typeof vehicleFormSchema>;
 
 interface VehicleFormProps {
   vehicle: Vehicle | null;
@@ -32,234 +33,174 @@ interface VehicleFormProps {
 }
 
 export function VehicleForm({ vehicle, customerId, onCancel, onSuccess }: VehicleFormProps) {
-  const { addVehicle, updateVehicle } = useVehicleManagement();
+  const { customers } = useCustomers();
+  const { createVehicle, updateVehicle } = useVehicleManagement();
   const { toast } = useToast();
   const isEditing = !!vehicle;
 
-  const form = useForm<VehicleFormValues>({
-    resolver: zodResolver(vehicleSchema),
-    defaultValues: isEditing && vehicle
-      ? {
-          make: vehicle.make || '',
-          model: vehicle.model || '',
-          year: vehicle.year || new Date().getFullYear(),
-          color: vehicle.color || '',
-          vin: vehicle.vin || '',
-          license_plate: vehicle.license_plate || '',
-          vehicle_type: vehicle.vehicle_type || 'car',
-          mileage: vehicle.mileage || 0,
-        }
-      : {
-          make: '',
-          model: '',
-          year: new Date().getFullYear(),
-          color: '',
-          vin: '',
-          license_plate: '',
-          vehicle_type: 'car' as VehicleType,
-          mileage: 0,
-        },
+  const form = useForm<VehicleFormData>({
+    resolver: zodResolver(vehicleFormSchema),
+    defaultValues: {
+      make: vehicle?.make || '',
+      model: vehicle?.model || '',
+      year: vehicle?.year || new Date().getFullYear(),
+      color: vehicle?.color || '',
+      vin: vehicle?.vin || '',
+      license_plate: vehicle?.license_plate || '',
+      vehicle_type: vehicle?.vehicle_type || 'car',
+      owner_id: vehicle?.owner_id || customerId,
+    },
   });
 
-  const onSubmit = async (values: VehicleFormValues) => {
+  const onSubmit = async (data: VehicleFormData) => {
     try {
       if (isEditing && vehicle) {
-        await updateVehicle(vehicle.id, {
-          make: values.make,
-          model: values.model,
-          year: values.year,
-          color: values.color,
-          vin: values.vin,
-          license_plate: values.license_plate,
-          vehicle_type: values.vehicle_type,
-          mileage: values.mileage || 0,
-        });
+        await updateVehicle(vehicle.id, data);
         toast({
           title: "Success",
           description: "Vehicle updated successfully",
         });
       } else {
-        await addVehicle({
-          make: values.make,
-          model: values.model,
-          year: values.year,
-          color: values.color,
-          vin: values.vin,
-          license_plate: values.license_plate,
-          vehicle_type: values.vehicle_type,
-          mileage: values.mileage || 0,
-        }, customerId);
+        await createVehicle(data);
         toast({
           title: "Success",
-          description: "Vehicle added successfully",
+          description: "Vehicle created successfully",
         });
       }
-      form.reset();
       onSuccess();
     } catch (error) {
       console.error('Error saving vehicle:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to save vehicle",
+        description: `Failed to ${isEditing ? 'update' : 'create'} vehicle`,
       });
     }
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2">
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="make"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Make</FormLabel>
-                <FormControl>
-                  <Input placeholder="Toyota, Ford, etc." {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="make">Make</Label>
+          <Input
+            id="make"
+            {...form.register('make')}
+            placeholder="Enter vehicle make"
           />
-          <FormField
-            control={form.control}
-            name="model"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Model</FormLabel>
-                <FormControl>
-                  <Input placeholder="Camry, F-150, etc." {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          {form.formState.errors.make && (
+            <p className="text-sm text-red-600">{form.formState.errors.make.message}</p>
+          )}
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="model">Model</Label>
+          <Input
+            id="model"
+            {...form.register('model')}
+            placeholder="Enter vehicle model"
+          />
+          {form.formState.errors.model && (
+            <p className="text-sm text-red-600">{form.formState.errors.model.message}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="year">Year</Label>
+          <Input
+            id="year"
+            type="number"
+            {...form.register('year', { valueAsNumber: true })}
+            placeholder="Enter year"
+          />
+          {form.formState.errors.year && (
+            <p className="text-sm text-red-600">{form.formState.errors.year.message}</p>
+          )}
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="color">Color</Label>
+          <Input
+            id="color"
+            {...form.register('color')}
+            placeholder="Enter vehicle color"
           />
         </div>
+      </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="year"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Year</FormLabel>
-                <FormControl>
-                  <Input 
-                    type="number" 
-                    placeholder="2023" 
-                    {...field}
-                    onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="color"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Color</FormLabel>
-                <FormControl>
-                  <Input placeholder="Red, Blue, etc." {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+      <div className="space-y-2">
+        <Label htmlFor="vehicle_type">Vehicle Type</Label>
+        <Select
+          value={form.watch('vehicle_type')}
+          onValueChange={(value) => form.setValue('vehicle_type', value as any)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select vehicle type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="car">Car</SelectItem>
+            <SelectItem value="truck">Truck</SelectItem>
+            <SelectItem value="motorcycle">Motorcycle</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="owner_id">Customer</Label>
+        <Select
+          value={form.watch('owner_id')}
+          onValueChange={(value) => form.setValue('owner_id', value)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select customer" />
+          </SelectTrigger>
+          <SelectContent>
+            {customers.map((customer) => (
+              <SelectItem key={customer.id} value={customer.id}>
+                {customer.first_name} {customer.last_name} - {customer.email}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {form.formState.errors.owner_id && (
+          <p className="text-sm text-red-600">{form.formState.errors.owner_id.message}</p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="vin">VIN</Label>
+          <Input
+            id="vin"
+            {...form.register('vin')}
+            placeholder="Enter VIN number"
           />
         </div>
-
-        <FormField
-          control={form.control}
-          name="vehicle_type"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Vehicle Type</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select vehicle type" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="car">Car</SelectItem>
-                  <SelectItem value="truck">Truck</SelectItem>
-                  <SelectItem value="motorcycle">Motorcycle</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="vin"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>VIN (optional)</FormLabel>
-              <FormControl>
-                <Input placeholder="17-character VIN" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="license_plate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>License Plate (optional)</FormLabel>
-              <FormControl>
-                <Input placeholder="ABC123" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="mileage"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Mileage (optional)</FormLabel>
-              <FormControl>
-                <Input 
-                  type="number" 
-                  placeholder="50000" 
-                  {...field}
-                  onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="flex justify-end space-x-2 pt-4">
-          <Button 
-            variant="outline" 
-            type="button" 
-            onClick={onCancel}
-            disabled={form.formState.isSubmitting}
-          >
-            Cancel
-          </Button>
-          <Button 
-            type="submit" 
-            disabled={form.formState.isSubmitting}
-          >
-            {isEditing ? 'Update Vehicle' : 'Add Vehicle'}
-          </Button>
+        
+        <div className="space-y-2">
+          <Label htmlFor="license_plate">License Plate</Label>
+          <Input
+            id="license_plate"
+            {...form.register('license_plate')}
+            placeholder="Enter license plate"
+          />
         </div>
-      </form>
-    </Form>
+      </div>
+
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={form.formState.isSubmitting}>
+          {form.formState.isSubmitting 
+            ? (isEditing ? 'Updating...' : 'Creating...') 
+            : (isEditing ? 'Update Vehicle' : 'Create Vehicle')
+          }
+        </Button>
+      </div>
+    </form>
   );
 }
