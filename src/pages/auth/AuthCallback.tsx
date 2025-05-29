@@ -14,19 +14,34 @@ const AuthCallback = () => {
       console.log('Current URL:', window.location.href);
       console.log('Search params:', Object.fromEntries(searchParams.entries()));
       
+      // Check for EGIS OAuth parameters first
+      const code = searchParams.get('code');
+      const state = searchParams.get('state');
+      
+      // Check for Supabase recovery parameters
       const token = searchParams.get('token');
       const type = searchParams.get('type');
       const redirectTo = searchParams.get('redirect_to');
       
-      console.log('Token:', token);
-      console.log('Type:', type);
+      console.log('OAuth Code:', code);
+      console.log('OAuth State:', state);
+      console.log('Recovery Token:', token);
+      console.log('Recovery Type:', type);
       console.log('Redirect to:', redirectTo);
       
+      // Handle EGIS OAuth callback
+      if (code && state) {
+        console.log('Processing EGIS OAuth callback...');
+        // Redirect to the EGIS-specific callback handler
+        navigate(`/auth/egis/callback?code=${code}&state=${state}`);
+        return;
+      }
+      
+      // Handle Supabase password recovery
       if (token && type === 'recovery') {
         console.log('Processing password recovery token...');
         
-        // Instead of verifying the token here, just redirect to the reset password page
-        // with the token parameters so it can handle the verification
+        // Redirect to the reset password page with the token parameters
         const resetUrl = new URL('/auth/reset-password', window.location.origin);
         resetUrl.searchParams.set('token', token);
         resetUrl.searchParams.set('type', type);
@@ -37,7 +52,7 @@ const AuthCallback = () => {
       }
       
       // Handle other auth types or redirect to login if no valid params
-      console.log('No valid recovery token found, redirecting to shop login');
+      console.log('No valid authentication parameters found, redirecting to shop login');
       navigate('/shop-login');
     };
     
