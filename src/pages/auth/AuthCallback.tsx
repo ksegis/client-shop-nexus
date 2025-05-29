@@ -1,0 +1,61 @@
+
+import { useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+const AuthCallback = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const handleAuthCallback = async () => {
+      console.log('=== AUTH CALLBACK DEBUG ===');
+      console.log('Current URL:', window.location.href);
+      console.log('Search params:', Object.fromEntries(searchParams.entries()));
+      
+      const token = searchParams.get('token');
+      const type = searchParams.get('type');
+      const redirectTo = searchParams.get('redirect_to');
+      
+      console.log('Token:', token);
+      console.log('Type:', type);
+      console.log('Redirect to:', redirectTo);
+      
+      if (token && type === 'recovery') {
+        console.log('Processing password recovery token...');
+        
+        // Instead of verifying the token here, just redirect to the reset password page
+        // with the token parameters so it can handle the verification
+        const resetUrl = new URL('/auth/reset-password', window.location.origin);
+        resetUrl.searchParams.set('token', token);
+        resetUrl.searchParams.set('type', type);
+        
+        console.log('Redirecting to:', resetUrl.toString());
+        window.location.href = resetUrl.toString();
+        return;
+      }
+      
+      // Handle other auth types or redirect to login if no valid params
+      console.log('No valid recovery token found, redirecting to shop login');
+      navigate('/shop-login');
+    };
+    
+    handleAuthCallback();
+  }, [searchParams, navigate]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Processing authentication...</CardTitle>
+        </CardHeader>
+        <CardContent className="flex justify-center p-6">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default AuthCallback;

@@ -7,6 +7,7 @@ import ShopRoutes from "@/routes/shop/ShopRoutes";
 import CustomerRoutes from "@/routes/CustomerRoutes";
 import ChangePassword from "@/pages/auth/ChangePassword";
 import ResetPassword from "@/pages/auth/ResetPassword";
+import AuthCallback from "@/pages/auth/AuthCallback";
 import InviteAccept from "@/pages/auth/InviteAccept";
 import NotFound from "@/pages/NotFound";
 import Unauthorized from "@/pages/Unauthorized";
@@ -20,6 +21,7 @@ const AppRoutes = () => {
       <Route path="/customer-login" element={<CustomerLogin />} />
       
       {/* Auth routes */}
+      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/auth/change-password" element={<ChangePassword />} />
       <Route path="/auth/reset-password" element={<ResetPassword />} />
       <Route path="/auth/invite-accept" element={<InviteAccept />} />
