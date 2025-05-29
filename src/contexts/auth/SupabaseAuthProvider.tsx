@@ -44,7 +44,7 @@ export function SupabaseAuthProvider({ children }: SupabaseAuthProviderProps) {
   const navigate = useNavigate();
 
   // Determine portal type based on user role
-  const portalType = profile?.role === 'customer' ? 'customer' : 'shop';
+  const portalType: 'shop' | 'customer' | null = profile?.role === 'customer' ? 'customer' : profile?.role ? 'shop' : null;
 
   // Validate access based on user role
   const validateAccess = (allowedRoles?: UserRole[]) => {
