@@ -29,7 +29,7 @@ const AuthCallback = () => {
       console.log('Recovery Type:', type);
       console.log('Redirect to:', redirectTo);
       
-      // Handle EGIS OAuth callback
+      // Handle EGIS OAuth callback - only if we have BOTH code AND state
       if (code && state) {
         console.log('Processing EGIS OAuth callback...');
         // Redirect to the EGIS-specific callback handler
@@ -40,6 +40,14 @@ const AuthCallback = () => {
       // Handle Supabase password recovery
       if (token && type === 'recovery') {
         console.log('Processing password recovery token...');
+        
+        // For password recovery, we need to sign out any existing user first
+        // to allow the password reset flow to work properly
+        console.log('Signing out existing user to allow password reset...');
+        await supabase.auth.signOut();
+        
+        // Clear any local dev user data
+        localStorage.removeItem('dev-customer-user');
         
         // Redirect to the reset password page with the token parameters
         const resetUrl = new URL('/auth/reset-password', window.location.origin);
