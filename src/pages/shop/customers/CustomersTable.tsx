@@ -1,6 +1,5 @@
-
 import { useState } from 'react';
-import { useCustomers } from './CustomersContext';
+import { useCustomers, Customer } from './CustomersContext';
 import { 
   Table, 
   TableBody, 
@@ -13,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, User } from 'lucide-react';
 import { CustomerDetailDialog } from './CustomerDetailDialog';
-import { Customer } from './types';
 
 interface CustomersTableProps {
   filter: 'all' | 'recent';
