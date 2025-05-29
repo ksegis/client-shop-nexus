@@ -43,46 +43,111 @@ const ResetPassword = () => {
 
   // Check if we have valid reset tokens in the URL
   useEffect(() => {
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
-    
-    if (accessToken && refreshToken) {
-      // Set the session with the tokens from the URL
-      supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken
-      }).then(({ data, error }) => {
-        if (error) {
-          console.error('Error setting session:', error);
+    const checkTokens = async () => {
+      console.log('=== RESET PASSWORD PAGE DEBUG ===');
+      console.log('Current URL:', window.location.href);
+      console.log('Search params:', Object.fromEntries(searchParams.entries()));
+      
+      // Check for the token and type parameters that Supabase sends
+      const token = searchParams.get('token');
+      const type = searchParams.get('type');
+      const accessToken = searchParams.get('access_token');
+      const refreshToken = searchParams.get('refresh_token');
+      
+      console.log('Token:', token);
+      console.log('Type:', type);
+      console.log('Access Token:', accessToken);
+      console.log('Refresh Token:', refreshToken);
+      
+      // If we have access_token and refresh_token, use them directly
+      if (accessToken && refreshToken) {
+        console.log('Using access_token and refresh_token from URL');
+        try {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          
+          if (error) {
+            console.error('Error setting session:', error);
+            toast({
+              title: "Invalid reset link",
+              description: "This password reset link is invalid or has expired.",
+              variant: "destructive",
+            });
+            navigate('/shop-login');
+          } else {
+            console.log('Session set successfully:', data);
+            setValidToken(true);
+          }
+        } catch (error) {
+          console.error('Error in setSession:', error);
           toast({
             title: "Invalid reset link",
             description: "This password reset link is invalid or has expired.",
             variant: "destructive",
           });
           navigate('/shop-login');
-        } else {
-          setValidToken(true);
         }
-      });
-    } else {
-      toast({
-        title: "Invalid reset link",
-        description: "This password reset link is invalid or has expired.",
-        variant: "destructive",
-      });
-      navigate('/shop-login');
-    }
+      }
+      // If we have token and type=recovery, try to exchange for session
+      else if (token && type === 'recovery') {
+        console.log('Using token and type=recovery from URL');
+        try {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'recovery'
+          });
+          
+          if (error) {
+            console.error('Error verifying recovery token:', error);
+            toast({
+              title: "Invalid reset link",
+              description: "This password reset link is invalid or has expired.",
+              variant: "destructive",
+            });
+            navigate('/shop-login');
+          } else {
+            console.log('Recovery token verified successfully:', data);
+            setValidToken(true);
+          }
+        } catch (error) {
+          console.error('Error in verifyOtp:', error);
+          toast({
+            title: "Invalid reset link",
+            description: "This password reset link is invalid or has expired.",
+            variant: "destructive",
+          });
+          navigate('/shop-login');
+        }
+      } else {
+        console.log('No valid tokens found in URL');
+        toast({
+          title: "Invalid reset link",
+          description: "This password reset link is invalid or has expired.",
+          variant: "destructive",
+        });
+        navigate('/shop-login');
+      }
+    };
+    
+    checkTokens();
   }, [searchParams, toast, navigate]);
 
   const onSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
+      console.log('Updating password...');
       const { error } = await supabase.auth.updateUser({
         password: values.password
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Password update error:', error);
+        throw error;
+      }
 
+      console.log('Password updated successfully');
       toast({
         title: "Password updated",
         description: "Your password has been successfully updated. You can now sign in with your new password.",
