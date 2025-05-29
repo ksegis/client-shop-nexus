@@ -177,6 +177,50 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_api_keys: {
+        Row: {
+          api_key: string
+          created_at: string
+          customer_id: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          key_name: string
+          last_used_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_key: string
+          created_at?: string
+          customer_id: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          key_name: string
+          last_used_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string
+          created_at?: string
+          customer_id?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          key_name?: string
+          last_used_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_api_keys_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estimate_items: {
         Row: {
           created_at: string
@@ -1279,6 +1323,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      generate_api_key: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       generate_invite_token: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -1293,6 +1341,10 @@ export type Database = {
       }
       is_staff_or_admin: {
         Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_valid_api_key: {
+        Args: { key: string }
         Returns: boolean
       }
       log_audit_event: {

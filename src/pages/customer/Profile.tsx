@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -14,6 +13,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useProfileData } from '@/hooks/profile';
 import { useAuth } from '@/contexts/auth';
 import { ProfilePicture } from '@/components/shared/profile/ProfilePicture';
+import { CustomerApiKeysManager } from '@/components/customer/api-keys/CustomerApiKeysManager';
 
 const profileFormSchema = z.object({
   firstName: z.string().min(2, { message: "First name must be at least 2 characters." }),
@@ -24,7 +24,7 @@ const profileFormSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
-const CustomerProfile = () => {
+const Profile = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { profileData, updateProfileData, updateProfileAvatar } = useProfileData();
@@ -88,7 +88,7 @@ const CustomerProfile = () => {
   }
 
   return (
-    <div className="container mx-auto max-w-4xl p-4">
+    <div className="container mx-auto px-4 py-8 space-y-8">
       <h1 className="text-3xl font-bold mb-6">My Profile</h1>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -218,8 +218,10 @@ const CustomerProfile = () => {
           </Card>
         </div>
       </div>
+      
+      <CustomerApiKeysManager />
     </div>
   );
 };
 
-export default CustomerProfile;
+export default Profile;
