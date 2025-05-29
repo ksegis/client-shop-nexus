@@ -31,6 +31,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { CheckCircle, AlertTriangle, Copy, ExternalLink, Clock, Mail } from 'lucide-react';
+import { storeInvitationData } from '@/utils/invitationStorage';
 
 const inviteSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -115,6 +116,15 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
       }
 
       console.log('Generated token:', tokenData);
+
+      // Store invitation data locally for development auth
+      storeInvitationData({
+        email: values.email,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        role: values.role,
+        token: tokenData
+      });
 
       // Create invitation record with pending status
       const { error: inviteError } = await supabase

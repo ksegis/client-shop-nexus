@@ -93,14 +93,45 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signIn: async (email, password) => {
       console.log('Signing in development user:', email);
       
-      // Determine role based on email - kevin.shelton@egisdynamics.com should be admin
+      // Enhanced role determination logic
       let userRole = 'customer'; // default
+      let firstName = 'Dev';
+      let lastName = 'User';
+      
+      // Check for specific admin email
       if (email === 'kevin.shelton@egisdynamics.com') {
         userRole = 'admin';
+        firstName = 'Kevin';
+        lastName = 'Shelton';
       } else if (email === 'customer@example.com') {
         userRole = 'admin';
-      } else if (email.includes('admin') || email.includes('staff')) {
-        userRole = 'admin';
+        firstName = 'Admin';
+        lastName = 'User';
+      } else {
+        // Check for role-based emails or existing invitation data
+        if (email.includes('admin')) {
+          userRole = 'admin';
+          firstName = 'Admin';
+          lastName = 'User';
+        } else if (email.includes('staff')) {
+          userRole = 'staff';
+          firstName = 'Staff';
+          lastName = 'Member';
+        }
+        
+        // Check localStorage for invitation data that might contain role and name info
+        const inviteData = localStorage.getItem(`invite_${email}`);
+        if (inviteData) {
+          try {
+            const parsed = JSON.parse(inviteData);
+            if (parsed.role) userRole = parsed.role;
+            if (parsed.firstName) firstName = parsed.firstName;
+            if (parsed.lastName) lastName = parsed.lastName;
+            console.log('Found invitation data for', email, 'with role:', userRole);
+          } catch (e) {
+            console.error('Error parsing invitation data:', e);
+          }
+        }
       }
       
       // Create a mock user object
@@ -108,8 +139,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         id: 'dev-' + Date.now(),
         email,
         user_metadata: {
-          first_name: userRole === 'admin' ? 'Kevin' : 'Dev',
-          last_name: userRole === 'admin' ? 'Shelton' : 'User',
+          first_name: firstName,
+          last_name: lastName,
           role: userRole
         },
         created_at: new Date().toISOString(),
@@ -128,13 +159,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         description: `Logged in as ${email}`,
       });
       
-      // Handle redirect based on user role
-      let redirectPath = '/shop/dashboard'; // Default to shop dashboard
+      // Handle redirect based on user role - admins and staff always go to shop portal
+      let redirectPath = '/shop/dashboard'; // Default for admin and staff
       
       if (userRole === 'customer') {
         redirectPath = '/customer/dashboard';
-      } else if (userRole === 'admin' || userRole === 'staff') {
-        redirectPath = '/shop/dashboard';
       }
       
       console.log(`Redirecting ${userRole} user ${email} to ${redirectPath}`);
