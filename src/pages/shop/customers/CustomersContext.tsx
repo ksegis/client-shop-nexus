@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,7 +9,7 @@ export type Customer = {
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
-  role: string;
+  role: 'customer' | 'staff' | 'admin';
   created_at: string;
   updated_at: string;
 };
@@ -101,9 +100,15 @@ export function CustomersProvider({ children }: { children: ReactNode }) {
 
   const updateCustomer = async (id: string, updatedCustomer: Partial<Customer>) => {
     try {
+      // Ensure role is properly typed if provided
+      const updateData: any = { ...updatedCustomer };
+      if (updateData.role && !['customer', 'staff', 'admin'].includes(updateData.role)) {
+        updateData.role = 'customer'; // Default to customer if invalid role
+      }
+      
       const { error: updateError } = await supabase
         .from('profiles')
-        .update(updatedCustomer)
+        .update(updateData)
         .eq('id', id);
       
       if (updateError) throw updateError;
