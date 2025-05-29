@@ -1,3 +1,4 @@
+
 import { ReactNode, useState, useEffect } from 'react';
 import { AuthContext } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -93,24 +94,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signIn: async (email, password) => {
       console.log('Signing in development user:', email);
       
-      // Default values
+      // Check for invitation data first
+      const inviteData = getInvitationData(email);
       let userRole = 'customer';
       let firstName = 'Dev';
       let lastName = 'User';
       
-      // Check for invitation data - this is the only source of role/name info
-      const inviteData = getInvitationData(email);
       if (inviteData) {
         userRole = inviteData.role;
         firstName = inviteData.firstName;
         lastName = inviteData.lastName;
-        console.log('Using invitation data for', email, 'with role:', userRole, 'name:', firstName, lastName);
+        console.log('Using invitation data for', email, '- Role:', userRole, 'Name:', firstName, lastName);
         
-        // Clear the invitation data after use to prevent reuse
+        // Clear the invitation data after use
         clearInvitationData(email);
+      } else {
+        console.log('No invitation data found for', email, '- using defaults');
       }
       
-      // Create a mock user object
+      // Create a mock user object with the correct data
       const devUser = {
         id: 'dev-' + Date.now(),
         email,
@@ -123,6 +125,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         updated_at: new Date().toISOString(),
       };
       
+      console.log('Created dev user object:', devUser);
+      
       // Store in localStorage
       localStorage.setItem('dev-customer-user', JSON.stringify(devUser));
       
@@ -132,10 +136,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       toast({
         title: "Signed in successfully",
-        description: `Logged in as ${email}`,
+        description: `Logged in as ${firstName} ${lastName} (${userRole})`,
       });
       
-      // Handle redirect based on user role - admin and staff go to shop portal
+      // Handle redirect based on user role
       let redirectPath = '/customer/dashboard'; // Default for customers
       
       if (userRole === 'admin' || userRole === 'staff') {
