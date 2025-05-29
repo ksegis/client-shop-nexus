@@ -219,7 +219,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         // In development mode, we'll use Supabase's password reset
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth/change-password`
+          redirectTo: `${window.location.origin}/auth/reset-password`
         });
         
         if (error) {
