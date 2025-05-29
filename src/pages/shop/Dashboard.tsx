@@ -1,16 +1,15 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, CheckCircle, XCircle, Clock, AlertTriangle, ChevronDown, ChevronUp, Package, TrendingDown, TrendingUp } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Clock, AlertTriangle, Package, TrendingDown } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useState } from 'react';
 import AppointmentsOverview from '@/components/shop/dashboard/AppointmentsOverview';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 
 const Dashboard = () => {
   const { estimates, workOrders, inventory, customerCount, loading, error } = useDashboardData();
-  const [inventoryAlertsOpen, setInventoryAlertsOpen] = useState(false);
+  const [selectedInventoryCard, setSelectedInventoryCard] = useState<string | null>(null);
 
   // Metric card icons mapping
   const metricIcons = {
@@ -117,6 +116,38 @@ const Dashboard = () => {
     rejected: 'negative',
   };
 
+  // Prepare inventory card data with detailed items
+  const inventoryCards = [
+    {
+      id: 'total',
+      title: 'Total Parts',
+      count: inventory.totalParts,
+      icon: Package,
+      color: 'border-gray-200',
+      items: inventory.items || []
+    },
+    {
+      id: 'lowStock',
+      title: 'Low Stock Items',
+      count: inventory.lowStock,
+      icon: TrendingDown,
+      color: inventory.lowStock > 0 ? 'border-orange-300' : 'border-gray-200',
+      items: (inventory.items || []).filter(item => 
+        item.quantity > 0 && item.quantity <= (item.min_stock || 10)
+      )
+    },
+    {
+      id: 'alerts',
+      title: 'Critical Alerts',
+      count: inventory.alerts.length,
+      icon: AlertTriangle,
+      color: inventory.alerts.length > 0 ? 'border-red-300' : 'border-gray-200',
+      items: inventory.alerts
+    }
+  ];
+
+  const selectedCardData = inventoryCards.find(card => card.id === selectedInventoryCard);
+
   return (
     <div className="space-y-6">
       <div>
@@ -218,99 +249,106 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Inventory Overview with Summary Cards */}
+      {/* Inventory Overview with Clickable Summary Cards */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Inventory Overview</h2>
         
-        {/* Inventory Summary Cards */}
         <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Parts</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{inventory.totalParts}</div>
-              <p className="text-xs text-muted-foreground">Items in inventory</p>
-            </CardContent>
-          </Card>
-
-          <Card className={inventory.lowStock > 0 ? "border-orange-300" : ""}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
-              <TrendingDown className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${inventory.lowStock > 0 ? "text-orange-600" : ""}`}>
-                {inventory.lowStock}
-              </div>
-              <p className="text-xs text-muted-foreground">Need attention</p>
-            </CardContent>
-          </Card>
-
-          <Card className={inventory.alerts.length > 0 ? "border-red-300" : ""}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Critical Alerts</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${inventory.alerts.length > 0 ? "text-red-600" : ""}`}>
-                {inventory.alerts.length}
-              </div>
-              <p className="text-xs text-muted-foreground">Require action</p>
-            </CardContent>
-          </Card>
+          {inventoryCards.map((card) => {
+            const IconComponent = card.icon;
+            return (
+              <Card 
+                key={card.id}
+                className={`cursor-pointer hover:shadow-md transition-shadow ${card.color}`}
+                onClick={() => setSelectedInventoryCard(card.id)}
+              >
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
+                  <IconComponent className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className={`text-2xl font-bold ${
+                    card.id === 'lowStock' && card.count > 0 ? "text-orange-600" :
+                    card.id === 'alerts' && card.count > 0 ? "text-red-600" : ""
+                  }`}>
+                    {card.count}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {card.id === 'total' ? 'Items in inventory' :
+                     card.id === 'lowStock' ? 'Need attention' :
+                     'Require action'}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
-
-        {/* Collapsible Inventory Alerts */}
-        <Card>
-          <Collapsible open={inventoryAlertsOpen} onOpenChange={setInventoryAlertsOpen}>
-            <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-red-500" />
-                    Inventory Alerts ({inventory.alerts.length})
-                  </CardTitle>
-                  <Button variant="ghost" size="sm">
-                    {inventoryAlertsOpen ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent>
-                <div className="space-y-2">
-                  {inventory.alerts.length > 0 ? (
-                    inventory.alerts.map((alert) => (
-                      <div 
-                        key={alert.id} 
-                        className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-md"
-                      >
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4" />
-                          <p className="font-medium">{alert.part_name} is low on stock</p>
-                        </div>
-                        <p className="text-sm mt-1">
-                          Current: {alert.current_stock} / Minimum: {alert.min_stock}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-4 text-gray-500">
-                      No inventory alerts at this time
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </CollapsibleContent>
-          </Collapsible>
-        </Card>
       </div>
+
+      {/* Inventory Details Dialog */}
+      <Dialog open={!!selectedInventoryCard} onOpenChange={() => setSelectedInventoryCard(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedCardData?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedCardData?.items && selectedCardData.items.length > 0 ? (
+              selectedCardData.items.map((item) => (
+                <Card key={item.id} className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">{item.part_name || item.name}</h4>
+                        {item.part_number && (
+                          <p className="text-sm text-gray-500">Part #: {item.part_number}</p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        {selectedCardData.id === 'alerts' ? (
+                          <Badge variant="destructive">Critical</Badge>
+                        ) : selectedCardData.id === 'lowStock' ? (
+                          <Badge variant="outline" className="text-orange-600 border-orange-300">Low Stock</Badge>
+                        ) : (
+                          <Badge variant="outline">In Stock</Badge>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="font-medium">Current Stock:</p>
+                        <p className="text-gray-600">{item.current_stock || item.quantity || 0}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium">Minimum Stock:</p>
+                        <p className="text-gray-600">{item.min_stock || item.reorder_level || 10}</p>
+                      </div>
+                    </div>
+                    
+                    {item.price && (
+                      <div>
+                        <p className="text-sm font-medium">Price:</p>
+                        <p className="text-sm text-gray-600">${item.price.toFixed(2)}</p>
+                      </div>
+                    )}
+                    
+                    {item.supplier && (
+                      <div>
+                        <p className="text-sm font-medium">Supplier:</p>
+                        <p className="text-sm text-gray-600">{item.supplier}</p>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                No items found in this category
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Employee Performance */}
       <Card className="col-span-1">
