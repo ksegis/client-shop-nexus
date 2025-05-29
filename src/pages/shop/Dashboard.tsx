@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, CheckCircle, XCircle, Clock, AlertTriangle, Package, TrendingDown } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
@@ -8,11 +7,13 @@ import { useState } from 'react';
 import AppointmentsOverview from '@/components/shop/dashboard/AppointmentsOverview';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
   const { estimates, workOrders, inventory, customerCount, loading, error } = useDashboardData();
   const { inventoryItems } = useInventoryData();
   const [selectedInventoryCard, setSelectedInventoryCard] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   // Metric card icons mapping
   const metricIcons = {
@@ -157,6 +158,13 @@ const Dashboard = () => {
   ];
 
   const selectedCardData = inventoryCards.find(card => card.id === selectedInventoryCard);
+
+  // Handle clicking on an inventory item to navigate to inventory page
+  const handleItemClick = (itemId: string) => {
+    // Navigate to inventory page with the item ID as a query parameter
+    navigate(`/shop/inventory?item=${itemId}`);
+    setSelectedInventoryCard(null); // Close the dialog
+  };
 
   return (
     <div className="space-y-6">
@@ -304,7 +312,11 @@ const Dashboard = () => {
           <div className="space-y-4">
             {selectedCardData?.items && selectedCardData.items.length > 0 ? (
               selectedCardData.items.map((item) => (
-                <Card key={item.id} className="p-4">
+                <Card 
+                  key={item.id} 
+                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => handleItemClick(item.id)}
+                >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
@@ -348,6 +360,10 @@ const Dashboard = () => {
                         <p className="text-sm text-gray-600">{item.supplier}</p>
                       </div>
                     )}
+                    
+                    <div className="text-xs text-blue-600 hover:underline">
+                      Click to view in inventory →
+                    </div>
                   </div>
                 </Card>
               ))
