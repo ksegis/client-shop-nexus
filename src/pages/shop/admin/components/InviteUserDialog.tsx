@@ -160,35 +160,41 @@ export const InviteUserDialog: React.FC<InviteUserDialogProps> = ({
 
       const timestamp = new Date().toISOString();
 
+      // Check if there was an error calling the function itself
       if (emailError) {
-        console.error('Email function error:', emailError);
+        console.error('Email function invocation error:', emailError);
         setInviteStatus({
           success: false,
-          message: `Invitation created but email failed to send: ${emailError.message}. Please use the manual link below.`,
+          message: `Failed to send invitation email: ${emailError.message}. Please use the manual link below.`,
           inviteUrl: `https://id-preview--6dd8b04d-be77-46f2-b1a0-1037f4165d18.lovable.app/auth/invite-accept?token=${tokenData}`,
           timestamp
         });
-      } else if (emailResponse?.success) {
-        setInviteStatus({
-          success: true,
-          message: `Invitation email sent successfully to ${values.email}`,
-          inviteUrl: emailResponse.inviteUrl,
-          emailId: emailResponse.emailId,
-          timestamp
-        });
-        onInviteSuccess();
-        
-        toast({
-          title: 'Invitation sent!',
-          description: `Email successfully sent to ${values.email}`,
-        });
       } else {
-        setInviteStatus({
-          success: false,
-          message: emailResponse?.error || 'Failed to send invitation email',
-          inviteUrl: emailResponse?.inviteUrl || `https://id-preview--6dd8b04d-be77-46f2-b1a0-1037f4165d18.lovable.app/auth/invite-accept?token=${tokenData}`,
-          timestamp
-        });
+        // Function was called successfully, check the response
+        if (emailResponse && emailResponse.success) {
+          setInviteStatus({
+            success: true,
+            message: emailResponse.message || `Invitation email sent successfully to ${values.email}`,
+            inviteUrl: emailResponse.inviteUrl,
+            emailId: emailResponse.messageId,
+            timestamp
+          });
+          onInviteSuccess();
+          
+          toast({
+            title: 'Invitation sent!',
+            description: `Email successfully sent to ${values.email}`,
+          });
+        } else {
+          // Function returned but indicated failure
+          const errorMessage = emailResponse?.message || 'Failed to send invitation email';
+          setInviteStatus({
+            success: false,
+            message: errorMessage + '. Please use the manual link below.',
+            inviteUrl: emailResponse?.inviteUrl || `https://id-preview--6dd8b04d-be77-46f2-b1a0-1037f4165d18.lovable.app/auth/invite-accept?token=${tokenData}`,
+            timestamp
+          });
+        }
       }
 
     } catch (error: any) {
