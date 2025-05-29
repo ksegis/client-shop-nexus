@@ -213,8 +213,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return { success: true, error: null };
     },
     resetPassword: async (email) => {
-      console.log('=== DEV PASSWORD RESET START ===');
-      console.log('Email for password reset:', email);
+      console.log('Password reset requested for:', email);
       
       try {
         // Use the callback route to handle the Supabase verification
@@ -236,7 +235,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           description: "If your email address is registered with us, you will receive password reset instructions within a few minutes. Please check your inbox and spam folder."
         });
         
-        console.log('=== DEV PASSWORD RESET END ===');
         return { success: true, error: null };
       } catch (error) {
         console.error('Password reset error:', error);
