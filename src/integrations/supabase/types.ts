@@ -1094,6 +1094,7 @@ export type Database = {
           images: string[] | null
           license_plate: string | null
           make: string
+          mileage: number | null
           model: string
           owner_id: string
           updated_at: string
@@ -1108,6 +1109,7 @@ export type Database = {
           images?: string[] | null
           license_plate?: string | null
           make: string
+          mileage?: number | null
           model: string
           owner_id: string
           updated_at?: string
@@ -1122,6 +1124,7 @@ export type Database = {
           images?: string[] | null
           license_plate?: string | null
           make?: string
+          mileage?: number | null
           model?: string
           owner_id?: string
           updated_at?: string

@@ -26,36 +26,48 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
   const [isLoadingVehicles, setIsLoadingVehicles] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(customerId);
 
+  // Watch for form values to get current customer selection
+  const formCustomerId = form.watch('customer_id');
+  const currentCustomerId = selectedCustomerId || formCustomerId;
+
   // Fetch vehicles when customer changes
   useEffect(() => {
     const fetchVehicles = async () => {
-      if (!selectedCustomerId) {
+      if (!currentCustomerId) {
         setCustomerVehicles([]);
         onVehiclesLoaded([], { email: '', phone: null });
         return;
       }
 
+      console.log('Fetching vehicles for customer:', currentCustomerId);
       setIsLoadingVehicles(true);
       try {
         // Fetch vehicles
         const { data: vehiclesData, error: vehiclesError } = await supabase
           .from('vehicles')
           .select('*')
-          .eq('owner_id', selectedCustomerId);
+          .eq('owner_id', currentCustomerId);
         
-        if (vehiclesError) throw vehiclesError;
+        if (vehiclesError) {
+          console.error('Error fetching vehicles:', vehiclesError);
+          throw vehiclesError;
+        }
         
         const vehicles = vehiclesData as Vehicle[];
+        console.log('Fetched vehicles:', vehicles);
         setCustomerVehicles(vehicles);
 
         // Fetch customer contact info
         const { data: customerData, error: customerError } = await supabase
           .from('profiles')
           .select('email, phone')
-          .eq('id', selectedCustomerId)
+          .eq('id', currentCustomerId)
           .single();
 
-        if (customerError) throw customerError;
+        if (customerError) {
+          console.error('Error fetching customer data:', customerError);
+          throw customerError;
+        }
         
         const customerContact = {
           email: customerData?.email || '',
@@ -73,15 +85,15 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
     };
 
     fetchVehicles();
-    
-    // Clear vehicle selection when customer changes
-    form.setValue('vehicle_id', '');
-  }, [selectedCustomerId, form, onVehiclesLoaded]);
+  }, [currentCustomerId, form, onVehiclesLoaded]);
 
   // Handle customer change
   const handleCustomerChange = (customerId: string) => {
+    console.log('Customer changed to:', customerId);
     setSelectedCustomerId(customerId);
     onCustomerChange(customerId);
+    // Clear vehicle selection when customer changes
+    form.setValue('vehicle_id', '');
   };
 
   return (
@@ -94,8 +106,11 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
             <FormItem>
               <FormLabel>Customer</FormLabel>
               <Select 
-                onValueChange={(value) => handleCustomerChange(value)} 
-                defaultValue={field.value}
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  handleCustomerChange(value);
+                }} 
+                value={field.value}
                 disabled={isLoadingCustomers}
               >
                 <FormControl>
@@ -125,11 +140,20 @@ const CustomerVehicleSection: React.FC<CustomerVehicleSectionProps> = ({
             <FormLabel>Vehicle</FormLabel>
             <Select 
               onValueChange={field.onChange}
-              disabled={!selectedCustomerId || isLoadingVehicles}
+              value={field.value}
+              disabled={!currentCustomerId || isLoadingVehicles}
             >
               <FormControl>
                 <SelectTrigger>
-                  <SelectValue placeholder={selectedCustomerId ? "Select vehicle" : "Select customer first"} />
+                  <SelectValue placeholder={
+                    !currentCustomerId 
+                      ? "Select customer first" 
+                      : isLoadingVehicles 
+                        ? "Loading vehicles..." 
+                        : customerVehicles.length === 0
+                          ? "No vehicles found"
+                          : "Select vehicle"
+                  } />
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
