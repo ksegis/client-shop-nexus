@@ -8,7 +8,7 @@ import { setupAudioCleanupOnNavigation } from "@/utils/audioUtils";
 import { HeaderProvider } from "./components/layout/HeaderContext";
 import { DevModeIndicator } from "./components/shared/DevModeIndicator";
 import { useSessionTracking } from "./utils/sessionService";
-import { AuthProvider } from "@/contexts/auth";
+import { SupabaseAuthProvider } from "@/contexts/auth/SupabaseAuthProvider";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -33,17 +33,37 @@ const App = () => {
   
   // Track user sessions
   useSessionTracking();
+
+  // Override any EGIS initialization
+  useEffect(() => {
+    console.log('[Supabase Auth] App component loading - blocking EGIS initialization');
+    
+    // Block EGIS logging
+    const originalConsoleLog = console.log;
+    console.log = (...args) => {
+      const argString = args.join(' ');
+      if (argString.includes('EGIS Dynamics Auth') || argString.includes('[EGIS')) {
+        console.warn('[Supabase Auth] Blocked EGIS log:', ...args);
+        return;
+      }
+      originalConsoleLog(...args);
+    };
+
+    return () => {
+      console.log = originalConsoleLog;
+    };
+  }, []);
   
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProviderWrapper>
-        <AuthProvider>
+        <SupabaseAuthProvider>
           <HeaderProvider>
             <AppRoutes />
             <Toaster />
             <DevModeIndicator />
           </HeaderProvider>
-        </AuthProvider>
+        </SupabaseAuthProvider>
       </TooltipProviderWrapper>
     </QueryClientProvider>
   );

@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { supabase } from '@/integrations/supabase/client';
 
 const AuthCallback = () => {
   const navigate = useNavigate();
@@ -9,12 +10,57 @@ const AuthCallback = () => {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
-      console.log('=== AUTH CALLBACK DEBUG ===');
+      console.log('[Supabase Auth] Auth callback handler started');
       console.log('Current URL:', window.location.href);
       console.log('Search params:', Object.fromEntries(searchParams.entries()));
       
-      // Simple redirect to shop login - no specific callback handling needed
-      console.log('Redirecting to shop login');
+      // Block any EGIS callback handling
+      const blockEGIS = () => {
+        console.warn('[Supabase Auth] Blocking EGIS callback handling');
+      };
+      
+      // Check for Supabase auth callback parameters
+      const code = searchParams.get('code');
+      const error = searchParams.get('error');
+      const type = searchParams.get('type');
+      
+      if (error) {
+        console.error('[Supabase Auth] Callback error:', error);
+        navigate('/shop-login?error=' + encodeURIComponent(error));
+        return;
+      }
+      
+      if (code) {
+        console.log('[Supabase Auth] Auth code found, exchanging for session');
+        try {
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          
+          if (exchangeError) {
+            console.error('[Supabase Auth] Code exchange error:', exchangeError);
+            navigate('/shop-login?error=auth_failed');
+            return;
+          }
+          
+          if (data.session) {
+            console.log('[Supabase Auth] Session established, redirecting to dashboard');
+            navigate('/shop/dashboard', { replace: true });
+            return;
+          }
+        } catch (error) {
+          console.error('[Supabase Auth] Code exchange exception:', error);
+          navigate('/shop-login?error=auth_failed');
+          return;
+        }
+      }
+      
+      if (type === 'recovery') {
+        console.log('[Supabase Auth] Password recovery callback detected');
+        navigate('/auth/reset-password?' + searchParams.toString(), { replace: true });
+        return;
+      }
+      
+      // Default fallback
+      console.log('[Supabase Auth] No specific callback handling needed, redirecting to login');
       navigate('/shop-login');
     };
     

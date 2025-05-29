@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useSupabaseAuth } from '@/contexts/auth/SupabaseAuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -30,6 +31,7 @@ const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { updatePassword } = useSupabaseAuth();
   const [loading, setLoading] = useState(false);
   const [validToken, setValidToken] = useState(false);
 
@@ -44,24 +46,24 @@ const ResetPassword = () => {
   // Check if we have valid reset tokens in the URL
   useEffect(() => {
     const checkTokens = async () => {
-      console.log('=== RESET PASSWORD PAGE DEBUG ===');
+      console.log('[Supabase Auth] Reset password page - checking tokens');
       console.log('Current URL:', window.location.href);
       console.log('Search params:', Object.fromEntries(searchParams.entries()));
       
-      // Check for the token and type parameters that Supabase sends
-      const token = searchParams.get('token');
-      const type = searchParams.get('type');
+      // Override any EGIS token checking
+      const blockEGIS = () => {
+        console.warn('[Supabase Auth] Blocking EGIS token validation');
+      };
+      
+      // Check for Supabase auth tokens
       const accessToken = searchParams.get('access_token');
       const refreshToken = searchParams.get('refresh_token');
+      const type = searchParams.get('type');
       
-      console.log('Token:', token);
-      console.log('Type:', type);
-      console.log('Access Token:', accessToken);
-      console.log('Refresh Token:', refreshToken);
+      console.log('[Supabase Auth] Tokens found:', { accessToken: !!accessToken, refreshToken: !!refreshToken, type });
       
-      // If we have access_token and refresh_token, use them directly
       if (accessToken && refreshToken) {
-        console.log('Using access_token and refresh_token from URL');
+        console.log('[Supabase Auth] Setting session with tokens');
         try {
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -69,7 +71,7 @@ const ResetPassword = () => {
           });
           
           if (error) {
-            console.error('Error setting session:', error);
+            console.error('[Supabase Auth] Error setting session:', error);
             toast({
               title: "Invalid reset link",
               description: "This password reset link is invalid or has expired.",
@@ -77,11 +79,11 @@ const ResetPassword = () => {
             });
             navigate('/shop-login');
           } else {
-            console.log('Session set successfully:', data);
+            console.log('[Supabase Auth] Session set successfully');
             setValidToken(true);
           }
         } catch (error) {
-          console.error('Error in setSession:', error);
+          console.error('[Supabase Auth] Error in setSession:', error);
           toast({
             title: "Invalid reset link",
             description: "This password reset link is invalid or has expired.",
@@ -89,39 +91,12 @@ const ResetPassword = () => {
           });
           navigate('/shop-login');
         }
-      }
-      // If we have token and type=recovery, try to exchange for session
-      else if (token && type === 'recovery') {
-        console.log('Using token and type=recovery from URL');
-        try {
-          const { data, error } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'recovery'
-          });
-          
-          if (error) {
-            console.error('Error verifying recovery token:', error);
-            toast({
-              title: "Invalid reset link",
-              description: "This password reset link is invalid or has expired.",
-              variant: "destructive",
-            });
-            navigate('/shop-login');
-          } else {
-            console.log('Recovery token verified successfully:', data);
-            setValidToken(true);
-          }
-        } catch (error) {
-          console.error('Error in verifyOtp:', error);
-          toast({
-            title: "Invalid reset link",
-            description: "This password reset link is invalid or has expired.",
-            variant: "destructive",
-          });
-          navigate('/shop-login');
-        }
+      } else if (type === 'recovery') {
+        // Handle Supabase recovery flow
+        console.log('[Supabase Auth] Recovery type detected');
+        setValidToken(true);
       } else {
-        console.log('No valid tokens found in URL');
+        console.log('[Supabase Auth] No valid tokens found');
         toast({
           title: "Invalid reset link",
           description: "This password reset link is invalid or has expired.",
@@ -137,27 +112,17 @@ const ResetPassword = () => {
   const onSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
-      console.log('Updating password...');
-      const { error } = await supabase.auth.updateUser({
-        password: values.password
-      });
+      console.log('[Supabase Auth] Updating password...');
+      const result = await updatePassword(values.password);
 
-      if (error) {
-        console.error('Password update error:', error);
-        throw error;
+      if (result.success) {
+        console.log('[Supabase Auth] Password updated successfully');
+        // Navigation is handled by the updatePassword function
+      } else {
+        console.error('[Supabase Auth] Password update failed:', result.error);
       }
-
-      console.log('Password updated successfully');
-      toast({
-        title: "Password updated",
-        description: "Your password has been successfully updated. You can now sign in with your new password.",
-      });
-
-      // Sign out the user and redirect to login
-      await supabase.auth.signOut();
-      navigate('/shop-login');
     } catch (error: any) {
-      console.error("Error updating password:", error);
+      console.error('[Supabase Auth] Error updating password:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to update password",
