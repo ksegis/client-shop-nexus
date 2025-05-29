@@ -13,6 +13,7 @@ import ServiceDesk from "@/pages/shop/ServiceDesk";
 import ServiceAppointments from "@/pages/shop/ServiceAppointments";
 import WorkOrders from "@/pages/shop/WorkOrders";
 import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
+import { WorkOrdersProvider } from "@/pages/shop/work-orders/WorkOrdersContext";
 import UserManagement from "@/pages/shop/admin/UserManagement";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
@@ -96,7 +97,9 @@ const ShopRoutes = () => {
           path="work-orders"
           element={
             <ProtectedRoute>
-              <WorkOrders />
+              <WorkOrdersProvider>
+                <WorkOrders />
+              </WorkOrdersProvider>
             </ProtectedRoute>
           }
         />
@@ -104,7 +107,9 @@ const ShopRoutes = () => {
           path="work-orders/:id"
           element={
             <ProtectedRoute>
-              <WorkOrderDetailPage />
+              <WorkOrdersProvider>
+                <WorkOrderDetailPage />
+              </WorkOrdersProvider>
             </ProtectedRoute>
           }
         />
