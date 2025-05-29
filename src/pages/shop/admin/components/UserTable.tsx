@@ -31,7 +31,7 @@ export const UserTable = ({ users, isLoading }: UserTableProps) => {
   };
 
   const handleImpersonateUser = async (user: AdminUser) => {
-    const userName = `${user.first_name} ${user.last_name}`;
+    const userName = getDisplayName(user);
     const success = await impersonateUser(user.id, userName);
     
     if (success) {
@@ -62,6 +62,29 @@ export const UserTable = ({ users, isLoading }: UserTableProps) => {
     } finally {
       setDeletingUserId(null);
     }
+  };
+
+  const getDisplayName = (user: AdminUser) => {
+    // Check if both first and last name exist and are not empty
+    const hasValidFirstName = user.first_name && user.first_name.trim() !== '';
+    const hasValidLastName = user.last_name && user.last_name.trim() !== '';
+    
+    if (hasValidFirstName && hasValidLastName) {
+      return `${user.first_name.trim()} ${user.last_name.trim()}`;
+    }
+    
+    // If only first name exists
+    if (hasValidFirstName) {
+      return user.first_name.trim();
+    }
+    
+    // If only last name exists
+    if (hasValidLastName) {
+      return user.last_name.trim();
+    }
+    
+    // Fall back to email if no valid names
+    return user.email;
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -95,7 +118,7 @@ export const UserTable = ({ users, isLoading }: UserTableProps) => {
             {users.map((user) => (
               <TableRow key={user.id}>
                 <TableCell className="font-medium">
-                  {user.first_name} {user.last_name}
+                  {getDisplayName(user)}
                 </TableCell>
                 <TableCell>{user.email}</TableCell>
                 <TableCell>
