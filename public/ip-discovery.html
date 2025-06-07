@@ -1,0 +1,26 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Server IP Discovery</title>
+</head>
+<body>
+    <h1>Server IP Discovery</h1>
+    <div id="ip-info">Loading...</div>
+    <script>
+        async function getServerIP( ) {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json' );
+                const data = await response.json();
+                document.getElementById('ip-info').innerHTML = `
+                    <h2>Your Server IP: ${data.ip}</h2>
+                    <p>Register this IP with Keystone Automotive</p>
+                    <p>Timestamp: ${new Date().toISOString()}</p>
+                `;
+            } catch (error) {
+                document.getElementById('ip-info').innerHTML = `Error: ${error.message}`;
+            }
+        }
+        getServerIP();
+    </script>
+</body>
+</html>
