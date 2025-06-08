@@ -14,8 +14,13 @@ const Index = () => {
         <Card>
           <CardHeader className="text-center">
             <div className="mb-6">
-              <ShoppingBag className="h-16 w-16 mx-auto text-shop-primary" />
-              <CardTitle className="text-3xl font-bold mt-4 mb-2">Custom Truck Connections</CardTitle>
+              <div className="flex justify-center mb-4">
+                <img 
+                  src="https://aw1.imgix.net/aw/_content/site/customtruckconnections/Logos/Logo-Primary.png?auto=format&dpr=1&fit=max&h=95&q=75&w=237"
+                  alt="Custom Truck Connections"
+                  className="h-16 w-auto max-w-full object-contain"
+                />
+              </div>
               <CardDescription className="text-gray-600 mb-8">Choose your portal</CardDescription>
             </div>
           </CardHeader>
