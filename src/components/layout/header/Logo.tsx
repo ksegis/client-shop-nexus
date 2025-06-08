@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Wrench } from 'lucide-react';
 
 interface LogoProps {
   portalType: 'shop' | 'customer';
@@ -12,12 +11,11 @@ export const Logo = ({ portalType }: LogoProps) => {
     <div className="flex items-center">
       <Link to={portalType === 'customer' ? '/customer' : '/shop'}>
         <div className="h-10 w-40 flex items-center justify-center">
-          <div className="flex items-center space-x-2">
-            <Wrench className="h-6 w-6 text-shop-primary" />
-            <span className="font-bold text-lg text-shop-primary">
-              Custom Truck Connections
-            </span>
-          </div>
+          <img 
+            src="https://aw1.imgix.net/aw/_content/site/customtruckconnections/Logos/Logo-Primary.png?auto=format&dpr=1&fit=max&h=95&q=75&w=237"
+            alt="Custom Truck Connections"
+            className="h-8 w-auto max-w-full object-contain"
+          />
         </div>
       </Link>
     </div>
