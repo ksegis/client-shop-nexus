@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Filter, Grid, List, Star, Heart, Eye, Truck, Wrench, Settings, BarChart3, TrendingUp, Package2, Clock, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Filter, Grid, List, Star, Heart, Eye, Truck, Wrench, Settings, BarChart3, TrendingUp, Package2, Clock, CheckCircle, XCircle, AlertTriangle, FileText, Download } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePartsCart } from "@/contexts/parts/PartsCartContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -188,6 +191,30 @@ const categories = [
   { name: "Hydraulics", icon: TrendingUp, count: 1, subcategories: ["Pumps", "Cylinders", "Hoses", "Fittings"] }
 ];
 
+// Mock special orders data
+const mockSpecialOrders = [
+  {
+    id: "SO-001",
+    customerName: "ABC Trucking",
+    partDescription: "Custom exhaust manifold for Peterbilt 389",
+    requestDate: "2024-01-15",
+    expectedDate: "2024-02-01",
+    status: "In Progress",
+    estimatedCost: 850.00,
+    supplier: "Custom Parts Co"
+  },
+  {
+    id: "SO-002", 
+    customerName: "XYZ Transport",
+    partDescription: "Specialized transmission cooler",
+    requestDate: "2024-01-10",
+    expectedDate: "2024-01-25",
+    status: "Ordered",
+    estimatedCost: 425.00,
+    supplier: "Trans Solutions"
+  }
+];
+
 const ShopParts = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -205,9 +232,17 @@ const ShopParts = () => {
   const [wishlist, setWishlist] = useState([]);
   const [showInStockOnly, setShowInStockOnly] = useState(false);
   const [showFeaturedOnly, setShowFeaturedOnly] = useState(false);
+  const [specialOrders, setSpecialOrders] = useState(mockSpecialOrders);
+  const [showSpecialOrderDialog, setShowSpecialOrderDialog] = useState(false);
+  const [newSpecialOrder, setNewSpecialOrder] = useState({
+    customerName: "",
+    partDescription: "",
+    estimatedCost: "",
+    notes: ""
+  });
   
   // Safely use the cart context with error handling
-  let cart, addToCart, getCartItemCount, isInCart, getCartTotal;
+  let cart, addToCart, getCartItemCount, isInCart, getCartTotal, clearCart;
   try {
     const cartContext = usePartsCart();
     cart = cartContext.cart;
@@ -215,6 +250,7 @@ const ShopParts = () => {
     getCartItemCount = cartContext.getCartItemCount;
     isInCart = cartContext.isInCart;
     getCartTotal = cartContext.getCartTotal;
+    clearCart = cartContext.clearCart;
   } catch (err) {
     console.warn("PartsCart context not available:", err);
     // Provide fallback functions
@@ -223,6 +259,7 @@ const ShopParts = () => {
     getCartItemCount = () => 0;
     isInCart = () => false;
     getCartTotal = () => 0;
+    clearCart = () => console.log("Cart not available");
   }
 
   const { toast } = useToast();
@@ -339,6 +376,87 @@ const ShopParts = () => {
     if (part.quantity === 0) return { status: "Out of Stock", color: "destructive", icon: XCircle };
     if (part.quantity <= part.reorder_level) return { status: "Low Stock", color: "warning", icon: AlertTriangle };
     return { status: "In Stock", color: "default", icon: CheckCircle };
+  };
+
+  const handleCategoryFilter = (categoryName: string) => {
+    setSelectedCategory(categoryName.toLowerCase());
+    setSelectedSubcategory("all");
+    setActiveTab("catalog");
+  };
+
+  const handleCreateSpecialOrder = () => {
+    if (!newSpecialOrder.customerName || !newSpecialOrder.partDescription) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in customer name and part description",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const order = {
+      id: `SO-${String(specialOrders.length + 1).padStart(3, '0')}`,
+      customerName: newSpecialOrder.customerName,
+      partDescription: newSpecialOrder.partDescription,
+      requestDate: new Date().toISOString().split('T')[0],
+      expectedDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      status: "Pending",
+      estimatedCost: parseFloat(newSpecialOrder.estimatedCost) || 0,
+      supplier: "TBD",
+      notes: newSpecialOrder.notes
+    };
+
+    setSpecialOrders(prev => [...prev, order]);
+    setNewSpecialOrder({ customerName: "", partDescription: "", estimatedCost: "", notes: "" });
+    setShowSpecialOrderDialog(false);
+    
+    toast({
+      title: "Special Order Created",
+      description: `Order ${order.id} has been created successfully`,
+    });
+  };
+
+  const handleSaveQuote = () => {
+    if (!cart || cart.length === 0) {
+      toast({
+        title: "Empty Cart",
+        description: "Add items to cart before saving quote",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const quoteId = `Q-${Date.now()}`;
+    toast({
+      title: "Quote Saved",
+      description: `Quote ${quoteId} has been saved successfully`,
+    });
+  };
+
+  const handleProceedToCheckout = () => {
+    if (!cart || cart.length === 0) {
+      toast({
+        title: "Empty Cart",
+        description: "Add items to cart before checkout",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    toast({
+      title: "Proceeding to Checkout",
+      description: "Redirecting to checkout process...",
+    });
+    
+    // Here you would typically redirect to checkout page
+    // For demo purposes, we'll just show a success message
+    setTimeout(() => {
+      toast({
+        title: "Order Placed",
+        description: `Order for ${cart.length} items has been placed successfully`,
+      });
+      if (clearCart) clearCart();
+    }, 2000);
   };
 
   if (isLoading) {
@@ -564,22 +682,25 @@ const ShopParts = () => {
               </CardContent>
             </Card>
 
-            {/* Category Quick Links */}
+            {/* Category Quick Links - Now Functional */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               {categories.map((category) => {
                 const IconComponent = category.icon;
+                const isActive = selectedCategory === category.name.toLowerCase();
                 return (
                   <Card 
                     key={category.name}
                     className={`cursor-pointer transition-all hover:shadow-lg ${
-                      selectedCategory === category.name.toLowerCase() ? 'ring-2 ring-blue-500' : ''
+                      isActive ? 'ring-2 ring-blue-500 bg-blue-50' : ''
                     }`}
-                    onClick={() => setSelectedCategory(category.name.toLowerCase())}
+                    onClick={() => handleCategoryFilter(category.name)}
                   >
                     <CardContent className="p-4 text-center">
-                      <IconComponent className="h-8 w-8 mx-auto mb-2 text-blue-600" />
-                      <h3 className="font-medium">{category.name}</h3>
-                      <p className="text-sm text-muted-foreground">{category.count} items</p>
+                      <IconComponent className={`h-8 w-8 mx-auto mb-2 ${isActive ? 'text-blue-600' : 'text-gray-600'}`} />
+                      <h3 className={`font-medium ${isActive ? 'text-blue-600' : ''}`}>{category.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {parts.filter(p => p.category === category.name).length} items
+                      </p>
                     </CardContent>
                   </Card>
                 );
@@ -815,7 +936,7 @@ const ShopParts = () => {
             )}
           </TabsContent>
 
-          {/* Other tabs content will be added in the next part... */}
+          {/* Enhanced Inventory Tab with Data Rows */}
           <TabsContent value="inventory" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <Card>
@@ -853,33 +974,180 @@ const ShopParts = () => {
                 </CardContent>
               </Card>
             </div>
-          </TabsContent>
 
-          <TabsContent value="orders" className="space-y-6">
+            {/* Inventory Data Table */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Special Orders Management
-                </CardTitle>
-                <CardDescription>
-                  Create and track custom part orders for items not in regular inventory
-                </CardDescription>
+                <CardTitle>Inventory Details</CardTitle>
+                <CardDescription>Complete inventory listing with stock levels and locations</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-12">
-                  <Truck className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-xl font-semibold mb-2">No special orders</h3>
-                  <p className="text-muted-foreground mb-6">Special orders will appear here when created</p>
-                  <Button size="lg">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Special Order
-                  </Button>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Part Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Reorder Level</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {parts.map((part) => {
+                      const stockStatus = getStockStatus(part);
+                      const StockIcon = stockStatus.icon;
+                      return (
+                        <TableRow key={part.id}>
+                          <TableCell className="font-medium">{part.sku}</TableCell>
+                          <TableCell>{part.name}</TableCell>
+                          <TableCell>{part.category}</TableCell>
+                          <TableCell>{part.location}</TableCell>
+                          <TableCell>{part.quantity}</TableCell>
+                          <TableCell>{part.reorder_level}</TableCell>
+                          <TableCell>
+                            <Badge variant={stockStatus.color} className="flex items-center gap-1 w-fit">
+                              <StockIcon className="h-3 w-3" />
+                              {stockStatus.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>${(part.price * part.quantity).toFixed(2)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
 
+          {/* Enhanced Special Orders Tab with Working Button */}
+          <TabsContent value="orders" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      Special Orders Management
+                    </CardTitle>
+                    <CardDescription>
+                      Create and track custom part orders for items not in regular inventory
+                    </CardDescription>
+                  </div>
+                  <Dialog open={showSpecialOrderDialog} onOpenChange={setShowSpecialOrderDialog}>
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Special Order
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Create Special Order</DialogTitle>
+                        <DialogDescription>
+                          Create a custom order for parts not in regular inventory
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="customerName">Customer Name</Label>
+                          <Input
+                            id="customerName"
+                            value={newSpecialOrder.customerName}
+                            onChange={(e) => setNewSpecialOrder(prev => ({...prev, customerName: e.target.value}))}
+                            placeholder="Enter customer name"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="partDescription">Part Description</Label>
+                          <Textarea
+                            id="partDescription"
+                            value={newSpecialOrder.partDescription}
+                            onChange={(e) => setNewSpecialOrder(prev => ({...prev, partDescription: e.target.value}))}
+                            placeholder="Describe the part needed"
+                            rows={3}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="estimatedCost">Estimated Cost</Label>
+                          <Input
+                            id="estimatedCost"
+                            type="number"
+                            value={newSpecialOrder.estimatedCost}
+                            onChange={(e) => setNewSpecialOrder(prev => ({...prev, estimatedCost: e.target.value}))}
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="notes">Notes (Optional)</Label>
+                          <Textarea
+                            id="notes"
+                            value={newSpecialOrder.notes}
+                            onChange={(e) => setNewSpecialOrder(prev => ({...prev, notes: e.target.value}))}
+                            placeholder="Additional notes or requirements"
+                            rows={2}
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button onClick={handleCreateSpecialOrder} className="flex-1">
+                            Create Order
+                          </Button>
+                          <Button variant="outline" onClick={() => setShowSpecialOrderDialog(false)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {specialOrders.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order ID</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Part Description</TableHead>
+                        <TableHead>Request Date</TableHead>
+                        <TableHead>Expected Date</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Estimated Cost</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {specialOrders.map((order) => (
+                        <TableRow key={order.id}>
+                          <TableCell className="font-medium">{order.id}</TableCell>
+                          <TableCell>{order.customerName}</TableCell>
+                          <TableCell>{order.partDescription}</TableCell>
+                          <TableCell>{order.requestDate}</TableCell>
+                          <TableCell>{order.expectedDate}</TableCell>
+                          <TableCell>
+                            <Badge variant={order.status === "Pending" ? "secondary" : "default"}>
+                              {order.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>${order.estimatedCost.toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-12">
+                    <Truck className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-xl font-semibold mb-2">No special orders</h3>
+                    <p className="text-muted-foreground mb-6">Special orders will appear here when created</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Enhanced Cart Tab with Working Buttons */}
           <TabsContent value="cart" className="space-y-6">
             <Card>
               <CardHeader>
@@ -934,10 +1202,11 @@ const ShopParts = () => {
                       </div>
                       
                       <div className="flex gap-4 mt-6">
-                        <Button variant="outline" className="flex-1">
+                        <Button variant="outline" className="flex-1" onClick={handleSaveQuote}>
+                          <FileText className="h-4 w-4 mr-2" />
                           Save Quote
                         </Button>
-                        <Button className="flex-1 bg-green-600 hover:bg-green-700">
+                        <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={handleProceedToCheckout}>
                           <Truck className="h-4 w-4 mr-2" />
                           Proceed to Checkout
                         </Button>
