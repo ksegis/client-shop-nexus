@@ -19,6 +19,7 @@ import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { CustomersProvider } from "@/pages/shop/customers/CustomersContext";
+import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
 
 const ShopRoutes = () => {
   return (
@@ -137,7 +138,9 @@ const ShopRoutes = () => {
           path="parts"
           element={
             <ProtectedRoute>
-              <Parts />
+              <PartsCartProvider>
+                <Parts />
+              </PartsCartProvider>
             </ProtectedRoute>
           }
         />
