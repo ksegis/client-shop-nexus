@@ -11,6 +11,7 @@ import AuthCallback from "@/pages/auth/AuthCallback";
 import InviteAccept from "@/pages/auth/InviteAccept";
 import NotFound from "@/pages/NotFound";
 import Unauthorized from "@/pages/Unauthorized";
+import KeystoneTest from "@/components/KeystoneTest";
 
 const AppRoutes = () => {
   return (
@@ -19,6 +20,9 @@ const AppRoutes = () => {
       <Route path="/" element={<Index />} />
       <Route path="/shop-login" element={<ShopLogin />} />
       <Route path="/customer-login" element={<CustomerLogin />} />
+      
+      {/* Keystone test route */}
+      <Route path="/keystone-test" element={<KeystoneTest />} />
       
       {/* Auth routes */}
       <Route path="/auth/callback" element={<AuthCallback />} />
