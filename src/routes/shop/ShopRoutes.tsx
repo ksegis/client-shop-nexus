@@ -17,6 +17,7 @@ import { WorkOrdersProvider } from "@/pages/shop/work-orders/WorkOrdersContext";
 import UserManagement from "@/pages/shop/admin/UserManagement";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
+import NewInvoice from "@/pages/shop/invoices/NewInvoice";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { CustomersProvider } from "@/pages/shop/customers/CustomersContext";
 import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
@@ -119,6 +120,14 @@ const ShopRoutes = () => {
           element={
             <ProtectedRoute>
               <Invoices />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="invoices/new"
+          element={
+            <ProtectedRoute>
+              <NewInvoice />
             </ProtectedRoute>
           }
         />
