@@ -1,6 +1,6 @@
-
 import { Link } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -15,7 +15,9 @@ import { cn } from "@/lib/utils";
 interface NavigationLink {
   name: string;
   path: string;
+  icon?: string;
   children?: NavigationLink[];
+  badge?: string | number;
 }
 
 interface DesktopNavigationProps {
@@ -23,32 +25,60 @@ interface DesktopNavigationProps {
   currentPath: string;
 }
 
+// Helper function to get Lucide icon component
+const getIcon = (iconName?: string) => {
+  if (!iconName) return null;
+  const IconComponent = (LucideIcons as any)[iconName];
+  return IconComponent ? <IconComponent className="w-4 h-4" /> : null;
+};
+
 export const DesktopNavigation = ({ links, currentPath }: DesktopNavigationProps) => {
   return (
     <NavigationMenu className="hidden md:flex">
-      <NavigationMenuList>
+      <NavigationMenuList className="space-x-1">
         {links.map((link) => {
+          const isActive = currentPath === link.path || 
+            (link.children && link.children.some(child => currentPath === child.path));
+          
           // If link has children, render a dropdown
           if (link.children && link.children.length > 0) {
             return (
               <NavigationMenuItem key={link.name} className="relative">
-                <NavigationMenuTrigger className="bg-transparent hover:bg-gray-100">
-                  <span className="text-gray-600 hover:text-shop-primary font-medium">
-                    {link.name}
-                  </span>
+                <NavigationMenuTrigger 
+                  className={cn(
+                    "bg-transparent hover:bg-blue-50 hover:text-blue-600 transition-colors duration-200",
+                    isActive ? "bg-blue-50 text-blue-600" : "text-gray-700"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    {getIcon(link.icon)}
+                    <span className="font-medium">{link.name}</span>
+                    {link.badge && (
+                      <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
+                        {link.badge}
+                      </span>
+                    )}
+                  </div>
                 </NavigationMenuTrigger>
-                <NavigationMenuContent className="absolute top-full left-0 min-w-[200px] bg-white border shadow-lg rounded-md z-50">
-                  <ul className="grid w-full gap-2 p-2 md:w-[200px] lg:w-[220px]">
+                <NavigationMenuContent className="absolute top-full left-0 min-w-[240px] bg-white border shadow-lg rounded-md z-50">
+                  <ul className="grid w-full gap-1 p-2 md:w-[240px] lg:w-[260px]">
                     {link.children.map((child) => (
                       <li key={child.name}>
                         <Link 
                           to={child.path}
                           className={cn(
-                            "flex select-none items-center rounded-md px-3 py-2 text-sm font-medium outline-none focus:bg-accent focus:text-accent-foreground hover:bg-gray-100",
-                            currentPath === child.path ? "bg-accent text-accent-foreground" : ""
+                            "flex select-none items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium outline-none transition-colors duration-200",
+                            "hover:bg-blue-50 hover:text-blue-600 focus:bg-blue-50 focus:text-blue-600",
+                            currentPath === child.path ? "bg-blue-100 text-blue-700" : "text-gray-700"
                           )}
                         >
-                          {child.name}
+                          {getIcon(child.icon)}
+                          <span>{child.name}</span>
+                          {child.badge && (
+                            <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
+                              {child.badge}
+                            </span>
+                          )}
                         </Link>
                       </li>
                     ))}
@@ -65,11 +95,18 @@ export const DesktopNavigation = ({ links, currentPath }: DesktopNavigationProps
                 to={link.path}
                 className={cn(
                   navigationMenuTriggerStyle(),
-                  "bg-transparent hover:bg-gray-100",
-                  currentPath === link.path ? "text-shop-primary" : "text-gray-600"
+                  "bg-transparent hover:bg-blue-50 hover:text-blue-600 transition-colors duration-200",
+                  "flex items-center gap-2 px-4 py-2",
+                  isActive ? "bg-blue-50 text-blue-600" : "text-gray-700"
                 )}
               >
-                {link.name}
+                {getIcon(link.icon)}
+                <span className="font-medium">{link.name}</span>
+                {link.badge && (
+                  <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
+                    {link.badge}
+                  </span>
+                )}
               </Link>
             </NavigationMenuItem>
           );
@@ -78,3 +115,4 @@ export const DesktopNavigation = ({ links, currentPath }: DesktopNavigationProps
     </NavigationMenu>
   );
 };
+

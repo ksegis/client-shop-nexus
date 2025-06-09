@@ -1,6 +1,21 @@
-
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, CheckCircle, XCircle, Clock, AlertTriangle, Package, TrendingDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { 
+  FileText, 
+  CheckCircle, 
+  XCircle, 
+  Clock, 
+  AlertTriangle, 
+  Package, 
+  TrendingDown,
+  Plus,
+  Search,
+  Calendar,
+  Receipt,
+  Users,
+  Wrench
+} from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useInventoryData } from '@/hooks/useInventoryData';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,6 +24,166 @@ import AppointmentsOverview from '@/components/shop/dashboard/AppointmentsOvervi
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
+
+// Quick Actions Component
+const QuickActionsSection = () => {
+  const navigate = useNavigate();
+
+  const quickActions = [
+    {
+      title: 'New Work Order',
+      description: 'Create a new work order',
+      icon: Plus,
+      color: 'bg-blue-500 hover:bg-blue-600',
+      action: () => navigate('/shop/work-orders/new')
+    },
+    {
+      title: 'Customer Lookup',
+      description: 'Search customers',
+      icon: Search,
+      color: 'bg-green-500 hover:bg-green-600',
+      action: () => navigate('/shop/customers')
+    },
+    {
+      title: 'Parts Search',
+      description: 'Find parts & inventory',
+      icon: Package,
+      color: 'bg-purple-500 hover:bg-purple-600',
+      action: () => navigate('/shop/parts')
+    },
+    {
+      title: 'Schedule Appointment',
+      description: 'Book service appointment',
+      icon: Calendar,
+      color: 'bg-orange-500 hover:bg-orange-600',
+      action: () => navigate('/shop/service-appointments')
+    },
+    {
+      title: 'Generate Invoice',
+      description: 'Create new invoice',
+      icon: Receipt,
+      color: 'bg-red-500 hover:bg-red-600',
+      action: () => navigate('/shop/invoices/new')
+    },
+    {
+      title: 'View Reports',
+      description: 'Access analytics',
+      icon: TrendingDown,
+      color: 'bg-indigo-500 hover:bg-indigo-600',
+      action: () => navigate('/shop/reports')
+    }
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Quick Actions</h2>
+        <p className="text-sm text-muted-foreground">Common tasks and shortcuts</p>
+      </div>
+      
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {quickActions.map((action, index) => {
+          const IconComponent = action.icon;
+          return (
+            <Card 
+              key={index}
+              className="cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-105 border-l-4 border-l-transparent hover:border-l-blue-500"
+              onClick={action.action}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-3">
+                  <div className={`p-2 rounded-lg text-white ${action.color} transition-colors duration-200`}>
+                    <IconComponent className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-medium text-sm">{action.title}</h3>
+                    <p className="text-xs text-muted-foreground">{action.description}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// Today's Priority Tasks Component
+const TodaysPriorities = () => {
+  const priorities = [
+    {
+      title: 'Pending Approvals',
+      count: 3,
+      icon: Clock,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50',
+      action: '/shop/estimates?status=pending'
+    },
+    {
+      title: 'Scheduled Services',
+      count: 7,
+      icon: Wrench,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+      action: '/shop/service-appointments'
+    },
+    {
+      title: 'Low Stock Alerts',
+      count: 12,
+      icon: AlertTriangle,
+      color: 'text-red-600',
+      bgColor: 'bg-red-50',
+      action: '/shop/inventory?filter=low-stock'
+    },
+    {
+      title: 'Follow-up Calls',
+      count: 5,
+      icon: Users,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+      action: '/shop/customers?filter=follow-up'
+    }
+  ];
+
+  const navigate = useNavigate();
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold">Today's Priorities</h2>
+      
+      <div className="grid gap-3 md:grid-cols-2">
+        {priorities.map((priority, index) => {
+          const IconComponent = priority.icon;
+          return (
+            <Card 
+              key={index}
+              className="cursor-pointer hover:shadow-md transition-all duration-200"
+              onClick={() => navigate(priority.action)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`p-2 rounded-lg ${priority.bgColor}`}>
+                      <IconComponent className={`h-4 w-4 ${priority.color}`} />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-sm">{priority.title}</h3>
+                      <p className="text-xs text-muted-foreground">Requires attention</p>
+                    </div>
+                  </div>
+                  <div className={`text-xl font-bold ${priority.color}`}>
+                    {priority.count}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 const Dashboard = () => {
   const { estimates, workOrders, inventory, customerCount, loading, error } = useDashboardData();
@@ -37,6 +212,23 @@ const Dashboard = () => {
           </p>
         </div>
 
+        {/* Quick Actions Skeleton */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-3">
+                  <Skeleton className="h-9 w-9 rounded-lg" />
+                  <div className="flex-1">
+                    <Skeleton className="h-4 w-24 mb-1" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
         {/* Metrics Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
@@ -50,44 +242,6 @@ const Dashboard = () => {
               <CardContent>
                 <Skeleton className="h-8 w-12" />
                 <Skeleton className="h-4 w-20 mt-2" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Current Activity Section */}
-        <div className="grid gap-4 md:grid-cols-2">
-          {[1, 2].map((card) => (
-            <Card key={card} className="col-span-1">
-              <CardHeader>
-                <CardTitle><Skeleton className="h-5 w-36" /></CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex items-center justify-between border-b last:border-0 py-3">
-                      <div>
-                        <Skeleton className="h-4 w-24 mb-1" />
-                        <Skeleton className="h-3 w-40" />
-                      </div>
-                      <Skeleton className="h-4 w-16" />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Bottom Section */}
-        <div className="grid gap-4 md:grid-cols-2">
-          {[1, 2].map((card) => (
-            <Card key={card} className="col-span-1">
-              <CardHeader>
-                <CardTitle><Skeleton className="h-5 w-36" /></CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-24 w-full" />
               </CardContent>
             </Card>
           ))}
@@ -107,7 +261,6 @@ const Dashboard = () => {
   }
 
   // Calculate change percentages (these would be real calculations in a full implementation)
-  // For demo, we'll use placeholder values
   const changeData = {
     totalEstimates: '+12%',
     pendingApproval: '-5%',
@@ -115,10 +268,9 @@ const Dashboard = () => {
     rejected: '+2%',
   };
 
-  // Determine if change is positive or negative
   const changeType = {
     totalEstimates: 'positive',
-    pendingApproval: 'positive', // Counter-intuitive but fewer pending is good
+    pendingApproval: 'positive',
     approved: 'positive',
     rejected: 'negative',
   };
@@ -132,7 +284,6 @@ const Dashboard = () => {
     item.quantity === 0 || item.quantity < 5
   );
 
-  // Prepare inventory card data with detailed items
   const inventoryCards = [
     {
       id: 'total',
@@ -162,125 +313,133 @@ const Dashboard = () => {
 
   const selectedCardData = inventoryCards.find(card => card.id === selectedInventoryCard);
 
-  // Handle clicking on an inventory item to navigate to inventory page
   const handleItemClick = (itemId: string) => {
-    // Navigate to inventory page with the item ID as a query parameter
     navigate(`/shop/inventory?item=${itemId}`);
-    setSelectedInventoryCard(null); // Close the dialog
+    setSelectedInventoryCard(null);
   };
 
-  // Handle clicking on an estimate to navigate to estimates page
   const handleEstimateClick = (estimateId: string) => {
     navigate(`/shop/estimates?estimate=${estimateId}`);
     setSelectedEstimatesDialog(false);
   };
 
-  // Handle clicking on a work order to navigate to work orders page
   const handleWorkOrderClick = (workOrderId: string) => {
     navigate(`/shop/work-orders/${workOrderId}`);
     setSelectedWorkOrdersDialog(false);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">
-          Overview of your shop's performance and key metrics.
+          Welcome back! Here's what's happening in your shop today.
         </p>
       </div>
 
+      {/* Quick Actions Section */}
+      <QuickActionsSection />
+
+      {/* Today's Priorities */}
+      <TodaysPriorities />
+
       {/* Metrics Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[
-          { id: 'totalEstimates', name: 'Total Estimates', value: estimates.count },
-          { id: 'pendingApproval', name: 'Pending Approval', value: estimates.pending },
-          { id: 'approved', name: 'Approved', value: estimates.approved },
-          { id: 'customerCount', name: 'Customers', value: customerCount }
-        ].map((metric) => {
-          const IconComponent = metricIcons[metric.id as keyof typeof metricIcons] || FileText;
-          return (
-            <Card key={metric.id}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{metric.name}</CardTitle>
-                <IconComponent className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{metric.value}</div>
-                <p className={`text-xs ${
-                  changeType[metric.id as keyof typeof changeType] === 'positive' ? 
-                  'text-green-500' : 'text-red-500'}`
-                }>
-                  {changeData[metric.id as keyof typeof changeData] || "+0%"} from last month
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Key Metrics</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[
+            { id: 'totalEstimates', name: 'Total Estimates', value: estimates.count },
+            { id: 'pendingApproval', name: 'Pending Approval', value: estimates.pending },
+            { id: 'approved', name: 'Approved', value: estimates.approved },
+            { id: 'customerCount', name: 'Customers', value: customerCount }
+          ].map((metric) => {
+            const IconComponent = metricIcons[metric.id as keyof typeof metricIcons] || FileText;
+            return (
+              <Card key={metric.id} className="hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">{metric.name}</CardTitle>
+                  <IconComponent className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{metric.value}</div>
+                  <p className={`text-xs ${
+                    changeType[metric.id as keyof typeof changeType] === 'positive' ? 
+                    'text-green-500' : 'text-red-500'}`
+                  }>
+                    {changeData[metric.id as keyof typeof changeData] || "+0%"} from last month
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
 
       {/* Appointments Overview */}
-      <div>
-        <h2 className="text-lg font-semibold mb-4">Service Appointments</h2>
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Service Appointments</h2>
         <AppointmentsOverview />
       </div>
 
-      {/* Current Activity Section - Now Interactive */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card 
-          className="col-span-1 cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => setSelectedEstimatesDialog(true)}
-        >
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Recent Estimates
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {estimates.recent.length > 0 ? (
-                <div>
-                  <div className="text-2xl font-bold">{estimates.recent.length}</div>
-                  <p className="text-xs text-muted-foreground">Click to view all estimates</p>
-                </div>
-              ) : (
-                <div className="text-center py-4 text-gray-500">
-                  No recent estimates available
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Current Activity Section */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Recent Activity</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card 
+            className="col-span-1 cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => setSelectedEstimatesDialog(true)}
+          >
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                Recent Estimates
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {estimates.recent.length > 0 ? (
+                  <div>
+                    <div className="text-2xl font-bold">{estimates.recent.length}</div>
+                    <p className="text-xs text-muted-foreground">Click to view all estimates</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    No recent estimates available
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card 
-          className="col-span-1 cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => setSelectedWorkOrdersDialog(true)}
-        >
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Active Work Orders
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {workOrders.recent.length > 0 ? (
-                <div>
-                  <div className="text-2xl font-bold">{workOrders.recent.length}</div>
-                  <p className="text-xs text-muted-foreground">Click to view all work orders</p>
-                </div>
-              ) : (
-                <div className="text-center py-4 text-gray-500">
-                  No active work orders at the moment
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          <Card 
+            className="col-span-1 cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => setSelectedWorkOrdersDialog(true)}
+          >
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                Active Work Orders
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {workOrders.recent.length > 0 ? (
+                  <div>
+                    <div className="text-2xl font-bold">{workOrders.recent.length}</div>
+                    <p className="text-xs text-muted-foreground">Click to view all work orders</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    No active work orders at the moment
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Inventory Overview with Clickable Summary Cards */}
+      {/* Inventory Overview */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Inventory Overview</h2>
         
@@ -316,6 +475,7 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Dialogs remain the same... */}
       {/* Estimates Details Dialog */}
       <Dialog open={selectedEstimatesDialog} onOpenChange={setSelectedEstimatesDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -438,49 +598,39 @@ const Dashboard = () => {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-medium">{item.name}</h4>
-                        {item.sku && (
-                          <p className="text-sm text-gray-500">SKU: {item.sku}</p>
-                        )}
+                        <h4 className="font-medium">{item.part_name}</h4>
+                        <p className="text-sm text-gray-500">SKU: {item.sku}</p>
                       </div>
                       <div className="text-right">
-                        {selectedCardData.id === 'alerts' ? (
-                          <Badge variant="destructive">Critical</Badge>
-                        ) : selectedCardData.id === 'lowStock' ? (
-                          <Badge variant="outline" className="text-orange-600 border-orange-300">Low Stock</Badge>
-                        ) : (
-                          <Badge variant="outline">In Stock</Badge>
-                        )}
+                        <div className={`text-lg font-semibold ${
+                          item.quantity === 0 ? 'text-red-600' :
+                          item.quantity <= (item.reorder_level || 10) ? 'text-orange-600' : 'text-green-600'
+                        }`}>
+                          {item.quantity} units
+                        </div>
+                        <Badge variant={
+                          item.quantity === 0 ? 'destructive' :
+                          item.quantity <= (item.reorder_level || 10) ? 'secondary' : 'default'
+                        }>
+                          {item.quantity === 0 ? 'Out of Stock' :
+                           item.quantity <= (item.reorder_level || 10) ? 'Low Stock' : 'In Stock'}
+                        </Badge>
                       </div>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <p className="font-medium">Current Stock:</p>
-                        <p className="text-gray-600">{item.quantity || 0}</p>
+                        <p className="font-medium">Location:</p>
+                        <p className="text-gray-600">{item.location || 'Not specified'}</p>
                       </div>
                       <div>
-                        <p className="font-medium">Minimum Stock:</p>
-                        <p className="text-gray-600">{item.reorder_level || 10}</p>
+                        <p className="font-medium">Reorder Level:</p>
+                        <p className="text-gray-600">{item.reorder_level || 'Not set'}</p>
                       </div>
                     </div>
                     
-                    {item.price && (
-                      <div>
-                        <p className="text-sm font-medium">Price:</p>
-                        <p className="text-sm text-gray-600">${item.price.toFixed(2)}</p>
-                      </div>
-                    )}
-                    
-                    {item.supplier && (
-                      <div>
-                        <p className="text-sm font-medium">Supplier:</p>
-                        <p className="text-sm text-gray-600">{item.supplier}</p>
-                      </div>
-                    )}
-                    
                     <div className="text-xs text-blue-600 hover:underline">
-                      Click to view in inventory →
+                      Click to view item details →
                     </div>
                   </div>
                 </Card>
@@ -493,26 +643,9 @@ const Dashboard = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Employee Performance */}
-      <Card className="col-span-1">
-        <CardHeader>
-          <CardTitle>Employee Performance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-md text-blue-700">
-            <p className="font-medium">Staff Performance Summary</p>
-            <p className="text-sm mt-1">Employee performance data is now available in the Reports section</p>
-          </div>
-          <div className="mt-2 flex justify-center">
-            <a href="/shop/reports" className="text-sm text-blue-600 hover:underline">
-              View detailed performance reports →
-            </a>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };
 
 export default Dashboard;
+
