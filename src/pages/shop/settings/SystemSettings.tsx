@@ -293,7 +293,6 @@ const SystemSettings: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                </div>
               </div>
             </CardContent>
           </Card>
