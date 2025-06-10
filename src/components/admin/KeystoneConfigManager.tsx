@@ -41,9 +41,10 @@ interface ValidationErrors {
 
 // Security validation functions
 const validateSecurityKey = (key: string): boolean => {
-  // Keystone security keys should be 36-byte hex strings (72 characters)
-  const hexPattern = /^[0-9a-fA-F]{72}$/;
-  return hexPattern.test(key);
+  // Accept any non-empty string as Keystone key formats may vary
+  // Remove whitespace and check for minimum length
+  const cleanKey = key.trim();
+  return cleanKey.length >= 10; // Minimum reasonable length for a security key
 };
 
 const validateIPAddress = (ip: string): boolean => {
@@ -52,9 +53,9 @@ const validateIPAddress = (ip: string): boolean => {
 };
 
 const validateAccountNumber = (accountNumber: string): boolean => {
-  // Account numbers should be numeric and at least 3 digits
-  const accountPattern = /^\d{3,}$/;
-  return accountPattern.test(accountNumber);
+  // Account numbers can be alphanumeric and at least 3 characters
+  const cleanAccount = accountNumber.trim();
+  return cleanAccount.length >= 3 && /^[a-zA-Z0-9]+$/.test(cleanAccount);
 };
 
 const sanitizeErrorMessage = (error: string): string => {
@@ -81,6 +82,7 @@ export const KeystoneConfigManager: React.FC = () => {
   const [syncLogs, setSyncLogs] = useState<any[]>([]);
   const [showDevKey, setShowDevKey] = useState(false);
   const [showProdKey, setShowProdKey] = useState(false);
+  const [showAccountNumber, setShowAccountNumber] = useState(false);
   const [approvedIPsInput, setApprovedIPsInput] = useState('');
   const { toast } = useToast();
 
@@ -101,15 +103,15 @@ export const KeystoneConfigManager: React.FC = () => {
     if (!config.accountNumber) {
       errors.accountNumber = 'Account number is required';
     } else if (!validateAccountNumber(config.accountNumber)) {
-      errors.accountNumber = 'Account number must be numeric and at least 3 digits';
+      errors.accountNumber = 'Account number must be alphanumeric and at least 3 characters';
     }
 
     if (config.securityKeyDev && !validateSecurityKey(config.securityKeyDev)) {
-      errors.securityKeyDev = 'Development security key must be a 72-character hex string';
+      errors.securityKeyDev = 'Development security key must be at least 10 characters';
     }
 
     if (config.securityKeyProd && !validateSecurityKey(config.securityKeyProd)) {
-      errors.securityKeyProd = 'Production security key must be a 72-character hex string';
+      errors.securityKeyProd = 'Production security key must be at least 10 characters';
     }
 
     if (config.approvedIPs.length > 0) {
@@ -348,21 +350,38 @@ export const KeystoneConfigManager: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="accountNumber">Account Number</Label>
-                  <Input
-                    id="accountNumber"
-                    placeholder="Enter your Keystone account number"
-                    value={config.accountNumber}
-                    onChange={(e) => {
-                      setConfig(prev => ({ ...prev, accountNumber: e.target.value }));
-                      if (validationErrors.accountNumber) {
-                        setValidationErrors(prev => ({ ...prev, accountNumber: undefined }));
-                      }
-                    }}
-                    className={validationErrors.accountNumber ? 'border-red-500' : ''}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="accountNumber"
+                      type={showAccountNumber ? "text" : "password"}
+                      placeholder="Enter your Keystone account number"
+                      value={config.accountNumber}
+                      onChange={(e) => {
+                        setConfig(prev => ({ ...prev, accountNumber: e.target.value }));
+                        if (validationErrors.accountNumber) {
+                          setValidationErrors(prev => ({ ...prev, accountNumber: undefined }));
+                        }
+                      }}
+                      className={validationErrors.accountNumber ? 'border-red-500 pr-10' : 'pr-10'}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowAccountNumber(!showAccountNumber)}
+                    >
+                      {showAccountNumber ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                   {validationErrors.accountNumber && (
                     <p className="text-sm text-red-500">{validationErrors.accountNumber}</p>
                   )}
+                  <p className="text-xs text-gray-500">Alphanumeric account identifier from Keystone</p>
                 </div>
 
                 <div className="space-y-2">
@@ -388,7 +407,7 @@ export const KeystoneConfigManager: React.FC = () => {
                   <Input
                     id={config.environment === 'development' ? 'securityKeyDev' : 'securityKeyProd'}
                     type={config.environment === 'development' ? (showDevKey ? "text" : "password") : (showProdKey ? "text" : "password")}
-                    placeholder={`72-character hex string for ${config.environment}`}
+                    placeholder={`Security key for ${config.environment} environment`}
                     value={config.environment === 'development' ? config.securityKeyDev : config.securityKeyProd}
                     onChange={(e) => {
                       if (config.environment === 'development') {
@@ -434,7 +453,7 @@ export const KeystoneConfigManager: React.FC = () => {
                 {config.environment === 'production' && validationErrors.securityKeyProd && (
                   <p className="text-sm text-red-500">{validationErrors.securityKeyProd}</p>
                 )}
-                <p className="text-xs text-gray-500">Must be exactly 72 hexadecimal characters</p>
+                <p className="text-xs text-gray-500">Security key provided by Keystone (minimum 10 characters)</p>
               </div>
 
               <div className="space-y-2">
