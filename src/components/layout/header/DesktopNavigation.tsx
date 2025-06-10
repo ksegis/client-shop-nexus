@@ -46,8 +46,8 @@ export const DesktopNavigation = ({ links, currentPath }: DesktopNavigationProps
               <NavigationMenuItem key={link.name} className="relative">
                 <NavigationMenuTrigger 
                   className={cn(
-                    "bg-transparent hover:bg-blue-50 hover:text-blue-600 transition-colors duration-200",
-                    isActive ? "bg-blue-50 text-blue-600" : "text-gray-700"
+                    "bg-transparent hover:bg-purple-600 hover:text-white transition-colors duration-200 text-white",
+                    isActive ? "bg-purple-600 text-white" : "text-white"
                   )}
                 >
                   <div className="flex items-center gap-2">
@@ -95,9 +95,9 @@ export const DesktopNavigation = ({ links, currentPath }: DesktopNavigationProps
                 to={link.path}
                 className={cn(
                   navigationMenuTriggerStyle(),
-                  "bg-transparent hover:bg-blue-50 hover:text-blue-600 transition-colors duration-200",
+                  "bg-transparent hover:bg-purple-600 hover:text-white transition-colors duration-200 text-white",
                   "flex items-center gap-2 px-4 py-2",
-                  isActive ? "bg-blue-50 text-blue-600" : "text-gray-700"
+                  isActive ? "bg-purple-600 text-white" : "text-white"
                 )}
               >
                 {getIcon(link.icon)}

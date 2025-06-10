@@ -52,9 +52,9 @@ const Header = ({ portalType }: HeaderProps) => {
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200" data-header-id={portalType}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center py-3">
+    <header className="ctc-header" data-header-id={portalType}>
+      <div className="ctc-header-container">
+        <div className="flex justify-between items-center w-full">
           {/* Logo */}
           <Logo portalType={portalType} />
           
