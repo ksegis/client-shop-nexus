@@ -22,20 +22,27 @@ class KeystoneService {
   private supabase;
   private loadedConfig: any = null;
 
-  constructor() {
-    this.config = {
-      proxyUrl: process.env.KEYSTONE_PROXY_URL || '',
-      apiToken: process.env.KEYSTONE_API_TOKEN || '',
-      environment: process.env.APP_ENVIRONMENT || 'development',
-      accountNumber: process.env.KEYSTONE_ACCOUNT_NUMBER || '',
-      securityToken: process.env.KEYSTONE_SECURITY_TOKEN || ''
-    };
+constructor() {
+  // DEBUG: Check environment variables
+  console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+  console.log('SUPABASE_TOKEN:', process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN ? 'SET' : 'NOT SET');
+  
+  this.config = {
+    proxyUrl: process.env.KEYSTONE_PROXY_URL || '',
+    apiToken: process.env.KEYSTONE_API_TOKEN || '',
+    environment: process.env.APP_ENVIRONMENT || 'development',
+    accountNumber: process.env.KEYSTONE_ACCOUNT_NUMBER || '',
+    securityToken: process.env.KEYSTONE_SECURITY_TOKEN || ''
+  };
 
-    // Initialize Supabase client
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN || ''
-    );
+  // Initialize Supabase client
+  this.supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN || ''
+  );
+  
+  // ... rest of constructor stays the same
+
 
     if (!this.config.proxyUrl || !this.config.apiToken) {
       console.warn('Keystone service not properly configured');
