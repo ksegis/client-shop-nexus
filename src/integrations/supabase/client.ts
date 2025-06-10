@@ -1,10 +1,12 @@
-
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-// Use the direct URLs instead of environment variables since Lovable doesn't support VITE_* variables
-const supabaseUrl = 'https://vqkxrbflwhunvbotjdds.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZxa3hyYmZsd2h1bnZib3RqZGRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY5ODc4ODksImV4cCI6MjA2MjU2Mzg4OX0.9cDur61j55TrjPY3SDDW4EHKGWjReC8Vk5eaojC4_sk';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vqkxrbflwhunvbotjdds.supabase.co';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZxa3hyYmZsd2h1bnZib3RqZGRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY5ODc4ODksImV4cCI6MjA2MjU2Mzg4OX0.9cDur61j55TrjPY3SDDW4EHKGWjReC8Vk5eaojC4_sk';
+
+if (!supabaseUrl || !supabaseKey ) {
+  throw new Error('Missing Supabase configuration');
+}
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
