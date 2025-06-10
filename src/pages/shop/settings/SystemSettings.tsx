@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,17 +23,123 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
+interface SystemSettings {
+  general: {
+    companyName: string;
+    timezone: string;
+    dateFormat: string;
+    currency: string;
+    language: string;
+  };
+  database: {
+    backupFrequency: string;
+    retentionDays: number;
+    autoBackup: boolean;
+  };
+  security: {
+    sessionTimeout: number;
+    passwordPolicy: string;
+    twoFactorAuth: boolean;
+    ipWhitelist: string[];
+  };
+  notifications: {
+    emailNotifications: boolean;
+    smsNotifications: boolean;
+    systemAlerts: boolean;
+    maintenanceMode: boolean;
+  };
+  performance: {
+    cacheEnabled: boolean;
+    logLevel: string;
+    maxFileSize: number;
+    compressionEnabled: boolean;
+  };
+}
+
+const defaultSettings: SystemSettings = {
+  general: {
+    companyName: 'Custom Truck Connections',
+    timezone: 'America/New_York',
+    dateFormat: 'MM/DD/YYYY',
+    currency: 'USD',
+    language: 'en'
+  },
+  database: {
+    backupFrequency: 'daily',
+    retentionDays: 30,
+    autoBackup: true
+  },
+  security: {
+    sessionTimeout: 30,
+    passwordPolicy: 'strong',
+    twoFactorAuth: false,
+    ipWhitelist: []
+  },
+  notifications: {
+    emailNotifications: true,
+    smsNotifications: false,
+    systemAlerts: true,
+    maintenanceMode: false
+  },
+  performance: {
+    cacheEnabled: true,
+    logLevel: 'info',
+    maxFileSize: 10,
+    compressionEnabled: true
+  }
+};
+
+const STORAGE_KEY = 'ctc_system_settings';
+
 const SystemSettings: React.FC = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState<SystemSettings>(defaultSettings);
+
+  // Load settings from localStorage on component mount
+  useEffect(() => {
+    try {
+      const savedSettings = localStorage.getItem(STORAGE_KEY);
+      if (savedSettings) {
+        const parsedSettings = JSON.parse(savedSettings);
+        setSettings(parsedSettings);
+      }
+    } catch (error) {
+      console.error('Failed to load settings from localStorage:', error);
+      toast({
+        title: "Settings Load Error",
+        description: "Failed to load saved settings. Using defaults.",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  // Save settings to localStorage
+  const saveSettingsToStorage = (newSettings: SystemSettings) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
+    } catch (error) {
+      console.error('Failed to save settings to localStorage:', error);
+      toast({
+        title: "Settings Save Error",
+        description: "Failed to save settings locally.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSaveSettings = async () => {
     setLoading(true);
     try {
+      // Save to localStorage immediately
+      saveSettingsToStorage(settings);
+      
+      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
+      
       toast({
         title: "Settings Saved",
-        description: "System settings have been updated successfully.",
+        description: "System settings have been updated and saved successfully.",
       });
     } catch (error) {
       toast({
@@ -44,6 +150,52 @@ const SystemSettings: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const updateGeneralSettings = (key: string, value: string) => {
+    const newSettings = {
+      ...settings,
+      general: { ...settings.general, [key]: value }
+    };
+    setSettings(newSettings);
+    // Auto-save to localStorage on change
+    saveSettingsToStorage(newSettings);
+  };
+
+  const updateDatabaseSettings = (key: string, value: any) => {
+    const newSettings = {
+      ...settings,
+      database: { ...settings.database, [key]: value }
+    };
+    setSettings(newSettings);
+    saveSettingsToStorage(newSettings);
+  };
+
+  const updateSecuritySettings = (key: string, value: any) => {
+    const newSettings = {
+      ...settings,
+      security: { ...settings.security, [key]: value }
+    };
+    setSettings(newSettings);
+    saveSettingsToStorage(newSettings);
+  };
+
+  const updateNotificationSettings = (key: string, value: boolean) => {
+    const newSettings = {
+      ...settings,
+      notifications: { ...settings.notifications, [key]: value }
+    };
+    setSettings(newSettings);
+    saveSettingsToStorage(newSettings);
+  };
+
+  const updatePerformanceSettings = (key: string, value: any) => {
+    const newSettings = {
+      ...settings,
+      performance: { ...settings.performance, [key]: value }
+    };
+    setSettings(newSettings);
+    saveSettingsToStorage(newSettings);
   };
 
   return (
@@ -93,21 +245,54 @@ const SystemSettings: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="companyName">Company Name</Label>
-                  <Input id="companyName" defaultValue="Custom Truck Connections" />
+                  <Input 
+                    id="companyName" 
+                    value={settings.general.companyName}
+                    onChange={(e) => updateGeneralSettings('companyName', e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="timezone">Timezone</Label>
-                  <Select defaultValue="America/New_York">
+                  <Select value={settings.general.timezone} onValueChange={(value) => updateGeneralSettings('timezone', value)}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select timezone" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="America/New_York">Eastern Time</SelectItem>
-                      <SelectItem value="America/Chicago">Central Time</SelectItem>
-                      <SelectItem value="America/Denver">Mountain Time</SelectItem>
-                      <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
+                      <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
+                      <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
+                      <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
+                      <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
+                      <SelectItem value="UTC">UTC</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dateFormat">Date Format</Label>
+                  <Select value={settings.general.dateFormat} onValueChange={(value) => updateGeneralSettings('dateFormat', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select date format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
+                      <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
+                      <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="currency">Currency</Label>
+                  <Select value={settings.general.currency} onValueChange={(value) => updateGeneralSettings('currency', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="CAD">CAD - Canadian Dollar</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 </div>
               </div>
             </CardContent>
