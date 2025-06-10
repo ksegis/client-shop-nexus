@@ -1,4 +1,6 @@
 // Keystone API Service with DigitalOcean Proxy Integration
+import { createClient } from '@supabase/supabase-js';
+
 interface KeystoneConfig {
   proxyUrl: string;
   apiToken: string;
@@ -12,10 +14,13 @@ interface KeystoneResponse<T = any> {
   data?: T;
   error?: string;
   statusCode?: number;
+  statusMessage?: string;
 }
 
 class KeystoneService {
   private config: KeystoneConfig;
+  private supabase;
+  private loadedConfig: any = null;
 
   constructor() {
     this.config = {
@@ -25,6 +30,12 @@ class KeystoneService {
       accountNumber: process.env.KEYSTONE_ACCOUNT_NUMBER || '',
       securityToken: process.env.KEYSTONE_SECURITY_TOKEN || ''
     };
+
+    // Initialize Supabase client
+    this.supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    );
 
     if (!this.config.proxyUrl || !this.config.apiToken) {
       console.warn('Keystone service not properly configured');
@@ -106,7 +117,165 @@ class KeystoneService {
     return this.makeRequest('proxy-status');
   }
 
-  // Example Keystone API methods (to be implemented based on actual API)
+  // Configuration Management Methods (for UI component)
+  async loadConfig(): Promise<void> {
+    try {
+      const { data, error } = await this.supabase
+        .from('keystone_config')
+        .select('*')
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      this.loadedConfig = data ? {
+        accountNumber: data.account_number || '',
+        securityKey: data.security_key || '',
+        securityKeyDev: data.security_key_dev || data.security_key || '',
+        securityKeyProd: data.security_key_prod || data.security_key || '',
+        environment: data.environment || 'development',
+        approvedIPs: data.approved_ips || []
+      } : {
+        accountNumber: '',
+        securityKey: '',
+        securityKeyDev: '',
+        securityKeyProd: '',
+        environment: 'development',
+        approvedIPs: []
+      };
+    } catch (error) {
+      console.error('Failed to load configuration:', error);
+      this.loadedConfig = {
+        accountNumber: '',
+        securityKey: '',
+        securityKeyDev: '',
+        securityKeyProd: '',
+        environment: 'development',
+        approvedIPs: []
+      };
+    }
+  }
+
+  async saveConfig(config: any): Promise<void> {
+    try {
+      // First, deactivate any existing configs
+      await this.supabase
+        .from('keystone_config')
+        .update({ is_active: false })
+        .eq('is_active', true);
+
+      // Insert new config
+      const { error } = await this.supabase
+        .from('keystone_config')
+        .insert({
+          account_number: config.accountNumber,
+          security_key: config.environment === 'development' ? config.securityKeyDev : config.securityKeyProd,
+          security_key_dev: config.securityKeyDev,
+          security_key_prod: config.securityKeyProd,
+          environment: config.environment,
+          approved_ips: config.approvedIPs,
+          is_active: true,
+          created_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      
+      this.loadedConfig = config;
+    } catch (error) {
+      console.error('Failed to save configuration:', error);
+      throw new Error('Failed to save Keystone configuration');
+    }
+  }
+
+  getConfig(): any {
+    return this.loadedConfig || {
+      accountNumber: '',
+      securityKey: '',
+      securityKeyDev: '',
+      securityKeyProd: '',
+      environment: 'development',
+      approvedIPs: []
+    };
+  }
+
+  async testConnection(): Promise<KeystoneResponse> {
+    try {
+      // Test the proxy health first
+      const healthResult = await this.healthCheck();
+      if (!healthResult.success) {
+        return {
+          success: false,
+          error: 'Proxy service is not available',
+          statusMessage: 'Proxy health check failed'
+        };
+      }
+
+      // Try a simple API call to test connectivity through the proxy
+      const result = await this.makeRequest('test-connection');
+      return {
+        success: result.success,
+        error: result.error,
+        statusMessage: result.success ? 'Connection successful' : 'Connection failed'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Connection test failed',
+        statusMessage: 'Connection test failed'
+      };
+    }
+  }
+
+  async getSyncLogs(limit: number = 20): Promise<any[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('sync_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Failed to load sync logs:', error);
+      return [];
+    }
+  }
+
+  // Utility methods that the UI expects (using proxy)
+  async utilityReportMyIP(): Promise<string> {
+    try {
+      const result = await this.makeRequest('utility/my-ip');
+      return result.data?.ip || 'Unknown';
+    } catch (error) {
+      console.error('Failed to get IP:', error);
+      return 'Unknown';
+    }
+  }
+
+  async utilityReportApprovedIPs(): Promise<any> {
+    try {
+      const result = await this.makeRequest('utility/approved-ips');
+      return result.data || { data: '' };
+    } catch (error) {
+      console.error('Failed to get approved IPs:', error);
+      return { data: '' };
+    }
+  }
+
+  async utilityReportApprovedMethods(): Promise<string[]> {
+    try {
+      const result = await this.makeRequest('utility/approved-methods');
+      return result.data?.methods || [];
+    } catch (error) {
+      console.error('Failed to get approved methods:', error);
+      return [];
+    }
+  }
+
+  // Original Keystone API methods (using proxy)
   async searchParts(query: string): Promise<KeystoneResponse> {
     return this.makeRequest(`SearchParts?query=${encodeURIComponent(query)}`);
   }
@@ -123,8 +292,8 @@ class KeystoneService {
     return this.makeRequest(`GetPricing?partNumber=${encodeURIComponent(partNumber)}`);
   }
 
-  // Configuration getters
-  getConfig(): KeystoneConfig {
+  // Configuration getters (original methods)
+  getOriginalConfig(): KeystoneConfig {
     return { ...this.config };
   }
 
