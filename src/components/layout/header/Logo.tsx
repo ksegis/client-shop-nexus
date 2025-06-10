@@ -10,11 +10,11 @@ export const Logo = ({ portalType }: LogoProps) => {
   return (
     <div className="flex items-center">
       <Link to={portalType === 'customer' ? '/customer' : '/shop'}>
-        <div className="h-12 flex items-center">
+        <div className="h-10 flex items-center">
           <img 
             src={ctcLogo} 
             alt="Custom Truck Connections" 
-            className="ctc-logo"
+            className="h-8 w-auto object-contain"
           />
         </div>
       </Link>
