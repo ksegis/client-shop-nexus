@@ -22,10 +22,12 @@ class KeystoneService {
   private supabase;
   private loadedConfig: any = null;
 
-constructor() {
+constructor( ) {
   // DEBUG: Check environment variables
   console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
   console.log('SUPABASE_TOKEN:', process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN ? 'SET' : 'NOT SET');
+  
+  // ... rest of your existing constructor code
   
   this.config = {
     proxyUrl: process.env.KEYSTONE_PROXY_URL || '',
