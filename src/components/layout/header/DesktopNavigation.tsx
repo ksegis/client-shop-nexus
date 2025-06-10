@@ -115,4 +115,3 @@ export const DesktopNavigation = ({ links, currentPath }: DesktopNavigationProps
     </NavigationMenu>
   );
 };
-
