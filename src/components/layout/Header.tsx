@@ -52,9 +52,9 @@ const Header = ({ portalType }: HeaderProps) => {
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
-    <header className="ctc-header" data-header-id={portalType}>
-      <div className="ctc-header-container">
-        <div className="flex justify-between items-center w-full">
+    <header className="bg-gradient-to-r from-gray-900 to-gray-800 shadow-lg border-b border-gray-700" data-header-id={portalType} style={{background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)'}}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center py-3">
           {/* Logo */}
           <Logo portalType={portalType} />
           
