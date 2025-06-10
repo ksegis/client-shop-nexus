@@ -87,5 +87,4 @@ const Header = ({ portalType }: HeaderProps) => {
     </header>
   );
 };
-
 export default Header;
