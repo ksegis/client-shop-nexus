@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useInvoices } from '../InvoicesContext';
+import InvoiceForm from '../components/InvoiceForm';
 
 interface InvoiceFormData {
   amount: number;
