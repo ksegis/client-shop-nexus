@@ -1,5 +1,5 @@
 // Updated to use VITE_ prefixed environment variables and user-selected environment
-// Version 2.2.0 - Updated for Vite environment variables
+// Version 2.3.0 - Updated for Vite environment variables and environment-specific IP lists
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -204,13 +204,30 @@ class KeystoneService {
 
   // Utility method to report approved IPs
   async utilityReportApprovedIPs(): Promise<KeystoneResponse> {
+    // Get the appropriate IP list based on current environment
+    const approvedIPs = this.getApprovedIPsForCurrentEnvironment();
+    
     const requestData = {
       accountNumber: this.config.accountNumber,
       securityToken: this.config.securityToken,
-      method: 'UtilityReportApprovedIPs'
+      method: 'UtilityReportApprovedIPs',
+      approvedIPs: approvedIPs // Send environment-specific IPs
     };
 
     return this.makeRequest('/keystone/utility/reportapprovedips', 'POST', requestData);
+  }
+
+  // Get the appropriate IP list based on current environment
+  private getApprovedIPsForCurrentEnvironment(): string[] {
+    if (!this.loadedConfig) {
+      return [];
+    }
+    
+    if (this.config.environment === 'development') {
+      return this.loadedConfig.developmentIPs || [];
+    } else {
+      return this.loadedConfig.productionIPs || [];
+    }
   }
 
   // Utility method to report approved methods
@@ -281,7 +298,8 @@ class KeystoneService {
         console.warn('Supabase not available, using default configuration');
         return {
           environment: 'development',
-          approvedIPs: [],
+          developmentIPs: [],
+          productionIPs: [],
           accountNumber: this.config.accountNumber,
           securityToken: this.getSecurityTokenForEnvironment('development')
         };
@@ -296,14 +314,25 @@ class KeystoneService {
         console.warn('Failed to load config from database, using defaults:', error.message);
         return {
           environment: 'development',
-          approvedIPs: [],
+          developmentIPs: [],
+          productionIPs: [],
           accountNumber: this.config.accountNumber,
           securityToken: this.getSecurityTokenForEnvironment('development')
         };
       }
 
+      // Handle legacy data format (single approvedIPs array)
+      if (data.approvedIPs && !data.developmentIPs && !data.productionIPs) {
+        console.log('Converting legacy IP format to environment-specific format');
+        data.developmentIPs = data.approvedIPs;
+        data.productionIPs = data.approvedIPs;
+      }
+
       this.loadedConfig = {
         ...data,
+        // Ensure environment-specific IP arrays exist
+        developmentIPs: data.developmentIPs || [],
+        productionIPs: data.productionIPs || [],
         // Override with environment variables for credentials
         accountNumber: this.config.accountNumber,
         securityToken: this.getSecurityTokenForEnvironment(data.environment || 'development')
@@ -314,7 +343,8 @@ class KeystoneService {
       console.error('Error loading configuration:', error);
       return {
         environment: 'development',
-        approvedIPs: [],
+        developmentIPs: [],
+        productionIPs: [],
         accountNumber: this.config.accountNumber,
         securityToken: this.getSecurityTokenForEnvironment('development')
       };
@@ -328,19 +358,35 @@ class KeystoneService {
         return;
       }
 
+      // Get current config to preserve IP lists for the non-active environment
+      const currentConfig = await this.loadConfig();
+      
+      // Determine which IP list to update based on environment
+      const isDevEnvironment = config.environment === 'development';
+      
       // Don't save credentials to database - only runtime settings
       const configToSave = {
         environment: config.environment,
-        approvedIPs: config.approvedIPs,
+        // Update the appropriate IP list based on current environment
+        developmentIPs: isDevEnvironment ? config.approvedIPs : (currentConfig.developmentIPs || []),
+        productionIPs: !isDevEnvironment ? config.approvedIPs : (currentConfig.productionIPs || []),
         updated_at: new Date().toISOString()
       };
 
-      const { error } = await this.supabase
-        .from('keystone_config')
-        .upsert(configToSave);
+      console.log('Saving configuration:', configToSave);
+      
+      try {
+        const { error } = await this.supabase
+          .from('keystone_config')
+          .upsert(configToSave);
 
-      if (error) {
-        throw error;
+        if (error) {
+          console.error('Database error when saving config:', error);
+          throw new Error(`Database error: ${error.message || 'Unknown database error'}`);
+        }
+      } catch (dbError) {
+        console.error('Failed to save to database:', dbError);
+        throw new Error(`Failed to save configuration: ${dbError instanceof Error ? dbError.message : 'Database error'}`);
       }
 
       // Update internal config with new environment
@@ -363,6 +409,16 @@ class KeystoneService {
   }
 
   getConfig(): any {
+    const currentConfig = this.loadedConfig || {
+      developmentIPs: [],
+      productionIPs: []
+    };
+    
+    // Get the appropriate IP list based on current environment
+    const approvedIPs = this.config.environment === 'development' 
+      ? currentConfig.developmentIPs || []
+      : currentConfig.productionIPs || [];
+    
     return {
       accountNumber: this.config.accountNumber,
       securityToken: this.config.securityToken,
@@ -370,7 +426,10 @@ class KeystoneService {
       securityKeyProd: this.getSecurityTokenForEnvironment('production'),
       environment: this.config.environment,
       proxyUrl: this.config.proxyUrl,
-      approvedIPs: this.loadedConfig?.approvedIPs || []
+      approvedIPs: approvedIPs,
+      // Include both IP lists for reference
+      developmentIPs: currentConfig.developmentIPs || [],
+      productionIPs: currentConfig.productionIPs || []
     };
   }
 

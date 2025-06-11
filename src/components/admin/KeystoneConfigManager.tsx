@@ -1,7 +1,7 @@
 // PHASE 1 - WEEK 3: KEYSTONE CONFIGURATION MANAGER
 // React component for managing Keystone API configuration
 // Updated to use Vite environment variables for credentials
-// Version: 2.2.0 - Updated for Vite environment variables
+// Version: 2.3.0 - Updated for Vite environment variables and environment-specific IP lists
 // =====================================================
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,12 +16,14 @@ import { useToast } from '@/hooks/use-toast';
 import { keystoneService } from '@/services/keystoneService';
 import { CheckCircle, XCircle, AlertCircle, Eye, EyeOff, Loader2, RefreshCw, Activity, Clock, CheckSquare, AlertTriangle } from 'lucide-react';
 
-const VERSION = "2.2.0";
+const VERSION = "2.3.0";
 const BUILD_DATE = "2025-06-11";
 
 interface KeystoneConfig {
   environment: 'development' | 'production';
   approvedIPs: string[];
+  developmentIPs?: string[];
+  productionIPs?: string[];
 }
 
 interface ConnectionStatus {
@@ -51,7 +53,9 @@ interface EnvironmentStatus {
 export const KeystoneConfigManager: React.FC = () => {
   const [config, setConfig] = useState<KeystoneConfig>({
     environment: 'development',
-    approvedIPs: ['']
+    approvedIPs: [''],
+    developmentIPs: [''],
+    productionIPs: ['']
   });
   
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
@@ -90,10 +94,21 @@ export const KeystoneConfigManager: React.FC = () => {
     setIsLoading(true);
     try {
       const loadedConfig = await keystoneService.getConfig();
+      
+      // Get the appropriate IP list based on current environment
+      const currentEnvironment = loadedConfig.environment || 'development';
+      const approvedIPs = currentEnvironment === 'development' 
+        ? loadedConfig.developmentIPs || [''] 
+        : loadedConfig.productionIPs || [''];
+      
       setConfig({
-        environment: loadedConfig.environment || 'development',
-        approvedIPs: loadedConfig.approvedIPs || ['']
+        environment: currentEnvironment,
+        approvedIPs: approvedIPs,
+        developmentIPs: loadedConfig.developmentIPs || [''],
+        productionIPs: loadedConfig.productionIPs || ['']
       });
+      
+      console.log('Loaded configuration:', loadedConfig);
     } catch (error) {
       console.error('Failed to load configuration:', error);
       toast({
@@ -123,11 +138,19 @@ export const KeystoneConfigManager: React.FC = () => {
       console.log('Saving configuration:', configToSave);
       await keystoneService.saveConfig(configToSave);
       
-      // Update local state with normalized environment
-      setConfig(prev => ({
-        ...prev,
-        environment: normalizedEnvironment
-      }));
+      // Update local state with normalized environment and update the appropriate IP list
+      setConfig(prev => {
+        const updatedConfig = { ...prev, environment: normalizedEnvironment };
+        
+        // Update the appropriate IP list based on environment
+        if (normalizedEnvironment === 'development') {
+          updatedConfig.developmentIPs = filteredIPs;
+        } else {
+          updatedConfig.productionIPs = filteredIPs;
+        }
+        
+        return updatedConfig;
+      });
       
       toast({
         title: "Configuration Saved",
@@ -137,7 +160,7 @@ export const KeystoneConfigManager: React.FC = () => {
       console.error('Failed to save configuration:', error);
       toast({
         title: "Save Error",
-        description: "Failed to save Keystone configuration. Check console for details.",
+        description: error instanceof Error ? error.message : "Failed to save Keystone configuration",
         variant: "destructive"
       });
     } finally {
@@ -288,6 +311,28 @@ export const KeystoneConfigManager: React.FC = () => {
     );
   };
 
+  // Handle environment change - update the IP list based on selected environment
+  const handleEnvironmentChange = (newEnvironment: 'development' | 'production') => {
+    setConfig(prev => {
+      // Save current IP list to the appropriate environment
+      const updatedConfig = { ...prev };
+      
+      if (prev.environment === 'development') {
+        updatedConfig.developmentIPs = prev.approvedIPs;
+      } else {
+        updatedConfig.productionIPs = prev.approvedIPs;
+      }
+      
+      // Update environment and switch to the appropriate IP list
+      updatedConfig.environment = newEnvironment;
+      updatedConfig.approvedIPs = newEnvironment === 'development' 
+        ? updatedConfig.developmentIPs || [''] 
+        : updatedConfig.productionIPs || [''];
+      
+      return updatedConfig;
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -419,19 +464,24 @@ export const KeystoneConfigManager: React.FC = () => {
                 <select
                   id="environment"
                   value={config.environment}
-                  onChange={(e) => setConfig(prev => ({ ...prev, environment: e.target.value as 'development' | 'production' }))}
+                  onChange={(e) => handleEnvironmentChange(e.target.value as 'development' | 'production')}
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="development">Development</option>
                   <option value="production">Production</option>
                 </select>
                 <p className="text-sm text-gray-500">
-                  Select the environment to determine which security key to use (case insensitive)
+                  Select the environment to determine which security key and IP addresses to use
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label>Approved IP Addresses</Label>
+                <Label>
+                  Approved IP Addresses 
+                  <Badge className="ml-2 bg-blue-100 text-blue-800">
+                    {config.environment === 'development' ? 'Development' : 'Production'} Environment
+                  </Badge>
+                </Label>
                 {config.approvedIPs.map((ip, index) => (
                   <div key={index} className="flex items-center space-x-2">
                     <Input
@@ -461,6 +511,9 @@ export const KeystoneConfigManager: React.FC = () => {
                 >
                   Add IP Address
                 </Button>
+                <p className="text-sm text-gray-500 mt-2">
+                  IP addresses are environment-specific. When you switch environments, the IP list will automatically change.
+                </p>
               </div>
 
               <div className="pt-4">
@@ -519,6 +572,15 @@ export const KeystoneConfigManager: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Current Environment:</strong> {config.environment}
+                  <br />
+                  Testing will use the {config.environment === 'development' ? 'development' : 'production'} security token and IP addresses.
+                </AlertDescription>
+              </Alert>
 
               <Button 
                 onClick={testConnection} 
