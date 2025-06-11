@@ -1,6 +1,7 @@
 // PHASE 1 - WEEK 3: KEYSTONE CONFIGURATION MANAGER
 // React component for managing Keystone API configuration
 // Updated to use environment variables for credentials
+// Version: 2.1.0 - Fixed environment variables and database issues
 // =====================================================
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +15,9 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { keystoneService } from '@/services/keystoneService';
 import { CheckCircle, XCircle, AlertCircle, Eye, EyeOff, Loader2, RefreshCw, Activity, Clock, CheckSquare, AlertTriangle } from 'lucide-react';
+
+const VERSION = "2.1.0";
+const BUILD_DATE = "2025-01-11";
 
 interface KeystoneConfig {
   environment: 'development' | 'production';
@@ -79,6 +83,7 @@ export const KeystoneConfigManager: React.FC = () => {
   const checkEnvironmentStatus = () => {
     const status = keystoneService.getEnvironmentStatus();
     setEnvironmentStatus(status);
+    console.log('Environment Status Check:', status);
   };
 
   const loadConfiguration = async () => {
@@ -107,22 +112,32 @@ export const KeystoneConfigManager: React.FC = () => {
       // Filter out empty IP addresses
       const filteredIPs = config.approvedIPs.filter(ip => ip.trim() !== '');
       
+      // Normalize environment to lowercase to avoid case sensitivity issues
+      const normalizedEnvironment = config.environment.toLowerCase() as 'development' | 'production';
+      
       const configToSave = {
-        ...config,
+        environment: normalizedEnvironment,
         approvedIPs: filteredIPs
       };
 
+      console.log('Saving configuration:', configToSave);
       await keystoneService.saveConfig(configToSave);
+      
+      // Update local state with normalized environment
+      setConfig(prev => ({
+        ...prev,
+        environment: normalizedEnvironment
+      }));
       
       toast({
         title: "Configuration Saved",
-        description: "Keystone configuration has been saved successfully",
+        description: `Keystone configuration saved successfully (Environment: ${normalizedEnvironment})`,
       });
     } catch (error) {
       console.error('Failed to save configuration:', error);
       toast({
         title: "Save Error",
-        description: "Failed to save Keystone configuration",
+        description: "Failed to save Keystone configuration. Check console for details.",
         variant: "destructive"
       });
     } finally {
@@ -297,6 +312,13 @@ export const KeystoneConfigManager: React.FC = () => {
         </div>
       </div>
 
+      {/* Version Indicator */}
+      <div className="text-right">
+        <Badge variant="outline" className="text-xs text-gray-500">
+          v{VERSION} ({BUILD_DATE})
+        </Badge>
+      </div>
+
       <Tabs defaultValue="configuration" className="space-y-4">
         <TabsList>
           <TabsTrigger value="configuration">Configuration</TabsTrigger>
@@ -372,6 +394,15 @@ export const KeystoneConfigManager: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Debug Information */}
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Debug Info:</strong> If variables show "Not Set", check browser console for environment variable details.
+                  Current environment: {config.environment}
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
 
@@ -395,7 +426,7 @@ export const KeystoneConfigManager: React.FC = () => {
                   <option value="production">Production</option>
                 </select>
                 <p className="text-sm text-gray-500">
-                  Select the environment to determine which security key to use
+                  Select the environment to determine which security key to use (case insensitive)
                 </p>
               </div>
 

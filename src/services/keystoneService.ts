@@ -1,4 +1,5 @@
 // Updated to use NEXT_PUBLIC_ prefixed environment variables and user-selected environment
+// Version: 2.1.0 - Fixed environment variables and database issues
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -269,7 +270,7 @@ class KeystoneService {
     return this.makeRequest('/keystone/pricing/get', 'POST', requestData);
   }
 
-  // Configuration management
+  // Configuration management - Fixed to only save minimal config to avoid database schema issues
   async loadConfig(): Promise<any> {
     if (this.loadedConfig) {
       return this.loadedConfig;
@@ -288,7 +289,7 @@ class KeystoneService {
 
       const { data, error } = await this.supabase
         .from('keystone_config')
-        .select('*')
+        .select('environment, approved_ips, updated_at')
         .single();
 
       if (error) {
@@ -302,10 +303,11 @@ class KeystoneService {
       }
 
       this.loadedConfig = {
-        ...data,
+        environment: data?.environment || 'development',
+        approvedIPs: data?.approved_ips || [],
         // Override with environment variables for credentials
         accountNumber: this.config.accountNumber,
-        securityToken: this.getSecurityTokenForEnvironment(data.environment || 'development')
+        securityToken: this.getSecurityTokenForEnvironment(data?.environment || 'development')
       };
 
       return this.loadedConfig;
@@ -327,28 +329,35 @@ class KeystoneService {
         return;
       }
 
-      // Don't save credentials to database - only runtime settings
+      // Normalize environment to lowercase to avoid case sensitivity issues
+      const normalizedEnvironment = config.environment.toLowerCase();
+
+      // Only save minimal config to avoid database schema issues
       const configToSave = {
-        environment: config.environment,
-        approvedIPs: config.approvedIPs,
+        environment: normalizedEnvironment,
+        approved_ips: config.approvedIPs || [],
         updated_at: new Date().toISOString()
       };
 
+      console.log('Saving minimal config to database:', configToSave);
+
       const { error } = await this.supabase
         .from('keystone_config')
-        .upsert(configToSave);
+        .upsert(configToSave, { onConflict: 'id' });
 
       if (error) {
-        throw error;
+        console.error('Database save error:', error);
+        throw new Error(`Failed to save configuration: ${error.message}`);
       }
 
       // Update internal config with new environment
-      this.config.environment = config.environment;
-      this.config.securityToken = this.getSecurityTokenForEnvironment(config.environment);
+      this.config.environment = normalizedEnvironment;
+      this.config.securityToken = this.getSecurityTokenForEnvironment(normalizedEnvironment as 'development' | 'production');
 
       // Update loaded config cache
       this.loadedConfig = {
-        ...configToSave,
+        environment: normalizedEnvironment,
+        approvedIPs: config.approvedIPs || [],
         // Keep environment variables for credentials
         accountNumber: this.config.accountNumber,
         securityToken: this.config.securityToken
