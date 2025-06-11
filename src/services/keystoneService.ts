@@ -39,7 +39,7 @@ class KeystoneService {
     this.config = {
       proxyUrl: process.env.NEXT_PUBLIC_KEYSTONE_PROXY_URL || '',
       apiToken: process.env.NEXT_PUBLIC_KEYSTONE_API_TOKEN || '',
-      environment: process.env.APP_ENVIRONMENT || 'development',
+      environment: process.env.APP_ENVIRONMENT || 'production',
       accountNumber: process.env.NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER || '',
       securityToken: this.getEnvironmentSecurityToken()
     };
