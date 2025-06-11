@@ -23,6 +23,8 @@ import NewInvoice from "@/pages/shop/invoices/NewInvoice";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { CustomersProvider } from "@/pages/shop/customers/CustomersContext";
 import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
+import EnvTest from "@/pages/shop/admin/EnvTest";
+
 
 const ShopRoutes = () => {
   return (
