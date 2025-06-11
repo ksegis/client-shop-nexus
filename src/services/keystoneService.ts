@@ -22,29 +22,30 @@ class KeystoneService {
   private supabase;
   private loadedConfig: any = null;
 
-constructor( ) {
-  // DEBUG: Check environment variables
-  console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-  console.log('SUPABASE_TOKEN:', process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN ? 'SET' : 'NOT SET');
-  
-  // ... rest of your existing constructor code
-  
-  this.config = {
-    proxyUrl: process.env.KEYSTONE_PROXY_URL || '',
-    apiToken: process.env.KEYSTONE_API_TOKEN || '',
-    environment: process.env.APP_ENVIRONMENT || 'development',
-    accountNumber: process.env.KEYSTONE_ACCOUNT_NUMBER || '',
-    securityToken: process.env.KEYSTONE_SECURITY_TOKEN || ''
-  };
+  constructor() {
+    // DEBUG: Check environment variables (REMOVE THIS AFTER TESTING)
+    console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log('SUPABASE_TOKEN:', process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN ? 'SET' : 'NOT SET');
+    
+    this.config = {
+      proxyUrl: process.env.KEYSTONE_PROXY_URL || '',
+      apiToken: process.env.KEYSTONE_API_TOKEN || '',
+      environment: process.env.APP_ENVIRONMENT || 'development',
+      accountNumber: process.env.KEYSTONE_ACCOUNT_NUMBER || '',
+      securityToken: process.env.KEYSTONE_SECURITY_TOKEN || ''
+    };
 
-  // Initialize Supabase client
-  this.supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN || ''
-  );
-  
-  // ... rest of constructor stays the same
+    // Initialize Supabase client with fallback values
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vqkxrbflwhunvbotjdds.supabase.co';
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZxa3hyYmZsd2h1bnZib3RqZGRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY5ODc4ODksImV4cCI6MjA2MjU2Mzg4OX0.9cDur61j55TrjPY3SDDW4EHKGWjReC8Vk5eaojC4_sk';
 
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Missing Supabase configuration in KeystoneService');
+      this.supabase = null;
+    } else {
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+      console.log('Supabase client initialized successfully'); // DEBUG (REMOVE AFTER TESTING)
+    }
 
     if (!this.config.proxyUrl || !this.config.apiToken) {
       console.warn('Keystone service not properly configured');
@@ -128,6 +129,19 @@ constructor( ) {
 
   // Configuration Management Methods (for UI component)
   async loadConfig(): Promise<void> {
+    if (!this.supabase) {
+      console.warn('Supabase not available, using default config');
+      this.loadedConfig = {
+        accountNumber: '',
+        securityKey: '',
+        securityKeyDev: '',
+        securityKeyProd: '',
+        environment: 'development',
+        approvedIPs: []
+      };
+      return;
+    }
+
     try {
       const { data, error } = await this.supabase
         .from('keystone_config')
@@ -168,6 +182,10 @@ constructor( ) {
   }
 
   async saveConfig(config: any): Promise<void> {
+    if (!this.supabase) {
+      throw new Error('Supabase not available - cannot save configuration');
+    }
+
     try {
       // First, deactivate any existing configs
       await this.supabase
@@ -238,6 +256,11 @@ constructor( ) {
   }
 
   async getSyncLogs(limit: number = 20): Promise<any[]> {
+    if (!this.supabase) {
+      console.warn('Supabase not available - cannot load sync logs');
+      return [];
+    }
+
     try {
       const { data, error } = await this.supabase
         .from('sync_logs')
