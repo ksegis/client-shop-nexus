@@ -44,7 +44,7 @@ interface EnvironmentStatus {
   hasSupabaseKey: boolean;
 }
 
-const KeystoneConfigManager: React.FC = () => {
+export const KeystoneConfigManager: React.FC = () => {
   const [config, setConfig] = useState<KeystoneConfig>({
     environment: 'development',
     approvedIPs: ['']
