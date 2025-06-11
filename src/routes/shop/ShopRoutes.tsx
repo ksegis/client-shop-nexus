@@ -88,6 +88,14 @@ const ShopRoutes = () => {
           }
         />
         <Route
+  path="admin/env-test"
+  element={
+    <ProtectedRoute>
+      <EnvTest />
+    </ProtectedRoute>
+  }
+/>
+        <Route
           path="admin/keystone-config"
           element={
             <ProtectedRoute>
