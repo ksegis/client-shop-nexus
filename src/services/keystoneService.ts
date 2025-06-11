@@ -1,5 +1,5 @@
 // Keystone API Service with DigitalOcean Proxy Integration
-// Updated to use NEXT_PUBLIC_ prefixed environment variables
+// Updated to use NEXT_PUBLIC_ prefixed environment variable
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {

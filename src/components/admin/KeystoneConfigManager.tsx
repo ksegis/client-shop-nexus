@@ -424,10 +424,10 @@ export const KeystoneConfigManager: React.FC = () => {
                     <AlertDescription>
                       <strong>Required Environment Variables:</strong>
                       <ul className="mt-2 space-y-1 text-sm">
-                        <li>• <code>KEYSTONE_ACCOUNT_NUMBER</code> - Your Keystone account number</li>
-                        <li>• <code>KEYSTONE_SECURITY_TOKEN_DEV</code> - Development security key</li>
-                        <li>• <code>KEYSTONE_SECURITY_TOKEN_PROD</code> - Production security key</li>
-                        <li>• <code>KEYSTONE_PROXY_URL</code> - DigitalOcean proxy server URL (HTTPS)</li>
+                        <li>• <code>NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER</code> - Your Keystone account number</li>
+                        <li>• <code>NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV</code> - Development security key</li>
+                        <li>• <code>NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD</code> - Production security key</li>
+                        <li>• <code>NEXT_PUBLIC_KEYSTONE_PROXY_URL</code> - DigitalOcean proxy server URL (HTTPS)</li>
                       </ul>
                     </AlertDescription>
                   </Alert>
