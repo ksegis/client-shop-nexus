@@ -1,5 +1,5 @@
 // Keystone API Service with DigitalOcean Proxy Integration
-// Updated to use environment variables for credentials (no hardcoded fallbacks)
+// Updated to use environment variables for credentials (with temporary debug and fallbacks)
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -24,6 +24,15 @@ class KeystoneService {
   private loadedConfig: any = null;
 
   constructor() {
+    // TEMPORARY DEBUG: Check what environment variables are available
+    console.log('ENV DEBUG:', {
+      url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN,
+      allNextPublic: Object.keys(process.env).filter(k => k.startsWith('NEXT_PUBLIC')),
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'NOT SET',
+      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN ? 'SET' : 'NOT SET'
+    });
+
     // Load configuration from environment variables
     this.config = {
       proxyUrl: process.env.KEYSTONE_PROXY_URL || '',
@@ -33,9 +42,15 @@ class KeystoneService {
       securityToken: this.getEnvironmentSecurityToken()
     };
 
-    // Initialize Supabase client (no hardcoded fallbacks)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN;
+    // Initialize Supabase client (with temporary fallbacks for debugging)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vqkxrbflwhunvbotjdds.supabase.co';
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZxa3hyYmZsd2h1bnZib3RqZGRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY5ODc4ODksImV4cCI6MjA2MjU2Mzg4OX0.9cDur61j55TrjPY3SDDW4EHKGWjReC8Vk5eaojC4_sk';
+
+    console.log('Supabase config:', {
+      url: supabaseUrl ? 'SET' : 'NOT SET',
+      key: supabaseKey ? 'SET' : 'NOT SET',
+      usingFallback: !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN
+    });
 
     if (!supabaseUrl || !supabaseKey) {
       console.error('Missing Supabase configuration - NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_TOKEN environment variables are required');
