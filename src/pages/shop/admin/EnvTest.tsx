@@ -2,7 +2,7 @@
 // Version: 1.0.0 - Basic test to isolate environment variable issues
 import React from 'react';
 
-const EnvTestPage: React.FC = () => {
+const EnvTest: React.FC = () => {
   // Test if process.env is available
   const processEnvAvailable = typeof process !== 'undefined' && process.env;
   
@@ -74,5 +74,5 @@ const EnvTestPage: React.FC = () => {
   );
 };
 
-export default EnvTestPage;
+export default EnvTest;
 
