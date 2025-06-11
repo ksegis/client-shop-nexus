@@ -127,7 +127,7 @@ export class KeystoneSoapClient {
                xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
                xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
-    <${method} xmlns="http://legacy.ekeystone.com/SDK/api/">
+    <${method} xmlns="https://legacy.ekeystone.com/SDK/api/">
       ${paramXML}
     </${method}>
   </soap:Body>
@@ -261,7 +261,7 @@ export class KeystoneSoapClient {
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',
-          'SOAPAction': `http://legacy.ekeystone.com/SDK/api/${method}`,
+          'SOAPAction': `https://legacy.ekeystone.com/SDK/api/${method}`,
           'User-Agent': 'Custom Truck Connections Portal/1.0'
         },
         body: soapEnvelope
