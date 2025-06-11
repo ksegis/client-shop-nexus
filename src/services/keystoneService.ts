@@ -1,5 +1,5 @@
 // Keystone API Service with DigitalOcean Proxy Integration
-// Updated to use environment variables for credentials (with temporary debug and fallbacks)
+// Updated to use NEXT_PUBLIC_ prefixed environment variables
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -28,17 +28,19 @@ class KeystoneService {
     console.log('ENV DEBUG:', {
       url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
       key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN,
-      allNextPublic: Object.keys(process.env).filter(k => k.startsWith('NEXT_PUBLIC')),
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'NOT SET',
-      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN ? 'SET' : 'NOT SET'
+      accountNumber: !!process.env.NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER,
+      devKey: !!process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV,
+      prodKey: !!process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD,
+      proxyUrl: !!process.env.NEXT_PUBLIC_KEYSTONE_PROXY_URL,
+      allNextPublic: Object.keys(process.env).filter(k => k.startsWith('NEXT_PUBLIC'))
     });
 
-    // Load configuration from environment variables
+    // Load configuration from environment variables (with NEXT_PUBLIC_ prefix)
     this.config = {
-      proxyUrl: process.env.KEYSTONE_PROXY_URL || '',
-      apiToken: process.env.KEYSTONE_API_TOKEN || '',
+      proxyUrl: process.env.NEXT_PUBLIC_KEYSTONE_PROXY_URL || '',
+      apiToken: process.env.NEXT_PUBLIC_KEYSTONE_API_TOKEN || '',
       environment: process.env.APP_ENVIRONMENT || 'development',
-      accountNumber: process.env.KEYSTONE_ACCOUNT_NUMBER || '',
+      accountNumber: process.env.NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER || '',
       securityToken: this.getEnvironmentSecurityToken()
     };
 
@@ -68,17 +70,17 @@ class KeystoneService {
     const missing = [];
     
     if (!this.config.proxyUrl) {
-      missing.push('KEYSTONE_PROXY_URL');
+      missing.push('NEXT_PUBLIC_KEYSTONE_PROXY_URL');
     }
     
     if (!this.config.accountNumber) {
-      missing.push('KEYSTONE_ACCOUNT_NUMBER');
+      missing.push('NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER');
     }
     
     if (!this.config.securityToken) {
       const envVar = this.config.environment === 'development' 
-        ? 'KEYSTONE_SECURITY_TOKEN_DEV' 
-        : 'KEYSTONE_SECURITY_TOKEN_PROD';
+        ? 'NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV' 
+        : 'NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD';
       missing.push(envVar);
     }
 
@@ -92,17 +94,17 @@ class KeystoneService {
   private getEnvironmentSecurityToken(): string {
     const environment = process.env.APP_ENVIRONMENT || 'development';
     if (environment === 'development') {
-      return process.env.KEYSTONE_SECURITY_TOKEN_DEV || '';
+      return process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV || '';
     } else {
-      return process.env.KEYSTONE_SECURITY_TOKEN_PROD || '';
+      return process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD || '';
     }
   }
 
   private getSecurityTokenForEnvironment(environment: 'development' | 'production'): string {
     if (environment === 'development') {
-      return process.env.KEYSTONE_SECURITY_TOKEN_DEV || '';
+      return process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV || '';
     } else {
-      return process.env.KEYSTONE_SECURITY_TOKEN_PROD || '';
+      return process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD || '';
     }
   }
 
@@ -113,17 +115,17 @@ class KeystoneService {
   ): Promise<KeystoneResponse<T>> {
     try {
       if (!this.config.proxyUrl) {
-        throw new Error('Proxy URL not configured - check KEYSTONE_PROXY_URL environment variable');
+        throw new Error('Proxy URL not configured - check NEXT_PUBLIC_KEYSTONE_PROXY_URL environment variable');
       }
 
       if (!this.config.accountNumber) {
-        throw new Error('Account number not configured - check KEYSTONE_ACCOUNT_NUMBER environment variable');
+        throw new Error('Account number not configured - check NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER environment variable');
       }
 
       if (!this.config.securityToken) {
         const envVar = this.config.environment === 'development' 
-          ? 'KEYSTONE_SECURITY_TOKEN_DEV' 
-          : 'KEYSTONE_SECURITY_TOKEN_PROD';
+          ? 'NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV' 
+          : 'NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD';
         throw new Error(`Security token not configured - check ${envVar} environment variable`);
       }
 
@@ -179,7 +181,7 @@ class KeystoneService {
       if (!this.config.proxyUrl) {
         return {
           success: false,
-          error: 'Proxy URL not configured - check KEYSTONE_PROXY_URL environment variable'
+          error: 'Proxy URL not configured - check NEXT_PUBLIC_KEYSTONE_PROXY_URL environment variable'
         };
       }
 
@@ -318,14 +320,14 @@ class KeystoneService {
         return {
           success: false,
           error: 'Account number not configured in environment variables',
-          statusMessage: 'Missing KEYSTONE_ACCOUNT_NUMBER environment variable'
+          statusMessage: 'Missing NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER environment variable'
         };
       }
 
       if (!this.config.securityToken) {
         const envVar = this.config.environment === 'development' 
-          ? 'KEYSTONE_SECURITY_TOKEN_DEV' 
-          : 'KEYSTONE_SECURITY_TOKEN_PROD';
+          ? 'NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV' 
+          : 'NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD';
         return {
           success: false,
           error: `Security token for ${this.config.environment} environment not configured`,
@@ -337,7 +339,7 @@ class KeystoneService {
         return {
           success: false,
           error: 'Proxy URL not configured in environment variables',
-          statusMessage: 'Missing KEYSTONE_PROXY_URL environment variable'
+          statusMessage: 'Missing NEXT_PUBLIC_KEYSTONE_PROXY_URL environment variable'
         };
       }
 
@@ -461,15 +463,15 @@ class KeystoneService {
     proxyUrl?: string;
   } {
     return {
-      hasAccountNumber: !!process.env.KEYSTONE_ACCOUNT_NUMBER,
-      hasDevKey: !!process.env.KEYSTONE_SECURITY_TOKEN_DEV,
-      hasProdKey: !!process.env.KEYSTONE_SECURITY_TOKEN_PROD,
-      hasProxyUrl: !!process.env.KEYSTONE_PROXY_URL,
+      hasAccountNumber: !!process.env.NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER,
+      hasDevKey: !!process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV,
+      hasProdKey: !!process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD,
+      hasProxyUrl: !!process.env.NEXT_PUBLIC_KEYSTONE_PROXY_URL,
       hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
       hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN,
-      accountNumberPreview: process.env.KEYSTONE_ACCOUNT_NUMBER ? 
-        `${process.env.KEYSTONE_ACCOUNT_NUMBER.substring(0, 3)}***` : undefined,
-      proxyUrl: process.env.KEYSTONE_PROXY_URL
+      accountNumberPreview: process.env.NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER ? 
+        `${process.env.NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER.substring(0, 3)}***` : undefined,
+      proxyUrl: process.env.NEXT_PUBLIC_KEYSTONE_PROXY_URL
     };
   }
 
