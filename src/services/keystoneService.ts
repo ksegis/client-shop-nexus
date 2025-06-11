@@ -1,5 +1,5 @@
-// Updated to use NEXT_PUBLIC_ prefixed environment variables and user-selected environment
-// Version: 2.1.0 - Fixed environment variables and database issues
+// Updated to use VITE_ prefixed environment variables and user-selected environment
+// Version 2.2.0 - Updated for Vite environment variables
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -24,21 +24,21 @@ class KeystoneService {
   private loadedConfig: any = null;
 
   constructor() {
-    // Load configuration from environment variables (using NEXT_PUBLIC_ prefix)
+    // Load configuration from environment variables (using VITE_ prefix)
     this.config = {
-      proxyUrl: process.env.NEXT_PUBLIC_KEYSTONE_PROXY_URL || '',
-      apiToken: process.env.NEXT_PUBLIC_KEYSTONE_API_TOKEN || '',
+      proxyUrl: import.meta.env.VITE_KEYSTONE_PROXY_URL || '',
+      apiToken: import.meta.env.VITE_KEYSTONE_API_TOKEN || '',
       environment: 'development', // Default, will be updated from saved config
-      accountNumber: process.env.NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER || '',
+      accountNumber: import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER || '',
       securityToken: '' // Will be set after loading config
     };
 
     // Initialize Supabase client (no hardcoded fallbacks)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN;
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error('Missing Supabase configuration - NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_TOKEN environment variables are required');
+      console.error('Missing Supabase configuration - VITE_SUPABASE_URL and VITE_SUPABASE_ANON_TOKEN environment variables are required');
       this.supabase = null;
     } else {
       this.supabase = createClient(supabaseUrl, supabaseKey);
@@ -70,17 +70,17 @@ class KeystoneService {
     const missing = [];
     
     if (!this.config.proxyUrl) {
-      missing.push('NEXT_PUBLIC_KEYSTONE_PROXY_URL');
+      missing.push('VITE_KEYSTONE_PROXY_URL');
     }
     
     if (!this.config.accountNumber) {
-      missing.push('NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER');
+      missing.push('VITE_KEYSTONE_ACCOUNT_NUMBER');
     }
     
     if (!this.config.securityToken) {
       const envVar = this.config.environment === 'development' 
-        ? 'NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV' 
-        : 'NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD';
+        ? 'VITE_KEYSTONE_SECURITY_TOKEN_DEV' 
+        : 'VITE_KEYSTONE_SECURITY_TOKEN_PROD';
       missing.push(envVar);
     }
 
@@ -93,9 +93,9 @@ class KeystoneService {
 
   private getSecurityTokenForEnvironment(environment: 'development' | 'production'): string {
     if (environment === 'development') {
-      return process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV || '';
+      return import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV || '';
     } else {
-      return process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD || '';
+      return import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD || '';
     }
   }
 
@@ -158,9 +158,9 @@ class KeystoneService {
       
       if (!this.config.accountNumber || !this.config.securityToken || !this.config.proxyUrl) {
         const missing = [];
-        if (!this.config.accountNumber) missing.push('NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER');
-        if (!this.config.securityToken) missing.push('NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV/PROD');
-        if (!this.config.proxyUrl) missing.push('NEXT_PUBLIC_KEYSTONE_PROXY_URL');
+        if (!this.config.accountNumber) missing.push('VITE_KEYSTONE_ACCOUNT_NUMBER');
+        if (!this.config.securityToken) missing.push('VITE_KEYSTONE_SECURITY_TOKEN_DEV/PROD');
+        if (!this.config.proxyUrl) missing.push('VITE_KEYSTONE_PROXY_URL');
         
         throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
       }
@@ -270,7 +270,7 @@ class KeystoneService {
     return this.makeRequest('/keystone/pricing/get', 'POST', requestData);
   }
 
-  // Configuration management - Fixed to only save minimal config to avoid database schema issues
+  // Configuration management
   async loadConfig(): Promise<any> {
     if (this.loadedConfig) {
       return this.loadedConfig;
@@ -289,7 +289,7 @@ class KeystoneService {
 
       const { data, error } = await this.supabase
         .from('keystone_config')
-        .select('environment, approved_ips, updated_at')
+        .select('*')
         .single();
 
       if (error) {
@@ -303,11 +303,10 @@ class KeystoneService {
       }
 
       this.loadedConfig = {
-        environment: data?.environment || 'development',
-        approvedIPs: data?.approved_ips || [],
+        ...data,
         // Override with environment variables for credentials
         accountNumber: this.config.accountNumber,
-        securityToken: this.getSecurityTokenForEnvironment(data?.environment || 'development')
+        securityToken: this.getSecurityTokenForEnvironment(data.environment || 'development')
       };
 
       return this.loadedConfig;
@@ -329,35 +328,28 @@ class KeystoneService {
         return;
       }
 
-      // Normalize environment to lowercase to avoid case sensitivity issues
-      const normalizedEnvironment = config.environment.toLowerCase();
-
-      // Only save minimal config to avoid database schema issues
+      // Don't save credentials to database - only runtime settings
       const configToSave = {
-        environment: normalizedEnvironment,
-        approved_ips: config.approvedIPs || [],
+        environment: config.environment,
+        approvedIPs: config.approvedIPs,
         updated_at: new Date().toISOString()
       };
 
-      console.log('Saving minimal config to database:', configToSave);
-
       const { error } = await this.supabase
         .from('keystone_config')
-        .upsert(configToSave, { onConflict: 'id' });
+        .upsert(configToSave);
 
       if (error) {
-        console.error('Database save error:', error);
-        throw new Error(`Failed to save configuration: ${error.message}`);
+        throw error;
       }
 
       // Update internal config with new environment
-      this.config.environment = normalizedEnvironment;
-      this.config.securityToken = this.getSecurityTokenForEnvironment(normalizedEnvironment as 'development' | 'production');
+      this.config.environment = config.environment;
+      this.config.securityToken = this.getSecurityTokenForEnvironment(config.environment);
 
       // Update loaded config cache
       this.loadedConfig = {
-        environment: normalizedEnvironment,
-        approvedIPs: config.approvedIPs || [],
+        ...configToSave,
         // Keep environment variables for credentials
         accountNumber: this.config.accountNumber,
         securityToken: this.config.securityToken
@@ -437,15 +429,15 @@ class KeystoneService {
     proxyUrl?: string;
   } {
     return {
-      hasAccountNumber: !!process.env.NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER,
-      hasDevKey: !!process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV,
-      hasProdKey: !!process.env.NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD,
-      hasProxyUrl: !!process.env.NEXT_PUBLIC_KEYSTONE_PROXY_URL,
-      hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_TOKEN,
-      accountNumberPreview: process.env.NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER ? 
-        `${process.env.NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER.substring(0, 3)}***` : undefined,
-      proxyUrl: process.env.NEXT_PUBLIC_KEYSTONE_PROXY_URL
+      hasAccountNumber: !!import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER,
+      hasDevKey: !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV,
+      hasProdKey: !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD,
+      hasProxyUrl: !!import.meta.env.VITE_KEYSTONE_PROXY_URL,
+      hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+      hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_TOKEN,
+      accountNumberPreview: import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER ? 
+        `${import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER.substring(0, 3)}***` : undefined,
+      proxyUrl: import.meta.env.VITE_KEYSTONE_PROXY_URL
     };
   }
 
@@ -459,4 +451,3 @@ class KeystoneService {
 // Export singleton instance
 export const keystoneService = new KeystoneService();
 export default keystoneService;
-
