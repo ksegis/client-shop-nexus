@@ -1,5 +1,5 @@
 // Updated to use VITE_ prefixed environment variables and user-selected environment
-// Version 2.3.0 - Updated for Vite environment variables and environment-specific IP lists
+// Version 2.3.1 - Updated for Vite environment variables and snake_case column names
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -224,9 +224,9 @@ class KeystoneService {
     }
     
     if (this.config.environment === 'development') {
-      return this.loadedConfig.developmentIPs || [];
+      return this.loadedConfig.development_ips || [];
     } else {
-      return this.loadedConfig.productionIPs || [];
+      return this.loadedConfig.production_ips || [];
     }
   }
 
@@ -298,8 +298,8 @@ class KeystoneService {
         console.warn('Supabase not available, using default configuration');
         return {
           environment: 'development',
-          developmentIPs: [],
-          productionIPs: [],
+          development_ips: [],
+          production_ips: [],
           accountNumber: this.config.accountNumber,
           securityToken: this.getSecurityTokenForEnvironment('development')
         };
@@ -314,25 +314,25 @@ class KeystoneService {
         console.warn('Failed to load config from database, using defaults:', error.message);
         return {
           environment: 'development',
-          developmentIPs: [],
-          productionIPs: [],
+          development_ips: [],
+          production_ips: [],
           accountNumber: this.config.accountNumber,
           securityToken: this.getSecurityTokenForEnvironment('development')
         };
       }
 
       // Handle legacy data format (single approvedIPs array)
-      if (data.approvedIPs && !data.developmentIPs && !data.productionIPs) {
+      if (data.approved_ips && !data.development_ips && !data.production_ips) {
         console.log('Converting legacy IP format to environment-specific format');
-        data.developmentIPs = data.approvedIPs;
-        data.productionIPs = data.approvedIPs;
+        data.development_ips = data.approved_ips;
+        data.production_ips = data.approved_ips;
       }
 
       this.loadedConfig = {
         ...data,
         // Ensure environment-specific IP arrays exist
-        developmentIPs: data.developmentIPs || [],
-        productionIPs: data.productionIPs || [],
+        development_ips: data.development_ips || [],
+        production_ips: data.production_ips || [],
         // Override with environment variables for credentials
         accountNumber: this.config.accountNumber,
         securityToken: this.getSecurityTokenForEnvironment(data.environment || 'development')
@@ -343,8 +343,8 @@ class KeystoneService {
       console.error('Error loading configuration:', error);
       return {
         environment: 'development',
-        developmentIPs: [],
-        productionIPs: [],
+        development_ips: [],
+        production_ips: [],
         accountNumber: this.config.accountNumber,
         securityToken: this.getSecurityTokenForEnvironment('development')
       };
@@ -368,8 +368,8 @@ class KeystoneService {
       const configToSave = {
         environment: config.environment,
         // Update the appropriate IP list based on current environment
-        developmentIPs: isDevEnvironment ? config.approvedIPs : (currentConfig.developmentIPs || []),
-        productionIPs: !isDevEnvironment ? config.approvedIPs : (currentConfig.productionIPs || []),
+        development_ips: isDevEnvironment ? config.approvedIPs : (currentConfig.development_ips || []),
+        production_ips: !isDevEnvironment ? config.approvedIPs : (currentConfig.production_ips || []),
         updated_at: new Date().toISOString()
       };
 
@@ -386,7 +386,7 @@ class KeystoneService {
         }
       } catch (dbError) {
         console.error('Failed to save to database:', dbError);
-        throw new Error(`Failed to save configuration: ${dbError instanceof Error ? dbError.message : 'Database error'}`);
+        throw new Error(`Failed to save to database: ${dbError instanceof Error ? dbError.message : 'Database error'}`);
       }
 
       // Update internal config with new environment
@@ -410,14 +410,14 @@ class KeystoneService {
 
   getConfig(): any {
     const currentConfig = this.loadedConfig || {
-      developmentIPs: [],
-      productionIPs: []
+      development_ips: [],
+      production_ips: []
     };
     
     // Get the appropriate IP list based on current environment
     const approvedIPs = this.config.environment === 'development' 
-      ? currentConfig.developmentIPs || []
-      : currentConfig.productionIPs || [];
+      ? currentConfig.development_ips || []
+      : currentConfig.production_ips || [];
     
     return {
       accountNumber: this.config.accountNumber,
@@ -428,8 +428,8 @@ class KeystoneService {
       proxyUrl: this.config.proxyUrl,
       approvedIPs: approvedIPs,
       // Include both IP lists for reference
-      developmentIPs: currentConfig.developmentIPs || [],
-      productionIPs: currentConfig.productionIPs || []
+      development_ips: currentConfig.development_ips || [],
+      production_ips: currentConfig.production_ips || []
     };
   }
 

@@ -1,7 +1,7 @@
 // PHASE 1 - WEEK 3: KEYSTONE CONFIGURATION MANAGER
 // React component for managing Keystone API configuration
 // Updated to use Vite environment variables for credentials
-// Version: 2.3.0 - Updated for Vite environment variables and environment-specific IP lists
+// Version: 2.3.1 - Updated for Vite environment variables and snake_case column names
 // =====================================================
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,14 +16,14 @@ import { useToast } from '@/hooks/use-toast';
 import { keystoneService } from '@/services/keystoneService';
 import { CheckCircle, XCircle, AlertCircle, Eye, EyeOff, Loader2, RefreshCw, Activity, Clock, CheckSquare, AlertTriangle } from 'lucide-react';
 
-const VERSION = "2.3.0";
+const VERSION = "2.3.1";
 const BUILD_DATE = "2025-06-11";
 
 interface KeystoneConfig {
   environment: 'development' | 'production';
   approvedIPs: string[];
-  developmentIPs?: string[];
-  productionIPs?: string[];
+  development_ips?: string[];
+  production_ips?: string[];
 }
 
 interface ConnectionStatus {
@@ -54,8 +54,8 @@ export const KeystoneConfigManager: React.FC = () => {
   const [config, setConfig] = useState<KeystoneConfig>({
     environment: 'development',
     approvedIPs: [''],
-    developmentIPs: [''],
-    productionIPs: ['']
+    development_ips: [''],
+    production_ips: ['']
   });
   
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
@@ -98,14 +98,14 @@ export const KeystoneConfigManager: React.FC = () => {
       // Get the appropriate IP list based on current environment
       const currentEnvironment = loadedConfig.environment || 'development';
       const approvedIPs = currentEnvironment === 'development' 
-        ? loadedConfig.developmentIPs || [''] 
-        : loadedConfig.productionIPs || [''];
+        ? loadedConfig.development_ips || [''] 
+        : loadedConfig.production_ips || [''];
       
       setConfig({
         environment: currentEnvironment,
         approvedIPs: approvedIPs,
-        developmentIPs: loadedConfig.developmentIPs || [''],
-        productionIPs: loadedConfig.productionIPs || ['']
+        development_ips: loadedConfig.development_ips || [''],
+        production_ips: loadedConfig.production_ips || ['']
       });
       
       console.log('Loaded configuration:', loadedConfig);
@@ -144,9 +144,9 @@ export const KeystoneConfigManager: React.FC = () => {
         
         // Update the appropriate IP list based on environment
         if (normalizedEnvironment === 'development') {
-          updatedConfig.developmentIPs = filteredIPs;
+          updatedConfig.development_ips = filteredIPs;
         } else {
-          updatedConfig.productionIPs = filteredIPs;
+          updatedConfig.production_ips = filteredIPs;
         }
         
         return updatedConfig;
@@ -318,16 +318,16 @@ export const KeystoneConfigManager: React.FC = () => {
       const updatedConfig = { ...prev };
       
       if (prev.environment === 'development') {
-        updatedConfig.developmentIPs = prev.approvedIPs;
+        updatedConfig.development_ips = prev.approvedIPs;
       } else {
-        updatedConfig.productionIPs = prev.approvedIPs;
+        updatedConfig.production_ips = prev.approvedIPs;
       }
       
       // Update environment and switch to the appropriate IP list
       updatedConfig.environment = newEnvironment;
       updatedConfig.approvedIPs = newEnvironment === 'development' 
-        ? updatedConfig.developmentIPs || [''] 
-        : updatedConfig.productionIPs || [''];
+        ? updatedConfig.development_ips || [''] 
+        : updatedConfig.production_ips || [''];
       
       return updatedConfig;
     });
