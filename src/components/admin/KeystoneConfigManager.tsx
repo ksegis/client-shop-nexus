@@ -1,7 +1,7 @@
 // PHASE 1 - WEEK 3: KEYSTONE CONFIGURATION MANAGER
 // React component for managing Keystone API configuration
-// Updated to use environment variables for credentials
-// Version: 2.1.0 - Fixed environment variables and database issues
+// Updated to use Vite environment variables for credentials
+// Version: 2.2.0 - Updated for Vite environment variables
 // =====================================================
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,8 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import { keystoneService } from '@/services/keystoneService';
 import { CheckCircle, XCircle, AlertCircle, Eye, EyeOff, Loader2, RefreshCw, Activity, Clock, CheckSquare, AlertTriangle } from 'lucide-react';
 
-const VERSION = "2.1.0";
-const BUILD_DATE = "2025-01-11";
+const VERSION = "2.2.0";
+const BUILD_DATE = "2025-06-11";
 
 interface KeystoneConfig {
   environment: 'development' | 'production';
@@ -339,9 +339,9 @@ export const KeystoneConfigManager: React.FC = () => {
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
                   Credentials are configured via environment variables in your deployment platform.
-                  The following variables are required: NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER, 
-                  NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV, NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD, 
-                  NEXT_PUBLIC_KEYSTONE_PROXY_URL
+                  The following variables are required: VITE_KEYSTONE_ACCOUNT_NUMBER, 
+                  VITE_KEYSTONE_SECURITY_TOKEN_DEV, VITE_KEYSTONE_SECURITY_TOKEN_PROD, 
+                  VITE_KEYSTONE_PROXY_URL
                 </AlertDescription>
               </Alert>
 
@@ -461,18 +461,13 @@ export const KeystoneConfigManager: React.FC = () => {
                 >
                   Add IP Address
                 </Button>
-                <p className="text-sm text-gray-500">
-                  IP addresses that are allowed to access the Keystone API
-                </p>
               </div>
 
-              <Separator />
-
-              <div className="flex space-x-2">
+              <div className="pt-4">
                 <Button 
                   onClick={handleSave} 
                   disabled={isLoading}
-                  className="flex-1"
+                  className="w-full"
                 >
                   {isLoading ? (
                     <>
@@ -482,13 +477,6 @@ export const KeystoneConfigManager: React.FC = () => {
                   ) : (
                     'Save Configuration'
                   )}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={loadConfiguration}
-                  disabled={isLoading}
-                >
-                  <RefreshCw className="h-4 w-4" />
                 </Button>
               </div>
             </CardContent>
@@ -626,4 +614,3 @@ export const KeystoneConfigManager: React.FC = () => {
 };
 
 export default KeystoneConfigManager;
-
