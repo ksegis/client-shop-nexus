@@ -1,6 +1,7 @@
 // =====================================================
 // PHASE 1 - WEEK 3: KEYSTONE CONFIGURATION MANAGER
 // React component for managing Keystone API configuration
+// Updated to use environment variables for credentials
 // =====================================================
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,14 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle, XCircle, AlertTriangle, Settings, TestTube, Activity, Shield, Eye, EyeOff } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Settings, TestTube, Activity, Shield, Info } from 'lucide-react';
 import { keystoneService } from '@/services/keystone/KeystoneService';
 import { useToast } from '@/hooks/use-toast';
 
 interface KeystoneConfigData {
-  accountNumber: string;
-  securityKeyDev: string;
-  securityKeyProd: string;
   environment: 'development' | 'production';
   approvedIPs: string[];
 }
@@ -33,29 +31,22 @@ interface ConnectionStatus {
 }
 
 interface ValidationErrors {
-  accountNumber?: string;
-  securityKeyDev?: string;
-  securityKeyProd?: string;
   approvedIPs?: string;
 }
 
-// Security validation functions
-const validateSecurityKey = (key: string): boolean => {
-  // Accept any non-empty string as Keystone key formats may vary
-  // Remove whitespace and check for minimum length
-  const cleanKey = key.trim();
-  return cleanKey.length >= 10; // Minimum reasonable length for a security key
-};
+interface EnvironmentInfo {
+  hasAccountNumber: boolean;
+  hasDevKey: boolean;
+  hasProdKey: boolean;
+  hasProxyUrl: boolean;
+  accountNumberPreview?: string;
+  proxyUrl?: string;
+}
 
+// Security validation functions
 const validateIPAddress = (ip: string): boolean => {
   const ipPattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
   return ipPattern.test(ip.trim());
-};
-
-const validateAccountNumber = (accountNumber: string): boolean => {
-  // Account numbers can be alphanumeric and at least 3 characters
-  const cleanAccount = accountNumber.trim();
-  return cleanAccount.length >= 3 && /^[a-zA-Z0-9]+$/.test(cleanAccount);
 };
 
 const sanitizeErrorMessage = (error: string): string => {
@@ -65,9 +56,6 @@ const sanitizeErrorMessage = (error: string): string => {
 
 export const KeystoneConfigManager: React.FC = () => {
   const [config, setConfig] = useState<KeystoneConfigData>({
-    accountNumber: '',
-    securityKeyDev: '',
-    securityKeyProd: '',
     environment: 'development',
     approvedIPs: []
   });
@@ -80,15 +68,19 @@ export const KeystoneConfigManager: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [syncLogs, setSyncLogs] = useState<any[]>([]);
-  const [showDevKey, setShowDevKey] = useState(false);
-  const [showProdKey, setShowProdKey] = useState(false);
-  const [showAccountNumber, setShowAccountNumber] = useState(false);
   const [approvedIPsInput, setApprovedIPsInput] = useState('');
+  const [envInfo, setEnvInfo] = useState<EnvironmentInfo>({
+    hasAccountNumber: false,
+    hasDevKey: false,
+    hasProdKey: false,
+    hasProxyUrl: false
+  });
   const { toast } = useToast();
 
   useEffect(() => {
     loadConfiguration();
     loadSyncLogs();
+    checkEnvironmentVariables();
   }, []);
 
   useEffect(() => {
@@ -96,23 +88,23 @@ export const KeystoneConfigManager: React.FC = () => {
     setApprovedIPsInput(config.approvedIPs.join(', '));
   }, [config.approvedIPs]);
 
+  // Check environment variables status
+  const checkEnvironmentVariables = () => {
+    const info: EnvironmentInfo = {
+      hasAccountNumber: !!process.env.KEYSTONE_ACCOUNT_NUMBER,
+      hasDevKey: !!process.env.KEYSTONE_SECURITY_TOKEN_DEV,
+      hasProdKey: !!process.env.KEYSTONE_SECURITY_TOKEN_PROD,
+      hasProxyUrl: !!process.env.KEYSTONE_PROXY_URL,
+      accountNumberPreview: process.env.KEYSTONE_ACCOUNT_NUMBER ? 
+        `${process.env.KEYSTONE_ACCOUNT_NUMBER.substring(0, 3)}***` : undefined,
+      proxyUrl: process.env.KEYSTONE_PROXY_URL
+    };
+    setEnvInfo(info);
+  };
+
   // Validation function
   const validateConfiguration = (): ValidationErrors => {
     const errors: ValidationErrors = {};
-
-    if (!config.accountNumber) {
-      errors.accountNumber = 'Account number is required';
-    } else if (!validateAccountNumber(config.accountNumber)) {
-      errors.accountNumber = 'Account number must be alphanumeric and at least 3 characters';
-    }
-
-    if (config.securityKeyDev && !validateSecurityKey(config.securityKeyDev)) {
-      errors.securityKeyDev = 'Development security key must be at least 10 characters';
-    }
-
-    if (config.securityKeyProd && !validateSecurityKey(config.securityKeyProd)) {
-      errors.securityKeyProd = 'Production security key must be at least 10 characters';
-    }
 
     if (config.approvedIPs.length > 0) {
       const invalidIPs = config.approvedIPs.filter(ip => ip.trim() && !validateIPAddress(ip));
@@ -131,9 +123,6 @@ export const KeystoneConfigManager: React.FC = () => {
       
       if (currentConfig) {
         setConfig({
-          accountNumber: currentConfig.accountNumber,
-          securityKeyDev: currentConfig.securityKey, // Will be updated when we have separate keys
-          securityKeyProd: currentConfig.securityKey,
           environment: currentConfig.environment,
           approvedIPs: currentConfig.approvedIPs
         });
@@ -297,6 +286,15 @@ export const KeystoneConfigManager: React.FC = () => {
     );
   };
 
+  const getEnvironmentStatus = () => {
+    const allPresent = envInfo.hasAccountNumber && envInfo.hasDevKey && envInfo.hasProdKey && envInfo.hasProxyUrl;
+    if (allPresent) {
+      return <Badge className="bg-green-100 text-green-800">All Environment Variables Set</Badge>;
+    } else {
+      return <Badge className="bg-red-100 text-red-800">Missing Environment Variables</Badge>;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -334,56 +332,110 @@ export const KeystoneConfigManager: React.FC = () => {
               <CardTitle className="flex items-center space-x-2">
                 <Shield className="w-5 h-5" />
                 <span>API Configuration</span>
+                {getEnvironmentStatus()}
               </CardTitle>
               <CardDescription>
-                Configure your Keystone API credentials and settings. All sensitive data is encrypted and protected.
+                Configure your Keystone API settings. Credentials are managed via environment variables for enhanced security.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <Alert>
                 <Shield className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>Security Notice:</strong> This connection uses HTTPS encryption. Your API keys are masked and not stored in browser storage.
+                  <strong>Security Notice:</strong> This connection uses HTTPS encryption. API credentials are managed via environment variables and not stored in browser storage.
                 </AlertDescription>
               </Alert>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="accountNumber">Account Number</Label>
-                  <div className="relative">
-                    <Input
-                      id="accountNumber"
-                      type={showAccountNumber ? "text" : "password"}
-                      placeholder="Enter your Keystone account number"
-                      value={config.accountNumber}
-                      onChange={(e) => {
-                        setConfig(prev => ({ ...prev, accountNumber: e.target.value }));
-                        if (validationErrors.accountNumber) {
-                          setValidationErrors(prev => ({ ...prev, accountNumber: undefined }));
-                        }
-                      }}
-                      className={validationErrors.accountNumber ? 'border-red-500 pr-10' : 'pr-10'}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowAccountNumber(!showAccountNumber)}
-                    >
-                      {showAccountNumber ? (
-                        <EyeOff className="h-4 w-4" />
+              {/* Environment Variables Status */}
+              <Card className="bg-gray-50">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center space-x-2">
+                    <Info className="w-5 h-5" />
+                    <span>Environment Variables Status</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Account Number:</span>
+                      <div className="flex items-center space-x-2">
+                        {envInfo.hasAccountNumber ? (
+                          <>
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            <span className="text-sm text-gray-600">{envInfo.accountNumberPreview}</span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-4 h-4 text-red-500" />
+                            <span className="text-sm text-red-600">Not Set</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Development Key:</span>
+                      {envInfo.hasDevKey ? (
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span className="text-sm text-gray-600">Set</span>
+                        </div>
                       ) : (
-                        <Eye className="h-4 w-4" />
+                        <div className="flex items-center space-x-2">
+                          <XCircle className="w-4 h-4 text-red-500" />
+                          <span className="text-sm text-red-600">Not Set</span>
+                        </div>
                       )}
-                    </Button>
-                  </div>
-                  {validationErrors.accountNumber && (
-                    <p className="text-sm text-red-500">{validationErrors.accountNumber}</p>
-                  )}
-                  <p className="text-xs text-gray-500">Alphanumeric account identifier from Keystone</p>
-                </div>
+                    </div>
 
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Production Key:</span>
+                      {envInfo.hasProdKey ? (
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span className="text-sm text-gray-600">Set</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <XCircle className="w-4 h-4 text-red-500" />
+                          <span className="text-sm text-red-600">Not Set</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Proxy URL:</span>
+                      {envInfo.hasProxyUrl ? (
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span className="text-sm text-gray-600">{envInfo.proxyUrl}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <XCircle className="w-4 h-4 text-red-500" />
+                          <span className="text-sm text-red-600">Not Set</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <Alert>
+                    <Info className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Required Environment Variables:</strong>
+                      <ul className="mt-2 space-y-1 text-sm">
+                        <li>• <code>KEYSTONE_ACCOUNT_NUMBER</code> - Your Keystone account number</li>
+                        <li>• <code>KEYSTONE_SECURITY_TOKEN_DEV</code> - Development security key</li>
+                        <li>• <code>KEYSTONE_SECURITY_TOKEN_PROD</code> - Production security key</li>
+                        <li>• <code>KEYSTONE_PROXY_URL</code> - DigitalOcean proxy server URL (HTTPS)</li>
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                </CardContent>
+              </Card>
+
+              {/* Runtime Configuration */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="environment">Environment</Label>
                   <Select value={config.environment} onValueChange={(value: 'development' | 'production') => 
@@ -396,90 +448,39 @@ export const KeystoneConfigManager: React.FC = () => {
                       <SelectItem value="production">Production</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-gray-500">
+                    Selects which environment credentials to use from environment variables
+                  </p>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor={config.environment === 'development' ? 'securityKeyDev' : 'securityKeyProd'}>
-                  {config.environment === 'development' ? 'Development' : 'Production'} Security Key
-                </Label>
-                <div className="relative">
+                <div className="space-y-2">
+                  <Label htmlFor="approvedIPs">Approved IP Addresses</Label>
                   <Input
-                    id={config.environment === 'development' ? 'securityKeyDev' : 'securityKeyProd'}
-                    type={config.environment === 'development' ? (showDevKey ? "text" : "password") : (showProdKey ? "text" : "password")}
-                    placeholder={`Security key for ${config.environment} environment`}
-                    value={config.environment === 'development' ? config.securityKeyDev : config.securityKeyProd}
-                    onChange={(e) => {
-                      if (config.environment === 'development') {
-                        setConfig(prev => ({ ...prev, securityKeyDev: e.target.value }));
-                        if (validationErrors.securityKeyDev) {
-                          setValidationErrors(prev => ({ ...prev, securityKeyDev: undefined }));
-                        }
-                      } else {
-                        setConfig(prev => ({ ...prev, securityKeyProd: e.target.value }));
-                        if (validationErrors.securityKeyProd) {
-                          setValidationErrors(prev => ({ ...prev, securityKeyProd: undefined }));
-                        }
-                      }
-                    }}
-                    className={
-                      (config.environment === 'development' ? validationErrors.securityKeyDev : validationErrors.securityKeyProd) 
-                        ? 'border-red-500 pr-10' : 'pr-10'
-                    }
+                    id="approvedIPs"
+                    placeholder="192.168.1.1, 10.0.0.1, 203.0.113.1"
+                    value={approvedIPsInput}
+                    onChange={(e) => handleApprovedIPsChange(e.target.value)}
+                    className={validationErrors.approvedIPs ? 'border-red-500' : ''}
                   />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => {
-                      if (config.environment === 'development') {
-                        setShowDevKey(!showDevKey);
-                      } else {
-                        setShowProdKey(!showProdKey);
-                      }
-                    }}
-                  >
-                    {(config.environment === 'development' ? showDevKey : showProdKey) ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
+                  {validationErrors.approvedIPs && (
+                    <p className="text-sm text-red-500">{validationErrors.approvedIPs}</p>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    Comma-separated list of IP addresses that Keystone will accept requests from
+                  </p>
                 </div>
-                {config.environment === 'development' && validationErrors.securityKeyDev && (
-                  <p className="text-sm text-red-500">{validationErrors.securityKeyDev}</p>
-                )}
-                {config.environment === 'production' && validationErrors.securityKeyProd && (
-                  <p className="text-sm text-red-500">{validationErrors.securityKeyProd}</p>
-                )}
-                <p className="text-xs text-gray-500">Security key provided by Keystone (minimum 10 characters)</p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="approvedIPs">Approved IP Addresses</Label>
-                <Input
-                  id="approvedIPs"
-                  placeholder="Comma-separated list of approved IPs (e.g., 192.168.1.1, 10.0.0.1)"
-                  value={approvedIPsInput}
-                  onChange={(e) => handleApprovedIPsChange(e.target.value)}
-                  className={validationErrors.approvedIPs ? 'border-red-500' : ''}
-                />
-                {validationErrors.approvedIPs && (
-                  <p className="text-sm text-red-500">{validationErrors.approvedIPs}</p>
-                )}
-                <p className="text-xs text-gray-500">
-                  Enter the IP addresses that Keystone has approved for your account
-                </p>
+              <div className="flex space-x-4">
+                <Button 
+                  onClick={handleSaveConfiguration} 
+                  disabled={loading}
+                  className="flex items-center space-x-2"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>{loading ? 'Saving...' : 'Save Configuration'}</span>
+                </Button>
               </div>
-
-              <Button 
-                onClick={handleSaveConfiguration} 
-                disabled={loading}
-                className="w-full md:w-auto"
-              >
-                {loading ? 'Saving...' : 'Save Configuration'}
-              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -492,7 +493,7 @@ export const KeystoneConfigManager: React.FC = () => {
                 <span>Connection Testing</span>
               </CardTitle>
               <CardDescription>
-                Test your Keystone API connection and view connection details
+                Test your Keystone API connection and verify configuration
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -511,52 +512,53 @@ export const KeystoneConfigManager: React.FC = () => {
                 <Button 
                   onClick={handleTestConnection} 
                   disabled={testing}
-                  variant="outline"
+                  className="flex items-center space-x-2"
                 >
-                  {testing ? 'Testing...' : 'Test Connection'}
+                  <TestTube className="w-4 h-4" />
+                  <span>{testing ? 'Testing...' : 'Test Connection'}</span>
                 </Button>
               </div>
 
-              {connectionStatus.error && (
-                <Alert variant="destructive">
-                  <XCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>Connection Error:</strong> {connectionStatus.error}
-                  </AlertDescription>
-                </Alert>
-              )}
-
               {connectionStatus.isConnected && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4">
                   {connectionStatus.currentIP && (
-                    <div className="p-4 border rounded-lg">
-                      <h4 className="font-medium mb-2">Current IP Address</h4>
-                      <p className="text-sm text-gray-600">{connectionStatus.currentIP}</p>
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <h4 className="font-medium text-green-800">Current IP Address</h4>
+                      <p className="text-green-700">{connectionStatus.currentIP}</p>
                     </div>
                   )}
 
                   {connectionStatus.approvedIPs && connectionStatus.approvedIPs.length > 0 && (
-                    <div className="p-4 border rounded-lg">
-                      <h4 className="font-medium mb-2">Approved IP Addresses</h4>
-                      <div className="space-y-1">
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <h4 className="font-medium text-blue-800">Approved IP Addresses</h4>
+                      <div className="flex flex-wrap gap-2 mt-2">
                         {connectionStatus.approvedIPs.map((ip, index) => (
-                          <p key={index} className="text-sm text-gray-600">{ip}</p>
+                          <Badge key={index} variant="secondary">{ip}</Badge>
                         ))}
                       </div>
                     </div>
                   )}
 
                   {connectionStatus.approvedMethods && connectionStatus.approvedMethods.length > 0 && (
-                    <div className="p-4 border rounded-lg md:col-span-2">
-                      <h4 className="font-medium mb-2">Approved Methods</h4>
-                      <div className="flex flex-wrap gap-2">
+                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                      <h4 className="font-medium text-purple-800">Available Methods</h4>
+                      <div className="flex flex-wrap gap-2 mt-2">
                         {connectionStatus.approvedMethods.map((method, index) => (
-                          <Badge key={index} variant="secondary">{method}</Badge>
+                          <Badge key={index} variant="outline">{method}</Badge>
                         ))}
                       </div>
                     </div>
                   )}
                 </div>
+              )}
+
+              {connectionStatus.error && (
+                <Alert className="border-red-200 bg-red-50">
+                  <XCircle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-800">
+                    <strong>Connection Error:</strong> {connectionStatus.error}
+                  </AlertDescription>
+                </Alert>
               )}
             </CardContent>
           </Card>
@@ -567,18 +569,27 @@ export const KeystoneConfigManager: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Activity className="w-5 h-5" />
-                <span>Sync Monitoring</span>
+                <span>Activity Monitoring</span>
               </CardTitle>
               <CardDescription>
-                Monitor recent synchronization activities and logs
+                Monitor Keystone API activity and sync operations
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {syncLogs.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No sync logs available</p>
-                ) : (
-                  <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium">Recent Sync Logs</h4>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={loadSyncLogs}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+
+                {syncLogs.length > 0 ? (
+                  <div className="space-y-2">
                     {syncLogs.map((log, index) => (
                       <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center space-x-3">
@@ -591,14 +602,20 @@ export const KeystoneConfigManager: React.FC = () => {
                         </div>
                         <div className="flex items-center space-x-2">
                           {formatLogStatus(log.status || 'unknown')}
-                          {log.recordCount && (
+                          {log.recordsProcessed && (
                             <span className="text-sm text-gray-500">
-                              {log.recordCount} records
+                              {log.recordsProcessed} records
                             </span>
                           )}
                         </div>
                       </div>
                     ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No sync logs available</p>
+                    <p className="text-sm">Logs will appear here after API operations</p>
                   </div>
                 )}
               </div>
