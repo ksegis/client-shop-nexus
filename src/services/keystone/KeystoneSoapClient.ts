@@ -61,8 +61,8 @@ export class KeystoneSoapClient {
         accountNumber: process.env.KEYSTONE_ACCOUNT_NUMBER || '',
         securityKey: process.env.KEYSTONE_SECURITY_KEY || '',
         environment: (process.env.KEYSTONE_ENVIRONMENT as 'development' | 'production') || 'development',
-        apiEndpoint: process.env.KEYSTONE_API_ENDPOINT || 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx',
-        wsdlUrl: process.env.KEYSTONE_WSDL_URL || 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL',
+        apiEndpoint: process.env.KEYSTONE_API_ENDPOINT || 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx',
+        wsdlUrl: process.env.KEYSTONE_WSDL_URL || 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL',
         approvedIPs: process.env.KEYSTONE_APPROVED_IPS?.split(',') || []
       };
 

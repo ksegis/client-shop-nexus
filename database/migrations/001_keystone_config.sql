@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS keystone_config (
   environment VARCHAR(20) DEFAULT 'development' CHECK (environment IN ('development', 'production')),
   is_active BOOLEAN DEFAULT FALSE,
   last_tested TIMESTAMP,
-  api_endpoint VARCHAR(255) DEFAULT 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx',
-  wsdl_url VARCHAR(255) DEFAULT 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL',
+  api_endpoint VARCHAR(255) DEFAULT 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx',
+  wsdl_url VARCHAR(255) DEFAULT 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

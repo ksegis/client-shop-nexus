@@ -12,8 +12,8 @@ CREATE TABLE IF NOT EXISTS keystone_config (
   security_key_dev TEXT NOT NULL,
   security_key_prod TEXT NOT NULL,
   environment VARCHAR(20) DEFAULT 'development' CHECK (environment IN ('development', 'production')),
-  api_endpoint VARCHAR(255) DEFAULT 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx',
-  wsdl_url VARCHAR(255) DEFAULT 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL',
+  api_endpoint VARCHAR(255) DEFAULT 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx',
+  wsdl_url VARCHAR(255) DEFAULT 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL',
   approved_ips TEXT[], -- Array of approved IP addresses
   is_active BOOLEAN DEFAULT TRUE,
   ip_approval_status VARCHAR(20) DEFAULT 'pending' CHECK (ip_approval_status IN ('pending', 'approved', 'rejected')),

@@ -100,13 +100,13 @@ export const KeystoneUtils = {
 // Configuration constants
 export const KeystoneConstants = {
   API_ENDPOINTS: {
-    PRODUCTION: 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx',
-    DEVELOPMENT: 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx'
+    PRODUCTION: 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx',
+    DEVELOPMENT: 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx'
   },
   
   WSDL_URLS: {
-    PRODUCTION: 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL',
-    DEVELOPMENT: 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL'
+    PRODUCTION: 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL',
+    DEVELOPMENT: 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL'
   },
 
   ORDER_TYPES: {
