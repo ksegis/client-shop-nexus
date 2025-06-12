@@ -365,13 +365,16 @@ class KeystoneService {
       const isDevEnvironment = config.environment === 'development';
       
       // Don't save credentials to database - only runtime settings
-      const configToSave = {
-        environment: config.environment,
-        // Update the appropriate IP list based on current environment
-        development_ips: isDevEnvironment ? config.approvedIPs : (currentConfig.development_ips || []),
-        production_ips: !isDevEnvironment ? config.approvedIPs : (currentConfig.production_ips || []),
-        updated_at: new Date().toISOString()
-      };
+const configToSave = {
+  environment: config.environment,
+  // Add this line to include the account number
+  account_number: this.config.accountNumber,
+  // Update the appropriate IP list based on current environment
+  development_ips: isDevEnvironment ? config.approvedIPs : (currentConfig.development_ips || []),
+  production_ips: !isDevEnvironment ? config.approvedIPs : (currentConfig.production_ips || []),
+  updated_at: new Date().toISOString()
+};
+
 
       console.log('Saving configuration:', configToSave);
       
