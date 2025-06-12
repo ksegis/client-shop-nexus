@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-// Import both logo variants - you'll need to create these assets
-import logoLight from '../../../assets/ctc_logo_light.svg';
-import logoDark from '../../../assets/ctc_logo_dark.svg';
-import logoMobile from '../../../assets/ctc_logo_icon.svg';
+// Only import the existing JPG that we know exists
+import ctcLogo from '../../../assets/ctc_logo.jpg';
 
 interface LogoProps {
   portalType: 'shop' | 'customer';
@@ -41,27 +39,24 @@ export const Logo = ({ portalType, theme = 'auto' }: LogoProps) => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Determine which logo to use based on theme and viewport size
-  const getLogo = () => {
-    if (isMobile) {
-      return logoMobile;
-    }
-    return isDarkMode ? logoLight : logoDark;
-  };
-
   return (
     <div className="flex items-center">
       <Link to={portalType === 'customer' ? '/customer' : '/shop'}>
         <div className="flex items-center">
           <img 
-            src={getLogo()} 
-            srcSet={`${getLogo()} 1x, ${getLogo()} 2x`} // Replace with actual 2x versions when available
+            src={ctcLogo} 
             alt="Custom Truck Connections" 
             className="nav-logo"
+            // Fallback inline styles if nav-logo class isn't defined yet
+            style={{ 
+              maxHeight: '32px', 
+              width: 'auto', 
+              height: 'auto',
+              marginRight: '16px'
+            }}
           />
         </div>
       </Link>
     </div>
   );
 };
-
