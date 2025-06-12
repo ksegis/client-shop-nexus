@@ -1,5 +1,5 @@
 // Updated to use VITE_ prefixed environment variables and user-selected environment
-// Version 2.3.0 - Updated for Vite environment variables and environment-specific IP lists
+// Version 2.4.0 - Fixed upsert logic to update existing rows instead of creating new ones
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -109,7 +109,12 @@ class KeystoneService {
         throw new Error('Proxy URL not configured');
       }
 
-      const url = `${this.config.proxyUrl}${endpoint}`;
+      // Ensure endpoint starts with a slash if not already
+      const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      const url = `${this.config.proxyUrl}${formattedEndpoint}`;
+      
+      console.log('Making request to:', url);
+      
       const options: RequestInit = {
         method,
         headers: {
@@ -224,9 +229,9 @@ class KeystoneService {
     }
     
     if (this.config.environment === 'development') {
-      return this.loadedConfig.developmentIPs || [];
+      return this.loadedConfig.development_ips || [];
     } else {
-      return this.loadedConfig.productionIPs || [];
+      return this.loadedConfig.production_ips || [];
     }
   }
 
@@ -298,53 +303,89 @@ class KeystoneService {
         console.warn('Supabase not available, using default configuration');
         return {
           environment: 'development',
-          developmentIPs: [],
-          productionIPs: [],
+          development_ips: [],
+          production_ips: [],
           accountNumber: this.config.accountNumber,
           securityToken: this.getSecurityTokenForEnvironment('development')
         };
       }
 
+      // First try to get the config for the current account number
+      const { data: accountData, error: accountError } = await this.supabase
+        .from('keystone_config')
+        .select('*')
+        .eq('account_number', this.config.accountNumber)
+        .maybeSingle();
+
+      // If we found a config for this account, use it
+      if (accountData) {
+        console.log('Found configuration for account:', this.config.accountNumber);
+        
+        // Handle legacy data format (single approvedIPs array)
+        if (accountData.approved_ips && (!accountData.development_ips || !accountData.production_ips)) {
+          console.log('Converting legacy IP format to environment-specific format');
+          accountData.development_ips = accountData.approved_ips;
+          accountData.production_ips = accountData.approved_ips;
+        }
+
+        this.loadedConfig = {
+          ...accountData,
+          // Ensure environment-specific IP arrays exist
+          development_ips: accountData.development_ips || [],
+          production_ips: accountData.production_ips || [],
+          // Override with environment variables for credentials
+          accountNumber: this.config.accountNumber,
+          securityToken: this.getSecurityTokenForEnvironment(accountData.environment || 'development')
+        };
+
+        return this.loadedConfig;
+      }
+
+      // If no config found for this account, try to get any config
       const { data, error } = await this.supabase
         .from('keystone_config')
         .select('*')
-        .single();
+        .limit(1)
+        .maybeSingle();
 
-      if (error) {
-        console.warn('Failed to load config from database, using defaults:', error.message);
-        return {
-          environment: 'development',
-          developmentIPs: [],
-          productionIPs: [],
+      if (data) {
+        console.log('Using existing configuration');
+        
+        // Handle legacy data format (single approvedIPs array)
+        if (data.approved_ips && (!data.development_ips || !data.production_ips)) {
+          console.log('Converting legacy IP format to environment-specific format');
+          data.development_ips = data.approved_ips;
+          data.production_ips = data.approved_ips;
+        }
+
+        this.loadedConfig = {
+          ...data,
+          // Ensure environment-specific IP arrays exist
+          development_ips: data.development_ips || [],
+          production_ips: data.production_ips || [],
+          // Override with environment variables for credentials
           accountNumber: this.config.accountNumber,
-          securityToken: this.getSecurityTokenForEnvironment('development')
+          securityToken: this.getSecurityTokenForEnvironment(data.environment || 'development')
         };
+
+        return this.loadedConfig;
       }
 
-      // Handle legacy data format (single approvedIPs array)
-      if (data.approvedIPs && !data.developmentIPs && !data.productionIPs) {
-        console.log('Converting legacy IP format to environment-specific format');
-        data.developmentIPs = data.approvedIPs;
-        data.productionIPs = data.approvedIPs;
-      }
-
-      this.loadedConfig = {
-        ...data,
-        // Ensure environment-specific IP arrays exist
-        developmentIPs: data.developmentIPs || [],
-        productionIPs: data.productionIPs || [],
-        // Override with environment variables for credentials
+      // If no config found at all, return defaults
+      console.warn('No configuration found in database, using defaults');
+      return {
+        environment: 'development',
+        development_ips: [],
+        production_ips: [],
         accountNumber: this.config.accountNumber,
-        securityToken: this.getSecurityTokenForEnvironment(data.environment || 'development')
+        securityToken: this.getSecurityTokenForEnvironment('development')
       };
-
-      return this.loadedConfig;
     } catch (error) {
       console.error('Error loading configuration:', error);
       return {
         environment: 'development',
-        developmentIPs: [],
-        productionIPs: [],
+        development_ips: [],
+        production_ips: [],
         accountNumber: this.config.accountNumber,
         securityToken: this.getSecurityTokenForEnvironment('development')
       };
@@ -367,26 +408,71 @@ class KeystoneService {
       // Don't save credentials to database - only runtime settings
       const configToSave = {
         environment: config.environment,
+        // Include account number to satisfy NOT NULL constraint
+        account_number: this.config.accountNumber,
+        // Include security keys to satisfy NOT NULL constraints
+        security_key_dev: import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV || '',
+        security_key_prod: import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD || '',
         // Update the appropriate IP list based on current environment
-        developmentIPs: isDevEnvironment ? config.approvedIPs : (currentConfig.developmentIPs || []),
-        productionIPs: !isDevEnvironment ? config.approvedIPs : (currentConfig.productionIPs || []),
+        development_ips: isDevEnvironment ? config.approvedIPs : (currentConfig.development_ips || []),
+        production_ips: !isDevEnvironment ? config.approvedIPs : (currentConfig.production_ips || []),
         updated_at: new Date().toISOString()
       };
 
       console.log('Saving configuration:', configToSave);
       
       try {
-        const { error } = await this.supabase
+        // First check if a row exists for this account number
+        const { data: existingConfig, error: checkError } = await this.supabase
           .from('keystone_config')
-          .upsert(configToSave);
+          .select('id')
+          .eq('account_number', this.config.accountNumber)
+          .maybeSingle();
 
-        if (error) {
-          console.error('Database error when saving config:', error);
-          throw new Error(`Database error: ${error.message || 'Unknown database error'}`);
+        if (checkError) {
+          console.error('Error checking for existing config:', checkError);
+        }
+
+        let result;
+        
+        if (existingConfig?.id) {
+          // Update existing row if found
+          console.log('Updating existing configuration with ID:', existingConfig.id);
+          result = await this.supabase
+            .from('keystone_config')
+            .update(configToSave)
+            .eq('id', existingConfig.id);
+        } else {
+          // Check if there's any row at all
+          const { data: anyConfig, error: anyCheckError } = await this.supabase
+            .from('keystone_config')
+            .select('id')
+            .limit(1)
+            .maybeSingle();
+            
+          if (anyConfig?.id) {
+            // Update the first row if any exists
+            console.log('Updating existing configuration with ID:', anyConfig.id);
+            result = await this.supabase
+              .from('keystone_config')
+              .update(configToSave)
+              .eq('id', anyConfig.id);
+          } else {
+            // Insert new row if none exists
+            console.log('Creating new configuration');
+            result = await this.supabase
+              .from('keystone_config')
+              .insert(configToSave);
+          }
+        }
+
+        if (result?.error) {
+          console.error('Database error when saving config:', result.error);
+          throw new Error(`Database error: ${result.error.message || 'Unknown database error'}`);
         }
       } catch (dbError) {
         console.error('Failed to save to database:', dbError);
-        throw new Error(`Failed to save configuration: ${dbError instanceof Error ? dbError.message : 'Database error'}`);
+        throw new Error(`Failed to save to database: ${dbError instanceof Error ? dbError.message : 'Database error'}`);
       }
 
       // Update internal config with new environment
@@ -410,14 +496,14 @@ class KeystoneService {
 
   getConfig(): any {
     const currentConfig = this.loadedConfig || {
-      developmentIPs: [],
-      productionIPs: []
+      development_ips: [],
+      production_ips: []
     };
     
     // Get the appropriate IP list based on current environment
     const approvedIPs = this.config.environment === 'development' 
-      ? currentConfig.developmentIPs || []
-      : currentConfig.productionIPs || [];
+      ? currentConfig.development_ips || []
+      : currentConfig.production_ips || [];
     
     return {
       accountNumber: this.config.accountNumber,
@@ -428,8 +514,8 @@ class KeystoneService {
       proxyUrl: this.config.proxyUrl,
       approvedIPs: approvedIPs,
       // Include both IP lists for reference
-      developmentIPs: currentConfig.developmentIPs || [],
-      productionIPs: currentConfig.productionIPs || []
+      development_ips: currentConfig.development_ips || [],
+      production_ips: currentConfig.production_ips || []
     };
   }
 
