@@ -1,672 +1,626 @@
+// =====================================================
 // PHASE 1 - WEEK 3: KEYSTONE CONFIGURATION MANAGER
 // React component for managing Keystone API configuration
-// Updated to use Vite environment variables for credentials
-// Version: 2.3.0 - Updated for Vite environment variables and environment-specific IP lists
+// Updated to use environment variables for credentials
 // =====================================================
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CheckCircle, XCircle, AlertTriangle, Settings, TestTube, Activity, Shield, Info } from 'lucide-react';
+import KeystoneService from '@/services/keystone/KeystoneService';
+
+const keystoneService = new KeystoneService();
 import { useToast } from '@/hooks/use-toast';
-import { keystoneService } from '@/services/keystoneService';
-import { CheckCircle, XCircle, AlertCircle, Eye, EyeOff, Loader2, RefreshCw, Activity, Clock, CheckSquare, AlertTriangle } from 'lucide-react';
 
-const VERSION = "2.3.0";
-const BUILD_DATE = "2025-06-11";
-
-interface KeystoneConfig {
+interface KeystoneConfigData {
   environment: 'development' | 'production';
   approvedIPs: string[];
-  developmentIPs?: string[];
-  productionIPs?: string[];
 }
 
 interface ConnectionStatus {
   isConnected: boolean;
-  lastChecked: Date | null;
-  error: string | null;
+  currentIP?: string;
+  approvedIPs?: string[];
+  approvedMethods?: string[];
+  lastTested?: Date;
+  error?: string;
 }
 
-interface SyncLog {
-  id: string;
-  timestamp: string;
-  operation: string;
-  status: 'success' | 'error' | 'warning';
-  message: string;
-  duration_seconds?: number;
+interface ValidationErrors {
+  approvedIPs?: string;
 }
 
-interface EnvironmentStatus {
+interface EnvironmentInfo {
   hasAccountNumber: boolean;
   hasDevKey: boolean;
   hasProdKey: boolean;
   hasProxyUrl: boolean;
-  hasSupabaseUrl: boolean;
-  hasSupabaseKey: boolean;
+  accountNumberPreview?: string;
+  proxyUrl?: string;
 }
 
+// Security validation functions
+const validateIPAddress = (ip: string): boolean => {
+  const ipPattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  return ipPattern.test(ip.trim());
+};
+
+const sanitizeErrorMessage = (error: string): string => {
+  // Remove any potential security key information from error messages
+  return error.replace(/[0-9a-fA-F]{20,}/g, '[REDACTED]');
+};
+
 export const KeystoneConfigManager: React.FC = () => {
-  const [config, setConfig] = useState<KeystoneConfig>({
+  const [config, setConfig] = useState<KeystoneConfigData>({
     environment: 'development',
-    approvedIPs: [''],
-    developmentIPs: [''],
-    productionIPs: ['']
+    approvedIPs: []
   });
-  
+
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
-    isConnected: false,
-    lastChecked: null,
-    error: null
+    isConnected: false
   });
-  
-  const [isLoading, setIsLoading] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
-  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
-  const [environmentStatus, setEnvironmentStatus] = useState<EnvironmentStatus>({
+
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
+  const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [syncLogs, setSyncLogs] = useState<any[]>([]);
+  const [approvedIPsInput, setApprovedIPsInput] = useState('');
+  const [envInfo, setEnvInfo] = useState<EnvironmentInfo>({
     hasAccountNumber: false,
     hasDevKey: false,
     hasProdKey: false,
-    hasProxyUrl: false,
-    hasSupabaseUrl: false,
-    hasSupabaseKey: false
+    hasProxyUrl: false
   });
-  
   const { toast } = useToast();
 
   useEffect(() => {
     loadConfiguration();
-    checkEnvironmentStatus();
+    loadSyncLogs();
+    checkEnvironmentVariables();
   }, []);
 
-  const checkEnvironmentStatus = () => {
-    const status = keystoneService.getEnvironmentStatus();
-    setEnvironmentStatus(status);
-    console.log('Environment Status Check:', status);
+  useEffect(() => {
+    // Update the input field when config.approvedIPs changes
+    setApprovedIPsInput(config.approvedIPs.join(', '));
+  }, [config.approvedIPs]);
+
+  // Check environment variables status
+  const checkEnvironmentVariables = () => {
+    const info: EnvironmentInfo = {
+      hasAccountNumber: !!process.env.KEYSTONE_ACCOUNT_NUMBER,
+      hasDevKey: !!process.env.KEYSTONE_SECURITY_TOKEN_DEV,
+      hasProdKey: !!process.env.KEYSTONE_SECURITY_TOKEN_PROD,
+      hasProxyUrl: !!process.env.KEYSTONE_PROXY_URL,
+      accountNumberPreview: process.env.KEYSTONE_ACCOUNT_NUMBER ? 
+        `${process.env.KEYSTONE_ACCOUNT_NUMBER.substring(0, 3)}***` : undefined,
+      proxyUrl: process.env.KEYSTONE_PROXY_URL
+    };
+    setEnvInfo(info);
+  };
+
+  // Validation function
+  const validateConfiguration = (): ValidationErrors => {
+    const errors: ValidationErrors = {};
+
+    if (config.approvedIPs.length > 0) {
+      const invalidIPs = config.approvedIPs.filter(ip => ip.trim() && !validateIPAddress(ip));
+      if (invalidIPs.length > 0) {
+        errors.approvedIPs = `Invalid IP addresses: ${invalidIPs.join(', ')}`;
+      }
+    }
+
+    return errors;
   };
 
   const loadConfiguration = async () => {
-    setIsLoading(true);
     try {
-      const loadedConfig = await keystoneService.getConfig();
+      await keystoneService.loadConfig();
+      const currentConfig = keystoneService.getConfig();
       
-      // Get the appropriate IP list based on current environment
-      const currentEnvironment = loadedConfig.environment || 'development';
-      const approvedIPs = currentEnvironment === 'development' 
-        ? loadedConfig.developmentIPs || [''] 
-        : loadedConfig.productionIPs || [''];
-      
-      setConfig({
-        environment: currentEnvironment,
-        approvedIPs: approvedIPs,
-        developmentIPs: loadedConfig.developmentIPs || [''],
-        productionIPs: loadedConfig.productionIPs || ['']
-      });
-      
-      console.log('Loaded configuration:', loadedConfig);
-    } catch (error) {
-      console.error('Failed to load configuration:', error);
-      toast({
-        title: "Configuration Error",
-        description: "Failed to load Keystone configuration",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const saveConfiguration = async () => {
-    setIsLoading(true);
-    try {
-      // Filter out empty IP addresses
-      const filteredIPs = config.approvedIPs.filter(ip => ip.trim() !== '');
-      
-      // Normalize environment to lowercase to avoid case sensitivity issues
-      const normalizedEnvironment = config.environment.toLowerCase() as 'development' | 'production';
-      
-      const configToSave = {
-        environment: normalizedEnvironment,
-        approvedIPs: filteredIPs
-      };
-
-      console.log('Saving configuration:', configToSave);
-      await keystoneService.saveConfig(configToSave);
-      
-      // Update local state with normalized environment and update the appropriate IP list
-      setConfig(prev => {
-        const updatedConfig = { ...prev, environment: normalizedEnvironment };
-        
-        // Update the appropriate IP list based on environment
-        if (normalizedEnvironment === 'development') {
-          updatedConfig.developmentIPs = filteredIPs;
-        } else {
-          updatedConfig.productionIPs = filteredIPs;
-        }
-        
-        return updatedConfig;
-      });
-      
-      toast({
-        title: "Configuration Saved",
-        description: `Keystone configuration saved successfully (Environment: ${normalizedEnvironment})`,
-      });
-    } catch (error) {
-      console.error('Failed to save configuration:', error);
-      toast({
-        title: "Save Error",
-        description: error instanceof Error ? error.message : "Failed to save Keystone configuration",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const testConnection = async () => {
-    setIsTesting(true);
-    try {
-      const result = await keystoneService.testConnection();
-      
-      setConnectionStatus({
-        isConnected: result.success,
-        lastChecked: new Date(),
-        error: result.success ? null : result.error || 'Connection failed'
-      });
-
-      if (result.success) {
-        toast({
-          title: "Connection Successful",
-          description: "Successfully connected to Keystone API",
-        });
-      } else {
-        toast({
-          title: "Connection Failed",
-          description: result.error || "Failed to connect to Keystone API",
-          variant: "destructive"
+      if (currentConfig) {
+        setConfig({
+          environment: currentConfig.environment,
+          approvedIPs: currentConfig.approvedIPs
         });
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      setConnectionStatus({
-        isConnected: false,
-        lastChecked: new Date(),
-        error: errorMessage
-      });
-      
-      toast({
-        title: "Connection Error",
-        description: errorMessage,
-        variant: "destructive"
-      });
-    } finally {
-      setIsTesting(false);
+      const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Unknown error');
+      console.error('Failed to load configuration:', sanitizedError);
     }
   };
 
   const loadSyncLogs = async () => {
-    setIsLoadingLogs(true);
     try {
-      const logs = await keystoneService.getSyncLogs();
+      const logs = await keystoneService.getSyncLogs(20);
       setSyncLogs(logs);
     } catch (error) {
-      console.error('Failed to load sync logs:', error);
+      const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Unknown error');
+      console.error('Failed to load sync logs:', sanitizedError);
+    }
+  };
+
+  const handleSaveConfiguration = async () => {
+    // Validate configuration before saving
+    const errors = validateConfiguration();
+    setValidationErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
       toast({
-        title: "Error Loading Logs",
-        description: "Failed to load synchronization logs",
-        variant: "destructive"
+        title: "Validation Failed",
+        description: "Please fix the validation errors before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await keystoneService.saveConfig(config);
+      toast({
+        title: "Configuration Saved",
+        description: "Keystone configuration has been saved successfully.",
+      });
+      setValidationErrors({}); // Clear any previous errors
+    } catch (error) {
+      const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Unknown error');
+      toast({
+        title: "Save Failed",
+        description: sanitizedError,
+        variant: "destructive",
       });
     } finally {
-      setIsLoadingLogs(false);
+      setLoading(false);
     }
   };
 
-  const addIPField = () => {
-    setConfig(prev => ({
-      ...prev,
-      approvedIPs: [...prev.approvedIPs, '']
-    }));
-  };
+  const handleTestConnection = async () => {
+    setTesting(true);
+    try {
+      const result = await keystoneService.testConnection();
+      
+      if (result.success) {
+        // Get additional connection info
+        const [ipResult, approvedIPsResult, methodsResult] = await Promise.allSettled([
+          keystoneService.utilityReportMyIP(),
+          keystoneService.utilityReportApprovedIPs(),
+          keystoneService.utilityReportApprovedMethods()
+        ]);
 
-  const removeIPField = (index: number) => {
-    setConfig(prev => ({
-      ...prev,
-      approvedIPs: prev.approvedIPs.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateIPField = (index: number, value: string) => {
-    setConfig(prev => ({
-      ...prev,
-      approvedIPs: prev.approvedIPs.map((ip, i) => i === index ? value : ip)
-    }));
-  };
-
-  const validateConfiguration = (): boolean => {
-    const filteredIPs = config.approvedIPs.filter(ip => ip.trim() !== '');
-    
-    if (filteredIPs.length === 0) {
-      toast({
-        title: "Validation Error",
-        description: "At least one approved IP address is required",
-        variant: "destructive"
-      });
-      return false;
-    }
-
-    // Basic IP validation
-    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
-    for (const ip of filteredIPs) {
-      if (!ipRegex.test(ip.trim())) {
-        toast({
-          title: "Validation Error",
-          description: `Invalid IP address format: ${ip}`,
-          variant: "destructive"
+        setConnectionStatus({
+          isConnected: true,
+          currentIP: ipResult.status === 'fulfilled' ? ipResult.value : undefined,
+          approvedIPs: approvedIPsResult.status === 'fulfilled' ? 
+            approvedIPsResult.value.data?.split(',') || [] : [],
+          approvedMethods: methodsResult.status === 'fulfilled' ? methodsResult.value : [],
+          lastTested: new Date()
         });
-        return false;
+
+        toast({
+          title: "Connection Successful",
+          description: "Successfully connected to Keystone API.",
+        });
+      } else {
+        const sanitizedError = sanitizeErrorMessage(result.error || result.statusMessage || 'Unknown error');
+        setConnectionStatus({
+          isConnected: false,
+          error: sanitizedError,
+          lastTested: new Date()
+        });
+
+        toast({
+          title: "Connection Failed",
+          description: sanitizedError,
+          variant: "destructive",
+        });
       }
+
+      // Refresh sync logs
+      await loadSyncLogs();
+    } catch (error) {
+      const sanitizedError = sanitizeErrorMessage(error instanceof Error ? error.message : 'Unknown error');
+      setConnectionStatus({
+        isConnected: false,
+        error: sanitizedError,
+        lastTested: new Date()
+      });
+
+      toast({
+        title: "Test Failed",
+        description: sanitizedError,
+        variant: "destructive",
+      });
+    } finally {
+      setTesting(false);
     }
-
-    return true;
   };
 
-  const handleSave = async () => {
-    if (validateConfiguration()) {
-      await saveConfiguration();
+  const handleApprovedIPsChange = (value: string) => {
+    setApprovedIPsInput(value);
+    
+    // Parse the input and update the config
+    const ips = value.split(',').map(ip => ip.trim()).filter(ip => ip);
+    setConfig(prev => ({ ...prev, approvedIPs: ips }));
+    
+    // Clear validation errors when user is typing
+    if (validationErrors.approvedIPs) {
+      setValidationErrors(prev => ({ ...prev, approvedIPs: undefined }));
     }
   };
 
-  const getStatusIcon = (status: boolean) => {
-    return status ? (
-      <CheckCircle className="h-4 w-4 text-green-500" />
-    ) : (
-      <XCircle className="h-4 w-4 text-red-500" />
-    );
+  const getStatusIcon = () => {
+    if (connectionStatus.isConnected) {
+      return <CheckCircle className="w-5 h-5 text-green-500" />;
+    } else if (connectionStatus.error) {
+      return <XCircle className="w-5 h-5 text-red-500" />;
+    } else {
+      return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
+    }
   };
 
-  const getStatusText = (status: boolean) => {
-    return status ? "Set" : "Not Set";
+  const getStatusText = () => {
+    if (connectionStatus.isConnected) {
+      return 'Connected';
+    } else if (connectionStatus.error) {
+      return 'Connection Failed';
+    } else {
+      return 'Not Tested';
+    }
   };
 
   const formatLogStatus = (status: string) => {
-    const statusConfig = {
-      success: { color: 'bg-green-100 text-green-800', icon: CheckSquare },
-      error: { color: 'bg-red-100 text-red-800', icon: XCircle },
-      warning: { color: 'bg-yellow-100 text-yellow-800', icon: AlertTriangle }
+    const statusColors = {
+      running: 'bg-blue-100 text-blue-800',
+      completed: 'bg-green-100 text-green-800',
+      failed: 'bg-red-100 text-red-800',
+      cancelled: 'bg-gray-100 text-gray-800'
     };
 
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.error;
-    const Icon = config.icon;
-
     return (
-      <Badge className={`${config.color} flex items-center gap-1`}>
-        <Icon className="h-3 w-3" />
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+      <Badge className={statusColors[status as keyof typeof statusColors] || statusColors.cancelled}>
+        {status}
       </Badge>
     );
   };
 
-  // Handle environment change - update the IP list based on selected environment
-  const handleEnvironmentChange = (newEnvironment: 'development' | 'production') => {
-    setConfig(prev => {
-      // Save current IP list to the appropriate environment
-      const updatedConfig = { ...prev };
-      
-      if (prev.environment === 'development') {
-        updatedConfig.developmentIPs = prev.approvedIPs;
-      } else {
-        updatedConfig.productionIPs = prev.approvedIPs;
-      }
-      
-      // Update environment and switch to the appropriate IP list
-      updatedConfig.environment = newEnvironment;
-      updatedConfig.approvedIPs = newEnvironment === 'development' 
-        ? updatedConfig.developmentIPs || [''] 
-        : updatedConfig.productionIPs || [''];
-      
-      return updatedConfig;
-    });
+  const getEnvironmentStatus = () => {
+    const allPresent = envInfo.hasAccountNumber && envInfo.hasDevKey && envInfo.hasProdKey && envInfo.hasProxyUrl;
+    if (allPresent) {
+      return <Badge className="bg-green-100 text-green-800">All Environment Variables Set</Badge>;
+    } else {
+      return <Badge className="bg-red-100 text-red-800">Missing Environment Variables</Badge>;
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Keystone Configuration</h2>
-          <p className="text-muted-foreground">
-            Manage your Keystone Automotive API integration settings
-          </p>
+          <h2 className="text-2xl font-bold">Keystone API Configuration</h2>
+          <p className="text-gray-600">Manage your Keystone API connection and settings</p>
         </div>
-        <div className="flex items-center space-x-2">
-          {connectionStatus.isConnected ? (
-            <Badge className="bg-green-100 text-green-800">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Connected
-            </Badge>
-          ) : (
-            <Badge className="bg-red-100 text-red-800">
-              <XCircle className="h-3 w-3 mr-1" />
-              Disconnected
-            </Badge>
-          )}
+        <div className="flex items-center space-x-3">
+          <Shield className="w-5 h-5 text-blue-500" />
+          <span className="text-sm text-blue-600 font-medium">Secure Configuration</span>
+          {getStatusIcon()}
+          <span className="font-medium">{getStatusText()}</span>
         </div>
       </div>
 
-      {/* Version Indicator */}
-      <div className="text-right">
-        <Badge variant="outline" className="text-xs text-gray-500">
-          v{VERSION} ({BUILD_DATE})
-        </Badge>
-      </div>
-
-      <Tabs defaultValue="configuration" className="space-y-4">
+      <Tabs defaultValue="configuration" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="configuration">Configuration</TabsTrigger>
-          <TabsTrigger value="testing">Testing</TabsTrigger>
-          <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
+          <TabsTrigger value="configuration" className="flex items-center space-x-2">
+            <Settings className="w-4 h-4" />
+            <span>Configuration</span>
+          </TabsTrigger>
+          <TabsTrigger value="testing" className="flex items-center space-x-2">
+            <TestTube className="w-4 h-4" />
+            <span>Connection Test</span>
+          </TabsTrigger>
+          <TabsTrigger value="monitoring" className="flex items-center space-x-2">
+            <Activity className="w-4 h-4" />
+            <span>Monitoring</span>
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="configuration" className="space-y-4">
+        <TabsContent value="configuration">
           <Card>
             <CardHeader>
-              <CardTitle>Environment Variables Status</CardTitle>
+              <CardTitle className="flex items-center space-x-2">
+                <Shield className="w-5 h-5" />
+                <span>API Configuration</span>
+                {getEnvironmentStatus()}
+              </CardTitle>
               <CardDescription>
-                Keystone credentials are managed via environment variables for security
+                Configure your Keystone API settings. Credentials are managed via environment variables for enhanced security.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <Alert>
-                <AlertCircle className="h-4 w-4" />
+                <Shield className="h-4 w-4" />
                 <AlertDescription>
-                  Credentials are configured via environment variables in your deployment platform.
-                  The following variables are required: VITE_KEYSTONE_ACCOUNT_NUMBER, 
-                  VITE_KEYSTONE_SECURITY_TOKEN_DEV, VITE_KEYSTONE_SECURITY_TOKEN_PROD, 
-                  VITE_KEYSTONE_PROXY_URL
+                  <strong>Security Notice:</strong> This connection uses HTTPS encryption. API credentials are managed via environment variables and not stored in browser storage.
                 </AlertDescription>
               </Alert>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span className="text-sm font-medium">Account Number</span>
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(environmentStatus.hasAccountNumber)}
-                    <span className="text-sm">{getStatusText(environmentStatus.hasAccountNumber)}</span>
+              {/* Environment Variables Status */}
+              <Card className="bg-gray-50">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center space-x-2">
+                    <Info className="w-5 h-5" />
+                    <span>Environment Variables Status</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Account Number:</span>
+                      <div className="flex items-center space-x-2">
+                        {envInfo.hasAccountNumber ? (
+                          <>
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            <span className="text-sm text-gray-600">{envInfo.accountNumberPreview}</span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-4 h-4 text-red-500" />
+                            <span className="text-sm text-red-600">Not Set</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Development Key:</span>
+                      {envInfo.hasDevKey ? (
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span className="text-sm text-gray-600">Set</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <XCircle className="w-4 h-4 text-red-500" />
+                          <span className="text-sm text-red-600">Not Set</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Production Key:</span>
+                      {envInfo.hasProdKey ? (
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span className="text-sm text-gray-600">Set</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <XCircle className="w-4 h-4 text-red-500" />
+                          <span className="text-sm text-red-600">Not Set</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Proxy URL:</span>
+                      {envInfo.hasProxyUrl ? (
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span className="text-sm text-gray-600">{envInfo.proxyUrl}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <XCircle className="w-4 h-4 text-red-500" />
+                          <span className="text-sm text-red-600">Not Set</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
+
+                  <Alert>
+                    <Info className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Required Environment Variables:</strong>
+                      <ul className="mt-2 space-y-1 text-sm">
+                        <li>• <code>NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER</code> - Your Keystone account number</li>
+                        <li>• <code>NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV</code> - Development security key</li>
+                        <li>• <code>NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD</code> - Production security key</li>
+                        <li>• <code>NEXT_PUBLIC_KEYSTONE_PROXY_URL</code> - DigitalOcean proxy server URL (HTTPS)</li>
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                </CardContent>
+              </Card>
+
+              {/* Runtime Configuration */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="environment">Environment</Label>
+                  <Select value={config.environment} onValueChange={(value: 'development' | 'production') => 
+                    setConfig(prev => ({ ...prev, environment: value }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="development">Development</SelectItem>
+                      <SelectItem value="production">Production</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500">
+                    Selects which environment credentials to use from environment variables
+                  </p>
                 </div>
 
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span className="text-sm font-medium">Development Key</span>
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(environmentStatus.hasDevKey)}
-                    <span className="text-sm">{getStatusText(environmentStatus.hasDevKey)}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span className="text-sm font-medium">Production Key</span>
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(environmentStatus.hasProdKey)}
-                    <span className="text-sm">{getStatusText(environmentStatus.hasProdKey)}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span className="text-sm font-medium">Proxy URL</span>
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(environmentStatus.hasProxyUrl)}
-                    <span className="text-sm">{getStatusText(environmentStatus.hasProxyUrl)}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span className="text-sm font-medium">Supabase URL</span>
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(environmentStatus.hasSupabaseUrl)}
-                    <span className="text-sm">{getStatusText(environmentStatus.hasSupabaseUrl)}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <span className="text-sm font-medium">Supabase Key</span>
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(environmentStatus.hasSupabaseKey)}
-                    <span className="text-sm">{getStatusText(environmentStatus.hasSupabaseKey)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Debug Information */}
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Debug Info:</strong> If variables show "Not Set", check browser console for environment variable details.
-                  Current environment: {config.environment}
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Runtime Configuration</CardTitle>
-              <CardDescription>
-                Configure runtime settings for your Keystone integration
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="environment">Environment</Label>
-                <select
-                  id="environment"
-                  value={config.environment}
-                  onChange={(e) => handleEnvironmentChange(e.target.value as 'development' | 'production')}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="development">Development</option>
-                  <option value="production">Production</option>
-                </select>
-                <p className="text-sm text-gray-500">
-                  Select the environment to determine which security key and IP addresses to use
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>
-                  Approved IP Addresses 
-                  <Badge className="ml-2 bg-blue-100 text-blue-800">
-                    {config.environment === 'development' ? 'Development' : 'Production'} Environment
-                  </Badge>
-                </Label>
-                {config.approvedIPs.map((ip, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <Input
-                      type="text"
-                      value={ip}
-                      onChange={(e) => updateIPField(index, e.target.value)}
-                      placeholder="Enter IP address (e.g., 192.168.1.1)"
-                      className="flex-1"
-                    />
-                    {config.approvedIPs.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeIPField(index)}
-                      >
-                        Remove
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addIPField}
-                >
-                  Add IP Address
-                </Button>
-                <p className="text-sm text-gray-500 mt-2">
-                  IP addresses are environment-specific. When you switch environments, the IP list will automatically change.
-                </p>
-              </div>
-
-              <div className="pt-4">
-                <Button 
-                  onClick={handleSave} 
-                  disabled={isLoading}
-                  className="w-full"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Configuration'
+                <div className="space-y-2">
+                  <Label htmlFor="approvedIPs">Approved IP Addresses</Label>
+                  <Input
+                    id="approvedIPs"
+                    placeholder="192.168.1.1, 10.0.0.1, 203.0.113.1"
+                    value={approvedIPsInput}
+                    onChange={(e) => handleApprovedIPsChange(e.target.value)}
+                    className={validationErrors.approvedIPs ? 'border-red-500' : ''}
+                  />
+                  {validationErrors.approvedIPs && (
+                    <p className="text-sm text-red-500">{validationErrors.approvedIPs}</p>
                   )}
+                  <p className="text-xs text-gray-500">
+                    Comma-separated list of IP addresses that Keystone will accept requests from
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex space-x-4">
+                <Button 
+                  onClick={handleSaveConfiguration} 
+                  disabled={loading}
+                  className="flex items-center space-x-2"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>{loading ? 'Saving...' : 'Save Configuration'}</span>
                 </Button>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="testing" className="space-y-4">
+        <TabsContent value="testing">
           <Card>
             <CardHeader>
-              <CardTitle>Connection Testing</CardTitle>
+              <CardTitle className="flex items-center space-x-2">
+                <TestTube className="w-5 h-5" />
+                <span>Connection Testing</span>
+              </CardTitle>
               <CardDescription>
                 Test your Keystone API connection and verify configuration
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <h4 className="font-medium">Connection Status</h4>
-                  <p className="text-sm text-gray-500">
-                    {connectionStatus.lastChecked 
-                      ? `Last checked: ${connectionStatus.lastChecked.toLocaleString()}`
-                      : 'Never tested'
-                    }
-                  </p>
-                  {connectionStatus.error && (
-                    <p className="text-sm text-red-600 mt-1">{connectionStatus.error}</p>
-                  )}
+                <div className="flex items-center space-x-3">
+                  {getStatusIcon()}
+                  <div>
+                    <p className="font-medium">{getStatusText()}</p>
+                    {connectionStatus.lastTested && (
+                      <p className="text-sm text-gray-500">
+                        Last tested: {connectionStatus.lastTested.toLocaleString()}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  {connectionStatus.isConnected ? (
-                    <Badge className="bg-green-100 text-green-800">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Connected
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-red-100 text-red-800">
-                      <XCircle className="h-3 w-3 mr-1" />
-                      Disconnected
-                    </Badge>
-                  )}
-                </div>
+                <Button 
+                  onClick={handleTestConnection} 
+                  disabled={testing}
+                  className="flex items-center space-x-2"
+                >
+                  <TestTube className="w-4 h-4" />
+                  <span>{testing ? 'Testing...' : 'Test Connection'}</span>
+                </Button>
               </div>
 
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Current Environment:</strong> {config.environment}
-                  <br />
-                  Testing will use the {config.environment === 'development' ? 'development' : 'production'} security token and IP addresses.
-                </AlertDescription>
-              </Alert>
+              {connectionStatus.isConnected && (
+                <div className="space-y-4">
+                  {connectionStatus.currentIP && (
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <h4 className="font-medium text-green-800">Current IP Address</h4>
+                      <p className="text-green-700">{connectionStatus.currentIP}</p>
+                    </div>
+                  )}
 
-              <Button 
-                onClick={testConnection} 
-                disabled={isTesting}
-                className="w-full"
-              >
-                {isTesting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Testing Connection...
-                  </>
-                ) : (
-                  <>
-                    <Activity className="mr-2 h-4 w-4" />
-                    Test Connection
-                  </>
-                )}
-              </Button>
+                  {connectionStatus.approvedIPs && connectionStatus.approvedIPs.length > 0 && (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <h4 className="font-medium text-blue-800">Approved IP Addresses</h4>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {connectionStatus.approvedIPs.map((ip, index) => (
+                          <Badge key={index} variant="secondary">{ip}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-              {!environmentStatus.hasAccountNumber || !environmentStatus.hasDevKey || !environmentStatus.hasProdKey || !environmentStatus.hasProxyUrl ? (
-                <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    Some required environment variables are missing. Please ensure all Keystone environment variables are configured in your deployment platform.
+                  {connectionStatus.approvedMethods && connectionStatus.approvedMethods.length > 0 && (
+                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                      <h4 className="font-medium text-purple-800">Available Methods</h4>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {connectionStatus.approvedMethods.map((method, index) => (
+                          <Badge key={index} variant="outline">{method}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {connectionStatus.error && (
+                <Alert className="border-red-200 bg-red-50">
+                  <XCircle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-800">
+                    <strong>Connection Error:</strong> {connectionStatus.error}
                   </AlertDescription>
                 </Alert>
-              ) : null}
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="monitoring" className="space-y-4">
+        <TabsContent value="monitoring">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Synchronization Logs</span>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={loadSyncLogs}
-                  disabled={isLoadingLogs}
-                >
-                  {isLoadingLogs ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                </Button>
+              <CardTitle className="flex items-center space-x-2">
+                <Activity className="w-5 h-5" />
+                <span>Activity Monitoring</span>
               </CardTitle>
               <CardDescription>
-                Monitor Keystone API synchronization activity and performance
+                Monitor Keystone API activity and sync operations
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoadingLogs ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                  Loading logs...
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium">Recent Sync Logs</h4>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={loadSyncLogs}
+                  >
+                    Refresh
+                  </Button>
                 </div>
-              ) : syncLogs.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No synchronization logs available</p>
-                  <p className="text-sm">Logs will appear here after API operations</p>
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {syncLogs.map((log) => (
-                    <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex-1">
+
+                {syncLogs.length > 0 ? (
+                  <div className="space-y-2">
+                    {syncLogs.map((log, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div>
+                            <p className="font-medium">{log.operation || 'Sync Operation'}</p>
+                            <p className="text-sm text-gray-500">
+                              {log.timestamp ? new Date(log.timestamp).toLocaleString() : 'Unknown time'}
+                            </p>
+                          </div>
+                        </div>
                         <div className="flex items-center space-x-2">
-                          <span className="font-medium">{log.operation}</span>
-                          {log.duration_seconds && (
+                          {formatLogStatus(log.status || 'unknown')}
+                          {log.recordsProcessed && (
                             <span className="text-sm text-gray-500">
-                              {log.duration_seconds}s
+                              {log.recordsProcessed} records
                             </span>
                           )}
-                          {formatLogStatus(log.status)}
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">{log.message}</p>
-                        <p className="text-xs text-gray-400">{new Date(log.timestamp).toLocaleString()}</p>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No sync logs available</p>
+                    <p className="text-sm">Logs will appear here after API operations</p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -675,4 +629,3 @@ export const KeystoneConfigManager: React.FC = () => {
   );
 };
 
-export default KeystoneConfigManager;
