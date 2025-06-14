@@ -12,8 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle, XCircle, AlertTriangle, Settings, TestTube, Activity, Shield, Info } from 'lucide-react';
-import KeystoneService from "@/services/keystone/KeystoneServiceClass.ts";
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/hooks/use-toast';
+import KeystoneService from '@/services/keystone/KeystoneService';
 
 const keystoneService = new KeystoneService();
 
@@ -92,13 +94,13 @@ export const KeystoneConfigManager: React.FC = () => {
   // Check environment variables status
   const checkEnvironmentVariables = () => {
     const info: EnvironmentInfo = {
-      hasAccountNumber: !!process.env.KEYSTONE_ACCOUNT_NUMBER,
-      hasDevKey: !!process.env.KEYSTONE_SECURITY_TOKEN_DEV,
-      hasProdKey: !!process.env.KEYSTONE_SECURITY_TOKEN_PROD,
-      hasProxyUrl: !!process.env.KEYSTONE_PROXY_URL,
-      accountNumberPreview: process.env.KEYSTONE_ACCOUNT_NUMBER ? 
-        `${process.env.KEYSTONE_ACCOUNT_NUMBER.substring(0, 3)}***` : undefined,
-      proxyUrl: process.env.KEYSTONE_PROXY_URL
+      hasAccountNumber: !!import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER,
+      hasDevKey: !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV,
+      hasProdKey: !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD,
+      hasProxyUrl: !!import.meta.env.VITE_KEYSTONE_PROXY_URL,
+      accountNumberPreview: import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER ? 
+        `${import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER.substring(0, 3)}***` : undefined,
+      proxyUrl: import.meta.env.VITE_KEYSTONE_PROXY_URL
     };
     setEnvInfo(info);
   };
@@ -425,10 +427,10 @@ export const KeystoneConfigManager: React.FC = () => {
                     <AlertDescription>
                       <strong>Required Environment Variables:</strong>
                       <ul className="mt-2 space-y-1">
-                        <li><code className="font-mono text-sm">KEYSTONE_ACCOUNT_NUMBER</code>: Your unique Keystone account identifier.</li>
-                        <li><code className="font-mono text-sm">KEYSTONE_SECURITY_TOKEN_DEV</code>: Security token for development environment.</li>
-                        <li><code className="font-mono text-sm">KEYSTONE_SECURITY_TOKEN_PROD</code>: Security token for production environment.</li>
-                        <li><code className="font-mono text-sm">KEYSTONE_PROXY_URL</code>: The URL of your Keystone API proxy.</li>
+                        <li><code className="font-mono text-sm">VITE_KEYSTONE_ACCOUNT_NUMBER</code>: Your unique Keystone account identifier.</li>
+                        <li><code className="font-mono text-sm">VITE_KEYSTONE_SECURITY_TOKEN_DEV</code>: Security token for development environment.</li>
+                        <li><code className="font-mono text-sm">VITE_KEYSTONE_SECURITY_TOKEN_PROD</code>: Security token for production environment.</li>
+                        <li><code className="font-mono text-sm">VITE_KEYSTONE_PROXY_URL</code>: The URL of your Keystone API proxy.</li>
                       </ul>
                     </AlertDescription>
                   </Alert>

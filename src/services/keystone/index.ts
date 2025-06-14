@@ -5,9 +5,13 @@
 
 // Core services
 export { KeystoneSoapClient } from './KeystoneSoapClient';
-export { KeystoneService, keystoneService } from './KeystoneService';
+export { default as KeystoneService } from './KeystoneService';
 export { KeystoneAPIService, keystoneAPI } from './KeystoneAPIService';
 export { KeystoneSyncScheduler, keystoneSyncScheduler } from './KeystoneSyncScheduler';
+
+// Create a default instance for convenience
+import KeystoneServiceClass from './KeystoneService';
+export const keystoneService = new KeystoneServiceClass();
 
 // React hooks
 export {
@@ -100,13 +104,13 @@ export const KeystoneUtils = {
 // Configuration constants
 export const KeystoneConstants = {
   API_ENDPOINTS: {
-    PRODUCTION: 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx',
-    DEVELOPMENT: 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx'
+    PRODUCTION: 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx',
+    DEVELOPMENT: 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx'
   },
   
   WSDL_URLS: {
-    PRODUCTION: 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL',
-    DEVELOPMENT: 'https://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL'
+    PRODUCTION: 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL',
+    DEVELOPMENT: 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL'
   },
 
   ORDER_TYPES: {
