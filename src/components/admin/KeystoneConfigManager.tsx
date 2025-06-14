@@ -8,13 +8,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle, XCircle, AlertTriangle, Settings, TestTube, Activity, Shield, Info } from 'lucide-react';
-import { keystoneService } from '@/services/keystone/KeystoneService';
+import KeystoneService from '@/services/keystone/KeystoneServiceClass';
 import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+
+const keystoneService = new KeystoneService();
 
 interface KeystoneConfigData {
   environment: 'development' | 'production';
@@ -423,64 +425,50 @@ export const KeystoneConfigManager: React.FC = () => {
                     <Info className="h-4 w-4" />
                     <AlertDescription>
                       <strong>Required Environment Variables:</strong>
-                      <ul className="mt-2 space-y-1 text-sm">
-                        <li>• <code>NEXT_PUBLIC_KEYSTONE_ACCOUNT_NUMBER</code> - Your Keystone account number</li>
-                        <li>• <code>NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_DEV</code> - Development security key</li>
-                        <li>• <code>NEXT_PUBLIC_KEYSTONE_SECURITY_TOKEN_PROD</code> - Production security key</li>
-                        <li>• <code>NEXT_PUBLIC_KEYSTONE_PROXY_URL</code> - DigitalOcean proxy server URL (HTTPS)</li>
+                      <ul className="mt-2 space-y-1">
+                        <li><code className="font-mono">VITE_KEYSTONE_PROXY_URL</code>: The base URL for the Keystone API proxy.</li>
+                        <li><code className="font-mono">VITE_KEYSTONE_API_TOKEN</code>: Your API token for authenticating with the proxy.</li>
+                        <li><code className="font-mono">VITE_KEYSTONE_ACCOUNT_NUMBER</code>: Your Keystone account number.</li>
+                        <li><code className="font-mono">VITE_KEYSTONE_SECURITY_TOKEN_DEV</code>: Security token for the development environment.</li>
+                        <li><code className="font-mono">VITE_KEYSTONE_SECURITY_TOKEN_PROD</code>: Security token for the production environment.</li>
+                        <li><code className="font-mono">VITE_SUPABASE_URL</code>: Supabase project URL for configuration storage.</li>
+                        <li><code className="font-mono">VITE_SUPABASE_ANON_TOKEN</code>: Supabase anonymous public key.</li>
                       </ul>
                     </AlertDescription>
                   </Alert>
                 </CardContent>
               </Card>
 
-              {/* Runtime Configuration */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="environment">Environment</Label>
-                  <Select value={config.environment} onValueChange={(value: 'development' | 'production') => 
-                    setConfig(prev => ({ ...prev, environment: value }))}>
-                    <SelectTrigger>
-                      <SelectValue />
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="environment" className="text-right">Environment</Label>
+                  <Select onValueChange={(value: 'development' | 'production') => setConfig(prev => ({ ...prev, environment: value }))} value={config.environment}>
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select environment" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="development">Development</SelectItem>
                       <SelectItem value="production">Production</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-gray-500">
-                    Selects which environment credentials to use from environment variables
-                  </p>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="approvedIPs">Approved IP Addresses</Label>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="approvedIPs" className="text-right">Approved IPs</Label>
                   <Input
                     id="approvedIPs"
-                    placeholder="192.168.1.1, 10.0.0.1, 203.0.113.1"
                     value={approvedIPsInput}
                     onChange={(e) => handleApprovedIPsChange(e.target.value)}
-                    className={validationErrors.approvedIPs ? 'border-red-500' : ''}
+                    className="col-span-3"
+                    placeholder="Comma-separated list of IPs (e.g., 192.168.1.1, 10.0.0.5)"
                   />
                   {validationErrors.approvedIPs && (
-                    <p className="text-sm text-red-500">{validationErrors.approvedIPs}</p>
+                    <p className="col-span-4 text-right text-red-500 text-sm">{validationErrors.approvedIPs}</p>
                   )}
-                  <p className="text-xs text-gray-500">
-                    Comma-separated list of IP addresses that Keystone will accept requests from
-                  </p>
                 </div>
               </div>
-
-              <div className="flex space-x-4">
-                <Button 
-                  onClick={handleSaveConfiguration} 
-                  disabled={loading}
-                  className="flex items-center space-x-2"
-                >
-                  <Shield className="w-4 h-4" />
-                  <span>{loading ? 'Saving...' : 'Save Configuration'}</span>
-                </Button>
-              </div>
+              <Button onClick={handleSaveConfiguration} disabled={loading}>
+                {loading ? 'Saving...' : 'Save Configuration'}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -490,73 +478,34 @@ export const KeystoneConfigManager: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <TestTube className="w-5 h-5" />
-                <span>Connection Testing</span>
+                <span>Connection Test</span>
               </CardTitle>
               <CardDescription>
-                Test your Keystone API connection and verify configuration
+                Test your connection to the Keystone API. This will verify your credentials and network access.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center space-x-3">
+            <CardContent className="space-y-4">
+              <Button onClick={handleTestConnection} disabled={testing}>
+                {testing ? 'Testing...' : 'Test Connection'}
+              </Button>
+              {connectionStatus.lastTested && (
+                <Alert>
                   {getStatusIcon()}
-                  <div>
-                    <p className="font-medium">{getStatusText()}</p>
-                    {connectionStatus.lastTested && (
-                      <p className="text-sm text-gray-500">
-                        Last tested: {connectionStatus.lastTested.toLocaleString()}
-                      </p>
+                  <AlertDescription>
+                    <strong>Status:</strong> {getStatusText()}<br />
+                    {connectionStatus.error && (
+                      <><strong>Error:</strong> {connectionStatus.error}<br /></>
                     )}
-                  </div>
-                </div>
-                <Button 
-                  onClick={handleTestConnection} 
-                  disabled={testing}
-                  className="flex items-center space-x-2"
-                >
-                  <TestTube className="w-4 h-4" />
-                  <span>{testing ? 'Testing...' : 'Test Connection'}</span>
-                </Button>
-              </div>
-
-              {connectionStatus.isConnected && (
-                <div className="space-y-4">
-                  {connectionStatus.currentIP && (
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                      <h4 className="font-medium text-green-800">Current IP Address</h4>
-                      <p className="text-green-700">{connectionStatus.currentIP}</p>
-                    </div>
-                  )}
-
-                  {connectionStatus.approvedIPs && connectionStatus.approvedIPs.length > 0 && (
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <h4 className="font-medium text-blue-800">Approved IP Addresses</h4>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {connectionStatus.approvedIPs.map((ip, index) => (
-                          <Badge key={index} variant="secondary">{ip}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {connectionStatus.approvedMethods && connectionStatus.approvedMethods.length > 0 && (
-                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                      <h4 className="font-medium text-purple-800">Available Methods</h4>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {connectionStatus.approvedMethods.map((method, index) => (
-                          <Badge key={index} variant="outline">{method}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {connectionStatus.error && (
-                <Alert className="border-red-200 bg-red-50">
-                  <XCircle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-800">
-                    <strong>Connection Error:</strong> {connectionStatus.error}
+                    {connectionStatus.currentIP && (
+                      <><strong>Your IP:</strong> {connectionStatus.currentIP}<br /></>
+                    )}
+                    {connectionStatus.approvedIPs && connectionStatus.approvedIPs.length > 0 && (
+                      <><strong>Approved IPs:</strong> {connectionStatus.approvedIPs.join(', ')}<br /></>
+                    )}
+                    {connectionStatus.approvedMethods && connectionStatus.approvedMethods.length > 0 && (
+                      <><strong>Approved Methods:</strong> {connectionStatus.approvedMethods.join(', ')}<br /></>
+                    )}
+                    <span className="text-xs text-gray-500">Last Tested: {connectionStatus.lastTested.toLocaleString()}</span>
                   </AlertDescription>
                 </Alert>
               )}
@@ -569,56 +518,29 @@ export const KeystoneConfigManager: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Activity className="w-5 h-5" />
-                <span>Activity Monitoring</span>
+                <span>Sync Logs</span>
               </CardTitle>
               <CardDescription>
-                Monitor Keystone API activity and sync operations
+                View recent synchronization logs from the Keystone API.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium">Recent Sync Logs</h4>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={loadSyncLogs}
-                  >
-                    Refresh
-                  </Button>
-                </div>
-
-                {syncLogs.length > 0 ? (
-                  <div className="space-y-2">
-                    {syncLogs.map((log, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <div>
-                            <p className="font-medium">{log.operation || 'Sync Operation'}</p>
-                            <p className="text-sm text-gray-500">
-                              {log.timestamp ? new Date(log.timestamp).toLocaleString() : 'Unknown time'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          {formatLogStatus(log.status || 'unknown')}
-                          {log.recordsProcessed && (
-                            <span className="text-sm text-gray-500">
-                              {log.recordsProcessed} records
-                            </span>
-                          )}
-                        </div>
+              {syncLogs.length > 0 ? (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {syncLogs.map((log, index) => (
+                    <div key={index} className="border p-3 rounded-md text-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{new Date(log.timestamp).toLocaleString()}</span>
+                        {formatLogStatus(log.status)}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>No sync logs available</p>
-                    <p className="text-sm">Logs will appear here after API operations</p>
-                  </div>
-                )}
-              </div>
+                      <p className="text-gray-700">{log.message}</p>
+                      {log.error && <p className="text-red-500">Error: {log.error}</p>}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">No sync logs available.</p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
