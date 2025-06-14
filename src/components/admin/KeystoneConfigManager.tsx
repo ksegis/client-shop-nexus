@@ -13,9 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CheckCircle, XCircle, AlertTriangle, Settings, TestTube, Activity, Shield, Info } from 'lucide-react';
-import * as KeystoneServiceModule from '@/services/keystone/KeystoneService';
-
-const keystoneService = new KeystoneServiceModule.default();
+import { keystoneService } from '@/services/keystone/KeystoneService';
 import { useToast } from '@/hooks/use-toast';
 
 interface KeystoneConfigData {

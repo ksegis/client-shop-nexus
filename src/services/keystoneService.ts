@@ -18,7 +18,7 @@ interface KeystoneResponse<T = any> {
   statusMessage?: string;
 }
 
-class KeystoneService {
+export default class KeystoneService {
   private config: KeystoneConfig;
   private supabase;
   private loadedConfig: any = null;
