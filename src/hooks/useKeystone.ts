@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import keystoneService from '../services/keystoneService';
+import keystoneService from '../services/keystone/KeystoneService';
 
 interface UseKeystoneResult {
   isConfigured: boolean;
