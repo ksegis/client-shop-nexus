@@ -114,7 +114,7 @@ export default class KeystoneService {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.config.apiToken}`,
+          'X-API-Key': this.config.apiToken,
         },
       };
 
