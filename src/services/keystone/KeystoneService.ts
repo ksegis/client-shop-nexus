@@ -506,8 +506,6 @@ export default class KeystoneService {
   }
 }
 
-export default KeystoneService;
-
 
 
 
