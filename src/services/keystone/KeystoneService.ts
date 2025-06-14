@@ -466,7 +466,7 @@ export default class KeystoneService {
       const { data, error } = await this.supabase
         .from('keystone_sync_logs')
         .select('*')
-        .order('timestamp', { ascending: false })
+        .order('started_at', { ascending: false })
         .limit(limit);
 
       if (error) {
