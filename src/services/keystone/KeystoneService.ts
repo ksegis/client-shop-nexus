@@ -118,6 +118,7 @@ export default class KeystoneService {
         },
       };
 
+      
       if (data && (method === 'POST' || method === 'PUT')) {
         options.body = JSON.stringify(data);
       }
