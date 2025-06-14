@@ -12,8 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle, XCircle, AlertTriangle, Settings, TestTube, Activity, Shield, Info } from 'lucide-react';
-import KeystoneService from '@/services/keystone/KeystoneServiceClass';
-import { useToast } from '@/hooks/use-toast';
+import KeystoneService from "@/services/keystone/KeystoneServiceClass.ts";
 import { Badge } from '@/components/ui/badge';
 
 const keystoneService = new KeystoneService();
@@ -426,46 +425,49 @@ export const KeystoneConfigManager: React.FC = () => {
                     <AlertDescription>
                       <strong>Required Environment Variables:</strong>
                       <ul className="mt-2 space-y-1">
-                        <li><code className="font-mono">VITE_KEYSTONE_PROXY_URL</code>: The base URL for the Keystone API proxy.</li>
-                        <li><code className="font-mono">VITE_KEYSTONE_API_TOKEN</code>: Your API token for authenticating with the proxy.</li>
-                        <li><code className="font-mono">VITE_KEYSTONE_ACCOUNT_NUMBER</code>: Your Keystone account number.</li>
-                        <li><code className="font-mono">VITE_KEYSTONE_SECURITY_TOKEN_DEV</code>: Security token for the development environment.</li>
-                        <li><code className="font-mono">VITE_KEYSTONE_SECURITY_TOKEN_PROD</code>: Security token for the production environment.</li>
-                        <li><code className="font-mono">VITE_SUPABASE_URL</code>: Supabase project URL for configuration storage.</li>
-                        <li><code className="font-mono">VITE_SUPABASE_ANON_TOKEN</code>: Supabase anonymous public key.</li>
+                        <li><code className="font-mono text-sm">KEYSTONE_ACCOUNT_NUMBER</code>: Your unique Keystone account identifier.</li>
+                        <li><code className="font-mono text-sm">KEYSTONE_SECURITY_TOKEN_DEV</code>: Security token for development environment.</li>
+                        <li><code className="font-mono text-sm">KEYSTONE_SECURITY_TOKEN_PROD</code>: Security token for production environment.</li>
+                        <li><code className="font-mono text-sm">KEYSTONE_PROXY_URL</code>: The URL of your Keystone API proxy.</li>
                       </ul>
                     </AlertDescription>
                   </Alert>
                 </CardContent>
               </Card>
 
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="environment" className="text-right">Environment</Label>
-                  <Select onValueChange={(value: 'development' | 'production') => setConfig(prev => ({ ...prev, environment: value }))} value={config.environment}>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select environment" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="development">Development</SelectItem>
-                      <SelectItem value="production">Production</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="approvedIPs" className="text-right">Approved IPs</Label>
-                  <Input
-                    id="approvedIPs"
-                    value={approvedIPsInput}
-                    onChange={(e) => handleApprovedIPsChange(e.target.value)}
-                    className="col-span-3"
-                    placeholder="Comma-separated list of IPs (e.g., 192.168.1.1, 10.0.0.5)"
-                  />
-                  {validationErrors.approvedIPs && (
-                    <p className="col-span-4 text-right text-red-500 text-sm">{validationErrors.approvedIPs}</p>
-                  )}
-                </div>
+              {/* Environment Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="environment">Environment</Label>
+                <Select
+                  value={config.environment}
+                  onValueChange={(value: 'development' | 'production') => setConfig(prev => ({ ...prev, environment: value }))}
+                >
+                  <SelectTrigger id="environment">
+                    <SelectValue placeholder="Select environment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="development">Development</SelectItem>
+                    <SelectItem value="production">Production</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {/* Approved IPs */}
+              <div className="space-y-2">
+                <Label htmlFor="approved-ips">Approved IP Addresses</Label>
+                <Input
+                  id="approved-ips"
+                  placeholder="e.g., 192.168.1.1, 10.0.0.5"
+                  value={approvedIPsInput}
+                  onChange={(e) => handleApprovedIPsChange(e.target.value)}
+                  className={validationErrors.approvedIPs ? 'border-red-500' : ''}
+                />
+                {validationErrors.approvedIPs && (
+                  <p className="text-red-500 text-sm">{validationErrors.approvedIPs}</p>
+                )}
+                <p className="text-sm text-gray-500">Comma-separated list of IP addresses approved to access the API.</p>
+              </div>
+
               <Button onClick={handleSaveConfiguration} disabled={loading}>
                 {loading ? 'Saving...' : 'Save Configuration'}
               </Button>
@@ -481,31 +483,28 @@ export const KeystoneConfigManager: React.FC = () => {
                 <span>Connection Test</span>
               </CardTitle>
               <CardDescription>
-                Test your connection to the Keystone API. This will verify your credentials and network access.
+                Test your connection to the Keystone API and view current status.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <Button onClick={handleTestConnection} disabled={testing}>
                 {testing ? 'Testing...' : 'Test Connection'}
               </Button>
+
               {connectionStatus.lastTested && (
-                <Alert>
+                <Alert className={connectionStatus.isConnected ? 'border-green-500' : 'border-red-500'}>
                   {getStatusIcon()}
                   <AlertDescription>
-                    <strong>Status:</strong> {getStatusText()}<br />
-                    {connectionStatus.error && (
-                      <><strong>Error:</strong> {connectionStatus.error}<br /></>
-                    )}
-                    {connectionStatus.currentIP && (
-                      <><strong>Your IP:</strong> {connectionStatus.currentIP}<br /></>
-                    )}
+                    <p className="font-medium">Status: {getStatusText()}</p>
+                    {connectionStatus.currentIP && <p>Your Current IP: {connectionStatus.currentIP}</p>}
                     {connectionStatus.approvedIPs && connectionStatus.approvedIPs.length > 0 && (
-                      <><strong>Approved IPs:</strong> {connectionStatus.approvedIPs.join(', ')}<br /></>
+                      <p>Approved IPs: {connectionStatus.approvedIPs.join(', ')}</p>
                     )}
                     {connectionStatus.approvedMethods && connectionStatus.approvedMethods.length > 0 && (
-                      <><strong>Approved Methods:</strong> {connectionStatus.approvedMethods.join(', ')}<br /></>
+                      <p>Approved Methods: {connectionStatus.approvedMethods.join(', ')}</p>
                     )}
-                    <span className="text-xs text-gray-500">Last Tested: {connectionStatus.lastTested.toLocaleString()}</span>
+                    {connectionStatus.error && <p className="text-red-600">Error: {connectionStatus.error}</p>}
+                    <p className="text-sm text-gray-500">Last Tested: {connectionStatus.lastTested.toLocaleString()}</p>
                   </AlertDescription>
                 </Alert>
               )}
@@ -518,28 +517,28 @@ export const KeystoneConfigManager: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Activity className="w-5 h-5" />
-                <span>Sync Logs</span>
+                <span>Recent Sync Logs</span>
               </CardTitle>
               <CardDescription>
-                View recent synchronization logs from the Keystone API.
+                View recent synchronization activities with the Keystone API.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {syncLogs.length > 0 ? (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
+              {syncLogs.length === 0 ? (
+                <p className="text-gray-500">No sync logs available.</p>
+              ) : (
+                <div className="space-y-4">
                   {syncLogs.map((log, index) => (
-                    <div key={index} className="border p-3 rounded-md text-sm">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">{new Date(log.timestamp).toLocaleString()}</span>
+                    <div key={index} className="border p-4 rounded-md shadow-sm">
+                      <div className="flex items-center justify-between text-sm text-gray-600">
+                        <span>{new Date(log.timestamp).toLocaleString()}</span>
                         {formatLogStatus(log.status)}
                       </div>
-                      <p className="text-gray-700">{log.message}</p>
-                      {log.error && <p className="text-red-500">Error: {log.error}</p>}
+                      <p className="font-medium mt-2">{log.message}</p>
+                      {log.details && <p className="text-sm text-gray-500">Details: {log.details}</p>}
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="text-gray-500">No sync logs available.</p>
               )}
             </CardContent>
           </Card>
