@@ -1,333 +1,513 @@
-// =====================================================
-// PHASE 1 - WEEK 3: KEYSTONE SERVICE INTERFACE
-// Main service interface for Keystone API operations
-// =====================================================
+// Updated to use VITE_ prefixed environment variables and user-selected environment
+// Version 2.3.2 - Updated for Vite environment variables, snake_case column names, and corrected API paths
+import { createClient } from '@supabase/supabase-js';
 
-import { KeystoneSoapClient, KeystoneResponse } from './KeystoneSoapClient';
-import { supabase } from '@/integrations/supabase/client';
+interface KeystoneConfig {
+  proxyUrl: string;
+  apiToken: string;
+  environment: string;
+  accountNumber: string;
+  securityToken: string;
+}
 
-/**
- * Main Keystone service class that extends the SOAP client
- * Provides high-level methods for common Keystone operations
- */
-export class KeystoneService extends KeystoneSoapClient {
-  
-  /**
-   * Load configuration from Supabase database
-   */
-  async loadConfig(): Promise<void> {
-    try {
-      // Try to load from database first
-      const { data: config, error } = await supabase
-        .from('keystone_config')
-        .select('*')
-        .eq('is_active', true)
-        .single();
+interface KeystoneResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  statusCode?: number;
+  statusMessage?: string;
+}
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        throw error;
-      }
+export default class KeystoneService {
+  private config: KeystoneConfig;
+  private supabase;
+  private loadedConfig: any = null;
 
-      if (config) {
-        // Use database configuration
-        const securityKey = config.environment === 'production' 
-          ? config.security_key_prod 
-          : config.security_key_dev;
+  constructor() {
+    // Load configuration from environment variables (using VITE_ prefix)
+    this.config = {
+      proxyUrl: import.meta.env.VITE_KEYSTONE_PROXY_URL || '',
+      apiToken: import.meta.env.VITE_KEYSTONE_API_TOKEN || '',
+      environment: 'development', // Default, will be updated from saved config
+      accountNumber: import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER || '',
+      securityToken: '' // Will be set after loading config
+    };
 
-        this.config = {
-          accountNumber: config.account_number,
-          securityKey: securityKey,
-          environment: config.environment,
-          apiEndpoint: config.api_endpoint,
-          wsdlUrl: config.wsdl_url,
-          approvedIPs: config.approved_ips || []
-        };
+    // Initialize Supabase client (no hardcoded fallbacks)
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN;
 
-        console.log('Keystone configuration loaded from database');
-      } else {
-        // Fall back to parent class method (environment variables)
-        await super.loadConfig();
-        console.log('Keystone configuration loaded from environment variables');
-      }
-
-    } catch (error) {
-      console.error('Failed to load Keystone configuration:', error);
-      throw error;
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Missing Supabase configuration - VITE_SUPABASE_URL and VITE_SUPABASE_ANON_TOKEN environment variables are required');
+      this.supabase = null;
+    } else {
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+      console.log('Supabase client initialized successfully');
     }
+
+    // Load configuration and set security token
+    this.initializeConfig();
   }
 
-  /**
-   * Save configuration to database
-   */
-  async saveConfig(config: {
-    accountNumber: string;
-    securityKeyDev: string;
-    securityKeyProd: string;
-    environment: 'development' | 'production';
-    approvedIPs: string[];
-  }): Promise<void> {
+  private async initializeConfig(): Promise<void> {
     try {
-      // Deactivate existing configurations
-      await supabase
-        .from('keystone_config')
-        .update({ is_active: false })
-        .eq('is_active', true);
-
-      // Insert new configuration
-      const { error } = await supabase
-        .from('keystone_config')
-        .insert({
-          account_number: config.accountNumber,
-          security_key_dev: config.securityKeyDev,
-          security_key_prod: config.securityKeyProd,
-          environment: config.environment,
-          approved_ips: config.approvedIPs,
-          is_active: true
-        });
-
-      if (error) throw error;
-
-      // Reload configuration
-      await this.loadConfig();
-
-      console.log('Keystone configuration saved successfully');
-    } catch (error) {
-      console.error('Failed to save Keystone configuration:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Test Keystone API connection and log result
-   */
-  async testConnection(): Promise<KeystoneResponse> {
-    const syncLogId = await this.startSyncLog('connection_test', 'manual');
-    
-    try {
-      const result = await super.testConnection();
+      const config = await this.loadConfig();
+      this.config.environment = config.environment || 'development';
+      this.config.securityToken = this.getSecurityTokenForEnvironment(this.config.environment as 'development' | 'production');
       
-      await this.logAPICall(syncLogId, 'UtilityReportMyIP', {}, result);
+      // Validate after loading config
+      this.validateConfiguration();
+    } catch (error) {
+      console.error('Failed to initialize config:', error);
+      // Use default development environment if config loading fails
+      this.config.environment = 'development';
+      this.config.securityToken = this.getSecurityTokenForEnvironment('development');
+      this.validateConfiguration();
+    }
+  }
+
+  private validateConfiguration(): void {
+    const missing = [];
+    
+    if (!this.config.proxyUrl) {
+      missing.push('VITE_KEYSTONE_PROXY_URL');
+    }
+    
+    if (!this.config.accountNumber) {
+      missing.push('VITE_KEYSTONE_ACCOUNT_NUMBER');
+    }
+    
+    if (!this.config.securityToken) {
+      const envVar = this.config.environment === 'development' 
+        ? 'VITE_KEYSTONE_SECURITY_TOKEN_DEV' 
+        : 'VITE_KEYSTONE_SECURITY_TOKEN_PROD';
+      missing.push(envVar);
+    }
+
+    if (missing.length > 0) {
+      console.warn(`Missing Keystone environment variables: ${missing.join(', ')}`);
+    } else {
+      console.log('Keystone configuration loaded successfully from environment variables');
+    }
+  }
+
+  private getSecurityTokenForEnvironment(environment: 'development' | 'production'): string {
+    if (environment === 'development') {
+      return import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV || '';
+    } else {
+      return import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD || '';
+    }
+  }
+
+  private async makeRequest<T>(
+    endpoint: string,
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+    data?: any
+  ): Promise<KeystoneResponse<T>> {
+    try {
+      if (!this.config.proxyUrl) {
+        throw new Error('Proxy URL not configured');
+      }
+
+      const url = `${this.config.proxyUrl}${endpoint}`;
+      const options: RequestInit = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.config.apiToken}`,
+        },
+      };
+
+      if (data && (method === 'POST' || method === 'PUT')) {
+        options.body = JSON.stringify(data);
+      }
+
+      const response = await fetch(url, options);
+      const responseData = await response.json();
+
+      return {
+        success: response.ok,
+        data: responseData,
+        statusCode: response.status,
+        statusMessage: response.statusText,
+        error: response.ok ? undefined : responseData.message || 'Request failed'
+      };
+    } catch (error) {
+      console.error('Keystone API request failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  // Health check for the proxy service
+  async healthCheck(): Promise<KeystoneResponse> {
+    return this.makeRequest('/health');
+  }
+
+  // Get proxy service status
+  async getProxyStatus(): Promise<KeystoneResponse> {
+    return this.makeRequest('/status');
+  }
+
+  // Test connection to Keystone API
+  async testConnection(): Promise<KeystoneResponse> {
+    try {
+      console.log('Making Keystone API call: UtilityReportMyIP');
+      
+      if (!this.config.accountNumber || !this.config.securityToken || !this.config.proxyUrl) {
+        const missing = [];
+        if (!this.config.accountNumber) missing.push('VITE_KEYSTONE_ACCOUNT_NUMBER');
+        if (!this.config.securityToken) missing.push('VITE_KEYSTONE_SECURITY_TOKEN_DEV/PROD');
+        if (!this.config.proxyUrl) missing.push('VITE_KEYSTONE_PROXY_URL');
+        
+        throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+      }
+
+      const result = await this.utilityReportMyIP();
       
       if (result.success) {
-        await this.completeSyncLog(syncLogId, 'completed', {
-          message: 'Connection test successful',
-          ipAddress: result.data
-        });
+        console.log('Keystone API connection successful');
+        return {
+          success: true,
+          data: result.data,
+          statusMessage: 'Connection successful'
+        };
       } else {
-        await this.completeSyncLog(syncLogId, 'failed', {
-          error: result.error || result.statusMessage
-        });
+        console.error('Keystone API call failed:', result.error);
+        return {
+          success: false,
+          error: result.error || 'Connection test failed'
+        };
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('Keystone API call failed:', errorMessage);
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  }
+
+  // Utility method to report current IP
+  async utilityReportMyIP(): Promise<KeystoneResponse> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      method: 'UtilityReportMyIP'
+    };
+
+    return this.makeRequest('/utility/reportmyip', 'POST', requestData);
+  }
+
+  // Utility method to report approved IPs
+  async utilityReportApprovedIPs(): Promise<KeystoneResponse> {
+    // Get the appropriate IP list based on current environment
+    const approvedIPs = this.getApprovedIPsForCurrentEnvironment();
+    
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      method: 'UtilityReportApprovedIPs',
+      approvedIPs: approvedIPs // Send environment-specific IPs
+    };
+
+    return this.makeRequest('/utility/reportapprovedips', 'POST', requestData);
+  }
+
+  // Get the appropriate IP list based on current environment
+  private getApprovedIPsForCurrentEnvironment(): string[] {
+    if (!this.loadedConfig) {
+      return [];
+    }
+    
+    if (this.config.environment === 'development') {
+      return this.loadedConfig.development_ips || [];
+    } else {
+      return this.loadedConfig.production_ips || [];
+    }
+  }
+
+  // Utility method to report approved methods
+  async utilityReportApprovedMethods(): Promise<KeystoneResponse> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      method: 'UtilityReportApprovedMethods'
+    };
+
+    return this.makeRequest('/utility/reportapprovedmethods', 'POST', requestData);
+  }
+
+  // Search for parts
+  async searchParts(searchTerm: string, limit: number = 50): Promise<KeystoneResponse> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      searchTerm,
+      limit
+    };
+
+    return this.makeRequest('/parts/search', 'POST', requestData);
+  }
+
+  // Get part details
+  async getPartDetails(partNumber: string): Promise<KeystoneResponse> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      partNumber
+    };
+
+    return this.makeRequest('/parts/details', 'POST', requestData);
+  }
+
+  // Check inventory for a part
+  async checkInventory(partNumber: string): Promise<KeystoneResponse> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      partNumber
+    };
+
+    return this.makeRequest('/inventory/check', 'POST', requestData);
+  }
+
+  // Get pricing for a part
+  async getPricing(partNumber: string, quantity: number = 1): Promise<KeystoneResponse> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      partNumber,
+      quantity
+    };
+
+    return this.makeRequest('/pricing/get', 'POST', requestData);
+  }
+
+  // Configuration management
+  async loadConfig(): Promise<any> {
+    if (this.loadedConfig) {
+      return this.loadedConfig;
+    }
+
+    try {
+      if (!this.supabase) {
+        console.warn('Supabase not available, using default configuration');
+        return {
+          environment: 'development',
+          development_ips: [],
+          production_ips: [],
+          accountNumber: this.config.accountNumber,
+          securityToken: this.getSecurityTokenForEnvironment('development')
+        };
       }
 
-      return result;
+      const { data, error } = await this.supabase
+        .from('keystone_config')
+        .select('*')
+        .single();
+
+      if (error) {
+        console.warn('Failed to load config from database, using defaults:', error.message);
+        return {
+          environment: 'development',
+          development_ips: [],
+          production_ips: [],
+          accountNumber: this.config.accountNumber,
+          securityToken: this.getSecurityTokenForEnvironment('development')
+        };
+      }
+
+      // Handle legacy data format (single approvedIPs array)
+      if (data.approved_ips && !data.development_ips && !data.production_ips) {
+        console.log('Converting legacy IP format to environment-specific format');
+        data.development_ips = data.approved_ips;
+        data.production_ips = data.approved_ips;
+      }
+
+      this.loadedConfig = {
+        ...data,
+        // Ensure environment-specific IP arrays exist
+        development_ips: data.development_ips || [],
+        production_ips: data.production_ips || [],
+        // Override with environment variables for credentials
+        accountNumber: this.config.accountNumber,
+        securityToken: this.getSecurityTokenForEnvironment(data.environment || 'development')
+      };
+
+      return this.loadedConfig;
     } catch (error) {
-      await this.completeSyncLog(syncLogId, 'failed', {
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      console.error('Error loading configuration:', error);
+      return {
+        environment: 'development',
+        development_ips: [],
+        production_ips: [],
+        accountNumber: this.config.accountNumber,
+        securityToken: this.getSecurityTokenForEnvironment('development')
+      };
+    }
+  }
+
+  async saveConfig(config: any): Promise<void> {
+    try {
+      if (!this.supabase) {
+        console.warn('Supabase not available, cannot save config to database');
+        return;
+      }
+
+      // Get current config to preserve IP lists for the non-active environment
+      const currentConfig = await this.loadConfig();
+      
+      // Determine which IP list to update based on environment
+      const isDevEnvironment = config.environment === 'development';
+      
+      // Don't save credentials to database - only runtime settings
+      const configToSave = {
+        environment: config.environment,
+        // Add account_number to configToSave
+        account_number: this.config.accountNumber,
+        // Update the appropriate IP list based on current environment
+        development_ips: isDevEnvironment ? config.approvedIPs : (currentConfig.development_ips || []),
+        production_ips: !isDevEnvironment ? config.approvedIPs : (currentConfig.production_ips || []),
+        // Add security_key_dev and security_key_prod to configToSave
+        security_key_dev: this.getSecurityTokenForEnvironment('development'),
+        security_key_prod: this.getSecurityTokenForEnvironment('production'),
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('Saving configuration:', configToSave);
+      
+      try {
+        const { error } = await this.supabase
+          .from('keystone_config')
+          .upsert(configToSave);
+
+        if (error) {
+          console.error('Database error when saving config:', error);
+          throw new Error(`Database error: ${error.message || 'Unknown database error'}`);
+        }
+      } catch (dbError) {
+        console.error('Failed to save to database:', dbError);
+        throw new Error(`Failed to save to database: ${dbError instanceof Error ? dbError.message : 'Database error'}`);
+      }
+
+      // Update internal config with new environment
+      this.config.environment = config.environment;
+      this.config.securityToken = this.getSecurityTokenForEnvironment(config.environment);
+
+      // Update loaded config cache
+      this.loadedConfig = {
+        ...configToSave,
+        // Keep environment variables for credentials
+        accountNumber: this.config.accountNumber,
+        securityToken: this.config.securityToken
+      };
+
+      console.log('Configuration saved successfully');
+    } catch (error) {
+      console.error('Failed to save configuration:', error);
       throw error;
     }
   }
 
-  // =====================================================
-  // UTILITY METHODS
-  // =====================================================
-
-  /**
-   * Report current IP address
-   */
-  async utilityReportMyIP(): Promise<string> {
-    const response = await this.makeSOAPCall('UtilityReportMyIP');
-    if (response.success) {
-      return response.data;
-    }
-    throw new Error(response.error || 'Failed to get IP address');
+  getConfig(): any {
+    const currentConfig = this.loadedConfig || {
+      development_ips: [],
+      production_ips: []
+    };
+    
+    // Get the appropriate IP list based on current environment
+    const approvedIPs = this.config.environment === 'development' 
+      ? currentConfig.development_ips || []
+      : currentConfig.production_ips || [];
+    
+    return {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      securityKeyDev: this.getSecurityTokenForEnvironment('development'),
+      securityKeyProd: this.getSecurityTokenForEnvironment('production'),
+      environment: this.config.environment,
+      proxyUrl: this.config.proxyUrl,
+      approvedIPs: approvedIPs,
+      // Include both IP lists for reference
+      development_ips: currentConfig.development_ips || [],
+      production_ips: currentConfig.production_ips || []
+    };
   }
 
-  /**
-   * Report approved IP addresses
-   */
-  async utilityReportApprovedIPs(): Promise<KeystoneResponse> {
-    return await this.makeSOAPCall('UtilityReportApprovedIPs');
+  getOriginalConfig(): any {
+    return {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      environment: this.config.environment,
+      proxyUrl: this.config.proxyUrl
+    };
   }
 
-  /**
-   * Report approved methods for current account
-   */
-  async utilityReportApprovedMethods(): Promise<string[]> {
-    const response = await this.makeSOAPCall('UtilityReportApprovedMethods');
-    if (response.success) {
-      // Parse the response to extract method names
-      const methods = response.data?.split(',') || [];
-      return methods.map((method: string) => method.trim());
-    }
-    throw new Error(response.error || 'Failed to get approved methods');
+  isConfigured(): boolean {
+    return !!(this.config.accountNumber && this.config.securityToken && this.config.proxyUrl);
   }
 
-  // =====================================================
-  // INVENTORY METHODS (Placeholder for Week 4)
-  // =====================================================
-
-  /**
-   * Check inventory for a single part
-   */
-  async checkInventory(partNumber: string): Promise<KeystoneResponse> {
-    return await this.makeSOAPCall('CheckInventory', {
-      FullPartNo: partNumber
-    });
+  getEnvironment(): string {
+    return this.config.environment;
   }
 
-  /**
-   * Check inventory for multiple parts
-   */
-  async checkInventoryBulk(partNumbers: string[]): Promise<KeystoneResponse> {
-    return await this.makeSOAPCall('CheckInventoryBulk', {
-      FullPartNo: partNumbers.join(',')
-    });
-  }
-
-  // =====================================================
-  // LOGGING METHODS
-  // =====================================================
-
-  /**
-   * Start a sync log entry
-   */
-  private async startSyncLog(
-    syncType: string, 
-    triggeredBy: string = 'api_call',
-    userId?: string
-  ): Promise<string> {
-    try {
-      const { data, error } = await supabase
-        .from('keystone_sync_logs')
-        .insert({
-          sync_type: syncType,
-          status: 'running',
-          triggered_by: triggeredBy,
-          user_id: userId,
-          started_at: new Date().toISOString()
-        })
-        .select('id')
-        .single();
-
-      if (error) throw error;
-      return data.id;
-    } catch (error) {
-      console.error('Failed to start sync log:', error);
-      // Return a dummy ID to prevent breaking the flow
-      return 'error-' + Date.now();
-    }
-  }
-
-  /**
-   * Complete a sync log entry
-   */
-  private async completeSyncLog(
-    syncLogId: string,
-    status: 'completed' | 'failed' | 'cancelled',
-    details: any = {}
-  ): Promise<void> {
-    try {
-      if (syncLogId.startsWith('error-')) return; // Skip if dummy ID
-
-      await supabase
-        .from('keystone_sync_logs')
-        .update({
-          status,
-          completed_at: new Date().toISOString(),
-          records_processed: details.recordsProcessed || 0,
-          records_updated: details.recordsUpdated || 0,
-          records_created: details.recordsCreated || 0,
-          records_failed: details.recordsFailed || 0,
-          error_message: details.error || null,
-          sync_details: details
-        })
-        .eq('id', syncLogId);
-    } catch (error) {
-      console.error('Failed to complete sync log:', error);
-    }
-  }
-
-  /**
-   * Log individual API call
-   */
-  private async logAPICall(
-    syncLogId: string,
-    methodName: string,
-    requestData: any,
-    response: KeystoneResponse
-  ): Promise<void> {
-    try {
-      if (syncLogId.startsWith('error-')) return; // Skip if dummy ID
-
-      // Sanitize request data (remove sensitive information)
-      const sanitizedRequest = { ...requestData };
-      delete sanitizedRequest.SecurityKey;
-      delete sanitizedRequest.AccountNumber;
-
-      await supabase
-        .from('keystone_api_logs')
-        .insert({
-          sync_log_id: syncLogId,
-          method_name: methodName,
-          request_data: sanitizedRequest,
-          response_data: response.data,
-          response_time_ms: response.responseTime,
-          status_code: response.statusCode,
-          success: response.success,
-          error_message: response.error,
-          created_at: new Date().toISOString()
-        });
-    } catch (error) {
-      console.error('Failed to log API call:', error);
-    }
-  }
-
-  /**
-   * Get sync logs for monitoring
-   */
+  // Get sync logs from database
   async getSyncLogs(limit: number = 50): Promise<any[]> {
     try {
-      const { data, error } = await supabase
+      if (!this.supabase) {
+        console.warn('Supabase not available, cannot fetch sync logs');
+        return [];
+      }
+
+      const { data, error } = await this.supabase
         .from('keystone_sync_logs')
         .select('*')
-        .order('started_at', { ascending: false })
+        .order('timestamp', { ascending: false })
         .limit(limit);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Failed to fetch sync logs:', error);
+        return [];
+      }
+
       return data || [];
     } catch (error) {
-      console.error('Failed to get sync logs:', error);
+      console.error('Error fetching sync logs:', error);
       return [];
     }
   }
 
-  /**
-   * Get API call logs for debugging
-   */
-  async getAPILogs(syncLogId?: string, limit: number = 100): Promise<any[]> {
-    try {
-      let query = supabase
-        .from('keystone_api_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      if (syncLogId) {
-        query = query.eq('sync_log_id', syncLogId);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error('Failed to get API logs:', error);
-      return [];
-    }
+  // Get environment status for UI
+  getEnvironmentStatus(): {
+    hasAccountNumber: boolean;
+    hasDevKey: boolean;
+    hasProdKey: boolean;
+    hasProxyUrl: boolean;
+    hasSupabaseUrl: boolean;
+    hasSupabaseKey: boolean;
+    accountNumberPreview?: string;
+    proxyUrl?: string;
+  } {
+    return {
+      hasAccountNumber: !!import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER,
+      hasDevKey: !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV,
+      hasProdKey: !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD,
+      hasProxyUrl: !!this.config.proxyUrl,
+      hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+      hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_TOKEN,
+      accountNumberPreview: import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER ? 
+        `...${import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER.slice(-4)}` : undefined,
+      proxyUrl: this.config.proxyUrl
+    };
   }
 }
 
-// Export singleton instance
-export const keystoneService = new KeystoneService();
+export default KeystoneService;
+
+
+
 
