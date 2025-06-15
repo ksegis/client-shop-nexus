@@ -1,5 +1,6 @@
+// Enhanced KeystoneService.ts - Version 3.0.0
+// Builds upon existing functionality while adding complete Keystone API coverage
 // Updated to use VITE_ prefixed environment variables and user-selected environment
-// Version 2.3.3 - Fixed response parsing for new proxy server JSON format
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -9,6 +10,7 @@ interface KeystoneConfig {
   accountNumber: string;
   securityToken: string;
 }
+
 interface KeystoneResponse<T = any> {
   success: boolean;
   data?: T;
@@ -16,6 +18,35 @@ interface KeystoneResponse<T = any> {
   statusCode?: number;
   statusMessage?: string;
   result?: any;
+}
+
+interface InventoryItem {
+  partNumber: string;
+  quantity: number;
+  warehouse: string;
+  lastUpdated: string;
+}
+
+interface PricingInfo {
+  partNumber: string;
+  price: number;
+  currency: string;
+  quantity: number;
+  discountTier: string;
+}
+
+interface ShippingOption {
+  method: string;
+  cost: number;
+  estimatedDays: number;
+  carrier: string;
+}
+
+interface OrderInfo {
+  orderNumber: string;
+  status: string;
+  trackingNumber?: string;
+  estimatedDelivery?: string;
 }
 
 export default class KeystoneService {
@@ -152,6 +183,16 @@ export default class KeystoneService {
     return this.makeRequest('/status');
   }
 
+  // Get rate limiting status
+  async getRateLimitStatus(): Promise<KeystoneResponse> {
+    return this.makeRequest(`/status/rate-limits?accountNumber=${this.config.accountNumber}`);
+  }
+
+  // Get cache status
+  async getCacheStatus(): Promise<KeystoneResponse> {
+    return this.makeRequest('/status/cache');
+  }
+
   // Test connection to Keystone API
   async testConnection(): Promise<KeystoneResponse> {
     try {
@@ -242,19 +283,166 @@ export default class KeystoneService {
     return this.makeRequest('/utility/reportapprovedmethods', 'POST', requestData);
   }
 
-  // Search for parts
-  async searchParts(searchTerm: string, limit: number = 50): Promise<KeystoneResponse> {
+  // ENHANCED INVENTORY MANAGEMENT METHODS
+
+  // Check inventory for a single part
+  async checkInventory(partNumber: string): Promise<KeystoneResponse<InventoryItem[]>> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      partNumber
+    };
+
+    return this.makeRequest('/inventory/check', 'POST', requestData);
+  }
+
+  // Check inventory for multiple parts (bulk operation)
+  async checkInventoryBulk(partNumbers: string[]): Promise<KeystoneResponse<InventoryItem[]>> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      partNumbers
+    };
+
+    return this.makeRequest('/inventory/bulk', 'POST', requestData);
+  }
+
+  // Get full inventory dataset (once per day limit)
+  async getInventoryFull(): Promise<KeystoneResponse<InventoryItem[]>> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken
+    };
+
+    return this.makeRequest('/inventory/full', 'POST', requestData);
+  }
+
+  // Get inventory updates since last check (every 15 minutes)
+  async getInventoryUpdates(lastUpdateTime?: string): Promise<KeystoneResponse<InventoryItem[]>> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      lastUpdateTime: lastUpdateTime || new Date(Date.now() - 15 * 60 * 1000).toISOString()
+    };
+
+    return this.makeRequest('/inventory/updates', 'POST', requestData);
+  }
+
+  // ENHANCED PRICING METHODS
+
+  // Get pricing for multiple parts (once per hour limit)
+  async getPricingBulk(partNumbers: string[], currency: string = 'USD'): Promise<KeystoneResponse<PricingInfo[]>> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      partNumbers,
+      currency
+    };
+
+    return this.makeRequest('/pricing/bulk', 'POST', requestData);
+  }
+
+  // Get pricing for a single part (legacy method maintained for compatibility)
+  async getPricing(partNumber: string, quantity: number = 1): Promise<KeystoneResponse<PricingInfo>> {
+    const result = await this.getPricingBulk([partNumber]);
+    if (result.success && result.data && Array.isArray(result.data) && result.data.length > 0) {
+      return {
+        ...result,
+        data: result.data[0]
+      };
+    }
+    return result;
+  }
+
+  // ENHANCED SHIPPING METHODS
+
+  // Get shipping options for a single part
+  async getShippingOptions(partNumber: string, quantity: number = 1, zipCode?: string): Promise<KeystoneResponse<ShippingOption[]>> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      partNumber,
+      quantity,
+      zipCode
+    };
+
+    return this.makeRequest('/shipping/options', 'POST', requestData);
+  }
+
+  // Get shipping options for multiple parts
+  async getShippingOptionsMultiple(items: Array<{partNumber: string, quantity: number}>, zipCode?: string): Promise<KeystoneResponse<ShippingOption[]>> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      items,
+      zipCode
+    };
+
+    return this.makeRequest('/shipping/options/multiple', 'POST', requestData);
+  }
+
+  // ENHANCED ORDER MANAGEMENT METHODS
+
+  // Place a standard order (ships to account address)
+  async shipOrder(partNumber: string, quantity: number, shippingMethod?: string): Promise<KeystoneResponse<OrderInfo>> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      partNumber,
+      quantity,
+      shippingMethod
+    };
+
+    return this.makeRequest('/orders/ship', 'POST', requestData);
+  }
+
+  // Place a dropship order (ships to custom address)
+  async shipOrderDropship(
+    partNumber: string, 
+    quantity: number, 
+    shippingAddress: any, 
+    shippingMethod?: string
+  ): Promise<KeystoneResponse<OrderInfo>> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      partNumber,
+      quantity,
+      shippingAddress,
+      shippingMethod
+    };
+
+    return this.makeRequest('/orders/ship/dropship', 'POST', requestData);
+  }
+
+  // Get order history
+  async getOrderHistory(startDate?: string, endDate?: string): Promise<KeystoneResponse<OrderInfo[]>> {
+    const requestData = {
+      accountNumber: this.config.accountNumber,
+      securityToken: this.config.securityToken,
+      startDate,
+      endDate
+    };
+
+    return this.makeRequest('/orders/history', 'POST', requestData);
+  }
+
+  // ENHANCED PARTS SEARCH METHODS
+
+  // Search for parts with enhanced filtering
+  async searchParts(searchTerm: string, limit: number = 50, filters?: any): Promise<KeystoneResponse> {
     const requestData = {
       accountNumber: this.config.accountNumber,
       securityToken: this.config.securityToken,
       searchTerm,
-      limit
+      limit,
+      filters
     };
 
     return this.makeRequest('/parts/search', 'POST', requestData);
   }
 
-  // Get part details
+  // Get part details (enhanced with more information)
   async getPartDetails(partNumber: string): Promise<KeystoneResponse> {
     const requestData = {
       accountNumber: this.config.accountNumber,
@@ -265,30 +453,19 @@ export default class KeystoneService {
     return this.makeRequest('/parts/details', 'POST', requestData);
   }
 
-  // Check inventory for a part
-  async checkInventory(partNumber: string): Promise<KeystoneResponse> {
+  // Get kit components
+  async getKitComponents(kitPartNumber: string): Promise<KeystoneResponse> {
     const requestData = {
       accountNumber: this.config.accountNumber,
       securityToken: this.config.securityToken,
-      partNumber
+      kitPartNumber
     };
 
-    return this.makeRequest('/inventory/check', 'POST', requestData);
+    return this.makeRequest('/kits/components', 'POST', requestData);
   }
 
-  // Get pricing for a part
-  async getPricing(partNumber: string, quantity: number = 1): Promise<KeystoneResponse> {
-    const requestData = {
-      accountNumber: this.config.accountNumber,
-      securityToken: this.config.securityToken,
-      partNumber,
-      quantity
-    };
+  // CONFIGURATION MANAGEMENT (PRESERVED FROM ORIGINAL)
 
-    return this.makeRequest('/pricing/get', 'POST', requestData);
-  }
-
-  // Configuration management
   async loadConfig(): Promise<any> {
     if (this.loadedConfig) {
       return this.loadedConfig;
@@ -495,6 +672,35 @@ export default class KeystoneService {
       hasDevCredentials: !!this.getSecurityTokenForEnvironment('development'),
       hasProdCredentials: !!this.getSecurityTokenForEnvironment('production')
     };
+  }
+
+  // ENHANCED MONITORING AND DIAGNOSTICS
+
+  // Get comprehensive system status
+  async getSystemStatus(): Promise<{
+    proxy: KeystoneResponse;
+    rateLimits: KeystoneResponse;
+    cache: KeystoneResponse;
+    connection: KeystoneResponse;
+  }> {
+    const [proxy, rateLimits, cache, connection] = await Promise.all([
+      this.healthCheck(),
+      this.getRateLimitStatus(),
+      this.getCacheStatus(),
+      this.testConnection()
+    ]);
+
+    return { proxy, rateLimits, cache, connection };
+  }
+
+  // Clear cache (admin function)
+  async clearCache(): Promise<KeystoneResponse> {
+    return this.makeRequest('/admin/cache/clear', 'POST');
+  }
+
+  // Reset rate limits (admin function)
+  async resetRateLimits(): Promise<KeystoneResponse> {
+    return this.makeRequest('/admin/rate-limits/reset', 'POST');
   }
 }
 
