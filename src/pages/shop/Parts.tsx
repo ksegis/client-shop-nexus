@@ -1,8 +1,8 @@
-// Updated Parts Page - Works with existing "inventory" table structure
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+// Simplified Parts Page - No external component dependencies
+// Works with existing inventory table structure
+import React, { useState, useEffect, useCallback } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Filter, Grid, List, Star, Heart, Eye, Truck, Wrench, Settings, BarChart3, TrendingUp, Package2, Clock, CheckCircle, XCircle, AlertTriangle, FileText, Download, RefreshCw, Zap, Timer, Wifi, WifiOff, Database, Sync } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, Database, Sync, Clock, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,23 +10,15 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
-// Import services and components
-import InventorySyncService from "../../services/InventorySyncService";
-import { getSyncScheduler } from "../../services/SyncScheduler";
-import { 
-  InformationPanel,
-  StatusBar,
-  FastLoadingWrapper,
-  RateLimitIndicator,
-  useKeystoneStatus
-} from "../../components/compact_keystone_ui_components";
+// Import services
+import InventorySyncService from "@/services/InventorySyncService";
+import { getSyncScheduler } from "@/services/SyncScheduler";
 
 // Interface matching your existing inventory table structure
 interface InventoryPart {
@@ -73,6 +65,26 @@ interface SyncStatus {
   syncStats?: any;
 }
 
+// Simple loading wrapper component
+const LoadingWrapper: React.FC<{ 
+  isLoading: boolean; 
+  hasData: boolean; 
+  children: React.ReactNode;
+  loadingMessage?: string;
+}> = ({ isLoading, hasData, children, loadingMessage = "Loading..." }) => {
+  if (isLoading && !hasData) {
+    return (
+      <Card>
+        <CardContent className="p-12 text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-500" />
+          <p className="text-gray-600">{loadingMessage}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  return <>{children}</>;
+};
+
 // Enhanced Parts component using your existing inventory table
 const Parts: React.FC = () => {
   // State management
@@ -92,7 +104,6 @@ const Parts: React.FC = () => {
   // Loading and sync states
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [dataSource, setDataSource] = useState<'supabase' | 'keystone' | 'cache'>('supabase');
   const [lastDataUpdate, setLastDataUpdate] = useState<Date | null>(null);
   const [totalPartsCount, setTotalPartsCount] = useState(0);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ pendingRequests: 0 });
@@ -123,7 +134,7 @@ const Parts: React.FC = () => {
         const syncScheduler = getSyncScheduler({
           enableDailySync: true,
           dailySyncTime: '02:00',
-          enableIncrementalSync: false, // Disabled due to rate limits
+          enableIncrementalSync: false,
           maxConcurrentUpdates: 5
         });
         await syncScheduler.initialize();
@@ -141,19 +152,48 @@ const Parts: React.FC = () => {
         console.error('Failed to initialize services:', error);
         toast({
           title: "Initialization Error",
-          description: "Failed to initialize inventory system. Some features may not work.",
+          description: "Failed to initialize inventory system. Loading cached data if available.",
           variant: "destructive",
         });
+        
+        // Try to load any cached data
+        await loadCachedData();
       }
     };
 
     initializeServices();
   }, []);
 
-  // Load inventory data from Supabase (using your existing table)
+  // Load cached data as fallback
+  const loadCachedData = async () => {
+    try {
+      const cached = localStorage.getItem('inventory_cache');
+      if (cached) {
+        const cachedParts = JSON.parse(cached);
+        setParts(cachedParts);
+        setTotalPartsCount(cachedParts.length);
+        setLastDataUpdate(new Date(localStorage.getItem('inventory_cache_time') || Date.now()));
+        
+        toast({
+          title: "Loaded Cached Data",
+          description: `Showing ${cachedParts.length} parts from cache`,
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load cached data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load inventory data from Supabase
   const loadInventoryFromSupabase = async (service?: InventorySyncService, page: number = 1) => {
     const serviceToUse = service || syncService;
-    if (!serviceToUse) return;
+    if (!serviceToUse) {
+      await loadCachedData();
+      return;
+    }
 
     try {
       setIsLoading(page === 1);
@@ -176,12 +216,15 @@ const Parts: React.FC = () => {
       if (page === 1) {
         setParts(result.data);
         setTotalPartsCount(result.count);
+        
+        // Cache the data
+        localStorage.setItem('inventory_cache', JSON.stringify(result.data));
+        localStorage.setItem('inventory_cache_time', new Date().toISOString());
       } else {
         setParts(prev => [...prev, ...result.data]);
       }
 
       setHasMoreData(result.data.length === itemsPerPage);
-      setDataSource('supabase');
       setLastDataUpdate(new Date());
       
       console.log(`Loaded ${result.data.length} parts from Supabase (total: ${result.count})`);
@@ -191,9 +234,14 @@ const Parts: React.FC = () => {
       
       toast({
         title: "Data Loading Error",
-        description: "Failed to load inventory from database. Please try refreshing.",
+        description: "Failed to load from database. Showing cached data if available.",
         variant: "destructive",
       });
+      
+      // Fallback to cached data
+      if (page === 1) {
+        await loadCachedData();
+      }
     } finally {
       setIsLoading(false);
     }
@@ -214,7 +262,14 @@ const Parts: React.FC = () => {
 
   // Trigger manual full sync
   const handleFullSync = async () => {
-    if (!scheduler) return;
+    if (!scheduler) {
+      toast({
+        title: "Service Not Available",
+        description: "Sync service is not initialized. Please refresh the page.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       setIsRefreshing(true);
@@ -257,9 +312,16 @@ const Parts: React.FC = () => {
     }
   };
 
-  // Request individual part update using keystone_vcpn
+  // Request individual part update
   const handlePartUpdate = async (keystoneVcpn: string, immediate: boolean = false) => {
-    if (!scheduler || !keystoneVcpn) return;
+    if (!scheduler || !keystoneVcpn) {
+      toast({
+        title: "Update Not Available",
+        description: "Sync service is not available or part has no Keystone VCPN.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       let result;
@@ -273,7 +335,7 @@ const Parts: React.FC = () => {
         
         result = await scheduler.updatePartNow(keystoneVcpn);
       } else {
-        result = await scheduler.requestPartUpdate(keystoneVcpn, 1); // High priority
+        result = await scheduler.requestPartUpdate(keystoneVcpn, 1);
       }
 
       if (result.success) {
@@ -284,7 +346,6 @@ const Parts: React.FC = () => {
         });
         
         if (immediate) {
-          // Reload the specific part or refresh the list
           await loadInventoryFromSupabase();
         }
       } else {
@@ -305,14 +366,14 @@ const Parts: React.FC = () => {
     }
   };
 
-  // Refresh data (reload from Supabase)
+  // Refresh data
   const handleRefresh = useCallback(async () => {
     setCurrentPage(1);
     await loadInventoryFromSupabase();
     await updateSyncStatus();
   }, [syncService]);
 
-  // Load more data (pagination)
+  // Load more data
   const loadMoreData = useCallback(async () => {
     if (!hasMoreData || isLoading) return;
     
@@ -325,7 +386,6 @@ const Parts: React.FC = () => {
   useEffect(() => {
     let filtered = [...parts];
 
-    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(part =>
         part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -336,22 +396,18 @@ const Parts: React.FC = () => {
       );
     }
 
-    // Category filter
     if (selectedCategory !== 'all') {
       filtered = filtered.filter(part => part.category === selectedCategory);
     }
 
-    // Price range filter
     filtered = filtered.filter(part => 
       (part.price || 0) >= priceRange[0] && (part.price || 0) <= priceRange[1]
     );
 
-    // In stock filter
     if (inStockOnly) {
       filtered = filtered.filter(part => part.quantity > 0);
     }
 
-    // Sort
     filtered.sort((a, b) => {
       let aValue: any = a[sortBy as keyof InventoryPart];
       let bValue: any = b[sortBy as keyof InventoryPart];
@@ -371,17 +427,17 @@ const Parts: React.FC = () => {
     setFilteredParts(filtered);
   }, [parts, searchTerm, selectedCategory, priceRange, inStockOnly, sortBy, sortOrder]);
 
-  // Reload data when filters change (for server-side filtering)
+  // Reload data when filters change
   useEffect(() => {
     const delayedReload = setTimeout(() => {
       setCurrentPage(1);
       loadInventoryFromSupabase();
-    }, 500); // Debounce
+    }, 500);
 
     return () => clearTimeout(delayedReload);
   }, [selectedCategory, inStockOnly, searchTerm]);
 
-  // Get unique categories for filter
+  // Get unique categories
   const categories = Array.from(new Set(parts.map(part => part.category).filter(Boolean)));
 
   // Cart management
@@ -399,14 +455,6 @@ const Parts: React.FC = () => {
     });
   };
 
-  const removeFromCart = (partId: string) => {
-    setCart(prev => {
-      const newCart = { ...prev };
-      delete newCart[partId];
-      return newCart;
-    });
-  };
-
   // Favorites management
   const toggleFavorite = (partId: string) => {
     setFavorites(prev => 
@@ -415,12 +463,6 @@ const Parts: React.FC = () => {
         : [...prev, partId]
     );
   };
-
-  // Calculate cart total
-  const cartTotal = Object.entries(cart).reduce((total, [partId, quantity]) => {
-    const part = parts.find(p => p.id === partId);
-    return total + (part?.price || 0) * quantity;
-  }, 0);
 
   const cartItemCount = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
 
@@ -550,75 +592,6 @@ const Parts: React.FC = () => {
     </Card>
   );
 
-  // Render part row for list view
-  const renderPartRow = (part: InventoryPart) => (
-    <TableRow key={part.id} className="hover:bg-gray-50">
-      <TableCell>
-        <div>
-          <p className="font-medium">{part.name}</p>
-          <p className="text-sm text-gray-500">{part.sku || part.keystone_vcpn || 'No SKU'}</p>
-        </div>
-      </TableCell>
-      <TableCell>
-        <div className="flex flex-col gap-1">
-          {part.category && (
-            <Badge variant="outline">{part.category}</Badge>
-          )}
-          {getSyncStatusBadge(part)}
-        </div>
-      </TableCell>
-      <TableCell>${(part.price || 0).toFixed(2)}</TableCell>
-      <TableCell>
-        <div>
-          <Badge variant={part.quantity > 0 ? "default" : "secondary"}>
-            {part.quantity} {part.quantity > 0 ? "In Stock" : "Out of Stock"}
-          </Badge>
-          <p className="text-xs text-gray-400 mt-1">
-            {formatLastUpdate(part.keystone_last_sync)}
-          </p>
-        </div>
-      </TableCell>
-      <TableCell>{part.warehouse || 'N/A'}</TableCell>
-      <TableCell>
-        <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => toggleFavorite(part.id)}
-            className={favorites.includes(part.id) ? 'text-red-500' : 'text-gray-400'}
-          >
-            <Heart className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSelectedPart(part)}
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-          {part.keystone_vcpn && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handlePartUpdate(part.keystone_vcpn!, true)}
-              title="Update from Keystone"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => addToCart(part.id)}
-            disabled={part.quantity <= 0}
-          >
-            <ShoppingCart className="h-4 w-4" />
-          </Button>
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
@@ -667,45 +640,47 @@ const Parts: React.FC = () => {
       </div>
 
       {/* Sync Status Information */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <p className="font-medium">Last Full Sync</p>
-              <p className="text-gray-600">
-                {syncStatus.lastFullSync 
-                  ? new Date(syncStatus.lastFullSync.started_at).toLocaleString()
-                  : 'Never'
-                }
-              </p>
+      {syncStatus && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <p className="font-medium">Last Full Sync</p>
+                <p className="text-gray-600">
+                  {syncStatus.lastFullSync 
+                    ? new Date(syncStatus.lastFullSync.started_at).toLocaleString()
+                    : 'Never'
+                  }
+                </p>
+              </div>
+              <div>
+                <p className="font-medium">Next Scheduled Sync</p>
+                <p className="text-gray-600">
+                  {syncStatus.nextScheduledSync 
+                    ? new Date(syncStatus.nextScheduledSync).toLocaleString()
+                    : 'Not scheduled'
+                  }
+                </p>
+              </div>
+              <div>
+                <p className="font-medium">Pending Updates</p>
+                <p className="text-gray-600">
+                  {syncStatus.pendingRequests} parts queued
+                </p>
+              </div>
+              <div>
+                <p className="font-medium">Sync Statistics</p>
+                <p className="text-gray-600">
+                  {syncStatus.syncStats ? 
+                    `${syncStatus.syncStats.synced_parts}/${syncStatus.syncStats.total_parts} synced` :
+                    'Loading...'
+                  }
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="font-medium">Next Scheduled Sync</p>
-              <p className="text-gray-600">
-                {syncStatus.nextScheduledSync 
-                  ? new Date(syncStatus.nextScheduledSync).toLocaleString()
-                  : 'Not scheduled'
-                }
-              </p>
-            </div>
-            <div>
-              <p className="font-medium">Pending Updates</p>
-              <p className="text-gray-600">
-                {syncStatus.pendingRequests} parts queued
-              </p>
-            </div>
-            <div>
-              <p className="font-medium">Sync Statistics</p>
-              <p className="text-gray-600">
-                {syncStatus.syncStats ? 
-                  `${syncStatus.syncStats.synced_parts}/${syncStatus.syncStats.total_parts} synced` :
-                  'Loading...'
-                }
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search and Filters */}
       <Card>
@@ -759,7 +734,6 @@ const Parts: React.FC = () => {
                   <SelectItem value="price-desc">Price High-Low</SelectItem>
                   <SelectItem value="quantity-desc">Stock High-Low</SelectItem>
                   <SelectItem value="updated_at-desc">Recently Updated</SelectItem>
-                  <SelectItem value="keystone_last_sync-desc">Recently Synced</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -811,7 +785,7 @@ const Parts: React.FC = () => {
       </div>
 
       {/* Parts Display */}
-      <FastLoadingWrapper
+      <LoadingWrapper
         isLoading={isLoading}
         hasData={parts.length > 0}
         loadingMessage="Loading inventory from database..."
@@ -840,7 +814,7 @@ const Parts: React.FC = () => {
               )}
             </CardContent>
           </Card>
-        ) : viewMode === 'grid' ? (
+        ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredParts.map(renderPartCard)}
@@ -864,46 +838,8 @@ const Parts: React.FC = () => {
               </div>
             )}
           </>
-        ) : (
-          <>
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Part</TableHead>
-                    <TableHead>Category/Status</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead>Warehouse</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredParts.map(renderPartRow)}
-                </TableBody>
-              </Table>
-            </Card>
-            
-            {/* Load More Button */}
-            {hasMoreData && (
-              <div className="text-center mt-6">
-                <Button 
-                  variant="outline" 
-                  onClick={loadMoreData}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Plus className="h-4 w-4 mr-2" />
-                  )}
-                  Load More Parts
-                </Button>
-              </div>
-            )}
-          </>
         )}
-      </FastLoadingWrapper>
+      </LoadingWrapper>
 
       {/* Part Details Dialog */}
       <Dialog open={!!selectedPart} onOpenChange={() => setSelectedPart(null)}>
