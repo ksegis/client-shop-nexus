@@ -28,7 +28,7 @@ import {
   ApiStatusIndicator, 
   ErrorBoundary,
   useKeystoneStatus 
-} from "./keystone_ui_components";
+} from "../../components/keystone_ui_components";
 
 // Enhanced interfaces for Keystone integration
 interface EnhancedPart extends InventoryItem {
