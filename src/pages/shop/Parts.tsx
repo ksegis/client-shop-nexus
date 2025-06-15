@@ -1,9 +1,7 @@
-// Enhanced Parts.tsx - Integrated with Real Keystone API (CORRECTED)
-// Maintains existing design patterns while fixing KeystoneService integration
-
-import React, { useState, useEffect } from 'react';
+// Enhanced Parts.tsx with Comprehensive Error Handling and Rate Limiting
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Filter, Grid, List, Star, Heart, Eye, Truck, Wrench, Settings, BarChart3, TrendingUp, Package2, Clock, CheckCircle, XCircle, AlertTriangle, FileText, Download, RefreshCw, Zap } from "lucide-react";
+import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Filter, Grid, List, Star, Heart, Eye, Truck, Wrench, Settings, BarChart3, TrendingUp, Package2, Clock, CheckCircle, XCircle, AlertTriangle, FileText, Download, RefreshCw, Zap, Timer, Wifi, WifiOff } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +15,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import KeystoneService, { InventoryItem, PricingInfo, KeystoneResponse } from "@/services/keystone/KeystoneService";
+import { Progress } from "@/components/ui/progress";
+
+// Import enhanced Keystone service and UI components
+import KeystoneService, { InventoryItem, PricingInfo, KeystoneResponse, RateLimitInfo, ErrorInfo } from "./enhanced_keystone_service_with_rate_limiting";
+import { 
+  RateLimitStatus, 
+  ConnectionStatus, 
+  ErrorDisplay, 
+  RetryCountdown, 
+  LoadingState, 
+  ApiStatusIndicator, 
+  ErrorBoundary,
+  useKeystoneStatus 
+} from "./keystone_ui_components";
 
 // Enhanced interfaces for Keystone integration
 interface EnhancedPart extends InventoryItem {
@@ -75,95 +86,338 @@ const mockParts: EnhancedPart[] = [
     inStock: true,
     featured: true,
     warehouse: "Main",
-    availability: "In Stock",
     lastUpdated: new Date().toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   },
+  {
+    id: "2",
+    sku: "BRK-002",
+    partNumber: "BRK-002",
+    name: "Ceramic Brake Pads Set",
+    description: "High-performance ceramic brake pads for commercial vehicles. Low dust formula with excellent stopping power and extended wear life.",
+    category: "Brakes",
+    subcategory: "Brake Pads",
+    price: 89.99,
+    cost: 55.00,
+    quantity: 25,
+    reorder_level: 5,
+    supplier: "BrakeTech",
+    location: "B2-C3",
+    weight: 8.5,
+    dimensions: "12x8x2 inches",
+    warranty: "24 months",
+    brand: "CeramicPro",
+    compatibility: ["Freightliner Cascadia", "Volvo VNL", "Peterbilt 579"],
+    features: ["Low Dust", "High Performance", "Extended Life"],
+    images: ["/api/placeholder/300/300"],
+    rating: 4.5,
+    reviews: 89,
+    inStock: true,
+    featured: false,
+    warehouse: "Main",
+    lastUpdated: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "3",
+    sku: "TRN-003",
+    partNumber: "TRN-003",
+    name: "Automatic Transmission Filter Kit",
+    description: "Complete transmission service kit including filter, gasket, and fluid. Designed for Allison 1000/2000 series transmissions.",
+    category: "Transmission",
+    subcategory: "Filters",
+    price: 156.99,
+    cost: 95.00,
+    quantity: 15,
+    reorder_level: 3,
+    supplier: "TransParts",
+    location: "C3-D4",
+    weight: 12.0,
+    dimensions: "14x10x6 inches",
+    warranty: "18 months",
+    brand: "AllTrans",
+    compatibility: ["Allison 1000", "Allison 2000", "Allison 2400"],
+    features: ["Complete Kit", "OEM Spec", "Professional Grade"],
+    images: ["/api/placeholder/300/300"],
+    rating: 4.9,
+    reviews: 203,
+    inStock: true,
+    featured: true,
+    warehouse: "Main",
+    lastUpdated: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "4",
+    sku: "ELC-004",
+    partNumber: "ELC-004",
+    name: "LED Headlight Assembly",
+    description: "High-intensity LED headlight assembly with integrated DRL. DOT approved for commercial vehicles with enhanced visibility and energy efficiency.",
+    category: "Electrical",
+    subcategory: "Lighting",
+    price: 299.99,
+    cost: 180.00,
+    quantity: 8,
+    reorder_level: 2,
+    supplier: "LightTech",
+    location: "D4-E5",
+    weight: 5.5,
+    dimensions: "16x12x8 inches",
+    warranty: "36 months",
+    brand: "BrightLED",
+    compatibility: ["Kenworth T680", "Peterbilt 389", "Mack Anthem"],
+    features: ["LED Technology", "DOT Approved", "Energy Efficient"],
+    images: ["/api/placeholder/300/300"],
+    rating: 4.7,
+    reviews: 156,
+    inStock: true,
+    featured: false,
+    warehouse: "Main",
+    lastUpdated: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "5",
+    sku: "SUS-005",
+    partNumber: "SUS-005",
+    name: "Air Suspension Bellows",
+    description: "Heavy-duty air suspension bellows for commercial truck applications. Reinforced rubber construction with steel end caps.",
+    category: "Suspension",
+    subcategory: "Air Springs",
+    price: 189.99,
+    cost: 115.00,
+    quantity: 12,
+    reorder_level: 4,
+    supplier: "SuspensionPro",
+    location: "E5-F6",
+    weight: 15.0,
+    dimensions: "18x8x8 inches",
+    warranty: "24 months",
+    brand: "AirRide",
+    compatibility: ["Freightliner Columbia", "International ProStar", "Volvo VN"],
+    features: ["Heavy Duty", "Reinforced", "OEM Quality"],
+    images: ["/api/placeholder/300/300"],
+    rating: 4.6,
+    reviews: 94,
+    inStock: false,
+    featured: false,
+    warehouse: "Main",
+    lastUpdated: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "6",
+    sku: "CLG-006",
+    partNumber: "CLG-006",
+    name: "Radiator Coolant System",
+    description: "Complete radiator assembly with integrated cooling system. Aluminum core construction with plastic tanks for optimal heat dissipation.",
+    category: "Cooling",
+    subcategory: "Radiators",
+    price: 445.99,
+    cost: 270.00,
+    quantity: 6,
+    reorder_level: 2,
+    supplier: "CoolTech",
+    location: "F6-G7",
+    weight: 35.0,
+    dimensions: "32x24x4 inches",
+    warranty: "24 months",
+    brand: "CoolMax",
+    compatibility: ["Caterpillar C15", "Cummins ISX15", "Detroit DD16"],
+    features: ["Aluminum Core", "High Efficiency", "OEM Replacement"],
+    images: ["/api/placeholder/300/300"],
+    rating: 4.8,
+    reviews: 78,
+    inStock: true,
+    featured: true,
+    warehouse: "Main",
+    lastUpdated: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
 ];
 
-const categories = [
-  { name: "Engine", icon: Settings, count: 0, subcategories: ["Filters", "Gaskets", "Belts", "Pumps"] },
-  { name: "Brakes", icon: Package, count: 0, subcategories: ["Brake Pads", "Rotors", "Calipers", "Lines"] },
-  { name: "Tires", icon: Package2, count: 0, subcategories: ["Drive Tires", "Steer Tires", "Trailer Tires"] },
-  { name: "Electrical", icon: AlertTriangle, count: 0, subcategories: ["Lighting", "Wiring", "Batteries", "Alternators"] },
-  { name: "Suspension", icon: Wrench, count: 0, subcategories: ["Air Bags", "Shocks", "Springs", "Bushings"] },
-  { name: "Hydraulics", icon: TrendingUp, count: 0, subcategories: ["Pumps", "Cylinders", "Hoses", "Fittings"] }
-];
-
-const ShopParts = () => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("catalog");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedSubcategory, setSelectedSubcategory] = useState("all");
-  const [priceRange, setPriceRange] = useState([0, 500]);
-  const [sortBy, setSortBy] = useState("name");
-  const [viewMode, setViewMode] = useState("grid");
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedPart, setSelectedPart] = useState<EnhancedPart | null>(null);
+// Enhanced Parts component with comprehensive error handling
+const Parts: React.FC = () => {
+  // State management
   const [parts, setParts] = useState<EnhancedPart[]>([]);
   const [filteredParts, setFilteredParts] = useState<EnhancedPart[]>([]);
-  const [wishlist, setWishlist] = useState<string[]>([]);
-  const [showInStockOnly, setShowInStockOnly] = useState(false);
-  const [showFeaturedOnly, setShowFeaturedOnly] = useState(false);
-  const [keystoneConnected, setKeystoneConnected] = useState(false);
-  const [lastInventoryUpdate, setLastInventoryUpdate] = useState<string | null>(null);
-  const [rateLimitStatus, setRateLimitStatus] = useState<any>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [priceRange, setPriceRange] = useState([0, 1000]);
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [selectedPart, setSelectedPart] = useState<EnhancedPart | null>(null);
+  const [cart, setCart] = useState<{ [key: string]: number }>({});
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUsingMockData, setIsUsingMockData] = useState(false);
+  const [lastInventoryUpdate, setLastInventoryUpdate] = useState<Date | null>(null);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [refreshInterval, setRefreshInterval] = useState(300000); // 5 minutes
 
-  // Initialize Keystone service
-  const keystoneService = KeystoneService.getInstance();
+  // Enhanced error and rate limit management
+  const {
+    errors,
+    rateLimits,
+    isConnected,
+    lastChecked,
+    addError,
+    removeError,
+    clearErrors,
+    updateRateLimits,
+    updateConnectionStatus
+  } = useKeystoneStatus();
 
-  // Safely use the cart context with error handling
-  let cart, addToCart, getCartItemCount, isInCart, getCartTotal, clearCart;
-  try {
-    const { usePartsCart } = require("@/contexts/parts/PartsCartContext");
-    const cartContext = usePartsCart();
-    cart = cartContext.cart;
-    addToCart = cartContext.addToCart;
-    getCartItemCount = cartContext.getCartItemCount;
-    isInCart = cartContext.isInCart;
-    getCartTotal = cartContext.getCartTotal;
-    clearCart = cartContext.clearCart;
-  } catch (err) {
-    console.warn("PartsCart context not available:", err);
-    cart = [];
-    addToCart = () => console.log("Cart not available");
-    getCartItemCount = () => 0;
-    isInCart = () => false;
-    getCartTotal = () => 0;
-    clearCart = () => console.log("Cart not available");
-  }
+  // Additional state for enhanced functionality
+  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [keystoneService, setKeystoneService] = useState<KeystoneService | null>(null);
+  const [healthCheckStatus, setHealthCheckStatus] = useState<'checking' | 'connected' | 'disconnected' | 'rate_limited' | 'error'>('checking');
+
+  // Refs for cleanup
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const { toast } = useToast();
 
+  // Initialize Keystone service with enhanced error handling
   useEffect(() => {
-    initializeData();
+    const initializeKeystone = async () => {
+      try {
+        console.log('Initializing Keystone service...');
+        const service = await KeystoneService.create();
+        
+        // Set up error and rate limit listeners
+        service.onError((error: ErrorInfo) => {
+          console.error('Keystone error:', error);
+          addError(error);
+          
+          // Show toast notification for user-facing errors
+          if (error.type !== 'rate_limit') {
+            toast({
+              title: "Keystone API Error",
+              description: error.message,
+              variant: error.type === 'network' ? 'destructive' : 'default',
+            });
+          }
+        });
+
+        service.onRateLimit((rateLimitInfo: RateLimitInfo) => {
+          console.warn('Rate limit encountered:', rateLimitInfo);
+          updateRateLimits([rateLimitInfo]);
+          
+          toast({
+            title: "Rate Limit Reached",
+            description: `Please wait ${rateLimitInfo.retryAfterSeconds} seconds before trying again.`,
+            variant: "default",
+          });
+          
+          // Set up automatic retry
+          if (rateLimitInfo.retryAfterSeconds > 0) {
+            setRetryCountdown(rateLimitInfo.retryAfterSeconds);
+          }
+        });
+
+        setKeystoneService(service);
+        console.log('Keystone service initialized successfully');
+        
+        // Perform initial health check
+        await performHealthCheck(service);
+        
+      } catch (error) {
+        console.error('Failed to initialize Keystone service:', error);
+        addError({
+          message: 'Failed to initialize Keystone service. Using mock data.',
+          type: 'unknown',
+          retryable: true
+        });
+        setIsUsingMockData(true);
+        updateConnectionStatus(false);
+        setHealthCheckStatus('error');
+      }
+    };
+
+    initializeKeystone();
+
+    // Cleanup function
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
   }, []);
 
-  const initializeData = async () => {
-    setIsLoading(true);
-    setError(null);
+  // Enhanced health check function
+  const performHealthCheck = async (service?: KeystoneService) => {
+    const serviceToUse = service || keystoneService;
+    if (!serviceToUse) return;
 
     try {
-      const healthCheck = await keystoneService.healthCheck();
-      if (healthCheck.success) {
-        setKeystoneConnected(true);
-        await loadKeystoneInventory();
+      setHealthCheckStatus('checking');
+      console.log('Performing health check...');
+      
+      const response = await serviceToUse.healthCheck();
+      
+      if (response.success) {
+        console.log('Health check successful');
+        updateConnectionStatus(true);
+        setHealthCheckStatus('connected');
+        setIsUsingMockData(false);
+        
+        // Clear any existing errors
+        clearErrors();
+        
+        // Load inventory data
+        await loadInventoryData(serviceToUse);
       } else {
-        console.warn("Keystone not available, using mock data");
-        setKeystoneConnected(false);
+        console.warn('Health check failed:', response.error);
+        
+        if (response.rate_limited) {
+          setHealthCheckStatus('rate_limited');
+          updateRateLimits([{
+            isRateLimited: true,
+            retryAfterSeconds: response.retry_after_seconds || 60,
+            endpoint: '/health',
+            timestamp: Date.now()
+          }]);
+        } else {
+          setHealthCheckStatus('error');
+          updateConnectionStatus(false);
+          addError({
+            message: response.error || 'Health check failed',
+            type: 'server',
+            retryable: true
+          });
+        }
+        
+        // Fall back to mock data
+        setIsUsingMockData(true);
         setParts(mockParts);
         setFilteredParts(mockParts);
       }
-
-      await loadRateLimitStatus();
-
-    } catch (err) {
-      console.error("Error initializing data:", err);
-      setError("Failed to load inventory data");
+    } catch (error: any) {
+      console.error('Health check error:', error);
+      setHealthCheckStatus('error');
+      updateConnectionStatus(false);
+      addError({
+        message: 'Failed to connect to Keystone API',
+        type: 'network',
+        retryable: true
+      });
+      
+      // Fall back to mock data
+      setIsUsingMockData(true);
       setParts(mockParts);
       setFilteredParts(mockParts);
     } finally {
@@ -171,1003 +425,1020 @@ const ShopParts = () => {
     }
   };
 
-  const loadKeystoneInventory = async () => {
+  // Enhanced inventory loading with retry logic
+  const loadInventoryData = async (service?: KeystoneService, retryCount = 0) => {
+    const serviceToUse = service || keystoneService;
+    if (!serviceToUse) return;
+
     try {
-      const inventoryResponse = await keystoneService.getInventoryUpdates(lastInventoryUpdate);
+      setIsLoading(true);
+      console.log('Loading inventory data...');
       
-      if (inventoryResponse.success && inventoryResponse.data) {
-        const keystoneParts = convertKeystoneToEnhancedParts(inventoryResponse.data);
-        setParts(keystoneParts);
-        setLastInventoryUpdate(new Date().toISOString());
+      // Check if inventory updates endpoint is rate limited
+      if (serviceToUse.isEndpointRateLimited('/inventory/updates')) {
+        const remainingTime = serviceToUse.getRateLimitRemainingTime('/inventory/updates');
+        console.log(`Inventory updates endpoint is rate limited. ${remainingTime}s remaining.`);
+        
+        toast({
+          title: "Rate Limited",
+          description: `Inventory updates are rate limited. Using cached data. Retry in ${remainingTime}s.`,
+          variant: "default",
+        });
+        
+        // Use mock data while rate limited
+        setParts(mockParts);
+        setFilteredParts(mockParts);
+        setIsUsingMockData(true);
+        return;
+      }
+
+      const response = await serviceToUse.getInventoryUpdates();
+      
+      if (response.success && response.data) {
+        console.log('Inventory data loaded successfully');
+        
+        // Transform Keystone data to our part format
+        const transformedParts = transformKeystoneData(response.data);
+        setParts(transformedParts);
+        setFilteredParts(transformedParts);
+        setIsUsingMockData(false);
+        setLastInventoryUpdate(new Date());
         
         toast({
           title: "Inventory Updated",
-          description: `Loaded ${keystoneParts.length} parts from Keystone API`,
+          description: `Loaded ${transformedParts.length} parts from Keystone API`,
+          variant: "default",
         });
-      } else if (keystoneService.isRateLimited(inventoryResponse)) {
-        const retryAfter = keystoneService.getRetryAfter(inventoryResponse);
-        toast({
-          title: "Rate Limited",
-          description: `Inventory updates limited. Retry in ${retryAfter} seconds.`,
-          variant: "destructive"
-        });
+        
+      } else if (response.rate_limited) {
+        console.warn('Inventory loading rate limited');
+        
+        // Update rate limit info
+        updateRateLimits([{
+          isRateLimited: true,
+          retryAfterSeconds: response.retry_after_seconds || 60,
+          endpoint: '/inventory/updates',
+          timestamp: Date.now()
+        }]);
+        
+        // Use mock data while rate limited
         setParts(mockParts);
+        setFilteredParts(mockParts);
+        setIsUsingMockData(true);
+        
       } else {
-        throw new Error(inventoryResponse.error || "Failed to load inventory");
+        console.warn('Failed to load inventory:', response.error);
+        
+        // Retry logic for non-rate-limit errors
+        if (retryCount < 3) {
+          console.log(`Retrying inventory load (attempt ${retryCount + 1}/3)...`);
+          setTimeout(() => {
+            loadInventoryData(serviceToUse, retryCount + 1);
+          }, Math.pow(2, retryCount) * 1000); // Exponential backoff
+          return;
+        }
+        
+        addError({
+          message: response.error || 'Failed to load inventory data',
+          type: 'server',
+          retryable: true
+        });
+        
+        // Fall back to mock data
+        setParts(mockParts);
+        setFilteredParts(mockParts);
+        setIsUsingMockData(true);
       }
-    } catch (err) {
-      console.error("Error loading Keystone inventory:", err);
-      setParts(mockParts);
-      toast({
-        title: "Using Cached Data",
-        description: "Could not fetch latest inventory, using cached data",
-        variant: "destructive"
+    } catch (error: any) {
+      console.error('Error loading inventory:', error);
+      
+      addError({
+        message: 'Error loading inventory data',
+        type: 'network',
+        retryable: true
       });
+      
+      // Fall back to mock data
+      setParts(mockParts);
+      setFilteredParts(mockParts);
+      setIsUsingMockData(true);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const convertKeystoneToEnhancedParts = (keystoneData: InventoryItem[]): EnhancedPart[] => {
+  // Transform Keystone API data to our part format
+  const transformKeystoneData = (keystoneData: any[]): EnhancedPart[] => {
     return keystoneData.map((item, index) => ({
-      id: String(index + 1),
-      sku: item.partNumber,
-      name: item.description || `Part ${item.partNumber}`,
-      description: item.description || `Keystone part ${item.partNumber}`,
-      category: categorizePartNumber(item.partNumber),
-      subcategory: "General",
-      cost: (item.price || 0) * 0.7,
-      reorder_level: Math.max(5, Math.floor(item.quantity * 0.2)),
-      supplier: "Keystone",
-      location: item.warehouse || "Unknown",
-      brand: "OEM",
-      compatibility: [],
-      features: ["Keystone Verified", item.availability || "Available"],
-      images: ["/api/placeholder/300/300"],
-      rating: 4.5,
-      reviews: Math.floor(Math.random() * 100) + 10,
-      inStock: item.quantity > 0,
-      featured: Math.random() > 0.8,
-      created_at: item.lastUpdated,
-      updated_at: item.lastUpdated,
-      ...item
+      id: item.partNumber || `keystone-${index}`,
+      sku: item.partNumber || `SKU-${index}`,
+      partNumber: item.partNumber || '',
+      name: item.description || item.partNumber || 'Unknown Part',
+      description: item.longDescription || item.description || '',
+      category: item.category || 'General',
+      subcategory: item.subcategory || 'Parts',
+      price: item.price || 0,
+      cost: item.cost || 0,
+      quantity: item.quantity || 0,
+      reorder_level: item.reorderLevel || 5,
+      supplier: item.supplier || 'Keystone',
+      location: item.location || 'Unknown',
+      weight: item.weight || 0,
+      dimensions: item.dimensions || '',
+      warranty: item.warranty || '12 months',
+      brand: item.brand || item.manufacturer || 'Unknown',
+      compatibility: item.compatibility || [],
+      features: item.features || [],
+      images: item.images || ['/api/placeholder/300/300'],
+      rating: item.rating || 4.0,
+      reviews: item.reviews || 0,
+      inStock: (item.quantity || 0) > 0,
+      featured: item.featured || false,
+      warehouse: item.warehouse || 'Main',
+      lastUpdated: item.lastUpdated || new Date().toISOString(),
+      created_at: item.created_at || new Date().toISOString(),
+      updated_at: item.updated_at || new Date().toISOString(),
+      pricing: item.pricing
     }));
   };
 
-  const categorizePartNumber = (partNumber: string): string => {
-    const part = partNumber.toLowerCase();
-    if (part.includes('eng') || part.includes('oil') || part.includes('filter')) return "Engine";
-    if (part.includes('brk') || part.includes('brake') || part.includes('pad')) return "Brakes";
-    if (part.includes('tir') || part.includes('tire') || part.includes('wheel')) return "Tires";
-    if (part.includes('ele') || part.includes('light') || part.includes('wire')) return "Electrical";
-    if (part.includes('sus') || part.includes('shock') || part.includes('spring')) return "Suspension";
-    if (part.includes('hyd') || part.includes('pump') || part.includes('cylinder')) return "Hydraulics";
-    return "General";
-  };
-
-  const loadRateLimitStatus = async () => {
-    try {
-      const response = await keystoneService.getRateLimitStatus();
-      if (response.success) {
-        setRateLimitStatus(response.data);
-      }
-    } catch (err) {
-      console.error("Error loading rate limit status:", err);
-    }
-  };
-
-  const handleRefreshInventory = async () => {
-    if (!keystoneConnected) {
-      toast({
-        title: "Keystone Disconnected",
-        description: "Cannot refresh inventory without Keystone connection",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsRefreshing(true);
-    try {
-      await loadKeystoneInventory();
-      await loadRateLimitStatus();
-    } catch (err) {
-      console.error("Error refreshing inventory:", err);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  const handleSearchParts = async (searchTerm: string) => {
-    if (!keystoneConnected || !searchTerm.trim()) {
-      return;
-    }
-
-    try {
-      const response = await keystoneService.searchParts(searchTerm, {
-        category: selectedCategory !== "all" ? selectedCategory : undefined,
-        page: 1,
-        pageSize: 50
-      });
-
-      if (response.success && response.data) {
-        const searchResults = convertKeystoneToEnhancedParts(response.data.results || []);
-        setFilteredParts(searchResults);
-        
-        toast({
-          title: "Search Complete",
-          description: `Found ${searchResults.length} parts matching "${searchTerm}"`,
-        });
-      }
-    } catch (err) {
-      console.error("Error searching parts:", err);
-      toast({
-        title: "Search Error",
-        description: "Could not search Keystone inventory",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleGetPartPricing = async (part: EnhancedPart) => {
-    if (!keystoneConnected) return;
-
-    try {
-      const response = await keystoneService.getPricing(part.partNumber);
-      if (response.success && response.data) {
-        const updatedPart = { ...part, pricing: response.data };
-        setSelectedPart(updatedPart);
-        
-        const price = response.data.price || response.data.customerPrice || 0;
-        toast({
-          title: "Pricing Updated",
-          description: `Current price: ${keystoneService.formatPrice(price)}`,
-        });
-      }
-    } catch (err) {
-      console.error("Error getting pricing:", err);
-    }
-  };
-
-  useEffect(() => {
-    let filtered = parts;
+  // Enhanced retry mechanism
+  const handleRetry = useCallback(async (endpoint?: string) => {
+    if (!keystoneService) return;
     
+    setIsRetrying(true);
+    clearErrors();
+    
+    try {
+      if (endpoint === '/health' || !endpoint) {
+        await performHealthCheck();
+      } else if (endpoint === '/inventory/updates') {
+        await loadInventoryData();
+      }
+    } catch (error) {
+      console.error('Retry failed:', error);
+    } finally {
+      setIsRetrying(false);
+    }
+  }, [keystoneService]);
+
+  // Auto-refresh functionality
+  useEffect(() => {
+    if (!autoRefreshEnabled || !keystoneService || isUsingMockData) return;
+
+    refreshIntervalRef.current = setInterval(() => {
+      console.log('Auto-refreshing inventory data...');
+      loadInventoryData();
+    }, refreshInterval);
+
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [autoRefreshEnabled, refreshInterval, keystoneService, isUsingMockData]);
+
+  // Retry countdown effect
+  useEffect(() => {
+    if (retryCountdown === null || retryCountdown <= 0) return;
+
+    retryTimeoutRef.current = setTimeout(() => {
+      setRetryCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          // Auto-retry when countdown reaches 0
+          handleRetry();
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, [retryCountdown, handleRetry]);
+
+  // Filter and search functionality
+  useEffect(() => {
+    let filtered = [...parts];
+
+    // Search filter
     if (searchTerm) {
-      filtered = filtered.filter(part => 
+      filtered = filtered.filter(part =>
         part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        part.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         part.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
         part.partNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        part.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (part.brand && part.brand.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (part.compatibility && part.compatibility.some(comp => comp.toLowerCase().includes(searchTerm.toLowerCase())))
+        part.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        part.category.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
-    if (selectedCategory !== "all") {
-      filtered = filtered.filter(part => 
-        part.category.toLowerCase() === selectedCategory.toLowerCase()
-      );
+
+    // Category filter
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(part => part.category === selectedCategory);
     }
-    
-    if (selectedSubcategory !== "all") {
-      filtered = filtered.filter(part => 
-        part.subcategory.toLowerCase() === selectedSubcategory.toLowerCase()
-      );
+
+    // Price range filter
+    filtered = filtered.filter(part => part.price >= priceRange[0] && part.price <= priceRange[1]);
+
+    // In stock filter
+    if (inStockOnly) {
+      filtered = filtered.filter(part => part.inStock);
     }
-    
-    filtered = filtered.filter(part => 
-      (part.price || 0) >= priceRange[0] && (part.price || 0) <= priceRange[1]
-    );
-    
-    if (showInStockOnly) {
-      filtered = filtered.filter(part => part.inStock && part.quantity > 0);
-    }
-    
-    if (showFeaturedOnly) {
-      filtered = filtered.filter(part => part.featured);
-    }
-    
+
+    // Sorting
     filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "name":
-          return a.name.localeCompare(b.name);
-        case "price-low":
-          return (a.price || 0) - (b.price || 0);
-        case "price-high":
-          return (b.price || 0) - (a.price || 0);
-        case "rating":
-          return (b.rating || 0) - (a.rating || 0);
-        case "newest":
-          return new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime();
-        case "stock":
-          return b.quantity - a.quantity;
-        default:
-          return 0;
+      let aValue: any = a[sortBy as keyof EnhancedPart];
+      let bValue: any = b[sortBy as keyof EnhancedPart];
+
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+
+      if (sortOrder === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
       }
     });
-    
-    setFilteredParts(filtered);
-  }, [searchTerm, selectedCategory, selectedSubcategory, priceRange, sortBy, parts, showInStockOnly, showFeaturedOnly]);
 
-  const handleAddToCart = (part: EnhancedPart) => {
-    try {
-      if (addToCart) {
-        addToCart(part, 1);
-        toast({
-          title: "Added to cart",
-          description: `${part.name} added to cart`,
-        });
-      }
-    } catch (err) {
-      console.error("Error adding to cart:", err);
-      toast({
-        title: "Error",
-        description: "Could not add item to cart",
-        variant: "destructive"
-      });
+    setFilteredParts(filtered);
+  }, [parts, searchTerm, selectedCategory, priceRange, inStockOnly, sortBy, sortOrder]);
+
+  // Get unique categories
+  const categories = Array.from(new Set(parts.map(part => part.category)));
+
+  // Cart management
+  const addToCart = (partId: string, quantity: number = 1) => {
+    setCart(prev => ({
+      ...prev,
+      [partId]: (prev[partId] || 0) + quantity
+    }));
+    
+    const part = parts.find(p => p.id === partId);
+    toast({
+      title: "Added to Cart",
+      description: `${part?.name} (${quantity}) added to cart`,
+    });
+  };
+
+  const removeFromCart = (partId: string) => {
+    setCart(prev => {
+      const newCart = { ...prev };
+      delete newCart[partId];
+      return newCart;
+    });
+  };
+
+  const updateCartQuantity = (partId: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeFromCart(partId);
+    } else {
+      setCart(prev => ({
+        ...prev,
+        [partId]: quantity
+      }));
     }
   };
 
-  const toggleWishlist = (partId: string) => {
-    setWishlist(prev => 
+  // Favorites management
+  const toggleFavorite = (partId: string) => {
+    setFavorites(prev => 
       prev.includes(partId) 
         ? prev.filter(id => id !== partId)
         : [...prev, partId]
     );
   };
 
-  const getSubcategories = () => {
-    if (selectedCategory === "all") return [];
-    const category = categories.find(cat => cat.name.toLowerCase() === selectedCategory.toLowerCase());
-    return category ? category.subcategories : [];
+  // Calculate cart totals
+  const cartTotal = Object.entries(cart).reduce((total, [partId, quantity]) => {
+    const part = parts.find(p => p.id === partId);
+    return total + (part?.price || 0) * quantity;
+  }, 0);
+
+  const cartItemCount = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
+
+  // Manual refresh function
+  const handleManualRefresh = () => {
+    if (keystoneService) {
+      loadInventoryData();
+    } else {
+      performHealthCheck();
+    }
   };
 
-  const getStockStatus = (part: EnhancedPart) => {
-    if (part.quantity === 0) return { status: "Out of Stock", color: "destructive", icon: XCircle };
-    if (part.quantity <= (part.reorder_level || 5)) return { status: "Low Stock", color: "warning", icon: AlertTriangle };
-    return { status: "In Stock", color: "default", icon: CheckCircle };
-  };
-
-  const handleCategoryFilter = (categoryName: string) => {
-    setSelectedCategory(categoryName.toLowerCase());
-    setSelectedSubcategory("all");
-    setActiveTab("catalog");
-  };
-
-  useEffect(() => {
-    const delayedSearch = setTimeout(() => {
-      if (searchTerm && keystoneConnected) {
-        handleSearchParts(searchTerm);
-      }
-    }, 500);
-
-    return () => clearTimeout(delayedSearch);
-  }, [searchTerm, keystoneConnected]);
-
-  if (isLoading) {
+  // Render loading state
+  if (isLoading && parts.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-blue-600" />
-          <h3 className="text-lg font-semibold mb-2">Loading Parts Catalog</h3>
-          <p className="text-gray-600">
-            {keystoneConnected ? "Fetching latest inventory from Keystone..." : "Loading cached inventory..."}
-          </p>
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+            <p className="text-gray-600">Loading parts inventory...</p>
+            <LoadingState isLoading={true} message="Connecting to Keystone API..." />
+          </div>
         </div>
       </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert className="m-6">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error Loading Parts</AlertTitle>
-        <AlertDescription>
-          {error}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="ml-4"
-            onClick={initializeData}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Retry
-          </Button>
-        </AlertDescription>
-      </Alert>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Parts Catalog</h1>
-          <div className="flex items-center gap-4 mt-2">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${keystoneConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span className="text-sm text-gray-600">
-                {keystoneConnected ? 'Keystone Connected' : 'Using Cached Data'}
-              </span>
-            </div>
-            {lastInventoryUpdate && (
-              <span className="text-sm text-gray-500">
-                Last updated: {new Date(lastInventoryUpdate).toLocaleTimeString()}
-              </span>
-            )}
+    <ErrorBoundary>
+      <div className="container mx-auto px-4 py-8 space-y-6">
+        {/* Header with Status Indicators */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Parts Inventory</h1>
+            <p className="text-gray-600 mt-1">
+              Manage and browse your parts catalog
+              {lastInventoryUpdate && (
+                <span className="ml-2 text-sm">
+                  (Last updated: {lastInventoryUpdate.toLocaleTimeString()})
+                </span>
+              )}
+            </p>
           </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefreshInventory}
-            disabled={!keystoneConnected || isRefreshing}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
           
-          {keystoneConnected && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            {/* Connection Status */}
+            <ConnectionStatus
+              isConnected={isConnected}
+              lastChecked={lastChecked}
+              onReconnect={handleRetry}
+            />
+            
+            {/* API Status Indicator */}
+            <ApiStatusIndicator
+              status={healthCheckStatus}
+              message={isUsingMockData ? "Using mock data" : undefined}
+            />
+            
+            {/* Manual Refresh Button */}
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setActiveTab("monitoring")}
+              onClick={handleManualRefresh}
+              disabled={isLoading || isRetrying}
             >
-              <BarChart3 className="h-4 w-4 mr-2" />
-              API Status
+              {isLoading || isRetrying ? (
+                <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Refresh
             </Button>
-          )}
+          </div>
         </div>
-      </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="catalog">Parts Catalog</TabsTrigger>
-          <TabsTrigger value="cart">
-            Cart ({getCartItemCount()})
-          </TabsTrigger>
-          <TabsTrigger value="orders">Special Orders</TabsTrigger>
-          {keystoneConnected && (
-            <TabsTrigger value="monitoring">API Monitoring</TabsTrigger>
-          )}
-        </TabsList>
+        {/* Error Display */}
+        {errors.length > 0 && (
+          <div className="space-y-2">
+            {errors.map((error, index) => (
+              <ErrorDisplay
+                key={index}
+                error={error}
+                onRetry={() => handleRetry()}
+                onDismiss={() => removeError(index)}
+              />
+            ))}
+          </div>
+        )}
 
-        <TabsContent value="catalog" className="space-y-6">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1">
+        {/* Rate Limit Status */}
+        <RateLimitStatus
+          rateLimits={rateLimits}
+          onRetry={handleRetry}
+        />
+
+        {/* Retry Countdown */}
+        {retryCountdown !== null && retryCountdown > 0 && (
+          <RetryCountdown
+            seconds={retryCountdown}
+            onRetry={() => handleRetry()}
+          />
+        )}
+
+        {/* Mock Data Warning */}
+        {isUsingMockData && (
+          <Alert className="border-orange-200 bg-orange-50">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Using Mock Data</AlertTitle>
+            <AlertDescription>
+              Keystone API is not available. Displaying sample data for demonstration purposes.
+              {!isConnected && (
+                <Button
+                  variant="link"
+                  className="p-0 h-auto ml-2"
+                  onClick={() => handleRetry()}
+                >
+                  Try to reconnect
+                </Button>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Auto-refresh Settings */}
+        <Card className="bg-gray-50">
+          <CardContent className="pt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="auto-refresh"
+                    checked={autoRefreshEnabled}
+                    onCheckedChange={setAutoRefreshEnabled}
+                    disabled={isUsingMockData}
+                  />
+                  <Label htmlFor="auto-refresh" className="text-sm">
+                    Auto-refresh inventory
+                  </Label>
+                </div>
+                
+                {autoRefreshEnabled && (
+                  <Select
+                    value={refreshInterval.toString()}
+                    onValueChange={(value) => setRefreshInterval(parseInt(value))}
+                  >
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="60000">1 min</SelectItem>
+                      <SelectItem value="300000">5 min</SelectItem>
+                      <SelectItem value="600000">10 min</SelectItem>
+                      <SelectItem value="1800000">30 min</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+              
+              <div className="text-sm text-gray-600">
+                {filteredParts.length} of {parts.length} parts shown
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Search and Filters */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder={keystoneConnected ? "Search parts in Keystone inventory..." : "Search parts..."}
+                  placeholder="Search parts..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
-                {keystoneConnected && searchTerm && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <Zap className="h-4 w-4 text-blue-500" title="Live Keystone Search" />
-                  </div>
-                )}
               </div>
-            </div>
-            
-            <div className="flex gap-2">
+
+              {/* Category Filter */}
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Category" />
+                <SelectTrigger>
+                  <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map((category) => (
-                    <SelectItem key={category.name} value={category.name.toLowerCase()}>
-                      {category.name}
+                  {categories.map(category => (
+                    <SelectItem key={category} value={category}>
+                      {category}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
 
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[180px]">
+              {/* Sort */}
+              <Select value={`${sortBy}-${sortOrder}`} onValueChange={(value) => {
+                const [field, order] = value.split('-');
+                setSortBy(field);
+                setSortOrder(order as 'asc' | 'desc');
+              }}>
+                <SelectTrigger>
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="name">Name A-Z</SelectItem>
-                  <SelectItem value="price-low">Price: Low to High</SelectItem>
-                  <SelectItem value="price-high">Price: High to Low</SelectItem>
-                  <SelectItem value="rating">Highest Rated</SelectItem>
-                  <SelectItem value="newest">Newest First</SelectItem>
-                  <SelectItem value="stock">Stock Level</SelectItem>
+                  <SelectItem value="name-asc">Name A-Z</SelectItem>
+                  <SelectItem value="name-desc">Name Z-A</SelectItem>
+                  <SelectItem value="price-asc">Price Low-High</SelectItem>
+                  <SelectItem value="price-desc">Price High-Low</SelectItem>
+                  <SelectItem value="quantity-desc">Stock High-Low</SelectItem>
+                  <SelectItem value="rating-desc">Rating High-Low</SelectItem>
                 </SelectContent>
               </Select>
 
-              <Button
-                variant="outline"
-                onClick={() => setShowFilters(!showFilters)}
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Filters
-              </Button>
-
-              <div className="flex border rounded-md">
+              {/* View Mode */}
+              <div className="flex items-center gap-2">
                 <Button
-                  variant={viewMode === "grid" ? "default" : "ghost"}
+                  variant={viewMode === 'grid' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setViewMode("grid")}
+                  onClick={() => setViewMode('grid')}
                 >
                   <Grid className="h-4 w-4" />
                 </Button>
                 <Button
-                  variant={viewMode === "list" ? "default" : "ghost"}
+                  variant={viewMode === 'list' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setViewMode("list")}
+                  onClick={() => setViewMode('list')}
                 >
                   <List className="h-4 w-4" />
                 </Button>
               </div>
             </div>
-          </div>
 
-          {showFilters && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Advanced Filters</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label>Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
-                    <Slider
-                      value={priceRange}
-                      onValueChange={setPriceRange}
-                      max={1000}
-                      step={10}
-                      className="mt-2"
-                    />
-                  </div>
-                  
-                  {getSubcategories().length > 0 && (
-                    <div>
-                      <Label>Subcategory</Label>
-                      <Select value={selectedSubcategory} onValueChange={setSelectedSubcategory}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All Subcategories" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Subcategories</SelectItem>
-                          {getSubcategories().map((sub) => (
-                            <SelectItem key={sub} value={sub.toLowerCase()}>
-                              {sub}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="in-stock"
-                        checked={showInStockOnly}
-                        onCheckedChange={setShowInStockOnly}
-                      />
-                      <Label htmlFor="in-stock">In Stock Only</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="featured"
-                        checked={showFeaturedOnly}
-                        onCheckedChange={setShowFeaturedOnly}
-                      />
-                      <Label htmlFor="featured">Featured Only</Label>
-                    </div>
-                  </div>
+            {/* Additional Filters */}
+            <div className="mt-4 pt-4 border-t space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                {/* Price Range */}
+                <div className="flex-1">
+                  <Label className="text-sm font-medium">Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
+                  <Slider
+                    value={priceRange}
+                    onValueChange={setPriceRange}
+                    max={1000}
+                    step={10}
+                    className="mt-2"
+                  />
                 </div>
-              </CardContent>
-            </Card>
-          )}
 
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-600">
-              Showing {filteredParts.length} of {parts.length} parts
-              {keystoneConnected && (
-                <span className="ml-2 text-blue-600">• Live Keystone Data</span>
-              )}
-            </p>
-            
-            {rateLimitStatus && (
-              <div className="text-xs text-gray-500">
-                API Calls Remaining: {rateLimitStatus.CheckInventory?.remaining || 'N/A'}
+                {/* In Stock Only */}
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="in-stock"
+                    checked={inStockOnly}
+                    onCheckedChange={setInStockOnly}
+                  />
+                  <Label htmlFor="in-stock" className="text-sm">In Stock Only</Label>
+                </div>
               </div>
-            )}
-          </div>
-
-          {viewMode === "grid" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredParts.map((part) => {
-                const stockStatus = getStockStatus(part);
-                const StockIcon = stockStatus.icon;
-                
-                return (
-                  <Card key={part.id} className="group hover:shadow-lg transition-shadow">
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <Badge variant="outline" className="mb-2">
-                            {part.sku}
-                          </Badge>
-                          <CardTitle className="text-sm font-medium line-clamp-2">
-                            {part.name}
-                          </CardTitle>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleWishlist(part.id)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Heart 
-                            className={`h-4 w-4 ${wishlist.includes(part.id) ? 'fill-red-500 text-red-500' : ''}`} 
-                          />
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    
-                    <CardContent className="space-y-3">
-                      <div className="aspect-square bg-gray-100 rounded-md flex items-center justify-center">
-                        <Package className="h-12 w-12 text-gray-400" />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <p className="text-xs text-gray-600 line-clamp-2">
-                          {part.description}
-                        </p>
-                        
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-lg">
-                            {keystoneService.formatPrice(part.price || 0)}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <StockIcon className="h-3 w-3" />
-                            <span className="text-xs">{part.quantity}</span>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <Badge variant={stockStatus.color as any} className="text-xs">
-                            {stockStatus.status}
-                          </Badge>
-                          {part.featured && (
-                            <Badge variant="secondary" className="text-xs">
-                              Featured
-                            </Badge>
-                          )}
-                          {keystoneConnected && (
-                            <Badge variant="outline" className="text-xs">
-                              <Zap className="h-2 w-2 mr-1" />
-                              Live
-                            </Badge>
-                          )}
-                        </div>
-                        
-                        {part.rating && (
-                          <div className="flex items-center gap-1">
-                            <div className="flex">
-                              {[...Array(5)].map((_, i) => (
-                                <Star
-                                  key={i}
-                                  className={`h-3 w-3 ${
-                                    i < Math.floor(part.rating!) 
-                                      ? 'fill-yellow-400 text-yellow-400' 
-                                      : 'text-gray-300'
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                            <span className="text-xs text-gray-600">
-                              ({part.reviews})
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1"
-                          onClick={() => setSelectedPart(part)}
-                        >
-                          <Eye className="h-3 w-3 mr-1" />
-                          View
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => handleAddToCart(part)}
-                          disabled={!part.inStock}
-                        >
-                          <ShoppingCart className="h-3 w-3 mr-1" />
-                          Add
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
             </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredParts.map((part) => {
-                const stockStatus = getStockStatus(part);
-                const StockIcon = stockStatus.icon;
-                
-                return (
-                  <Card key={part.id} className="p-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center flex-shrink-0">
-                        <Package className="h-8 w-8 text-gray-400" />
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge variant="outline" className="text-xs">
-                                {part.sku}
-                              </Badge>
-                              {keystoneConnected && (
-                                <Badge variant="outline" className="text-xs">
-                                  <Zap className="h-2 w-2 mr-1" />
-                                  Live
-                                </Badge>
-                              )}
-                            </div>
-                            <h3 className="font-medium text-gray-900 truncate">
-                              {part.name}
-                            </h3>
-                            <p className="text-sm text-gray-600 line-clamp-2 mt-1">
-                              {part.description}
-                            </p>
-                          </div>
-                          
-                          <div className="text-right ml-4">
-                            <div className="font-semibold text-lg">
-                              {keystoneService.formatPrice(part.price || 0)}
-                            </div>
-                            <div className="flex items-center gap-1 justify-end mt-1">
-                              <StockIcon className="h-3 w-3" />
-                              <span className="text-xs text-gray-600">
-                                {part.quantity} in stock
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center justify-between mt-3">
-                          <div className="flex items-center gap-2">
-                            <Badge variant={stockStatus.color as any} className="text-xs">
-                              {stockStatus.status}
-                            </Badge>
-                            {part.featured && (
-                              <Badge variant="secondary" className="text-xs">
-                                Featured
-                              </Badge>
-                            )}
-                            {part.rating && (
-                              <div className="flex items-center gap-1">
-                                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                                <span className="text-xs text-gray-600">
-                                  {part.rating} ({part.reviews})
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleWishlist(part.id)}
-                            >
-                              <Heart 
-                                className={`h-4 w-4 ${wishlist.includes(part.id) ? 'fill-red-500 text-red-500' : ''}`} 
-                              />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedPart(part)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => handleAddToCart(part)}
-                              disabled={!part.inStock}
-                            >
-                              <ShoppingCart className="h-4 w-4 mr-2" />
-                              Add to Cart
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+          </CardContent>
+        </Card>
 
-          {filteredParts.length === 0 && (
-            <div className="text-center py-12">
-              <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No parts found</h3>
-              <p className="text-gray-600 mb-4">
-                {searchTerm 
-                  ? `No parts match "${searchTerm}". Try adjusting your search or filters.`
-                  : "No parts match your current filters. Try adjusting your criteria."
-                }
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSearchTerm("");
-                  setSelectedCategory("all");
-                  setSelectedSubcategory("all");
-                  setShowInStockOnly(false);
-                  setShowFeaturedOnly(false);
-                  setPriceRange([0, 500]);
-                }}
-              >
-                Clear All Filters
-              </Button>
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="cart" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Shopping Cart</CardTitle>
-              <CardDescription>
-                {getCartItemCount()} items • Total: {keystoneService.formatPrice(getCartTotal())}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {cart && cart.length > 0 ? (
-                <div className="space-y-4">
-                  {cart.map((item: any) => (
-                    <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                          <Package className="h-6 w-6 text-gray-400" />
-                        </div>
-                        <div>
-                          <h4 className="font-medium">{item.name}</h4>
-                          <p className="text-sm text-gray-600">SKU: {item.sku}</p>
-                          <p className="text-sm font-medium">
-                            {keystoneService.formatPrice(item.price || 0)} × {item.quantity}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">
-                          {keystoneService.formatPrice((item.price || 0) * (item.quantity || 1))}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="flex justify-between items-center pt-4 border-t">
-                    <Button variant="outline" onClick={clearCart}>
-                      Clear Cart
-                    </Button>
-                    <div className="text-right">
-                      <p className="text-lg font-semibold">
-                        Total: {keystoneService.formatPrice(getCartTotal())}
-                      </p>
-                      <Button className="mt-2">
-                        Proceed to Checkout
-                      </Button>
-                    </div>
-                  </div>
+        {/* Shopping Cart Summary */}
+        {cartItemCount > 0 && (
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5 text-blue-600" />
+                  <span className="font-medium">
+                    {cartItemCount} item{cartItemCount !== 1 ? 's' : ''} in cart
+                  </span>
+                  <span className="text-blue-600 font-bold">
+                    ${cartTotal.toFixed(2)}
+                  </span>
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <ShoppingCart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Your cart is empty</h3>
-                  <p className="text-gray-600 mb-4">Add some parts to get started</p>
-                  <Button onClick={() => setActiveTab("catalog")}>
-                    Browse Parts
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="orders" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Special Orders</CardTitle>
-              <CardDescription>
-                Request parts not in our standard inventory
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Special Order System</h3>
-                <p className="text-gray-600 mb-4">
-                  Contact our parts department for special orders and custom requests
-                </p>
-                <Button>
-                  Contact Parts Department
+                <Button size="sm">
+                  View Cart
                 </Button>
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {keystoneConnected && (
-          <TabsContent value="monitoring" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="h-5 w-5" />
-                    Connection Status
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span>Keystone API</span>
-                      <Badge variant="default">Connected</Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Last Update</span>
-                      <span className="text-sm text-gray-600">
-                        {lastInventoryUpdate ? new Date(lastInventoryUpdate).toLocaleTimeString() : 'Never'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Parts Loaded</span>
-                      <span className="text-sm text-gray-600">{parts.length}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5" />
-                    Rate Limits
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {rateLimitStatus ? (
-                    <div className="space-y-3">
-                      {Object.entries(rateLimitStatus).map(([method, status]: [string, any]) => (
-                        <div key={method} className="flex items-center justify-between">
-                          <span className="text-sm">{method}</span>
-                          <span className="text-sm text-gray-600">
-                            {status.remaining || 0} / {status.limit || 0}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-600">Loading rate limit status...</p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
         )}
-      </Tabs>
 
-      {selectedPart && (
-        <Dialog open={!!selectedPart} onOpenChange={() => setSelectedPart(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{selectedPart.name}</DialogTitle>
-              <DialogDescription>
-                SKU: {selectedPart.sku} | Part Number: {selectedPart.partNumber}
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
-                  <Package className="h-24 w-24 text-gray-400" />
-                </div>
-                
-                {selectedPart.features && selectedPart.features.length > 0 && (
-                  <div>
-                    <h4 className="font-semibold mb-2">Features</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedPart.features.map((feature, index) => (
-                        <Badge key={index} variant="outline">
-                          {feature}
+        {/* Parts Display */}
+        <div className="space-y-6">
+          {/* Loading State */}
+          {isLoading && (
+            <LoadingState
+              isLoading={true}
+              message="Updating inventory data..."
+              className="justify-center py-8"
+            />
+          )}
+
+          {/* Grid View */}
+          {viewMode === 'grid' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredParts.map((part) => (
+                <Card key={part.id} className="group hover:shadow-lg transition-shadow">
+                  <CardContent className="p-4">
+                    {/* Part Image */}
+                    <div className="relative mb-4">
+                      <img
+                        src={part.images?.[0] || '/api/placeholder/300/300'}
+                        alt={part.name}
+                        className="w-full h-48 object-cover rounded-lg"
+                      />
+                      
+                      {/* Status Badges */}
+                      <div className="absolute top-2 left-2 flex flex-col gap-1">
+                        {part.featured && (
+                          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                            <Star className="h-3 w-3 mr-1" />
+                            Featured
+                          </Badge>
+                        )}
+                        {!part.inStock && (
+                          <Badge variant="destructive">
+                            Out of Stock
+                          </Badge>
+                        )}
+                        {part.inStock && part.quantity <= (part.reorder_level || 5) && (
+                          <Badge variant="outline" className="bg-orange-100 text-orange-800">
+                            Low Stock
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => toggleFavorite(part.id)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Heart className={`h-4 w-4 ${favorites.includes(part.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setSelectedPart(part)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Part Info */}
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-sm leading-tight line-clamp-2">
+                            {part.name}
+                          </h3>
+                          <p className="text-xs text-gray-600 mt-1">
+                            SKU: {part.sku}
+                          </p>
+                        </div>
+                        <div className="text-right ml-2">
+                          <p className="font-bold text-lg text-green-600">
+                            ${part.price.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Category and Brand */}
+                      <div className="flex items-center gap-2 text-xs">
+                        <Badge variant="outline" className="text-xs">
+                          {part.category}
                         </Badge>
-                      ))}
+                        {part.brand && (
+                          <span className="text-gray-500">{part.brand}</span>
+                        )}
+                      </div>
+
+                      {/* Stock Info */}
+                      <div className="flex items-center justify-between text-xs">
+                        <span className={`flex items-center gap-1 ${part.inStock ? 'text-green-600' : 'text-red-600'}`}>
+                          <Package className="h-3 w-3" />
+                          {part.inStock ? `${part.quantity} in stock` : 'Out of stock'}
+                        </span>
+                        {part.rating && (
+                          <div className="flex items-center gap-1">
+                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            <span>{part.rating.toFixed(1)}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Add to Cart */}
+                      <div className="flex items-center gap-2 pt-2">
+                        {cart[part.id] ? (
+                          <div className="flex items-center gap-2 flex-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => updateCartQuantity(part.id, cart[part.id] - 1)}
+                              className="h-8 w-8 p-0"
+                            >
+                              -
+                            </Button>
+                            <span className="text-sm font-medium min-w-[2rem] text-center">
+                              {cart[part.id]}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => updateCartQuantity(part.id, cart[part.id] + 1)}
+                              className="h-8 w-8 p-0"
+                              disabled={!part.inStock || cart[part.id] >= part.quantity}
+                            >
+                              +
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => addToCart(part.id)}
+                            disabled={!part.inStock}
+                            className="flex-1"
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add to Cart
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* List View */}
+          {viewMode === 'list' && (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Part</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Brand</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead>Rating</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredParts.map((part) => (
+                    <TableRow key={part.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={part.images?.[0] || '/api/placeholder/300/300'}
+                            alt={part.name}
+                            className="w-12 h-12 object-cover rounded"
+                          />
+                          <div>
+                            <p className="font-medium">{part.name}</p>
+                            <p className="text-sm text-gray-600">SKU: {part.sku}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{part.category}</Badge>
+                      </TableCell>
+                      <TableCell>{part.brand || 'N/A'}</TableCell>
+                      <TableCell className="font-bold text-green-600">
+                        ${part.price.toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <div className={`flex items-center gap-1 ${part.inStock ? 'text-green-600' : 'text-red-600'}`}>
+                          <Package className="h-4 w-4" />
+                          {part.inStock ? part.quantity : 'Out of stock'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {part.rating && (
+                          <div className="flex items-center gap-1">
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                            <span>{part.rating.toFixed(1)}</span>
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedPart(part)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => toggleFavorite(part.id)}
+                          >
+                            <Heart className={`h-4 w-4 ${favorites.includes(part.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                          </Button>
+                          {cart[part.id] ? (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => updateCartQuantity(part.id, cart[part.id] - 1)}
+                                className="h-8 w-8 p-0"
+                              >
+                                -
+                              </Button>
+                              <span className="text-sm font-medium min-w-[2rem] text-center">
+                                {cart[part.id]}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => updateCartQuantity(part.id, cart[part.id] + 1)}
+                                className="h-8 w-8 p-0"
+                                disabled={!part.inStock || cart[part.id] >= part.quantity}
+                              >
+                                +
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => addToCart(part.id)}
+                              disabled={!part.inStock}
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+
+          {/* No Results */}
+          {filteredParts.length === 0 && !isLoading && (
+            <Card>
+              <CardContent className="text-center py-12">
+                <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No parts found</h3>
+                <p className="text-gray-600 mb-4">
+                  Try adjusting your search criteria or filters
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedCategory('all');
+                    setPriceRange([0, 1000]);
+                    setInStockOnly(false);
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Part Detail Modal */}
+        {selectedPart && (
+          <Dialog open={!!selectedPart} onOpenChange={() => setSelectedPart(null)}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{selectedPart.name}</DialogTitle>
+                <DialogDescription>
+                  SKU: {selectedPart.sku} | Part Number: {selectedPart.partNumber}
+                </DialogDescription>
+              </DialogHeader>
               
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Images */}
                 <div>
-                  <h4 className="font-semibold mb-2">Description</h4>
-                  <p className="text-sm text-gray-600">{selectedPart.description}</p>
+                  <img
+                    src={selectedPart.images?.[0] || '/api/placeholder/400/400'}
+                    alt={selectedPart.name}
+                    className="w-full h-64 object-cover rounded-lg"
+                  />
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+
+                {/* Details */}
+                <div className="space-y-4">
                   <div>
-                    <h4 className="font-semibold mb-1">Price</h4>
-                    <p className="text-2xl font-bold">
-                      {keystoneService.formatPrice(selectedPart.price || 0)}
-                    </p>
+                    <h3 className="font-semibold text-lg mb-2">Details</h3>
+                    <p className="text-gray-600">{selectedPart.description}</p>
                   </div>
-                  
-                  <div>
-                    <h4 className="font-semibold mb-1">Stock</h4>
-                    <p className="text-lg">{selectedPart.quantity} units</p>
-                    <p className="text-sm text-gray-600">in {selectedPart.warehouse}</p>
+
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium">Category:</span>
+                      <p>{selectedPart.category}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium">Brand:</span>
+                      <p>{selectedPart.brand || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium">Price:</span>
+                      <p className="text-green-600 font-bold">${selectedPart.price.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium">Stock:</span>
+                      <p className={selectedPart.inStock ? 'text-green-600' : 'text-red-600'}>
+                        {selectedPart.inStock ? `${selectedPart.quantity} available` : 'Out of stock'}
+                      </p>
+                    </div>
+                    {selectedPart.weight && (
+                      <div>
+                        <span className="font-medium">Weight:</span>
+                        <p>{selectedPart.weight} lbs</p>
+                      </div>
+                    )}
+                    {selectedPart.dimensions && (
+                      <div>
+                        <span className="font-medium">Dimensions:</span>
+                        <p>{selectedPart.dimensions}</p>
+                      </div>
+                    )}
+                    {selectedPart.warranty && (
+                      <div>
+                        <span className="font-medium">Warranty:</span>
+                        <p>{selectedPart.warranty}</p>
+                      </div>
+                    )}
+                    {selectedPart.location && (
+                      <div>
+                        <span className="font-medium">Location:</span>
+                        <p>{selectedPart.location}</p>
+                      </div>
+                    )}
                   </div>
-                </div>
-                
-                <div>
-                  <h4 className="font-semibold mb-2">Details</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Category:</span>
-                      <span>{selectedPart.category}</span>
+
+                  {/* Features */}
+                  {selectedPart.features && selectedPart.features.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-2">Features</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPart.features.map((feature, index) => (
+                          <Badge key={index} variant="secondary">
+                            {feature}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Brand:</span>
-                      <span>{selectedPart.brand || 'OEM'}</span>
+                  )}
+
+                  {/* Compatibility */}
+                  {selectedPart.compatibility && selectedPart.compatibility.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-2">Compatibility</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPart.compatibility.map((item, index) => (
+                          <Badge key={index} variant="outline">
+                            {item}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Supplier:</span>
-                      <span>{selectedPart.supplier || 'Keystone'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Last Updated:</span>
-                      <span>{new Date(selectedPart.lastUpdated).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex gap-2 pt-4">
-                  <Button
-                    onClick={() => handleAddToCart(selectedPart)}
-                    disabled={!selectedPart.inStock}
-                    className="flex-1"
-                  >
-                    <ShoppingCart className="h-4 w-4 mr-2" />
-                    Add to Cart
-                  </Button>
-                  
-                  {keystoneConnected && (
+                  )}
+
+                  {/* Add to Cart */}
+                  <div className="flex items-center gap-4 pt-4 border-t">
+                    {cart[selectedPart.id] ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => updateCartQuantity(selectedPart.id, cart[selectedPart.id] - 1)}
+                        >
+                          -
+                        </Button>
+                        <span className="font-medium min-w-[3rem] text-center">
+                          {cart[selectedPart.id]}
+                        </span>
+                        <Button
+                          variant="outline"
+                          onClick={() => updateCartQuantity(selectedPart.id, cart[selectedPart.id] + 1)}
+                          disabled={!selectedPart.inStock || cart[selectedPart.id] >= selectedPart.quantity}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => addToCart(selectedPart.id)}
+                        disabled={!selectedPart.inStock}
+                        className="flex-1"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add to Cart
+                      </Button>
+                    )}
+                    
                     <Button
                       variant="outline"
-                      onClick={() => handleGetPartPricing(selectedPart)}
+                      onClick={() => toggleFavorite(selectedPart.id)}
                     >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Update Price
+                      <Heart className={`h-4 w-4 ${favorites.includes(selectedPart.id) ? 'fill-red-500 text-red-500' : ''}`} />
                     </Button>
-                  )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-    </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+    </ErrorBoundary>
   );
 };
 
-export default ShopParts;
+export default Parts;
+

@@ -1,5 +1,5 @@
-// Enhanced KeystoneService.ts - Version 3.1.0 (Fixed Environment Variables Priority)
-// Singleton pattern with complete Keystone API coverage and prioritized environment variables
+// Enhanced KeystoneService.ts - Version 4.0.0 with Comprehensive Rate Limiting and Error Handling
+// Singleton pattern with complete Keystone API coverage, prioritized environment variables, and advanced error handling
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -17,6 +17,9 @@ interface KeystoneResponse<T = any> {
   statusCode?: number;
   statusMessage?: string;
   result?: any;
+  retry_after_seconds?: number;
+  function?: string;
+  rate_limited?: boolean;
 }
 
 interface InventoryItem {
@@ -52,11 +55,32 @@ interface OrderInfo {
   estimatedDelivery?: string;
 }
 
+// Enhanced interfaces for rate limiting and error handling
+interface RateLimitInfo {
+  isRateLimited: boolean;
+  retryAfterSeconds: number;
+  endpoint: string;
+  timestamp: number;
+}
+
+interface ErrorInfo {
+  message: string;
+  type: 'network' | 'rate_limit' | 'auth' | 'server' | 'unknown';
+  statusCode?: number;
+  retryable: boolean;
+  retryAfterSeconds?: number;
+}
+
 export default class KeystoneService {
   private static instance: KeystoneService;
   private config: KeystoneConfig;
   private supabase;
   private loadedConfig: any = null;
+  
+  // Enhanced error handling and rate limiting
+  private rateLimitInfo: Map<string, RateLimitInfo> = new Map();
+  private errorCallbacks: ((error: ErrorInfo) => void)[] = [];
+  private rateLimitCallbacks: ((info: RateLimitInfo) => void)[] = [];
 
   private constructor() {
     // Load configuration from environment variables (using VITE_ prefix)
@@ -98,6 +122,145 @@ export default class KeystoneService {
       KeystoneService.instance = new KeystoneService();
     }
     return KeystoneService.instance;
+  }
+
+  // Enhanced factory method for creating instances with error handling
+  public static async create(): Promise<KeystoneService> {
+    const instance = KeystoneService.getInstance();
+    await instance.initializeConfig();
+    return instance;
+  }
+
+  // Event listeners for error and rate limit handling
+  onError(callback: (error: ErrorInfo) => void): void {
+    this.errorCallbacks.push(callback);
+  }
+
+  onRateLimit(callback: (info: RateLimitInfo) => void): void {
+    this.rateLimitCallbacks.push(callback);
+  }
+
+  // Remove event listeners
+  removeErrorListener(callback: (error: ErrorInfo) => void): void {
+    const index = this.errorCallbacks.indexOf(callback);
+    if (index > -1) {
+      this.errorCallbacks.splice(index, 1);
+    }
+  }
+
+  removeRateLimitListener(callback: (info: RateLimitInfo) => void): void {
+    const index = this.rateLimitCallbacks.indexOf(callback);
+    if (index > -1) {
+      this.rateLimitCallbacks.splice(index, 1);
+    }
+  }
+
+  // Check if an endpoint is currently rate limited
+  isEndpointRateLimited(endpoint: string): boolean {
+    const rateLimitInfo = this.rateLimitInfo.get(endpoint);
+    if (!rateLimitInfo) return false;
+    
+    const now = Date.now();
+    const rateLimitExpiry = rateLimitInfo.timestamp + (rateLimitInfo.retryAfterSeconds * 1000);
+    
+    if (now >= rateLimitExpiry) {
+      this.rateLimitInfo.delete(endpoint);
+      return false;
+    }
+    
+    return true;
+  }
+
+  // Get remaining time for rate limit
+  getRateLimitRemainingTime(endpoint: string): number {
+    const rateLimitInfo = this.rateLimitInfo.get(endpoint);
+    if (!rateLimitInfo) return 0;
+    
+    const now = Date.now();
+    const rateLimitExpiry = rateLimitInfo.timestamp + (rateLimitInfo.retryAfterSeconds * 1000);
+    
+    return Math.max(0, Math.ceil((rateLimitExpiry - now) / 1000));
+  }
+
+  // Get all current rate limits
+  getAllRateLimits(): RateLimitInfo[] {
+    const now = Date.now();
+    const activeLimits: RateLimitInfo[] = [];
+    
+    for (const [endpoint, info] of this.rateLimitInfo.entries()) {
+      const rateLimitExpiry = info.timestamp + (info.retryAfterSeconds * 1000);
+      if (now < rateLimitExpiry) {
+        activeLimits.push({
+          ...info,
+          retryAfterSeconds: Math.ceil((rateLimitExpiry - now) / 1000)
+        });
+      } else {
+        this.rateLimitInfo.delete(endpoint);
+      }
+    }
+    
+    return activeLimits;
+  }
+
+  // Enhanced error handling
+  private handleError(error: any, endpoint: string): ErrorInfo {
+    let errorInfo: ErrorInfo;
+
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      errorInfo = {
+        message: 'Network connection failed. Please check your internet connection.',
+        type: 'network',
+        retryable: true
+      };
+    } else if (error.statusCode === 429 || (error.error && error.error.toLowerCase().includes('rate limit'))) {
+      const retryAfterSeconds = error.retry_after_seconds || 60;
+      
+      // Store rate limit info
+      const rateLimitInfo: RateLimitInfo = {
+        isRateLimited: true,
+        retryAfterSeconds,
+        endpoint,
+        timestamp: Date.now()
+      };
+      this.rateLimitInfo.set(endpoint, rateLimitInfo);
+      
+      // Notify rate limit listeners
+      this.rateLimitCallbacks.forEach(callback => callback(rateLimitInfo));
+      
+      errorInfo = {
+        message: `Rate limit exceeded. Please wait ${retryAfterSeconds} seconds before trying again.`,
+        type: 'rate_limit',
+        statusCode: 429,
+        retryable: true,
+        retryAfterSeconds
+      };
+    } else if (error.statusCode === 401 || error.statusCode === 403) {
+      errorInfo = {
+        message: 'Authentication failed. Please check your credentials.',
+        type: 'auth',
+        statusCode: error.statusCode,
+        retryable: false
+      };
+    } else if (error.statusCode >= 500) {
+      errorInfo = {
+        message: 'Server error occurred. Please try again later.',
+        type: 'server',
+        statusCode: error.statusCode,
+        retryable: true
+      };
+    } else {
+      errorInfo = {
+        message: error.message || error.error || 'An unknown error occurred',
+        type: 'unknown',
+        statusCode: error.statusCode,
+        retryable: true
+      };
+    }
+
+    // Notify error listeners
+    this.errorCallbacks.forEach(callback => callback(errorInfo));
+    
+    return errorInfo;
   }
 
   private async initializeConfig(): Promise<void> {
@@ -168,35 +331,82 @@ export default class KeystoneService {
     }
   }
 
+  // Enhanced makeRequest with comprehensive error handling and rate limiting
   private async makeRequest<T>(
     endpoint: string,
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
-    data?: any
+    data?: any,
+    timeout: number = 30000
   ): Promise<KeystoneResponse<T>> {
+    // Check if endpoint is rate limited
+    if (this.isEndpointRateLimited(endpoint)) {
+      const remainingTime = this.getRateLimitRemainingTime(endpoint);
+      return {
+        success: false,
+        error: `Rate limit active. Please wait ${remainingTime} seconds.`,
+        rate_limited: true,
+        retry_after_seconds: remainingTime
+      };
+    }
+
     try {
       // DEBUG LOGGING
-      console.log('🔧 Making health check request to:', `${this.config.proxyUrl}${endpoint}`);
+      console.log('🔧 Making request to:', `${this.config.proxyUrl}${endpoint}`);
       
       if (!this.config.proxyUrl) {
         throw new Error('Proxy URL not configured');
       }
 
       const url = `${this.config.proxyUrl}${endpoint}`;
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
       const options: RequestInit = {
         method,
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': this.config.apiToken,
         },
+        signal: controller.signal
       };
 
-      
       if (data && (method === 'POST' || method === 'PUT')) {
         options.body = JSON.stringify(data);
       }
 
       const response = await fetch(url, options);
+      clearTimeout(timeoutId);
+      
       const responseData = await response.json();
+
+      if (!response.ok) {
+        const errorInfo = this.handleError({
+          statusCode: response.status,
+          error: responseData.error || `HTTP ${response.status}`,
+          retry_after_seconds: responseData.retry_after_seconds
+        }, endpoint);
+
+        return {
+          success: false,
+          error: errorInfo.message,
+          statusCode: response.status,
+          statusMessage: response.statusText,
+          retry_after_seconds: errorInfo.retryAfterSeconds,
+          rate_limited: errorInfo.type === 'rate_limit'
+        };
+      }
+
+      // Handle successful response that might still contain rate limit info
+      if (responseData.error && responseData.error.toLowerCase().includes('rate limit')) {
+        const errorInfo = this.handleError(responseData, endpoint);
+        return {
+          success: false,
+          error: errorInfo.message,
+          retry_after_seconds: errorInfo.retryAfterSeconds,
+          rate_limited: true
+        };
+      }
 
       return {
         success: response.ok,
@@ -205,13 +415,58 @@ export default class KeystoneService {
         statusMessage: response.statusText,
         error: response.ok ? undefined : responseData.message || responseData.error || 'Request failed'
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Keystone API request failed:', error);
+      
+      const errorInfo = this.handleError(error, endpoint);
+      
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
+        error: errorInfo.message,
+        statusCode: errorInfo.statusCode,
+        retry_after_seconds: errorInfo.retryAfterSeconds
       };
     }
+  }
+
+  // Enhanced retry mechanism
+  async retryRequest<T = any>(
+    endpoint: string, 
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'POST', 
+    data?: any, 
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<KeystoneResponse<T>> {
+    let lastResponse: KeystoneResponse<T>;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      lastResponse = await this.makeRequest<T>(endpoint, method, data);
+      
+      if (lastResponse.success) {
+        return lastResponse;
+      }
+      
+      // Don't retry on auth errors or non-retryable errors
+      if (lastResponse.statusCode === 401 || lastResponse.statusCode === 403) {
+        break;
+      }
+      
+      // For rate limits, wait the specified time
+      if (lastResponse.rate_limited && lastResponse.retry_after_seconds) {
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, lastResponse.retry_after_seconds! * 1000));
+          continue;
+        }
+      }
+      
+      // For other errors, use exponential backoff
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    return lastResponse!;
   }
 
   // Health check for the proxy service
@@ -282,7 +537,7 @@ export default class KeystoneService {
       method: 'UtilityReportMyIP'
     };
 
-    return this.makeRequest('/utility/reportmyip', 'POST', requestData);
+    return this.retryRequest('/utility/reportmyip', 'POST', requestData);
   }
 
   // Utility method to report approved IPs
@@ -297,7 +552,7 @@ export default class KeystoneService {
       approvedIPs: approvedIPs // Send environment-specific IPs
     };
 
-    return this.makeRequest('/utility/reportapprovedips', 'POST', requestData);
+    return this.retryRequest('/utility/reportapprovedips', 'POST', requestData);
   }
 
   // Get the appropriate IP list based on current environment
@@ -321,7 +576,7 @@ export default class KeystoneService {
       method: 'UtilityReportApprovedMethods'
     };
 
-    return this.makeRequest('/utility/reportapprovedmethods', 'POST', requestData);
+    return this.retryRequest('/utility/reportapprovedmethods', 'POST', requestData);
   }
 
   // ENHANCED INVENTORY MANAGEMENT METHODS
@@ -334,7 +589,7 @@ export default class KeystoneService {
       partNumber
     };
 
-    return this.makeRequest('/inventory/check', 'POST', requestData);
+    return this.retryRequest('/inventory/check', 'POST', requestData);
   }
 
   // Check inventory for multiple parts (bulk operation)
@@ -345,7 +600,7 @@ export default class KeystoneService {
       partNumbers
     };
 
-    return this.makeRequest('/inventory/bulk', 'POST', requestData);
+    return this.retryRequest('/inventory/bulk', 'POST', requestData);
   }
 
   // Get full inventory dataset (once per day limit)
@@ -355,7 +610,7 @@ export default class KeystoneService {
       securityToken: this.config.securityToken
     };
 
-    return this.makeRequest('/inventory/full', 'POST', requestData);
+    return this.retryRequest('/inventory/full', 'POST', requestData);
   }
 
   // Get inventory updates since last check (every 15 minutes)
@@ -366,7 +621,7 @@ export default class KeystoneService {
       lastUpdateTime: lastUpdateTime || new Date(Date.now() - 15 * 60 * 1000).toISOString()
     };
 
-    return this.makeRequest('/inventory/updates', 'POST', requestData);
+    return this.retryRequest('/inventory/updates', 'POST', requestData);
   }
 
   // ENHANCED PRICING METHODS
@@ -380,7 +635,7 @@ export default class KeystoneService {
       currency
     };
 
-    return this.makeRequest('/pricing/bulk', 'POST', requestData);
+    return this.retryRequest('/pricing/bulk', 'POST', requestData);
   }
 
   // Get pricing for a single part (legacy method maintained for compatibility)
@@ -407,7 +662,7 @@ export default class KeystoneService {
       zipCode
     };
 
-    return this.makeRequest('/shipping/options', 'POST', requestData);
+    return this.retryRequest('/shipping/options', 'POST', requestData);
   }
 
   // Get shipping options for multiple parts
@@ -419,7 +674,7 @@ export default class KeystoneService {
       zipCode
     };
 
-    return this.makeRequest('/shipping/options/multiple', 'POST', requestData);
+    return this.retryRequest('/shipping/options/multiple', 'POST', requestData);
   }
 
   // ENHANCED ORDER MANAGEMENT METHODS
@@ -434,7 +689,7 @@ export default class KeystoneService {
       shippingMethod
     };
 
-    return this.makeRequest('/orders/ship', 'POST', requestData);
+    return this.retryRequest('/orders/ship', 'POST', requestData);
   }
 
   // Place a dropship order (ships to custom address)
@@ -453,7 +708,7 @@ export default class KeystoneService {
       shippingMethod
     };
 
-    return this.makeRequest('/orders/ship/dropship', 'POST', requestData);
+    return this.retryRequest('/orders/ship/dropship', 'POST', requestData);
   }
 
   // Get order history
@@ -465,7 +720,7 @@ export default class KeystoneService {
       endDate
     };
 
-    return this.makeRequest('/orders/history', 'POST', requestData);
+    return this.retryRequest('/orders/history', 'POST', requestData);
   }
 
   // ENHANCED PARTS SEARCH METHODS
@@ -483,7 +738,7 @@ export default class KeystoneService {
       pageSize: options?.pageSize || 50
     };
 
-    return this.makeRequest('/parts/search', 'POST', requestData);
+    return this.retryRequest('/parts/search', 'POST', requestData);
   }
 
   // Get part details (enhanced with more information)
@@ -494,7 +749,7 @@ export default class KeystoneService {
       partNumber
     };
 
-    return this.makeRequest('/parts/details', 'POST', requestData);
+    return this.retryRequest('/parts/details', 'POST', requestData);
   }
 
   // Get kit components
@@ -505,21 +760,22 @@ export default class KeystoneService {
       kitPartNumber
     };
 
-    return this.makeRequest('/kits/components', 'POST', requestData);
+    return this.retryRequest('/kits/components', 'POST', requestData);
   }
 
   // UTILITY METHODS
 
   // Check if response indicates rate limiting
   isRateLimited(response: KeystoneResponse): boolean {
-    return response.statusCode === 429 || 
+    return response.rate_limited === true || 
+           response.statusCode === 429 || 
            (response.error && response.error.toLowerCase().includes('rate limit'));
   }
 
   // Get retry after time from rate limited response
   getRetryAfter(response: KeystoneResponse): number {
-    if (response.data && response.data.retry_after_seconds) {
-      return response.data.retry_after_seconds;
+    if (response.retry_after_seconds) {
+      return response.retry_after_seconds;
     }
     return 60; // Default 1 minute
   }
@@ -773,8 +1029,27 @@ export default class KeystoneService {
   async resetRateLimits(): Promise<KeystoneResponse> {
     return this.makeRequest('/admin/rate-limits/reset', 'POST');
   }
+
+  // Get current configuration for external access
+  getKeystoneConfig(): KeystoneConfig {
+    return { ...this.config };
+  }
+
+  // Update configuration for external access
+  updateKeystoneConfig(updates: Partial<KeystoneConfig>): void {
+    this.config = { ...this.config, ...updates };
+  }
 }
 
 // Export types for use in other components
-export type { KeystoneResponse, InventoryItem, PricingInfo, ShippingOption, OrderInfo };
+export type { 
+  KeystoneResponse, 
+  InventoryItem, 
+  PricingInfo, 
+  ShippingOption, 
+  OrderInfo, 
+  RateLimitInfo, 
+  ErrorInfo,
+  KeystoneConfig 
+};
 
