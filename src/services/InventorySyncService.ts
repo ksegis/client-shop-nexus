@@ -1,6 +1,6 @@
-// Updated Inventory Sync Service - Works with existing "inventory" table
+// Fixed Inventory Sync Service - Corrected import paths
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import KeystoneService, { InventoryItem, KeystoneResponse } from './KeystoneService';
+import KeystoneService, { InventoryItem, KeystoneResponse } from '@/services/keystone/KeystoneService';
 
 interface SyncLog {
   id?: string;
@@ -728,7 +728,7 @@ export class InventorySyncService {
       }
 
       if (filters?.inStockOnly) {
-        query = query.eq('in_stock', true);
+        query = query.gt('quantity', 0);
       }
 
       if (filters?.search) {

@@ -876,7 +876,6 @@ export default class KeystoneService {
         // Add security_key_dev and security_key_prod to configToSave
         security_key_dev: this.getSecurityTokenForEnvironment('development'),
         security_key_prod: this.getSecurityTokenForEnvironment('production'),
-        updated_at: new Date().toISOString()
       };
 
       console.log('Saving configuration:', configToSave);
