@@ -9,7 +9,6 @@ interface KeystoneConfig {
   accountNumber: string;
   securityToken: string;
 }
-
 interface KeystoneResponse<T = any> {
   success: boolean;
   data?: T;
