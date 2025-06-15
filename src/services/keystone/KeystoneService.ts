@@ -1,6 +1,5 @@
-// Enhanced KeystoneService.ts - Version 3.0.0
-// Builds upon existing functionality while adding complete Keystone API coverage
-// Updated to use VITE_ prefixed environment variables and user-selected environment
+// Enhanced KeystoneService.ts - Version 3.0.0 (Complete Reconciled)
+// Singleton pattern with complete Keystone API coverage and all existing functionality
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -25,6 +24,9 @@ interface InventoryItem {
   quantity: number;
   warehouse: string;
   lastUpdated: string;
+  availability?: string;
+  description?: string;
+  price?: number;
 }
 
 interface PricingInfo {
@@ -33,6 +35,7 @@ interface PricingInfo {
   currency: string;
   quantity: number;
   discountTier: string;
+  customerPrice?: number;
 }
 
 interface ShippingOption {
@@ -50,11 +53,12 @@ interface OrderInfo {
 }
 
 export default class KeystoneService {
+  private static instance: KeystoneService;
   private config: KeystoneConfig;
   private supabase;
   private loadedConfig: any = null;
 
-  constructor() {
+  private constructor() {
     // Load configuration from environment variables (using VITE_ prefix)
     this.config = {
       proxyUrl: import.meta.env.VITE_KEYSTONE_PROXY_URL || '',
@@ -78,6 +82,13 @@ export default class KeystoneService {
 
     // Load configuration and set security token
     this.initializeConfig();
+  }
+
+  public static getInstance(): KeystoneService {
+    if (!KeystoneService.instance) {
+      KeystoneService.instance = new KeystoneService();
+    }
+    return KeystoneService.instance;
   }
 
   private async initializeConfig(): Promise<void> {
@@ -162,7 +173,7 @@ export default class KeystoneService {
         data: responseData,
         statusCode: response.status,
         statusMessage: response.statusText,
-        error: response.ok ? undefined : responseData.message || 'Request failed'
+        error: response.ok ? undefined : responseData.message || responseData.error || 'Request failed'
       };
     } catch (error) {
       console.error('Keystone API request failed:', error);
@@ -180,17 +191,17 @@ export default class KeystoneService {
 
   // Get proxy service status
   async getProxyStatus(): Promise<KeystoneResponse> {
-    return this.makeRequest('/status');
+    return this.makeRequest('/admin/status');
   }
 
   // Get rate limiting status
   async getRateLimitStatus(): Promise<KeystoneResponse> {
-    return this.makeRequest(`/status/rate-limits?accountNumber=${this.config.accountNumber}`);
+    return this.makeRequest('/admin/rate-limits');
   }
 
   // Get cache status
   async getCacheStatus(): Promise<KeystoneResponse> {
-    return this.makeRequest('/status/cache');
+    return this.makeRequest('/admin/cache/status');
   }
 
   // Test connection to Keystone API
@@ -430,13 +441,16 @@ export default class KeystoneService {
   // ENHANCED PARTS SEARCH METHODS
 
   // Search for parts with enhanced filtering
-  async searchParts(searchTerm: string, limit: number = 50, filters?: any): Promise<KeystoneResponse> {
+  async searchParts(searchTerm: string, options?: { limit?: number; filters?: any; category?: string; page?: number; pageSize?: number }): Promise<KeystoneResponse> {
     const requestData = {
       accountNumber: this.config.accountNumber,
       securityToken: this.config.securityToken,
       searchTerm,
-      limit,
-      filters
+      limit: options?.limit || 50,
+      filters: options?.filters,
+      category: options?.category,
+      page: options?.page || 1,
+      pageSize: options?.pageSize || 50
     };
 
     return this.makeRequest('/parts/search', 'POST', requestData);
@@ -462,6 +476,30 @@ export default class KeystoneService {
     };
 
     return this.makeRequest('/kits/components', 'POST', requestData);
+  }
+
+  // UTILITY METHODS (Added for Parts page compatibility)
+
+  // Check if response indicates rate limiting
+  isRateLimited(response: KeystoneResponse): boolean {
+    return response.statusCode === 429 || 
+           (response.error && response.error.toLowerCase().includes('rate limit'));
+  }
+
+  // Get retry after time from rate limited response
+  getRetryAfter(response: KeystoneResponse): number {
+    if (response.data && response.data.retry_after_seconds) {
+      return response.data.retry_after_seconds;
+    }
+    return 60; // Default 1 minute
+  }
+
+  // Format price for display
+  formatPrice(price: number, currency: string = 'USD'): string {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency
+    }).format(price);
   }
 
   // CONFIGURATION MANAGEMENT (PRESERVED FROM ORIGINAL)
@@ -704,3 +742,5 @@ export default class KeystoneService {
   }
 }
 
+// Export types for use in other components
+export type { KeystoneResponse, InventoryItem, PricingInfo, ShippingOption, OrderInfo };
