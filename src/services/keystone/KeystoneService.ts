@@ -1,5 +1,5 @@
 // Updated to use VITE_ prefixed environment variables and user-selected environment
-// Version 2.3.2 - Updated for Vite environment variables, snake_case column names, and corrected API paths
+// Version 2.3.3 - Fixed response parsing for new proxy server JSON format
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -16,6 +16,7 @@ interface KeystoneResponse<T = any> {
   error?: string;
   statusCode?: number;
   statusMessage?: string;
+  result?: any;
 }
 
 export default class KeystoneService {
@@ -484,29 +485,17 @@ export default class KeystoneService {
 
   // Get environment status for UI
   getEnvironmentStatus(): {
-    hasAccountNumber: boolean;
-    hasDevKey: boolean;
-    hasProdKey: boolean;
-    hasProxyUrl: boolean;
-    hasSupabaseUrl: boolean;
-    hasSupabaseKey: boolean;
-    accountNumberPreview?: string;
-    proxyUrl?: string;
+    current: string;
+    available: string[];
+    hasDevCredentials: boolean;
+    hasProdCredentials: boolean;
   } {
     return {
-      hasAccountNumber: !!import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER,
-      hasDevKey: !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV,
-      hasProdKey: !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD,
-      hasProxyUrl: !!this.config.proxyUrl,
-      hasSupabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
-      hasSupabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_TOKEN,
-      accountNumberPreview: import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER ? 
-        `...${import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER.slice(-4)}` : undefined,
-      proxyUrl: this.config.proxyUrl
+      current: this.config.environment,
+      available: ['development', 'production'],
+      hasDevCredentials: !!this.getSecurityTokenForEnvironment('development'),
+      hasProdCredentials: !!this.getSecurityTokenForEnvironment('production')
     };
   }
 }
-
-
-
 
