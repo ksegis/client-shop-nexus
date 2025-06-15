@@ -1,8 +1,7 @@
-// Simplified Parts Page - No external component dependencies
-// Works with existing inventory table structure
+// Fixed Parts Page - Corrected lucide-react icon imports
 import React, { useState, useEffect, useCallback } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, Database, Sync, Clock, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, Database, RotateCcw, Clock, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -624,7 +623,7 @@ const Parts: React.FC = () => {
             onClick={handleFullSync}
             disabled={isRefreshing}
           >
-            <Sync className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <RotateCcw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Full Sync
           </Button>
           <Button variant="outline" className="relative">
@@ -808,7 +807,7 @@ const Parts: React.FC = () => {
                   className="mt-4"
                   disabled={isRefreshing}
                 >
-                  <Sync className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <RotateCcw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
                   Sync Inventory
                 </Button>
               )}
