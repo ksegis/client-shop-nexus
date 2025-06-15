@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 
 // Import enhanced Keystone service and UI components
-import KeystoneService, { InventoryItem, PricingInfo, KeystoneResponse, RateLimitInfo, ErrorInfo } from "./enhanced_keystone_service_with_rate_limiting";
+import KeystoneService, { InventoryItem, PricingInfo, KeystoneResponse, RateLimitInfo, ErrorInfo } from "../../services/keystone/KeystoneService";
 import { 
   RateLimitStatus, 
   ConnectionStatus, 
