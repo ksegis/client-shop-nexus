@@ -1,447 +1,389 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { 
   AlertTriangle, 
   Clock, 
-  RefreshCw, 
   Wifi, 
   WifiOff, 
+  RefreshCw, 
   CheckCircle, 
   XCircle,
   Timer,
-  Zap
+  Zap,
+  AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  Info,
+  Database
 } from 'lucide-react';
-import { RateLimitInfo, ErrorInfo } from './enhanced_keystone_service_with_rate_limiting';
+import { useToast } from '@/hooks/use-toast';
 
-interface RateLimitStatusProps {
-  rateLimits: RateLimitInfo[];
-  onRetry?: (endpoint: string) => void;
-  className?: string;
+// Enhanced interfaces for better error and rate limit handling
+interface RateLimitInfo {
+  isRateLimited: boolean;
+  retryAfterSeconds: number;
+  endpoint: string;
+  timestamp: number;
 }
 
-export const RateLimitStatus: React.FC<RateLimitStatusProps> = ({ 
-  rateLimits, 
-  onRetry, 
-  className = '' 
-}) => {
-  const [timeRemaining, setTimeRemaining] = useState<{ [key: string]: number }>({});
+interface ErrorInfo {
+  message: string;
+  type: 'network' | 'rate_limit' | 'auth' | 'server' | 'unknown';
+  statusCode?: number;
+  retryable: boolean;
+  retryAfterSeconds?: number;
+}
 
+interface ConnectionState {
+  isConnected: boolean;
+  isLoading: boolean;
+  lastError?: ErrorInfo;
+  rateLimits: RateLimitInfo[];
+  usingCachedData?: boolean;
+}
+
+// Compact Information Panel - Collapsible status section
+export const InformationPanel: React.FC<{ 
+  connectionState: ConnectionState;
+  onRetry?: () => void;
+  onUseCachedData?: () => void;
+  onRefresh?: () => void;
+}> = ({ connectionState, onRetry, onUseCachedData, onRefresh }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const { rateLimits, lastError, usingCachedData, isConnected } = connectionState;
+  
+  // Auto-open if there are important issues
   useEffect(() => {
-    const interval = setInterval(() => {
-      const newTimeRemaining: { [key: string]: number } = {};
-      
-      rateLimits.forEach(limit => {
-        const remaining = Math.max(0, limit.retryAfterSeconds - 1);
-        newTimeRemaining[limit.endpoint] = remaining;
-      });
-      
-      setTimeRemaining(newTimeRemaining);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [rateLimits]);
-
-  if (rateLimits.length === 0) {
-    return null;
-  }
-
-  const formatTime = (seconds: number): string => {
-    if (seconds < 60) {
-      return `${seconds}s`;
+    if (rateLimits.length > 0 || lastError || usingCachedData) {
+      setIsOpen(true);
     }
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}m ${remainingSeconds}s`;
-  };
+  }, [rateLimits.length, lastError, usingCachedData]);
+
+  const hasIssues = rateLimits.length > 0 || lastError || usingCachedData;
+  const statusCount = (rateLimits.length > 0 ? 1 : 0) + (lastError ? 1 : 0) + (usingCachedData ? 1 : 0);
 
   return (
-    <Card className={`border-orange-200 bg-orange-50 ${className}`}>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-orange-800">
-          <Timer className="h-4 w-4" />
-          Rate Limits Active
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {rateLimits.map((limit) => {
-          const remaining = timeRemaining[limit.endpoint] ?? limit.retryAfterSeconds;
-          const progress = ((limit.retryAfterSeconds - remaining) / limit.retryAfterSeconds) * 100;
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger asChild>
+        <Button 
+          variant="outline" 
+          className={`w-full justify-between h-10 ${hasIssues ? 'border-orange-200 bg-orange-50' : 'border-gray-200'}`}
+        >
+          <div className="flex items-center gap-2">
+            <Info className="h-4 w-4" />
+            <span className="font-medium">Information</span>
+            {statusCount > 0 && (
+              <Badge variant="secondary" className="h-5 px-2 text-xs">
+                {statusCount}
+              </Badge>
+            )}
+          </div>
+          {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </Button>
+      </CollapsibleTrigger>
+      
+      <CollapsibleContent className="mt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           
-          return (
-            <div key={limit.endpoint} className="space-y-2">
+          {/* Connection Status Card */}
+          <Card className="border-gray-200">
+            <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-orange-700 border-orange-300">
-                    {limit.endpoint}
-                  </Badge>
-                  <span className="text-sm text-orange-600">
-                    {formatTime(remaining)} remaining
+                  {isConnected ? (
+                    <Wifi className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <WifiOff className="h-4 w-4 text-red-500" />
+                  )}
+                  <span className="text-sm font-medium">
+                    {isConnected ? 'Connected' : 'Disconnected'}
                   </span>
                 </div>
-                {remaining === 0 && onRetry && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onRetry(limit.endpoint)}
-                    className="h-6 px-2 text-xs"
-                  >
-                    <RefreshCw className="h-3 w-3 mr-1" />
-                    Retry
+                {onRetry && !isConnected && (
+                  <Button variant="outline" size="sm" onClick={onRetry}>
+                    <RefreshCw className="h-3 w-3" />
                   </Button>
                 )}
               </div>
-              <Progress value={progress} className="h-2" />
-            </div>
-          );
-        })}
-      </CardContent>
-    </Card>
-  );
-};
+            </CardContent>
+          </Card>
 
-interface ConnectionStatusProps {
-  isConnected: boolean;
-  lastChecked?: Date;
-  onReconnect?: () => void;
-  className?: string;
-}
-
-export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
-  isConnected,
-  lastChecked,
-  onReconnect,
-  className = ''
-}) => {
-  const [isReconnecting, setIsReconnecting] = useState(false);
-
-  const handleReconnect = async () => {
-    if (onReconnect) {
-      setIsReconnecting(true);
-      try {
-        await onReconnect();
-      } finally {
-        setIsReconnecting(false);
-      }
-    }
-  };
-
-  return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      {isConnected ? (
-        <>
-          <div className="flex items-center gap-1 text-green-600">
-            <Wifi className="h-4 w-4" />
-            <span className="text-sm font-medium">Keystone Connected</span>
-          </div>
-          {lastChecked && (
-            <span className="text-xs text-gray-500">
-              Last checked: {lastChecked.toLocaleTimeString()}
-            </span>
+          {/* Rate Limits Card */}
+          {rateLimits.length > 0 && (
+            <Card className="border-orange-200 bg-orange-50">
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Timer className="h-4 w-4 text-orange-600" />
+                    <span className="text-sm font-medium text-orange-700">Rate Limits Active</span>
+                  </div>
+                  {rateLimits.slice(0, 2).map((limit, index) => {
+                    const timeRemaining = Math.max(0, limit.retryAfterSeconds - Math.floor((Date.now() - limit.timestamp) / 1000));
+                    const minutes = Math.floor(timeRemaining / 60);
+                    const seconds = timeRemaining % 60;
+                    
+                    return (
+                      <div key={index} className="text-xs text-orange-600">
+                        {limit.endpoint.replace('/inventory/', '').replace('/parts/', '').toUpperCase()}: {minutes}:{seconds.toString().padStart(2, '0')}
+                      </div>
+                    );
+                  })}
+                  {rateLimits.length > 2 && (
+                    <div className="text-xs text-orange-600">
+                      +{rateLimits.length - 2} more...
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           )}
-        </>
-      ) : (
-        <>
-          <div className="flex items-center gap-1 text-red-600">
-            <WifiOff className="h-4 w-4" />
-            <span className="text-sm font-medium">Keystone Disconnected</span>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleReconnect}
-            disabled={isReconnecting}
-            className="h-6 px-2 text-xs"
-          >
-            {isReconnecting ? (
-              <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3 w-3 mr-1" />
-            )}
-            Reconnect
-          </Button>
-        </>
-      )}
-    </div>
-  );
-};
 
-interface ErrorDisplayProps {
-  error: ErrorInfo | null;
-  onRetry?: () => void;
-  onDismiss?: () => void;
-  className?: string;
-}
+          {/* Error Card */}
+          {lastError && (
+            <Card className="border-red-200 bg-red-50">
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <span className="text-sm font-medium text-red-700">
+                      {lastError.type === 'rate_limit' ? 'Rate Limited' : 'Error'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-red-600 line-clamp-2">
+                    {lastError.message}
+                  </p>
+                  {lastError.retryable && onRetry && (
+                    <Button variant="outline" size="sm" onClick={onRetry} className="h-6 text-xs">
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
-  error,
-  onRetry,
-  onDismiss,
-  className = ''
-}) => {
-  if (!error) return null;
+          {/* Cached Data Card */}
+          {usingCachedData && (
+            <Card className="border-blue-200 bg-blue-50">
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Database className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-700">Using Cached Data</span>
+                  </div>
+                  <p className="text-xs text-blue-600">
+                    Showing offline inventory data
+                  </p>
+                  {onRefresh && (
+                    <Button variant="outline" size="sm" onClick={onRefresh} className="h-6 text-xs">
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      Refresh
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-  const getErrorIcon = () => {
-    switch (error.type) {
-      case 'network':
-        return <WifiOff className="h-4 w-4" />;
-      case 'rate_limit':
-        return <Timer className="h-4 w-4" />;
-      case 'auth':
-        return <XCircle className="h-4 w-4" />;
-      case 'server':
-        return <AlertTriangle className="h-4 w-4" />;
-      default:
-        return <AlertTriangle className="h-4 w-4" />;
-    }
-  };
-
-  const getErrorVariant = () => {
-    switch (error.type) {
-      case 'network':
-      case 'server':
-        return 'destructive';
-      case 'rate_limit':
-        return 'default';
-      case 'auth':
-        return 'destructive';
-      default:
-        return 'default';
-    }
-  };
-
-  return (
-    <Alert variant={getErrorVariant()} className={className}>
-      <div className="flex items-start gap-2">
-        {getErrorIcon()}
-        <div className="flex-1">
-          <AlertDescription className="mb-2">
-            {error.message}
-            {error.retryAfterSeconds && (
-              <span className="block text-sm mt-1">
-                Retry available in {error.retryAfterSeconds} seconds
-              </span>
-            )}
-          </AlertDescription>
-          <div className="flex gap-2">
-            {error.retryable && onRetry && (
-              <Button size="sm" variant="outline" onClick={onRetry}>
-                <RefreshCw className="h-3 w-3 mr-1" />
-                Retry
-              </Button>
-            )}
-            {onDismiss && (
-              <Button size="sm" variant="ghost" onClick={onDismiss}>
-                Dismiss
-              </Button>
-            )}
-          </div>
         </div>
-      </div>
-    </Alert>
+      </CollapsibleContent>
+    </Collapsible>
   );
 };
 
-interface RetryCountdownProps {
-  seconds: number;
-  onRetry?: () => void;
-  className?: string;
-}
-
-export const RetryCountdown: React.FC<RetryCountdownProps> = ({
-  seconds,
-  onRetry,
-  className = ''
-}) => {
-  const [timeLeft, setTimeLeft] = useState(seconds);
-
-  useEffect(() => {
-    setTimeLeft(seconds);
-  }, [seconds]);
-
-  useEffect(() => {
-    if (timeLeft <= 0) return;
-
-    const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          if (onRetry) {
-            onRetry();
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [timeLeft, onRetry]);
-
-  if (timeLeft <= 0) {
-    return null;
-  }
-
-  const progress = ((seconds - timeLeft) / seconds) * 100;
-
-  return (
-    <div className={`space-y-2 ${className}`}>
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-gray-600">Auto-retry in:</span>
-        <span className="font-mono font-medium">{timeLeft}s</span>
-      </div>
-      <Progress value={progress} className="h-2" />
-    </div>
-  );
-};
-
-interface LoadingStateProps {
-  isLoading: boolean;
-  message?: string;
-  showSpinner?: boolean;
-  className?: string;
-}
-
-export const LoadingState: React.FC<LoadingStateProps> = ({
-  isLoading,
-  message = 'Loading...',
-  showSpinner = true,
-  className = ''
-}) => {
-  if (!isLoading) return null;
-
-  return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      {showSpinner && <RefreshCw className="h-4 w-4 animate-spin" />}
-      <span className="text-sm text-gray-600">{message}</span>
-    </div>
-  );
-};
-
-interface ApiStatusIndicatorProps {
-  status: 'connected' | 'disconnected' | 'rate_limited' | 'error';
-  message?: string;
-  className?: string;
-}
-
-export const ApiStatusIndicator: React.FC<ApiStatusIndicatorProps> = ({
-  status,
-  message,
-  className = ''
-}) => {
-  const getStatusConfig = () => {
-    switch (status) {
-      case 'connected':
-        return {
-          icon: <CheckCircle className="h-4 w-4" />,
-          color: 'text-green-600',
-          bgColor: 'bg-green-100',
-          borderColor: 'border-green-200',
-          label: 'Connected'
-        };
-      case 'disconnected':
-        return {
-          icon: <WifiOff className="h-4 w-4" />,
-          color: 'text-red-600',
-          bgColor: 'bg-red-100',
-          borderColor: 'border-red-200',
-          label: 'Disconnected'
-        };
-      case 'rate_limited':
-        return {
-          icon: <Timer className="h-4 w-4" />,
-          color: 'text-orange-600',
-          bgColor: 'bg-orange-100',
-          borderColor: 'border-orange-200',
-          label: 'Rate Limited'
-        };
-      case 'error':
-        return {
-          icon: <XCircle className="h-4 w-4" />,
-          color: 'text-red-600',
-          bgColor: 'bg-red-100',
-          borderColor: 'border-red-200',
-          label: 'Error'
-        };
-    }
+// Compact Status Bar - Always visible minimal status
+export const StatusBar: React.FC<{ 
+  connectionState: ConnectionState;
+  lastRefresh?: Date;
+}> = ({ connectionState, lastRefresh }) => {
+  const { isConnected, rateLimits, usingCachedData } = connectionState;
+  
+  const getStatusIcon = () => {
+    if (rateLimits.length > 0) return <Timer className="h-3 w-3 text-orange-500" />;
+    if (usingCachedData) return <Database className="h-3 w-3 text-blue-500" />;
+    if (isConnected) return <CheckCircle className="h-3 w-3 text-green-500" />;
+    return <XCircle className="h-3 w-3 text-red-500" />;
   };
 
-  const config = getStatusConfig();
+  const getStatusText = () => {
+    if (rateLimits.length > 0) return 'Rate Limited';
+    if (usingCachedData) return 'Cached Data';
+    if (isConnected) return 'Live Data';
+    return 'Offline';
+  };
 
   return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${config.bgColor} ${config.borderColor} ${className}`}>
-      <div className={config.color}>
-        {config.icon}
+    <div className="flex items-center justify-between text-xs text-gray-500 py-1">
+      <div className="flex items-center gap-2">
+        {getStatusIcon()}
+        <span>{getStatusText()}</span>
       </div>
-      <span className={`text-sm font-medium ${config.color}`}>
-        {config.label}
-      </span>
-      {message && (
-        <span className="text-xs text-gray-600">
-          {message}
+      {lastRefresh && (
+        <span>
+          Last updated: {lastRefresh.toLocaleTimeString()}
         </span>
       )}
     </div>
   );
 };
 
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error?: Error;
-}
-
-interface ErrorBoundaryProps {
+// Fast Loading Component - Shows cached data immediately
+export const FastLoadingWrapper: React.FC<{ 
   children: React.ReactNode;
-  fallback?: React.ComponentType<{ error: Error; resetError: () => void }>;
-  onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
-}
+  isLoading: boolean;
+  hasData: boolean;
+  cachedData?: any;
+  onUseCachedData?: () => void;
+  loadingMessage?: string;
+}> = ({ 
+  children, 
+  isLoading, 
+  hasData, 
+  cachedData, 
+  onUseCachedData,
+  loadingMessage = "Loading fresh data..."
+}) => {
+  
+  // If we have cached data and we're loading, show cached data immediately
+  if (isLoading && cachedData && onUseCachedData) {
+    // Auto-use cached data after 2 seconds of loading
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        onUseCachedData();
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }, [onUseCachedData]);
+  }
 
-export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
+  // Always show content if we have any data
+  if (hasData || cachedData) {
+    return <>{children}</>;
+  }
+
+  // Only show loading state if we have no data at all
+  return (
+    <div className="flex flex-col items-center justify-center p-8 space-y-4">
+      <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+      <p className="text-sm text-gray-600">{loadingMessage}</p>
+      {cachedData && onUseCachedData && (
+        <Button variant="outline" onClick={onUseCachedData}>
+          <Database className="h-4 w-4 mr-2" />
+          Use Cached Data
+        </Button>
+      )}
+    </div>
+  );
+};
+
+// Minimal Rate Limit Indicator
+export const RateLimitIndicator: React.FC<{ 
+  rateLimits: RateLimitInfo[];
+  className?: string;
+}> = ({ rateLimits, className = "" }) => {
+  if (rateLimits.length === 0) return null;
+
+  const nextExpiry = Math.min(...rateLimits.map(limit => {
+    return limit.retryAfterSeconds - Math.floor((Date.now() - limit.timestamp) / 1000);
+  }));
+
+  if (nextExpiry <= 0) return null;
+
+  const minutes = Math.floor(nextExpiry / 60);
+  const seconds = nextExpiry % 60;
+
+  return (
+    <Badge variant="outline" className={`text-orange-600 border-orange-300 ${className}`}>
+      <Timer className="h-3 w-3 mr-1" />
+      {minutes}:{seconds.toString().padStart(2, '0')}
+    </Badge>
+  );
+};
+
+// Auto-refresh with rate limit awareness
+export const useSmartRefresh = (
+  refreshFunction: () => Promise<void>,
+  intervalMs: number = 30000,
+  rateLimits: RateLimitInfo[] = []
+) => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date>();
+
+  const refresh = useCallback(async () => {
+    if (isRefreshing) return;
+    
+    // Check if any endpoints are rate limited
+    const hasActiveLimits = rateLimits.some(limit => {
+      const timeRemaining = limit.retryAfterSeconds - Math.floor((Date.now() - limit.timestamp) / 1000);
+      return timeRemaining > 0;
+    });
+
+    if (hasActiveLimits) {
+      console.log('Skipping refresh due to active rate limits');
+      return;
+    }
+
+    setIsRefreshing(true);
+    try {
+      await refreshFunction();
+      setLastRefresh(new Date());
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refreshFunction, isRefreshing, rateLimits]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refresh();
+    }, intervalMs);
+
+    return () => clearInterval(interval);
+  }, [refresh, intervalMs]);
+
+  return { refresh, isRefreshing, lastRefresh };
+};
+
+// Enhanced Error Boundary with minimal UI
+export class ErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback?: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode; fallback?: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
-    if (this.props.onError) {
-      this.props.onError(error, errorInfo);
-    }
   }
-
-  resetError = () => {
-    this.setState({ hasError: false, error: undefined });
-  };
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) {
-        const FallbackComponent = this.props.fallback;
-        return <FallbackComponent error={this.state.error!} resetError={this.resetError} />;
-      }
-
-      return (
-        <Alert variant="destructive" className="m-4">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            <div className="space-y-2">
-              <p>Something went wrong. Please try refreshing the page.</p>
-              <p className="text-sm text-gray-600">
-                Error: {this.state.error?.message}
-              </p>
-              <Button size="sm" variant="outline" onClick={this.resetError}>
-                <RefreshCw className="h-3 w-3 mr-1" />
-                Try Again
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
+      return this.props.fallback || (
+        <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+          <div className="flex items-center gap-2 text-red-700">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm font-medium">Something went wrong</span>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => window.location.reload()}
+            >
+              Refresh
+            </Button>
+          </div>
+        </div>
       );
     }
 
@@ -449,44 +391,109 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 }
 
-// Custom hook for managing error and rate limit state
-export const useKeystoneStatus = () => {
-  const [errors, setErrors] = useState<ErrorInfo[]>([]);
-  const [rateLimits, setRateLimits] = useState<RateLimitInfo[]>([]);
-  const [isConnected, setIsConnected] = useState(false);
-  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+// Custom hook for managing Keystone status with cached data support
+export const useKeystoneStatus = (keystoneService: any, enableCaching: boolean = true) => {
+  const [connectionState, setConnectionState] = useState<ConnectionState>({
+    isConnected: false,
+    isLoading: false, // Start as false to show cached data immediately
+    rateLimits: [],
+    usingCachedData: false
+  });
+  const { toast } = useToast();
 
-  const addError = (error: ErrorInfo) => {
-    setErrors(prev => [...prev, { ...error, id: Date.now() } as any]);
-  };
+  const updateRateLimits = useCallback(() => {
+    if (keystoneService?.getAllRateLimits) {
+      const rateLimits = keystoneService.getAllRateLimits();
+      setConnectionState(prev => ({ ...prev, rateLimits }));
+    }
+  }, [keystoneService]);
 
-  const removeError = (index: number) => {
-    setErrors(prev => prev.filter((_, i) => i !== index));
-  };
+  const handleError = useCallback((error: ErrorInfo) => {
+    setConnectionState(prev => ({ 
+      ...prev, 
+      lastError: error,
+      isConnected: error.type !== 'network',
+      isLoading: false
+    }));
 
-  const clearErrors = () => {
-    setErrors([]);
-  };
+    // Only show toast for critical errors, not rate limits
+    if (error.type === 'network') {
+      toast({
+        title: "Connection Error",
+        description: "Using cached data while offline.",
+        variant: "default",
+      });
+    }
+  }, [toast]);
 
-  const updateRateLimits = (limits: RateLimitInfo[]) => {
-    setRateLimits(limits);
-  };
+  const handleRateLimit = useCallback((rateLimitInfo: RateLimitInfo) => {
+    updateRateLimits();
+    // Don't show toast for rate limits - handle silently
+  }, [updateRateLimits]);
 
-  const updateConnectionStatus = (connected: boolean) => {
-    setIsConnected(connected);
-    setLastChecked(new Date());
-  };
+  const useCachedData = useCallback(() => {
+    setConnectionState(prev => ({
+      ...prev,
+      usingCachedData: true,
+      isLoading: false
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (keystoneService) {
+      // Set up error and rate limit listeners
+      keystoneService.onError?.(handleError);
+      keystoneService.onRateLimit?.(handleRateLimit);
+
+      // Update rate limits periodically
+      const interval = setInterval(updateRateLimits, 5000); // Less frequent updates
+
+      return () => {
+        clearInterval(interval);
+        keystoneService.removeErrorListener?.(handleError);
+        keystoneService.removeRateLimitListener?.(handleRateLimit);
+      };
+    }
+  }, [keystoneService, handleError, handleRateLimit, updateRateLimits]);
+
+  const testConnection = useCallback(async () => {
+    if (!keystoneService) return;
+
+    setConnectionState(prev => ({ ...prev, isLoading: true }));
+    
+    try {
+      const result = await keystoneService.testConnection();
+      setConnectionState(prev => ({
+        ...prev,
+        isConnected: result.success,
+        isLoading: false,
+        usingCachedData: false,
+        lastError: result.success ? undefined : {
+          message: result.error || 'Connection test failed',
+          type: 'unknown',
+          retryable: true
+        }
+      }));
+    } catch (error) {
+      setConnectionState(prev => ({
+        ...prev,
+        isConnected: false,
+        isLoading: false,
+        lastError: {
+          message: 'Connection test failed',
+          type: 'network',
+          retryable: true
+        }
+      }));
+    }
+  }, [keystoneService]);
 
   return {
-    errors,
-    rateLimits,
-    isConnected,
-    lastChecked,
-    addError,
-    removeError,
-    clearErrors,
+    connectionState,
+    testConnection,
     updateRateLimits,
-    updateConnectionStatus
+    useCachedData,
+    clearError: () => setConnectionState(prev => ({ ...prev, lastError: undefined }))
   };
 };
 
