@@ -147,6 +147,12 @@ export default class KeystoneService {
     data?: any
   ): Promise<KeystoneResponse<T>> {
     try {
+          // DEBUG LOGGING
+    console.log('🔧 Debug makeRequest:');
+    console.log('- Proxy URL from config:', this.config.proxyUrl);
+    console.log('- API Token from config:', this.config.apiToken);
+    console.log('- Endpoint:', endpoint);
+    console.log('- Full URL:', `${this.config.proxyUrl}${endpoint}`);
       if (!this.config.proxyUrl) {
         throw new Error('Proxy URL not configured');
       }
