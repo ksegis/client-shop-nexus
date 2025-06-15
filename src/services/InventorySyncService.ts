@@ -1,5 +1,6 @@
-// Fixed Inventory Sync Service - Corrected import paths
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+// Complete InventorySyncService - Uses shared Supabase client with ALL functionality preserved
+import { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/lib/supabase';
 import KeystoneService, { InventoryItem, KeystoneResponse } from '@/services/keystone/KeystoneService';
 
 interface SyncLog {
@@ -76,19 +77,13 @@ interface SyncSchedule {
 }
 
 export class InventorySyncService {
-  private supabase: SupabaseClient;
+  public supabase: SupabaseClient; // Make public for debugging
   private keystoneService: KeystoneService;
   private isInitialized = false;
 
   constructor() {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN;
-
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase configuration missing');
-    }
-
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    // Use shared Supabase client instead of creating a new one
+    this.supabase = getSupabaseClient();
     this.keystoneService = KeystoneService.getInstance();
   }
 
@@ -96,6 +91,8 @@ export class InventorySyncService {
     if (this.isInitialized) return;
 
     try {
+      console.log('Initializing InventorySyncService with shared Supabase client...');
+      
       // Test Supabase connection using your existing inventory table
       const { error } = await this.supabase.from('inventory').select('count').limit(1);
       if (error) {
