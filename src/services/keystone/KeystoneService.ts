@@ -1,5 +1,5 @@
-// Enhanced KeystoneService.ts - Version 3.0.0 (Complete Reconciled)
-// Singleton pattern with complete Keystone API coverage and all existing functionality
+// Enhanced KeystoneService.ts - Version 3.1.0 (Fixed Environment Variables Priority)
+// Singleton pattern with complete Keystone API coverage and prioritized environment variables
 import { createClient } from '@supabase/supabase-js';
 
 interface KeystoneConfig {
@@ -67,19 +67,22 @@ export default class KeystoneService {
       accountNumber: import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER || '',
       securityToken: '' // Will be set after loading config
     };
-      // DEBUG LOGGING - Add this right here
-  console.log('🔧 KeystoneService Constructor Debug:');
-  console.log('- VITE_KEYSTONE_PROXY_URL env:', import.meta.env.VITE_KEYSTONE_PROXY_URL);
-  console.log('- VITE_KEYSTONE_API_TOKEN env:', import.meta.env.VITE_KEYSTONE_API_TOKEN);
-  console.log('- Config proxyUrl:', this.config.proxyUrl);
-  console.log('- Config apiToken:', this.config.apiToken);
 
-    // Initialize Supabase client (no hardcoded fallbacks)
+    // DEBUG LOGGING - Add this right here
+    console.log('🔧 KeystoneService Constructor Debug:');
+    console.log('- VITE_KEYSTONE_PROXY_URL env:', import.meta.env.VITE_KEYSTONE_PROXY_URL);
+    console.log('- VITE_KEYSTONE_API_TOKEN env:', import.meta.env.VITE_KEYSTONE_API_TOKEN);
+    console.log('- VITE_KEYSTONE_ACCOUNT_NUMBER env:', import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER);
+    console.log('- Config proxyUrl:', this.config.proxyUrl);
+    console.log('- Config apiToken:', this.config.apiToken);
+    console.log('- Config accountNumber:', this.config.accountNumber);
+
+    // Initialize Supabase client only if needed
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN;
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error('Missing Supabase configuration - VITE_SUPABASE_URL and VITE_SUPABASE_ANON_TOKEN environment variables are required');
+      console.warn('Supabase configuration missing - will use environment variables only');
       this.supabase = null;
     } else {
       this.supabase = createClient(supabaseUrl, supabaseKey);
@@ -99,8 +102,26 @@ export default class KeystoneService {
 
   private async initializeConfig(): Promise<void> {
     try {
+      // First, check if all required environment variables are available
+      const envAccountNumber = import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER;
+      const envSecurityTokenDev = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV;
+      const envSecurityTokenProd = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD;
+      
+      // If we have the required environment variables, use them directly
+      if (envAccountNumber && (envSecurityTokenDev || envSecurityTokenProd)) {
+        console.log('✅ Using environment variables for Keystone configuration');
+        this.config.accountNumber = envAccountNumber;
+        this.config.environment = 'development'; // Default to development
+        this.config.securityToken = this.getSecurityTokenForEnvironment('development');
+        this.validateConfiguration();
+        return;
+      }
+      
+      // Only try to load from Supabase if environment variables are missing
+      console.log('⚠️ Environment variables incomplete, trying to load from Supabase');
       const config = await this.loadConfig();
       this.config.environment = config.environment || 'development';
+      this.config.accountNumber = config.account_number || this.config.accountNumber;
       this.config.securityToken = this.getSecurityTokenForEnvironment(this.config.environment as 'development' | 'production');
       
       // Validate after loading config
@@ -135,7 +156,7 @@ export default class KeystoneService {
     if (missing.length > 0) {
       console.warn(`Missing Keystone environment variables: ${missing.join(', ')}`);
     } else {
-      console.log('Keystone configuration loaded successfully from environment variables');
+      console.log('✅ Keystone configuration loaded successfully from environment variables');
     }
   }
 
@@ -153,12 +174,9 @@ export default class KeystoneService {
     data?: any
   ): Promise<KeystoneResponse<T>> {
     try {
-          // DEBUG LOGGING
-    console.log('🔧 Debug makeRequest:');
-    console.log('- Proxy URL from config:', this.config.proxyUrl);
-    console.log('- API Token from config:', this.config.apiToken);
-    console.log('- Endpoint:', endpoint);
-    console.log('- Full URL:', `${this.config.proxyUrl}${endpoint}`);
+      // DEBUG LOGGING
+      console.log('🔧 Making health check request to:', `${this.config.proxyUrl}${endpoint}`);
+      
       if (!this.config.proxyUrl) {
         throw new Error('Proxy URL not configured');
       }
@@ -490,7 +508,7 @@ export default class KeystoneService {
     return this.makeRequest('/kits/components', 'POST', requestData);
   }
 
-  // UTILITY METHODS (Added for Parts page compatibility)
+  // UTILITY METHODS
 
   // Check if response indicates rate limiting
   isRateLimited(response: KeystoneResponse): boolean {
@@ -514,7 +532,7 @@ export default class KeystoneService {
     }).format(price);
   }
 
-  // CONFIGURATION MANAGEMENT (PRESERVED FROM ORIGINAL)
+  // CONFIGURATION MANAGEMENT
 
   async loadConfig(): Promise<any> {
     if (this.loadedConfig) {
@@ -528,7 +546,7 @@ export default class KeystoneService {
           environment: 'development',
           development_ips: [],
           production_ips: [],
-          accountNumber: this.config.accountNumber,
+          account_number: this.config.accountNumber,
           securityToken: this.getSecurityTokenForEnvironment('development')
         };
       }
@@ -544,7 +562,7 @@ export default class KeystoneService {
           environment: 'development',
           development_ips: [],
           production_ips: [],
-          accountNumber: this.config.accountNumber,
+          account_number: this.config.accountNumber,
           securityToken: this.getSecurityTokenForEnvironment('development')
         };
       }
@@ -556,24 +574,16 @@ export default class KeystoneService {
         data.production_ips = data.approved_ips;
       }
 
-      this.loadedConfig = {
-        ...data,
-        // Ensure environment-specific IP arrays exist
-        development_ips: data.development_ips || [],
-        production_ips: data.production_ips || [],
-        // Override with environment variables for credentials
-        accountNumber: this.config.accountNumber,
-        securityToken: this.getSecurityTokenForEnvironment(data.environment || 'development')
-      };
-
-      return this.loadedConfig;
+      this.loadedConfig = data;
+      console.log('Configuration loaded from database');
+      return data;
     } catch (error) {
       console.error('Error loading configuration:', error);
       return {
         environment: 'development',
         development_ips: [],
         production_ips: [],
-        accountNumber: this.config.accountNumber,
+        account_number: this.config.accountNumber,
         securityToken: this.getSecurityTokenForEnvironment('development')
       };
     }
@@ -582,22 +592,29 @@ export default class KeystoneService {
   async saveConfig(config: any): Promise<void> {
     try {
       if (!this.supabase) {
-        console.warn('Supabase not available, cannot save config to database');
-        return;
+        throw new Error('Supabase not available');
       }
 
-      // Get current config to preserve IP lists for the non-active environment
+      // Get current config to preserve existing data
       const currentConfig = await this.loadConfig();
       
-      // Determine which IP list to update based on environment
+      // Determine if we're in development environment
       const isDevEnvironment = config.environment === 'development';
       
-      // Don't save credentials to database - only runtime settings
+      // Prepare config to save with environment-specific IP handling
       const configToSave = {
-        environment: config.environment,
-        // Add account_number to configToSave
-        account_number: this.config.accountNumber,
-        // Update the appropriate IP list based on current environment
+        id: currentConfig.id || 'ac1a4977-53ce-41f5-bf45-37abe54a1a75',
+        account_number: config.accountNumber || this.config.accountNumber,
+        api_endpoint: config.apiEndpoint || 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx',
+        wsdl_url: config.wsdlUrl || 'http://legacy.ekeystone.com/SDK/api/ekeystoneapi.asmx?WSDL',
+        approved_ips: config.approvedIPs || [],
+        is_active: config.isActive !== undefined ? config.isActive : true,
+        ip_approval_status: config.ipApprovalStatus || 'pending',
+        ip_approval_date: config.ipApprovalDate || null,
+        created_at: currentConfig.created_at || '2025-06-12T20:45:47.347159',
+        updated_at: new Date().toISOString(),
+        environment: config.environment || 'development',
+        // Handle environment-specific IPs
         development_ips: isDevEnvironment ? config.approvedIPs : (currentConfig.development_ips || []),
         production_ips: !isDevEnvironment ? config.approvedIPs : (currentConfig.production_ips || []),
         // Add security_key_dev and security_key_prod to configToSave
@@ -683,6 +700,10 @@ export default class KeystoneService {
     return this.config.environment;
   }
 
+  getCurrentEnvironment(): string {
+    return this.config.environment;
+  }
+
   // Get sync logs from database
   async getSyncLogs(limit: number = 50): Promise<any[]> {
     try {
@@ -756,3 +777,4 @@ export default class KeystoneService {
 
 // Export types for use in other components
 export type { KeystoneResponse, InventoryItem, PricingInfo, ShippingOption, OrderInfo };
+
