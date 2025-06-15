@@ -67,6 +67,12 @@ export default class KeystoneService {
       accountNumber: import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER || '',
       securityToken: '' // Will be set after loading config
     };
+      // DEBUG LOGGING - Add this right here
+  console.log('🔧 KeystoneService Constructor Debug:');
+  console.log('- VITE_KEYSTONE_PROXY_URL env:', import.meta.env.VITE_KEYSTONE_PROXY_URL);
+  console.log('- VITE_KEYSTONE_API_TOKEN env:', import.meta.env.VITE_KEYSTONE_API_TOKEN);
+  console.log('- Config proxyUrl:', this.config.proxyUrl);
+  console.log('- Config apiToken:', this.config.apiToken);
 
     // Initialize Supabase client (no hardcoded fallbacks)
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
