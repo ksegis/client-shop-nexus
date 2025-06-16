@@ -132,14 +132,27 @@ export class PricingSyncService {
    */
   private async testDatabaseConnection(): Promise<void> {
     try {
-      // Test pricing_cache table
+      // Test basic Supabase connection first
       const { data, error } = await this.supabase
-        .from('pricing_cache')
-        .select('count(*)')
+        .from('inventory') // Use existing inventory table
+        .select('id')
         .limit(1);
 
       if (error) {
         throw new Error(`Database connection failed: ${error.message}`);
+      }
+
+      // Test if pricing_cache table exists
+      const { data: pricingData, error: pricingError } = await this.supabase
+        .from('pricing_cache')
+        .select('id')
+        .limit(1);
+
+      if (pricingError && pricingError.code === 'PGRST116') {
+        console.warn('⚠️ pricing_cache table does not exist. Please run the pricing system database schema.');
+        // Don't throw error, just warn - the service can still work for some functions
+      } else if (pricingError) {
+        console.warn('⚠️ pricing_cache table access issue:', pricingError.message);
       }
 
       console.log('✅ Database connection verified');
@@ -154,32 +167,30 @@ export class PricingSyncService {
    */
   private async initializeSyncTables(): Promise<void> {
     try {
-      // Ensure pricing sync logs table exists
+      // Check if pricing sync logs table exists
       const { error: logsError } = await this.supabase
         .from('pricing_sync_logs')
         .select('id')
         .limit(1);
 
       if (logsError && logsError.code === 'PGRST116') {
-        console.log('📊 Creating pricing sync logs table...');
-        // Table doesn't exist, but we'll assume it's created via SQL schema
+        console.warn('⚠️ pricing_sync_logs table does not exist. Please run the pricing system database schema.');
       }
 
-      // Ensure pricing update requests table exists
+      // Check if pricing update requests table exists
       const { error: requestsError } = await this.supabase
         .from('pricing_update_requests')
         .select('id')
         .limit(1);
 
       if (requestsError && requestsError.code === 'PGRST116') {
-        console.log('📋 Creating pricing update requests table...');
-        // Table doesn't exist, but we'll assume it's created via SQL schema
+        console.warn('⚠️ pricing_update_requests table does not exist. Please run the pricing system database schema.');
       }
 
-      console.log('✅ Sync tracking tables verified');
+      console.log('✅ Sync tracking tables checked');
     } catch (error) {
-      console.error('❌ Failed to initialize sync tables:', error);
-      throw error;
+      console.error('❌ Failed to check sync tables:', error);
+      // Don't throw error - service can still work with limited functionality
     }
   }
 
@@ -194,19 +205,27 @@ export class PricingSyncService {
 
     console.log('🔄 Starting full pricing sync...');
     
-    const syncLog = await this.startSyncLog('full');
-    this.currentSyncLog = syncLog;
+    let syncLog: PricingSyncLog | null = null;
+    try {
+      syncLog = await this.startSyncLog('full');
+      this.currentSyncLog = syncLog;
+    } catch (error) {
+      console.warn('⚠️ Could not create sync log:', error.message);
+    }
 
     try {
       // Check if Keystone service is rate limited
       if (this.keystoneService.isEndpointRateLimited('/pricing')) {
         const remainingTime = this.keystoneService.getRateLimitRemainingTime('/pricing');
-        await this.updateSyncLog(syncLog.id!, {
-          status: 'failed',
-          error_message: `Rate limited. Retry in ${remainingTime} seconds`,
-          rate_limited: true,
-          retry_after: remainingTime
-        });
+        
+        if (syncLog) {
+          await this.updateSyncLog(syncLog.id!, {
+            status: 'failed',
+            error_message: `Rate limited. Retry in ${remainingTime} seconds`,
+            rate_limited: true,
+            retry_after: remainingTime
+          });
+        }
         
         return {
           success: false,
@@ -219,12 +238,14 @@ export class PricingSyncService {
       console.log(`📊 Found ${partsToSync.length} parts needing pricing sync`);
 
       if (partsToSync.length === 0) {
-        await this.updateSyncLog(syncLog.id!, {
-          status: 'completed',
-          total_parts: 0,
-          successful_updates: 0,
-          failed_updates: 0
-        });
+        if (syncLog) {
+          await this.updateSyncLog(syncLog.id!, {
+            status: 'completed',
+            total_parts: 0,
+            successful_updates: 0,
+            failed_updates: 0
+          });
+        }
 
         return {
           success: true,
@@ -233,9 +254,11 @@ export class PricingSyncService {
       }
 
       // Update sync log with total parts count
-      await this.updateSyncLog(syncLog.id!, {
-        total_parts: partsToSync.length
-      });
+      if (syncLog) {
+        await this.updateSyncLog(syncLog.id!, {
+          total_parts: partsToSync.length
+        });
+      }
 
       // Process parts in batches
       let successfulUpdates = 0;
@@ -288,12 +311,14 @@ export class PricingSyncService {
       }
 
       // Complete sync log
-      await this.updateSyncLog(syncLog.id!, {
-        status: failedUpdates === 0 ? 'completed' : 'partial',
-        successful_updates: successfulUpdates,
-        failed_updates: failedUpdates,
-        error_message: failedUpdates > 0 ? `${failedUpdates} parts failed to sync` : undefined
-      });
+      if (syncLog) {
+        await this.updateSyncLog(syncLog.id!, {
+          status: failedUpdates === 0 ? 'completed' : 'partial',
+          successful_updates: successfulUpdates,
+          failed_updates: failedUpdates,
+          error_message: failedUpdates > 0 ? `${failedUpdates} parts failed to sync` : undefined
+        });
+      }
 
       const message = failedUpdates === 0 
         ? `Full pricing sync completed successfully. Updated ${successfulUpdates} parts.`
@@ -308,17 +333,19 @@ export class PricingSyncService {
           totalParts: partsToSync.length,
           successfulUpdates,
           failedUpdates,
-          syncLogId: syncLog.id
+          syncLogId: syncLog?.id
         }
       };
 
     } catch (error) {
       console.error('❌ Full pricing sync failed:', error);
       
-      await this.updateSyncLog(syncLog.id!, {
-        status: 'failed',
-        error_message: error.message
-      });
+      if (syncLog) {
+        await this.updateSyncLog(syncLog.id!, {
+          status: 'failed',
+          error_message: error.message
+        });
+      }
 
       return {
         success: false,
@@ -326,96 +353,6 @@ export class PricingSyncService {
       };
     } finally {
       this.currentSyncLog = null;
-    }
-  }
-
-  /**
-   * Perform incremental pricing sync for stale data
-   * Only syncs parts with outdated pricing information
-   */
-  async performIncrementalSync(staleThresholdHours: number = this.STALE_THRESHOLD_HOURS): Promise<{ success: boolean; message: string; details?: any }> {
-    if (!this.isInitialized) {
-      await this.initialize();
-    }
-
-    console.log(`🔄 Starting incremental pricing sync (stale threshold: ${staleThresholdHours}h)...`);
-    
-    const syncLog = await this.startSyncLog('incremental');
-
-    try {
-      // Get stale pricing data
-      const staleParts = await this.getStalePricingData(staleThresholdHours);
-      console.log(`📊 Found ${staleParts.length} parts with stale pricing`);
-
-      if (staleParts.length === 0) {
-        await this.updateSyncLog(syncLog.id!, {
-          status: 'completed',
-          total_parts: 0,
-          successful_updates: 0,
-          failed_updates: 0
-        });
-
-        return {
-          success: true,
-          message: 'No stale pricing data found. All pricing is current.'
-        };
-      }
-
-      // Process stale parts
-      let successfulUpdates = 0;
-      let failedUpdates = 0;
-
-      for (const part of staleParts) {
-        try {
-          const result = await this.updateSinglePartPricing(part.keystone_vcpn);
-          if (result.success) {
-            successfulUpdates++;
-          } else {
-            failedUpdates++;
-          }
-        } catch (error) {
-          console.error(`❌ Failed to update pricing for ${part.keystone_vcpn}:`, error);
-          failedUpdates++;
-        }
-
-        // Add small delay between requests
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      // Complete sync log
-      await this.updateSyncLog(syncLog.id!, {
-        status: failedUpdates === 0 ? 'completed' : 'partial',
-        total_parts: staleParts.length,
-        successful_updates: successfulUpdates,
-        failed_updates: failedUpdates
-      });
-
-      const message = failedUpdates === 0 
-        ? `Incremental pricing sync completed. Updated ${successfulUpdates} stale parts.`
-        : `Incremental sync completed with issues. Updated ${successfulUpdates} parts, ${failedUpdates} failed.`;
-
-      return {
-        success: failedUpdates === 0,
-        message,
-        details: {
-          staleParts: staleParts.length,
-          successfulUpdates,
-          failedUpdates
-        }
-      };
-
-    } catch (error) {
-      console.error('❌ Incremental pricing sync failed:', error);
-      
-      await this.updateSyncLog(syncLog.id!, {
-        status: 'failed',
-        error_message: error.message
-      });
-
-      return {
-        success: false,
-        message: `Incremental pricing sync failed: ${error.message}`
-      };
     }
   }
 
@@ -489,6 +426,12 @@ export class PricingSyncService {
         .single();
 
       if (error) {
+        // If table doesn't exist, fall back to direct update
+        if (error.code === 'PGRST116') {
+          console.warn('⚠️ pricing_update_requests table not found, performing direct update');
+          const result = await this.updateSinglePartPricing(vcpn);
+          return result;
+        }
         throw error;
       }
 
@@ -504,97 +447,6 @@ export class PricingSyncService {
       return {
         success: false,
         message: `Failed to request pricing update: ${error.message}`
-      };
-    }
-  }
-
-  /**
-   * Process pending pricing update requests
-   * Processes queued requests in priority order
-   */
-  async processPendingPricingUpdates(maxRequests: number = 10): Promise<{ success: boolean; message: string; processed: number }> {
-    try {
-      // Get pending requests ordered by priority and request time
-      const { data: requests, error } = await this.supabase
-        .from('pricing_update_requests')
-        .select('*')
-        .eq('status', 'pending')
-        .order('priority', { ascending: true }) // high, medium, low
-        .order('requested_at', { ascending: true })
-        .limit(maxRequests);
-
-      if (error) {
-        throw error;
-      }
-
-      if (!requests || requests.length === 0) {
-        return {
-          success: true,
-          message: 'No pending pricing update requests',
-          processed: 0
-        };
-      }
-
-      console.log(`🔄 Processing ${requests.length} pending pricing update requests...`);
-
-      let processed = 0;
-      for (const request of requests) {
-        try {
-          // Mark as processing
-          await this.supabase
-            .from('pricing_update_requests')
-            .update({
-              status: 'processing',
-              last_attempt: new Date().toISOString(),
-              attempts: (request.attempts || 0) + 1
-            })
-            .eq('id', request.id);
-
-          // Update the pricing
-          const result = await this.updateSinglePartPricing(request.keystone_vcpn);
-
-          // Update request status
-          await this.supabase
-            .from('pricing_update_requests')
-            .update({
-              status: result.success ? 'completed' : 'failed',
-              error_message: result.success ? null : result.message
-            })
-            .eq('id', request.id);
-
-          if (result.success) {
-            processed++;
-          }
-
-        } catch (error) {
-          console.error(`❌ Failed to process pricing update request ${request.id}:`, error);
-          
-          // Mark as failed
-          await this.supabase
-            .from('pricing_update_requests')
-            .update({
-              status: 'failed',
-              error_message: error.message
-            })
-            .eq('id', request.id);
-        }
-
-        // Add delay between requests
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-
-      return {
-        success: true,
-        message: `Processed ${processed}/${requests.length} pricing update requests`,
-        processed
-      };
-
-    } catch (error) {
-      console.error('❌ Failed to process pending pricing updates:', error);
-      return {
-        success: false,
-        message: `Failed to process pending updates: ${error.message}`,
-        processed: 0
       };
     }
   }
@@ -640,6 +492,10 @@ export class PricingSyncService {
       const { data, error } = await query;
 
       if (error) {
+        if (error.code === 'PGRST116') {
+          console.warn('⚠️ pricing_cache table not found, returning empty array');
+          return [];
+        }
         throw error;
       }
 
@@ -647,7 +503,7 @@ export class PricingSyncService {
 
     } catch (error) {
       console.error('❌ Failed to get pricing from Supabase:', error);
-      throw error;
+      return []; // Return empty array instead of throwing
     }
   }
 
@@ -656,33 +512,48 @@ export class PricingSyncService {
    */
   async getPricingSyncStatus(): Promise<PricingSyncStatus> {
     try {
-      // Get basic statistics
-      const { data: stats, error: statsError } = await this.supabase
-        .rpc('get_pricing_sync_stats');
-
-      if (statsError) {
-        console.error('❌ Failed to get pricing sync stats:', statsError);
+      // Try to get basic statistics
+      let stats = null;
+      try {
+        const { data: statsData, error: statsError } = await this.supabase
+          .rpc('get_pricing_sync_stats');
+        
+        if (!statsError) {
+          stats = statsData;
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not get pricing sync stats:', error.message);
       }
 
-      // Get recent sync logs
-      const { data: logs, error: logsError } = await this.supabase
-        .from('pricing_sync_logs')
-        .select('*')
-        .order('started_at', { ascending: false })
-        .limit(10);
+      // Try to get recent sync logs
+      let logs = [];
+      try {
+        const { data: logsData, error: logsError } = await this.supabase
+          .from('pricing_sync_logs')
+          .select('*')
+          .order('started_at', { ascending: false })
+          .limit(10);
 
-      if (logsError) {
-        console.error('❌ Failed to get pricing sync logs:', logsError);
+        if (!logsError) {
+          logs = logsData || [];
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not get pricing sync logs:', error.message);
       }
 
-      // Get pending update requests count
-      const { count: pendingCount, error: pendingError } = await this.supabase
-        .from('pricing_update_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
+      // Try to get pending update requests count
+      let pendingCount = 0;
+      try {
+        const { count, error: pendingError } = await this.supabase
+          .from('pricing_update_requests')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending');
 
-      if (pendingError) {
-        console.error('❌ Failed to get pending pricing updates:', pendingError);
+        if (!pendingError) {
+          pendingCount = count || 0;
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not get pending pricing updates:', error.message);
       }
 
       // Calculate error rate and average sync time
@@ -708,7 +579,7 @@ export class PricingSyncService {
         totalParts: stats?.total_parts || 0,
         syncedParts: stats?.synced_parts || 0,
         staleParts: stats?.stale_parts || 0,
-        pendingUpdates: pendingCount || 0,
+        pendingUpdates: pendingCount,
         isRunning,
         recentLogs,
         errorRate,
@@ -739,21 +610,20 @@ export class PricingSyncService {
    */
   private async getPartsNeedingPricingSync(): Promise<{ keystone_vcpn: string }[]> {
     try {
-      // Get parts from inventory that don't have current pricing
-      const { data, error } = await this.supabase
-        .rpc('get_parts_needing_pricing_sync', {
-          stale_hours: this.STALE_THRESHOLD_HOURS
-        });
+      // Try to use the database function first
+      try {
+        const { data, error } = await this.supabase
+          .rpc('get_parts_needing_pricing_sync', {
+            stale_hours: this.STALE_THRESHOLD_HOURS
+          });
 
-      if (error) {
-        throw error;
+        if (!error && data) {
+          return data;
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not use get_parts_needing_pricing_sync function:', error.message);
       }
 
-      return data || [];
-
-    } catch (error) {
-      console.error('❌ Failed to get parts needing pricing sync:', error);
-      
       // Fallback: get all inventory parts
       const { data: inventoryParts, error: inventoryError } = await this.supabase
         .from('inventory')
@@ -765,31 +635,10 @@ export class PricingSyncService {
       }
 
       return inventoryParts || [];
-    }
-  }
-
-  /**
-   * Get parts with stale pricing data
-   */
-  private async getStalePricingData(staleThresholdHours: number): Promise<PricingData[]> {
-    try {
-      const staleThreshold = new Date();
-      staleThreshold.setHours(staleThreshold.getHours() - staleThresholdHours);
-
-      const { data, error } = await this.supabase
-        .from('pricing_cache')
-        .select('*')
-        .or(`keystone_last_sync.is.null,keystone_last_sync.lt.${staleThreshold.toISOString()}`);
-
-      if (error) {
-        throw error;
-      }
-
-      return data || [];
 
     } catch (error) {
-      console.error('❌ Failed to get stale pricing data:', error);
-      throw error;
+      console.error('❌ Failed to get parts needing pricing sync:', error);
+      return [];
     }
   }
 
@@ -819,6 +668,9 @@ export class PricingSyncService {
         .single();
 
       if (error) {
+        if (error.code === 'PGRST116') {
+          throw new Error('pricing_cache table does not exist. Please run the pricing system database schema.');
+        }
         throw error;
       }
 
@@ -848,6 +700,9 @@ export class PricingSyncService {
         .single();
 
       if (error) {
+        if (error.code === 'PGRST116') {
+          throw new Error('pricing_sync_logs table does not exist. Please run the pricing system database schema.');
+        }
         throw error;
       }
 
@@ -883,7 +738,7 @@ export class PricingSyncService {
 
     } catch (error) {
       console.error(`❌ Failed to update sync log ${logId}:`, error);
-      throw error;
+      // Don't throw error for log updates
     }
   }
 }
