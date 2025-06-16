@@ -14,20 +14,8 @@
  * - Comprehensive logging and monitoring
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '../lib/supabase'; // Use your existing Supabase client
 import KeystoneService, { PricingInfo, KeystoneResponse } from './keystone/KeystoneService';
-
-// Create Supabase client function
-function getSupabaseClient() {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-  
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables');
-  }
-  
-  return createClient(supabaseUrl, supabaseKey);
-}
 
 // Interfaces for pricing data management
 export interface PricingData {
@@ -95,7 +83,7 @@ export interface PricingSyncStatus {
  * rate limit handling, and performance optimization.
  */
 export class PricingSyncService {
-  private supabase = getSupabaseClient();
+  private supabase = getSupabaseClient(); // Use your existing client
   private keystoneService: KeystoneService;
   private isInitialized = false;
   private currentSyncLog: PricingSyncLog | null = null;
