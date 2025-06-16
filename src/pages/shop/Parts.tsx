@@ -1791,6 +1791,5 @@ const PartsPage: React.FC = () => {
     </div>
   );
 };
-
 export default PartsPage;
 
