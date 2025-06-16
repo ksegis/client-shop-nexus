@@ -15,7 +15,7 @@
  */
 
 import { getPricingSyncService, PricingSyncService, PricingSyncStatus } from './pricing_sync_service';
-import { getSupabaseClient } from './shared_supabase_client';
+import { createClient } from '@supabase/supabase-js';
 import KeystoneService from './keystone/KeystoneService';
 
 // Interfaces for pricing scheduler management
