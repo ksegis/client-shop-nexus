@@ -1,4 +1,4 @@
-// Fixed Parts Page - Corrected lucide-react icon imports
+// Complete Parts.tsx - Fixed Full Sync and Cart with ALL Existing Functionality Preserved
 import React, { useState, useEffect, useCallback } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, Database, RotateCcw, Clock, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
@@ -103,6 +103,7 @@ const Parts: React.FC = () => {
   // Loading and sync states
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isFullSyncing, setIsFullSyncing] = useState(false);
   const [lastDataUpdate, setLastDataUpdate] = useState<Date | null>(null);
   const [totalPartsCount, setTotalPartsCount] = useState(0);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ pendingRequests: 0 });
@@ -122,7 +123,7 @@ const Parts: React.FC = () => {
   useEffect(() => {
     const initializeServices = async () => {
       try {
-        console.log('Initializing inventory services...');
+        console.log('🔧 Initializing inventory services...');
         
         // Initialize sync service
         const inventorySync = new InventorySyncService();
@@ -139,7 +140,7 @@ const Parts: React.FC = () => {
         await syncScheduler.initialize();
         setScheduler(syncScheduler);
 
-        console.log('Services initialized successfully');
+        console.log('✅ Services initialized successfully');
         
         // Load initial data from Supabase
         await loadInventoryFromSupabase(inventorySync);
@@ -148,7 +149,7 @@ const Parts: React.FC = () => {
         await updateSyncStatus(inventorySync);
 
       } catch (error) {
-        console.error('Failed to initialize services:', error);
+        console.error('❌ Failed to initialize services:', error);
         toast({
           title: "Initialization Error",
           description: "Failed to initialize inventory system. Loading cached data if available.",
@@ -180,7 +181,7 @@ const Parts: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('Failed to load cached data:', error);
+      console.error('❌ Failed to load cached data:', error);
     } finally {
       setIsLoading(false);
     }
@@ -196,7 +197,7 @@ const Parts: React.FC = () => {
 
     try {
       setIsLoading(page === 1);
-      console.log(`Loading inventory from Supabase (page ${page})...`);
+      console.log(`📊 Loading inventory from Supabase (page ${page})...`);
 
       const filters = {
         category: selectedCategory !== 'all' ? selectedCategory : undefined,
@@ -226,10 +227,10 @@ const Parts: React.FC = () => {
       setHasMoreData(result.data.length === itemsPerPage);
       setLastDataUpdate(new Date());
       
-      console.log(`Loaded ${result.data.length} parts from Supabase (total: ${result.count})`);
+      console.log(`✅ Loaded ${result.data.length} parts from Supabase (total: ${result.count})`);
 
     } catch (error: any) {
-      console.error('Error loading inventory from Supabase:', error);
+      console.error('❌ Error loading inventory from Supabase:', error);
       
       toast({
         title: "Data Loading Error",
@@ -252,14 +253,16 @@ const Parts: React.FC = () => {
     if (!serviceToUse) return;
 
     try {
+      console.log('📈 Loading sync status...');
       const status = await serviceToUse.getSyncStatus();
       setSyncStatus(status);
+      console.log('✅ Sync status loaded:', status);
     } catch (error) {
-      console.error('Error getting sync status:', error);
+      console.error('❌ Error loading sync status:', error);
     }
   };
 
-  // Trigger manual full sync
+  // Trigger manual full sync with timeout and proper error handling
   const handleFullSync = async () => {
     if (!scheduler) {
       toast({
@@ -270,16 +273,32 @@ const Parts: React.FC = () => {
       return;
     }
 
+    console.log('🔄 Starting full sync...');
+    setIsFullSyncing(true);
+    
+    // Set a timeout to prevent endless spinning
+    const timeoutId = setTimeout(() => {
+      console.log('⏰ Full sync timeout reached');
+      setIsFullSyncing(false);
+      toast({
+        title: "Sync Timeout",
+        description: "Sync operation timed out after 60 seconds. Please try again.",
+        variant: "destructive",
+      });
+    }, 60000); // 60 second timeout
+
     try {
-      setIsRefreshing(true);
-      
       toast({
         title: "Starting Full Sync",
         description: "Syncing all inventory data from Keystone API...",
         variant: "default",
       });
 
+      console.log('📡 Calling scheduler.triggerFullSync()...');
       const result = await scheduler.triggerFullSync();
+      
+      clearTimeout(timeoutId);
+      console.log('✅ Full sync result:', result);
       
       if (result.success) {
         toast({
@@ -300,14 +319,16 @@ const Parts: React.FC = () => {
       }
 
     } catch (error: any) {
-      console.error('Full sync error:', error);
+      clearTimeout(timeoutId);
+      console.error('❌ Full sync error:', error);
       toast({
         title: "Sync Error",
         description: `Failed to sync inventory: ${error.message}`,
         variant: "destructive",
       });
     } finally {
-      setIsRefreshing(false);
+      console.log('🏁 Full sync completed, resetting state...');
+      setIsFullSyncing(false);
     }
   };
 
@@ -356,7 +377,7 @@ const Parts: React.FC = () => {
       }
 
     } catch (error: any) {
-      console.error('Part update error:', error);
+      console.error('❌ Part update error:', error);
       toast({
         title: "Update Error",
         description: `Failed to update part: ${error.message}`,
@@ -367,9 +388,21 @@ const Parts: React.FC = () => {
 
   // Refresh data
   const handleRefresh = useCallback(async () => {
-    setCurrentPage(1);
-    await loadInventoryFromSupabase();
-    await updateSyncStatus();
+    setIsRefreshing(true);
+    try {
+      setCurrentPage(1);
+      await loadInventoryFromSupabase();
+      await updateSyncStatus();
+      toast({
+        title: "Data Refreshed",
+        description: "Inventory data has been refreshed",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error('❌ Refresh error:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [syncService]);
 
   // Load more data
@@ -439,12 +472,18 @@ const Parts: React.FC = () => {
   // Get unique categories
   const categories = Array.from(new Set(parts.map(part => part.category).filter(Boolean)));
 
-  // Cart management
+  // Cart management - Fixed with proper logging
   const addToCart = (partId: string, quantity: number = 1) => {
-    setCart(prev => ({
-      ...prev,
-      [partId]: (prev[partId] || 0) + quantity
-    }));
+    console.log('🛒 Adding to cart:', partId, 'quantity:', quantity);
+    
+    setCart(prev => {
+      const newCart = {
+        ...prev,
+        [partId]: (prev[partId] || 0) + quantity
+      };
+      console.log('🛒 Updated cart state:', newCart);
+      return newCart;
+    });
     
     const part = parts.find(p => p.id === partId);
     toast({
@@ -464,6 +503,10 @@ const Parts: React.FC = () => {
   };
 
   const cartItemCount = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
+  const cartTotalValue = Object.entries(cart).reduce((total, [partId, quantity]) => {
+    const part = parts.find(p => p.id === partId);
+    return total + (part?.price || 0) * quantity;
+  }, 0);
 
   // Format last update time
   const formatLastUpdate = (dateString?: string) => {
@@ -613,26 +656,40 @@ const Parts: React.FC = () => {
           <Button
             variant="outline"
             onClick={handleRefresh}
-            disabled={isLoading}
+            disabled={isRefreshing}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Button
             variant="outline"
             onClick={handleFullSync}
-            disabled={isRefreshing}
+            disabled={isFullSyncing}
           >
-            <RotateCcw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Full Sync
+            <RotateCcw className={`h-4 w-4 mr-2 ${isFullSyncing ? 'animate-spin' : ''}`} />
+            {isFullSyncing ? 'Syncing...' : 'Full Sync'}
           </Button>
-          <Button variant="outline" className="relative">
+          <Button 
+            variant="outline" 
+            className="relative"
+            onClick={() => {
+              console.log('🛒 Cart clicked. Current cart:', cart);
+              console.log('🛒 Total items:', cartItemCount);
+              console.log('🛒 Total value:', cartTotalValue);
+              // Add your cart navigation logic here
+            }}
+          >
             <ShoppingCart className="h-4 w-4 mr-2" />
             Cart ({cartItemCount})
             {cartItemCount > 0 && (
-              <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center">
-                {cartItemCount}
-              </Badge>
+              <>
+                <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center">
+                  {cartItemCount}
+                </Badge>
+                <span className="ml-2 text-sm text-green-600">
+                  ${cartTotalValue.toFixed(2)}
+                </span>
+              </>
             )}
           </Button>
         </div>
@@ -805,10 +862,10 @@ const Parts: React.FC = () => {
                   variant="outline" 
                   onClick={handleFullSync}
                   className="mt-4"
-                  disabled={isRefreshing}
+                  disabled={isFullSyncing}
                 >
-                  <RotateCcw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  Sync Inventory
+                  <RotateCcw className={`h-4 w-4 mr-2 ${isFullSyncing ? 'animate-spin' : ''}`} />
+                  {isFullSyncing ? 'Syncing...' : 'Sync Inventory'}
                 </Button>
               )}
             </CardContent>
