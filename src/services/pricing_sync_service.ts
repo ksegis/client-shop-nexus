@@ -14,7 +14,7 @@
  * - Comprehensive logging and monitoring
  */
 
-import { getSupabaseClient } from '../supabase'; // Use your existing Supabase client
+import { getSupabaseClient } from '../lib/supabase'; // Correct path: lib is sibling to services
 import KeystoneService, { PricingInfo, KeystoneResponse } from './keystone/KeystoneService';
 
 // Interfaces for pricing data management
