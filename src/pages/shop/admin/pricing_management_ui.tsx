@@ -100,7 +100,7 @@ const calculateMarkupPercentage = (cost: number, price: number): number => {
   return ((price - cost) / cost) * 100;
 };
 
-// Enhanced part search component with better error handling
+// Enhanced part search component with better sizing
 const PartSearchSelector: React.FC<{
   onPartSelect: (part: InventoryItem) => void;
   selectedPart?: InventoryItem;
@@ -299,64 +299,66 @@ const PartSearchSelector: React.FC<{
         </Alert>
       )}
 
-      {/* Search Results Dropdown */}
+      {/* Search Results Dropdown - FIXED SIZE */}
       {showResults && searchResults.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-          {searchResults.map((part) => (
-            <div
-              key={part.id}
-              className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-              onClick={() => handlePartSelect(part)}
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900">{part.part_name}</div>
-                  <div className="text-sm text-gray-600">
-                    {part.part_number && `${part.part_number} • `}{part.brand}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    VCPN: {part.keystone_vcpn}
-                  </div>
-                  {part.description && (
-                    <div className="text-xs text-gray-500 mt-1 truncate">
-                      {part.description}
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
+          <ScrollArea className="max-h-80">
+            {searchResults.map((part) => (
+              <div
+                key={part.id}
+                className="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                onClick={() => handlePartSelect(part)}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900 truncate">{part.part_name}</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      {part.part_number && `${part.part_number} • `}{part.brand}
                     </div>
-                  )}
-                </div>
-                <div className="text-right text-sm">
-                  {part.cost > 0 && (
-                    <div className="text-gray-600">Cost: ${part.cost.toFixed(2)}</div>
-                  )}
-                  {part.list_price > 0 && (
-                    <div className="text-green-600 font-medium">List: ${part.list_price.toFixed(2)}</div>
-                  )}
-                  {part.quantity_available !== undefined && (
-                    <div className="text-xs text-gray-500">Qty: {part.quantity_available}</div>
-                  )}
+                    <div className="text-xs text-gray-500 mt-1">
+                      VCPN: {part.keystone_vcpn}
+                    </div>
+                    {part.description && (
+                      <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                        {part.description}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right text-sm ml-4 flex-shrink-0">
+                    {part.cost > 0 && (
+                      <div className="text-gray-600">Cost: ${part.cost.toFixed(2)}</div>
+                    )}
+                    {part.list_price > 0 && (
+                      <div className="text-green-600 font-medium">List: ${part.list_price.toFixed(2)}</div>
+                    )}
+                    {part.quantity_available !== undefined && (
+                      <div className="text-xs text-gray-500 mt-1">Qty: {part.quantity_available}</div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </ScrollArea>
         </div>
       )}
 
       {/* No Results */}
       {showResults && searchResults.length === 0 && searchTerm.length >= 2 && !isSearching && !searchError && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-3">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-4">
           <div className="text-gray-500 text-sm">No parts found matching "{searchTerm}"</div>
         </div>
       )}
 
       {/* Selected Part Display */}
       {selectedPart && (
-        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+        <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-md">
           <div className="flex justify-between items-start">
             <div>
               <div className="font-medium text-blue-900">{selectedPart.part_name}</div>
-              <div className="text-sm text-blue-700">
+              <div className="text-sm text-blue-700 mt-1">
                 {selectedPart.part_number && `${selectedPart.part_number} • `}{selectedPart.brand}
               </div>
-              <div className="text-xs text-blue-600">
+              <div className="text-xs text-blue-600 mt-1">
                 VCPN: {selectedPart.keystone_vcpn}
               </div>
             </div>
@@ -466,253 +468,255 @@ const PricingForm: React.FC<{
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Part Selection */}
-      {!isEditing && (
-        <PartSearchSelector
-          onPartSelect={handlePartSelect}
-          selectedPart={selectedPart}
-        />
-      )}
+    <ScrollArea className="max-h-[70vh] pr-4">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Part Selection */}
+        {!isEditing && (
+          <PartSearchSelector
+            onPartSelect={handlePartSelect}
+            selectedPart={selectedPart}
+          />
+        )}
 
-      {/* Part Information (Read-only when editing) */}
-      {(isEditing || selectedPart) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="part_name">Part Name</Label>
-            <Input
-              id="part_name"
-              value={formData.part_name}
-              onChange={(e) => setFormData(prev => ({ ...prev, part_name: e.target.value }))}
-              placeholder="Part name"
-              readOnly={isEditing}
-              className={isEditing ? "bg-gray-50" : ""}
-            />
-          </div>
-          <div>
-            <Label htmlFor="part_sku">Part Number</Label>
-            <Input
-              id="part_sku"
-              value={formData.part_sku}
-              onChange={(e) => setFormData(prev => ({ ...prev, part_sku: e.target.value }))}
-              placeholder="Part number"
-              readOnly={isEditing}
-              className={isEditing ? "bg-gray-50" : ""}
-            />
-          </div>
-          <div>
-            <Label htmlFor="vcpn">Keystone VCPN</Label>
-            <Input
-              id="vcpn"
-              value={formData.keystone_vcpn}
-              onChange={(e) => setFormData(prev => ({ ...prev, keystone_vcpn: e.target.value }))}
-              placeholder="VCPN"
-              readOnly={isEditing}
-              className={isEditing ? "bg-gray-50" : ""}
-            />
-          </div>
-          <div>
-            <Label htmlFor="currency">Currency</Label>
-            <Select value={formData.currency} onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="USD">USD</SelectItem>
-                <SelectItem value="CAD">CAD</SelectItem>
-                <SelectItem value="EUR">EUR</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      )}
-
-      {/* Only show pricing section if we have a part selected or are editing */}
-      {(selectedPart || isEditing) && (
-        <>
-          {/* Pricing Calculation Mode */}
-          <div className="space-y-4">
-            <div className="flex items-center space-x-4">
-              <Label>Calculation Mode:</Label>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={calculationMode === 'price'}
-                  onCheckedChange={(checked) => setCalculationMode(checked ? 'price' : 'markup')}
-                />
-                <span className="text-sm">
-                  {calculationMode === 'markup' ? 'Calculate Price from Markup %' : 'Calculate Markup % from Price'}
-                </span>
-              </div>
-            </div>
-
-            {/* Cost Input */}
+        {/* Part Information (Read-only when editing) */}
+        {(isEditing || selectedPart) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="cost">Cost *</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="cost"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.cost}
-                  onChange={(e) => handleCostChange(parseFloat(e.target.value) || 0)}
-                  className="pl-10"
-                  placeholder="0.00"
-                  required
-                />
-              </div>
+              <Label htmlFor="part_name">Part Name</Label>
+              <Input
+                id="part_name"
+                value={formData.part_name}
+                onChange={(e) => setFormData(prev => ({ ...prev, part_name: e.target.value }))}
+                placeholder="Part name"
+                readOnly={isEditing}
+                className={isEditing ? "bg-gray-50" : ""}
+              />
             </div>
+            <div>
+              <Label htmlFor="part_sku">Part Number</Label>
+              <Input
+                id="part_sku"
+                value={formData.part_sku}
+                onChange={(e) => setFormData(prev => ({ ...prev, part_sku: e.target.value }))}
+                placeholder="Part number"
+                readOnly={isEditing}
+                className={isEditing ? "bg-gray-50" : ""}
+              />
+            </div>
+            <div>
+              <Label htmlFor="vcpn">Keystone VCPN</Label>
+              <Input
+                id="vcpn"
+                value={formData.keystone_vcpn}
+                onChange={(e) => setFormData(prev => ({ ...prev, keystone_vcpn: e.target.value }))}
+                placeholder="VCPN"
+                readOnly={isEditing}
+                className={isEditing ? "bg-gray-50" : ""}
+              />
+            </div>
+            <div>
+              <Label htmlFor="currency">Currency</Label>
+              <Select value={formData.currency} onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">USD</SelectItem>
+                  <SelectItem value="CAD">CAD</SelectItem>
+                  <SelectItem value="EUR">EUR</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
 
-            {/* Markup Percentage or List Price */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="markup">Markup Percentage</Label>
-                <div className="relative">
-                  <Percent className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    id="markup"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.markup_percentage?.toFixed(2)}
-                    onChange={(e) => handleMarkupChange(parseFloat(e.target.value) || 0)}
-                    className="pl-10"
-                    placeholder="0.00"
-                    disabled={calculationMode === 'price'}
+        {/* Only show pricing section if we have a part selected or are editing */}
+        {(selectedPart || isEditing) && (
+          <>
+            {/* Pricing Calculation Mode */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-4">
+                <Label>Calculation Mode:</Label>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    checked={calculationMode === 'price'}
+                    onCheckedChange={(checked) => setCalculationMode(checked ? 'price' : 'markup')}
                   />
+                  <span className="text-sm">
+                    {calculationMode === 'markup' ? 'Calculate Price from Markup %' : 'Calculate Markup % from Price'}
+                  </span>
                 </div>
               </div>
+
+              {/* Cost Input */}
               <div>
-                <Label htmlFor="price">List Price *</Label>
+                <Label htmlFor="cost">Cost *</Label>
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <Input
-                    id="price"
+                    id="cost"
                     type="number"
                     step="0.01"
                     min="0"
-                    value={formData.list_price?.toFixed(2)}
-                    onChange={(e) => handlePriceChange(parseFloat(e.target.value) || 0)}
+                    value={formData.cost}
+                    onChange={(e) => handleCostChange(parseFloat(e.target.value) || 0)}
                     className="pl-10"
                     placeholder="0.00"
-                    disabled={calculationMode === 'markup'}
                     required
                   />
                 </div>
               </div>
-            </div>
 
-            {/* Calculation Display */}
-            {formData.cost > 0 && formData.list_price > 0 && (
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Calculator className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium text-blue-900">Pricing Calculation</span>
+              {/* Markup Percentage or List Price */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="markup">Markup Percentage</Label>
+                  <div className="relative">
+                    <Percent className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="markup"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.markup_percentage?.toFixed(2)}
+                      onChange={(e) => handleMarkupChange(parseFloat(e.target.value) || 0)}
+                      className="pl-10"
+                      placeholder="0.00"
+                      disabled={calculationMode === 'price'}
+                    />
+                  </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600">Cost:</span>
-                    <div className="font-medium">${formData.cost.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Markup:</span>
-                    <div className="font-medium">{formData.markup_percentage?.toFixed(2)}%</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">List Price:</span>
-                    <div className="font-medium text-green-600">${formData.list_price.toFixed(2)}</div>
+                <div>
+                  <Label htmlFor="price">List Price *</Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.list_price?.toFixed(2)}
+                      onChange={(e) => handlePriceChange(parseFloat(e.target.value) || 0)}
+                      className="pl-10"
+                      placeholder="0.00"
+                      disabled={calculationMode === 'markup'}
+                      required
+                    />
                   </div>
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Additional Pricing Controls */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="core_charge">Core Charge</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              {/* Calculation Display */}
+              {formData.cost > 0 && formData.list_price > 0 && (
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Calculator className="h-4 w-4 text-blue-600" />
+                    <span className="font-medium text-blue-900">Pricing Calculation</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Cost:</span>
+                      <div className="font-medium">${formData.cost.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Markup:</span>
+                      <div className="font-medium">{formData.markup_percentage?.toFixed(2)}%</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">List Price:</span>
+                      <div className="font-medium text-green-600">${formData.list_price.toFixed(2)}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Additional Pricing Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="core_charge">Core Charge</Label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="core_charge"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.core_charge}
+                    onChange={(e) => setFormData(prev => ({ ...prev, core_charge: parseFloat(e.target.value) || 0 }))}
+                    className="pl-10"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="minimum_price">Minimum Price</Label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="minimum_price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.minimum_price}
+                    onChange={(e) => setFormData(prev => ({ ...prev, minimum_price: parseFloat(e.target.value) || 0 }))}
+                    className="pl-10"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Effective Dates */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="start_date">Effective Start Date *</Label>
                 <Input
-                  id="core_charge"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.core_charge}
-                  onChange={(e) => setFormData(prev => ({ ...prev, core_charge: parseFloat(e.target.value) || 0 }))}
-                  className="pl-10"
-                  placeholder="0.00"
+                  id="start_date"
+                  type="date"
+                  value={formData.effective_start_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, effective_start_date: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="end_date">Effective End Date</Label>
+                <Input
+                  id="end_date"
+                  type="date"
+                  value={formData.effective_end_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, effective_end_date: e.target.value }))}
+                  placeholder="Leave blank for indefinite"
                 />
               </div>
             </div>
-            <div>
-              <Label htmlFor="minimum_price">Minimum Price</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="minimum_price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.minimum_price}
-                  onChange={(e) => setFormData(prev => ({ ...prev, minimum_price: parseFloat(e.target.value) || 0 }))}
-                  className="pl-10"
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* Effective Dates */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Notes */}
             <div>
-              <Label htmlFor="start_date">Effective Start Date *</Label>
-              <Input
-                id="start_date"
-                type="date"
-                value={formData.effective_start_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, effective_start_date: e.target.value }))}
-                required
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Add any notes about this pricing change..."
+                rows={3}
               />
             </div>
-            <div>
-              <Label htmlFor="end_date">Effective End Date</Label>
-              <Input
-                id="end_date"
-                type="date"
-                value={formData.effective_end_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, effective_end_date: e.target.value }))}
-                placeholder="Leave blank for indefinite"
-              />
+
+            {/* Form Actions */}
+            <div className="flex justify-end space-x-2 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!selectedPart && !isEditing}>
+                <Save className="h-4 w-4 mr-2" />
+                {isEditing ? 'Update Pricing' : 'Create Pricing'}
+              </Button>
             </div>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-              placeholder="Add any notes about this pricing change..."
-              rows={3}
-            />
-          </div>
-
-          {/* Form Actions */}
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!selectedPart && !isEditing}>
-              <Save className="h-4 w-4 mr-2" />
-              {isEditing ? 'Update Pricing' : 'Create Pricing'}
-            </Button>
-          </div>
-        </>
-      )}
-    </form>
+          </>
+        )}
+      </form>
+    </ScrollArea>
   );
 };
 
@@ -1124,9 +1128,9 @@ const PricingManagement: React.FC = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Pricing Form Dialog */}
+      {/* Pricing Form Dialog - LARGER SIZE */}
       <Dialog open={showPricingForm} onOpenChange={setShowPricingForm}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[95vh] w-[95vw]">
           <DialogHeader>
             <DialogTitle>
               {editingPricing ? 'Edit Pricing' : 'Create New Pricing'}
@@ -1167,5 +1171,6 @@ const PricingManagement: React.FC = () => {
     </div>
   );
 };
+
 export default PricingManagement;
 
