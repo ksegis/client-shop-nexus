@@ -16,26 +16,29 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Use your existing Supabase client instead of creating a new one
+import { getSupabaseClient } from "@/lib/supabase";
 
 // Interfaces for pricing management
 interface InventoryItem {
   id: string;
   keystone_vcpn: string;
   part_name: string;
-  part_number: string;
-  brand: string;
-  category: string;
+  part_number?: string;
+  brand?: string;
+  category?: string;
   description?: string;
   cost?: number;
   list_price?: number;
   core_charge?: number;
   quantity_available?: number;
+  // Add alternative column names that might exist
+  name?: string;
+  sku?: string;
+  manufacturer?: string;
+  price?: number;
+  qty?: number;
 }
 
 interface PricingRecord {
@@ -97,7 +100,7 @@ const calculateMarkupPercentage = (cost: number, price: number): number => {
   return ((price - cost) / cost) * 100;
 };
 
-// Part search component
+// Enhanced part search component with better error handling
 const PartSearchSelector: React.FC<{
   onPartSelect: (part: InventoryItem) => void;
   selectedPart?: InventoryItem;
@@ -106,37 +109,154 @@ const PartSearchSelector: React.FC<{
   const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [tableColumns, setTableColumns] = useState<string[]>([]);
 
-  // Search inventory table
+  const { toast } = useToast();
+
+  // Check what columns exist in the inventory table
+  const checkTableStructure = useCallback(async () => {
+    try {
+      const supabase = getSupabaseClient();
+      
+      // Try to get a single row to see what columns exist
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .limit(1);
+
+      if (error) {
+        console.error('Table structure check error:', error);
+        setSearchError(`Cannot access inventory table: ${error.message}`);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const columns = Object.keys(data[0]);
+        setTableColumns(columns);
+        console.log('Available inventory columns:', columns);
+      } else {
+        // Table exists but is empty, try to get column info differently
+        console.log('Inventory table is empty, will use default column names');
+        setTableColumns(['keystone_vcpn', 'part_name', 'part_number', 'brand', 'description']);
+      }
+    } catch (error) {
+      console.error('Failed to check table structure:', error);
+      setSearchError('Failed to connect to inventory database');
+    }
+  }, []);
+
+  // Initialize by checking table structure
+  useEffect(() => {
+    checkTableStructure();
+  }, [checkTableStructure]);
+
+  // Search inventory table with flexible column mapping
   const searchParts = useCallback(async (term: string) => {
     if (term.length < 2) {
       setSearchResults([]);
       setShowResults(false);
+      setSearchError(null);
       return;
     }
 
     setIsSearching(true);
+    setSearchError(null);
+
     try {
-      const { data, error } = await supabase
-        .from('inventory')
-        .select('*')
-        .or(`part_name.ilike.%${term}%,part_number.ilike.%${term}%,keystone_vcpn.ilike.%${term}%,brand.ilike.%${term}%,description.ilike.%${term}%`)
-        .limit(20);
+      const supabase = getSupabaseClient();
+      
+      // Build search query based on available columns
+      let query = supabase.from('inventory').select('*');
+
+      // Try different column name variations
+      const searchConditions = [];
+      
+      // Standard column names
+      if (tableColumns.includes('part_name') || tableColumns.length === 0) {
+        searchConditions.push(`part_name.ilike.%${term}%`);
+      }
+      if (tableColumns.includes('name')) {
+        searchConditions.push(`name.ilike.%${term}%`);
+      }
+      if (tableColumns.includes('part_number') || tableColumns.length === 0) {
+        searchConditions.push(`part_number.ilike.%${term}%`);
+      }
+      if (tableColumns.includes('sku')) {
+        searchConditions.push(`sku.ilike.%${term}%`);
+      }
+      if (tableColumns.includes('keystone_vcpn') || tableColumns.length === 0) {
+        searchConditions.push(`keystone_vcpn.ilike.%${term}%`);
+      }
+      if (tableColumns.includes('brand') || tableColumns.length === 0) {
+        searchConditions.push(`brand.ilike.%${term}%`);
+      }
+      if (tableColumns.includes('manufacturer')) {
+        searchConditions.push(`manufacturer.ilike.%${term}%`);
+      }
+      if (tableColumns.includes('description') || tableColumns.length === 0) {
+        searchConditions.push(`description.ilike.%${term}%`);
+      }
+
+      if (searchConditions.length === 0) {
+        // Fallback to basic search if no columns detected
+        searchConditions.push(`keystone_vcpn.ilike.%${term}%`);
+      }
+
+      // Apply search conditions
+      query = query.or(searchConditions.join(','));
+      query = query.limit(20);
+
+      console.log('Search conditions:', searchConditions);
+
+      const { data, error } = await query;
 
       if (error) {
-        console.error('Search error:', error);
+        console.error('Search error details:', error);
+        setSearchError(`Search failed: ${error.message}`);
         setSearchResults([]);
+        
+        toast({
+          title: "Search Error",
+          description: `Failed to search inventory: ${error.message}`,
+          variant: "destructive",
+        });
       } else {
-        setSearchResults(data || []);
+        console.log('Search results:', data);
+        
+        // Map results to standardized format
+        const mappedResults = (data || []).map(item => ({
+          id: item.id,
+          keystone_vcpn: item.keystone_vcpn || item.vcpn || '',
+          part_name: item.part_name || item.name || 'Unknown Part',
+          part_number: item.part_number || item.sku || item.part_sku || '',
+          brand: item.brand || item.manufacturer || '',
+          category: item.category || '',
+          description: item.description || '',
+          cost: item.cost || item.unit_cost || 0,
+          list_price: item.list_price || item.price || item.retail_price || 0,
+          core_charge: item.core_charge || 0,
+          quantity_available: item.quantity_available || item.qty || item.stock || 0
+        }));
+
+        setSearchResults(mappedResults);
         setShowResults(true);
+        setSearchError(null);
       }
     } catch (error) {
       console.error('Search failed:', error);
+      setSearchError('Search request failed');
       setSearchResults([]);
+      
+      toast({
+        title: "Search Error",
+        description: "Failed to search inventory database",
+        variant: "destructive",
+      });
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [tableColumns, toast]);
 
   // Debounced search
   useEffect(() => {
@@ -149,7 +269,7 @@ const PartSearchSelector: React.FC<{
 
   const handlePartSelect = (part: InventoryItem) => {
     onPartSelect(part);
-    setSearchTerm(`${part.part_name} (${part.part_number})`);
+    setSearchTerm(`${part.part_name} (${part.part_number || part.keystone_vcpn})`);
     setShowResults(false);
   };
 
@@ -171,6 +291,14 @@ const PartSearchSelector: React.FC<{
         )}
       </div>
 
+      {/* Search Error Display */}
+      {searchError && (
+        <Alert className="mt-2" variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{searchError}</AlertDescription>
+        </Alert>
+      )}
+
       {/* Search Results Dropdown */}
       {showResults && searchResults.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
@@ -184,7 +312,7 @@ const PartSearchSelector: React.FC<{
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">{part.part_name}</div>
                   <div className="text-sm text-gray-600">
-                    {part.part_number} • {part.brand}
+                    {part.part_number && `${part.part_number} • `}{part.brand}
                   </div>
                   <div className="text-xs text-gray-500">
                     VCPN: {part.keystone_vcpn}
@@ -196,10 +324,10 @@ const PartSearchSelector: React.FC<{
                   )}
                 </div>
                 <div className="text-right text-sm">
-                  {part.cost && (
+                  {part.cost > 0 && (
                     <div className="text-gray-600">Cost: ${part.cost.toFixed(2)}</div>
                   )}
-                  {part.list_price && (
+                  {part.list_price > 0 && (
                     <div className="text-green-600 font-medium">List: ${part.list_price.toFixed(2)}</div>
                   )}
                   {part.quantity_available !== undefined && (
@@ -213,7 +341,7 @@ const PartSearchSelector: React.FC<{
       )}
 
       {/* No Results */}
-      {showResults && searchResults.length === 0 && searchTerm.length >= 2 && !isSearching && (
+      {showResults && searchResults.length === 0 && searchTerm.length >= 2 && !isSearching && !searchError && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-3">
           <div className="text-gray-500 text-sm">No parts found matching "{searchTerm}"</div>
         </div>
@@ -226,7 +354,7 @@ const PartSearchSelector: React.FC<{
             <div>
               <div className="font-medium text-blue-900">{selectedPart.part_name}</div>
               <div className="text-sm text-blue-700">
-                {selectedPart.part_number} • {selectedPart.brand}
+                {selectedPart.part_number && `${selectedPart.part_number} • `}{selectedPart.brand}
               </div>
               <div className="text-xs text-blue-600">
                 VCPN: {selectedPart.keystone_vcpn}
@@ -697,6 +825,8 @@ const PricingManagement: React.FC = () => {
       // } else {
       //   await pricingService.createPricing(pricingData);
       // }
+      
+      console.log('Saving pricing data:', pricingData);
       
       toast({
         title: "Success",
