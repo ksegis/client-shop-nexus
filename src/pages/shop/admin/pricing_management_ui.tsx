@@ -1192,5 +1192,6 @@ const PricingManagement: React.FC = () => {
   );
 };
 
+
 export default PricingManagement;
 
