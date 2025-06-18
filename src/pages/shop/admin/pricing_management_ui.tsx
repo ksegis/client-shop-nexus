@@ -17,7 +17,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 
-// Use your existing Supabase client instead of creating a new one
+// Use your existing Supabase client
 import { getSupabaseClient } from "@/lib/supabase";
 
 // Interfaces for pricing management
@@ -33,7 +33,6 @@ interface InventoryItem {
   list_price?: number;
   core_charge?: number;
   quantity_available?: number;
-  // Add alternative column names that might exist
   name?: string;
   sku?: string;
   manufacturer?: string;
@@ -100,7 +99,7 @@ const calculateMarkupPercentage = (cost: number, price: number): number => {
   return ((price - cost) / cost) * 100;
 };
 
-// Enhanced part search component with better sizing
+// Enhanced part search component
 const PartSearchSelector: React.FC<{
   onPartSelect: (part: InventoryItem) => void;
   selectedPart?: InventoryItem;
@@ -119,7 +118,6 @@ const PartSearchSelector: React.FC<{
     try {
       const supabase = getSupabaseClient();
       
-      // Try to get a single row to see what columns exist
       const { data, error } = await supabase
         .from('inventory')
         .select('*')
@@ -136,7 +134,6 @@ const PartSearchSelector: React.FC<{
         setTableColumns(columns);
         console.log('Available inventory columns:', columns);
       } else {
-        // Table exists but is empty, try to get column info differently
         console.log('Inventory table is empty, will use default column names');
         setTableColumns(['keystone_vcpn', 'part_name', 'part_number', 'brand', 'description']);
       }
@@ -146,7 +143,6 @@ const PartSearchSelector: React.FC<{
     }
   }, []);
 
-  // Initialize by checking table structure
   useEffect(() => {
     checkTableStructure();
   }, [checkTableStructure]);
@@ -166,13 +162,10 @@ const PartSearchSelector: React.FC<{
     try {
       const supabase = getSupabaseClient();
       
-      // Build search query based on available columns
       let query = supabase.from('inventory').select('*');
 
-      // Try different column name variations
       const searchConditions = [];
       
-      // Standard column names
       if (tableColumns.includes('part_name') || tableColumns.length === 0) {
         searchConditions.push(`part_name.ilike.%${term}%`);
       }
@@ -199,11 +192,9 @@ const PartSearchSelector: React.FC<{
       }
 
       if (searchConditions.length === 0) {
-        // Fallback to basic search if no columns detected
         searchConditions.push(`keystone_vcpn.ilike.%${term}%`);
       }
 
-      // Apply search conditions
       query = query.or(searchConditions.join(','));
       query = query.limit(20);
 
@@ -224,7 +215,6 @@ const PartSearchSelector: React.FC<{
       } else {
         console.log('Search results:', data);
         
-        // Map results to standardized format
         const mappedResults = (data || []).map(item => ({
           id: item.id,
           keystone_vcpn: item.keystone_vcpn || item.vcpn || '',
@@ -258,7 +248,6 @@ const PartSearchSelector: React.FC<{
     }
   }, [tableColumns, toast]);
 
-  // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
       searchParts(searchTerm);
@@ -291,7 +280,6 @@ const PartSearchSelector: React.FC<{
         )}
       </div>
 
-      {/* Search Error Display */}
       {searchError && (
         <Alert className="mt-2" variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -299,7 +287,6 @@ const PartSearchSelector: React.FC<{
         </Alert>
       )}
 
-      {/* Search Results Dropdown - FORCED LARGE SIZE */}
       {showResults && searchResults.length > 0 && (
         <div 
           className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg"
@@ -353,14 +340,12 @@ const PartSearchSelector: React.FC<{
         </div>
       )}
 
-      {/* No Results */}
       {showResults && searchResults.length === 0 && searchTerm.length >= 2 && !isSearching && !searchError && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-4">
           <div className="text-gray-500 text-sm">No parts found matching "{searchTerm}"</div>
         </div>
       )}
 
-      {/* Selected Part Display */}
       {selectedPart && (
         <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-md">
           <div className="flex justify-between items-start">
@@ -417,7 +402,6 @@ const PricingForm: React.FC<{
 
   const [calculationMode, setCalculationMode] = useState<'markup' | 'price'>('markup');
 
-  // Handle part selection
   const handlePartSelect = (part: InventoryItem) => {
     setSelectedPart(part);
     setFormData(prev => ({
@@ -430,7 +414,6 @@ const PricingForm: React.FC<{
       core_charge: part.core_charge || prev.core_charge
     }));
 
-    // Calculate markup if we have cost and price
     if (part.cost && part.list_price) {
       const markup = calculateMarkupPercentage(part.cost, part.list_price);
       setFormData(prev => ({
@@ -440,7 +423,6 @@ const PricingForm: React.FC<{
     }
   };
 
-  // Handle cost change and auto-calculate price
   const handleCostChange = (cost: number) => {
     setFormData(prev => {
       const newData = { ...prev, cost };
@@ -451,7 +433,6 @@ const PricingForm: React.FC<{
     });
   };
 
-  // Handle markup percentage change and auto-calculate price
   const handleMarkupChange = (markupPercentage: number) => {
     setFormData(prev => {
       const newData = { ...prev, markup_percentage: markupPercentage };
@@ -462,7 +443,6 @@ const PricingForm: React.FC<{
     });
   };
 
-  // Handle price change and auto-calculate markup
   const handlePriceChange = (listPrice: number) => {
     setFormData(prev => {
       const newData = { ...prev, list_price: listPrice };
@@ -481,7 +461,6 @@ const PricingForm: React.FC<{
   return (
     <div style={{ height: '70vh', overflow: 'auto', padding: '16px' }}>
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Part Selection */}
         {!isEditing && (
           <PartSearchSelector
             onPartSelect={handlePartSelect}
@@ -489,7 +468,6 @@ const PricingForm: React.FC<{
           />
         )}
 
-        {/* Part Information (Read-only when editing) */}
         {(isEditing || selectedPart) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -541,10 +519,8 @@ const PricingForm: React.FC<{
           </div>
         )}
 
-        {/* Only show pricing section if we have a part selected or are editing */}
         {(selectedPart || isEditing) && (
           <>
-            {/* Pricing Calculation Mode */}
             <div className="space-y-4">
               <div className="flex items-center space-x-4">
                 <Label>Calculation Mode:</Label>
@@ -559,7 +535,6 @@ const PricingForm: React.FC<{
                 </div>
               </div>
 
-              {/* Cost Input */}
               <div>
                 <Label htmlFor="cost">Cost *</Label>
                 <div className="relative">
@@ -578,7 +553,6 @@ const PricingForm: React.FC<{
                 </div>
               </div>
 
-              {/* Markup Percentage or List Price */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="markup">Markup Percentage</Label>
@@ -617,7 +591,6 @@ const PricingForm: React.FC<{
                 </div>
               </div>
 
-              {/* Calculation Display */}
               {formData.cost > 0 && formData.list_price > 0 && (
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <div className="flex items-center space-x-2 mb-2">
@@ -642,7 +615,6 @@ const PricingForm: React.FC<{
               )}
             </div>
 
-            {/* Additional Pricing Controls */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="core_charge">Core Charge</Label>
@@ -678,7 +650,6 @@ const PricingForm: React.FC<{
               </div>
             </div>
 
-            {/* Effective Dates */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="start_date">Effective Start Date *</Label>
@@ -702,7 +673,6 @@ const PricingForm: React.FC<{
               </div>
             </div>
 
-            {/* Notes */}
             <div>
               <Label htmlFor="notes">Notes</Label>
               <Textarea
@@ -714,7 +684,6 @@ const PricingForm: React.FC<{
               />
             </div>
 
-            {/* Form Actions */}
             <div className="flex justify-end space-x-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={onCancel}>
                 Cancel
@@ -803,7 +772,6 @@ const PricingManagement: React.FC = () => {
 
   const { toast } = useToast();
 
-  // Load pricing data
   useEffect(() => {
     loadPricingData();
   }, []);
@@ -811,11 +779,6 @@ const PricingManagement: React.FC = () => {
   const loadPricingData = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API calls
-      // const records = await pricingService.getAllPricingRecords();
-      // const requests = await pricingService.getPriceChangeRequests();
-      
-      // Mock data for now
       setPricingRecords([]);
       setPriceChangeRequests([]);
       setError(null);
@@ -834,13 +797,6 @@ const PricingManagement: React.FC = () => {
 
   const handleSavePricing = async (pricingData: Partial<PricingRecord>) => {
     try {
-      // TODO: Replace with actual API call
-      // if (editingPricing) {
-      //   await pricingService.updatePricing(editingPricing.id, pricingData);
-      // } else {
-      //   await pricingService.createPricing(pricingData);
-      // }
-      
       console.log('Saving pricing data:', pricingData);
       
       toast({
@@ -863,10 +819,6 @@ const PricingManagement: React.FC = () => {
 
   const handleViewHistory = async (vcpn: string) => {
     try {
-      // TODO: Replace with actual API call
-      // const history = await pricingService.getPriceHistory(vcpn);
-      
-      // Mock data for now
       const mockHistory: PriceHistory[] = [
         {
           id: '1',
@@ -902,7 +854,6 @@ const PricingManagement: React.FC = () => {
     }
   };
 
-  // Filter pricing records
   const filteredRecords = pricingRecords.filter(record => {
     const matchesSearch = record.keystone_vcpn.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          record.part_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -943,7 +894,6 @@ const PricingManagement: React.FC = () => {
         </TabsList>
 
         <TabsContent value="pricing" className="space-y-6">
-          {/* Search and Filters */}
           <Card>
             <CardContent className="p-4">
               <div className="flex flex-col md:flex-row gap-4">
@@ -974,7 +924,6 @@ const PricingManagement: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Pricing Records Table */}
           <Card>
             <CardHeader>
               <CardTitle>Pricing Records</CardTitle>
@@ -1139,7 +1088,7 @@ const PricingManagement: React.FC = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Pricing Form Dialog - FORCED LARGE SIZE WITH INLINE STYLES */}
+      {/* FIXED: Pricing Form Dialog with proper JSX structure */}
       <Dialog open={showPricingForm} onOpenChange={setShowPricingForm}>
         <DialogContent 
           className="max-w-none max-h-none"
@@ -1171,7 +1120,7 @@ const PricingManagement: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Price History Dialog */}
+      {/* FIXED: Price History Dialog with proper JSX structure */}
       <Dialog open={showHistory} onOpenChange={setShowHistory}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1179,7 +1128,7 @@ const PricingManagement: React.FC = () => {
             <DialogDescription>
               View historical pricing changes and effective dates
             </DialogDescription>
-          </Dialog>
+          </DialogHeader>
           {selectedVcpn && (
             <PriceHistoryView
               vcpn={selectedVcpn}
@@ -1191,7 +1140,6 @@ const PricingManagement: React.FC = () => {
     </div>
   );
 };
-
 
 export default PricingManagement;
 
