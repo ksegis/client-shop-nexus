@@ -299,45 +299,56 @@ const PartSearchSelector: React.FC<{
         </Alert>
       )}
 
-      {/* Search Results Dropdown - FIXED SIZE */}
+      {/* Search Results Dropdown - FORCED LARGE SIZE */}
       {showResults && searchResults.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
-          <ScrollArea className="max-h-80">
-            {searchResults.map((part) => (
-              <div
-                key={part.id}
-                className="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                onClick={() => handlePartSelect(part)}
-              >
-                <div className="flex justify-between items-start">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900 truncate">{part.part_name}</div>
-                    <div className="text-sm text-gray-600 mt-1">
-                      {part.part_number && `${part.part_number} • `}{part.brand}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      VCPN: {part.keystone_vcpn}
-                    </div>
-                    {part.description && (
-                      <div className="text-xs text-gray-500 mt-1 line-clamp-2">
-                        {part.description}
+        <div 
+          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg"
+          style={{ 
+            maxHeight: '400px',
+            minHeight: '200px',
+            width: '100%',
+            zIndex: 9999
+          }}
+        >
+          <ScrollArea style={{ height: '400px' }}>
+            <div className="p-2">
+              {searchResults.map((part) => (
+                <div
+                  key={part.id}
+                  className="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 rounded-md"
+                  onClick={() => handlePartSelect(part)}
+                  style={{ minHeight: '80px' }}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 text-base">{part.part_name}</div>
+                      <div className="text-sm text-gray-600 mt-1">
+                        {part.part_number && `${part.part_number} • `}{part.brand}
                       </div>
-                    )}
-                  </div>
-                  <div className="text-right text-sm ml-4 flex-shrink-0">
-                    {part.cost > 0 && (
-                      <div className="text-gray-600">Cost: ${part.cost.toFixed(2)}</div>
-                    )}
-                    {part.list_price > 0 && (
-                      <div className="text-green-600 font-medium">List: ${part.list_price.toFixed(2)}</div>
-                    )}
-                    {part.quantity_available !== undefined && (
-                      <div className="text-xs text-gray-500 mt-1">Qty: {part.quantity_available}</div>
-                    )}
+                      <div className="text-xs text-gray-500 mt-1">
+                        VCPN: {part.keystone_vcpn}
+                      </div>
+                      {part.description && (
+                        <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                          {part.description}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right text-sm ml-4 flex-shrink-0">
+                      {part.cost > 0 && (
+                        <div className="text-gray-600">Cost: ${part.cost.toFixed(2)}</div>
+                      )}
+                      {part.list_price > 0 && (
+                        <div className="text-green-600 font-medium">List: ${part.list_price.toFixed(2)}</div>
+                      )}
+                      {part.quantity_available !== undefined && (
+                        <div className="text-xs text-gray-500 mt-1">Qty: {part.quantity_available}</div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </ScrollArea>
         </div>
       )}
@@ -468,7 +479,7 @@ const PricingForm: React.FC<{
   };
 
   return (
-    <ScrollArea className="max-h-[70vh] pr-4">
+    <div style={{ height: '70vh', overflow: 'auto', padding: '16px' }}>
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Part Selection */}
         {!isEditing && (
@@ -716,7 +727,7 @@ const PricingForm: React.FC<{
           </>
         )}
       </form>
-    </ScrollArea>
+    </div>
   );
 };
 
@@ -1128,9 +1139,18 @@ const PricingManagement: React.FC = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Pricing Form Dialog - LARGER SIZE */}
+      {/* Pricing Form Dialog - FORCED LARGE SIZE WITH INLINE STYLES */}
       <Dialog open={showPricingForm} onOpenChange={setShowPricingForm}>
-        <DialogContent className="max-w-6xl max-h-[95vh] w-[95vw]">
+        <DialogContent 
+          className="max-w-none max-h-none"
+          style={{
+            width: '95vw',
+            height: '95vh',
+            maxWidth: '95vw',
+            maxHeight: '95vh',
+            margin: '2.5vh auto'
+          }}
+        >
           <DialogHeader>
             <DialogTitle>
               {editingPricing ? 'Edit Pricing' : 'Create New Pricing'}
@@ -1159,7 +1179,7 @@ const PricingManagement: React.FC = () => {
             <DialogDescription>
               View historical pricing changes and effective dates
             </DialogDescription>
-          </DialogHeader>
+          </Dialog>
           {selectedVcpn && (
             <PriceHistoryView
               vcpn={selectedVcpn}
