@@ -1,916 +1,780 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, DollarSign, Calendar, History, Edit, Save, X, Plus, Search, Filter, Download, Upload, Eye, Clock, CheckCircle, XCircle, AlertTriangle, TrendingUp, TrendingDown, Percent, Calculator } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DatePicker } from "@/components/ui/date-picker";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-
-// Use your existing Supabase client
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarIcon, Search, Plus, Edit, History, DollarSign, TrendingUp, AlertTriangle, CheckCircle } from 'lucide-react';
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { getSupabaseClient } from "@/lib/supabase";
 
-// Interfaces for pricing management
 interface InventoryItem {
   id: string;
   keystone_vcpn: string;
-  part_name: string;
+  name?: string;
+  part_name?: string;
   part_number?: string;
+  sku?: string;
   brand?: string;
-  category?: string;
   description?: string;
   cost?: number;
-  list_price?: number;
-  core_charge?: number;
-  quantity_available?: number;
-  name?: string;
-  sku?: string;
-  manufacturer?: string;
   price?: number;
-  qty?: number;
+  list_price?: number;
+  quantity?: number;
 }
 
 interface PricingRecord {
   id: string;
   keystone_vcpn: string;
   part_name: string;
-  part_sku?: string;
   cost: number;
   list_price: number;
   markup_percentage: number;
   effective_start_date: string;
   effective_end_date?: string;
+  status: 'active' | 'draft' | 'pending_approval' | 'expired';
   created_by: string;
   created_at: string;
-  approved_by?: string;
-  approved_at?: string;
-  status: 'draft' | 'pending_approval' | 'active' | 'expired' | 'superseded';
   notes?: string;
-  currency: string;
-  core_charge?: number;
-  minimum_price?: number;
-  maximum_discount_percentage?: number;
 }
 
-interface PriceChangeRequest {
-  id: string;
+interface PricingFormData {
   keystone_vcpn: string;
-  current_price: number;
-  proposed_price: number;
+  part_name: string;
+  cost: number;
+  list_price: number;
   markup_percentage: number;
-  effective_date: string;
-  reason: string;
-  requested_by: string;
-  requested_at: string;
-  status: 'pending' | 'approved' | 'rejected';
-  reviewed_by?: string;
-  reviewed_at?: string;
-  review_notes?: string;
+  effective_start_date: Date;
+  effective_end_date?: Date;
+  notes: string;
 }
 
-interface PriceHistory {
-  id: string;
-  keystone_vcpn: string;
-  price: number;
-  markup_percentage: number;
-  effective_start: string;
-  effective_end?: string;
-  created_by: string;
-  reason?: string;
-}
-
-// Price calculation utilities
-const calculateMarkupPrice = (cost: number, markupPercentage: number): number => {
-  return cost * (1 + markupPercentage / 100);
-};
-
-const calculateMarkupPercentage = (cost: number, price: number): number => {
-  if (cost === 0) return 0;
-  return ((price - cost) / cost) * 100;
-};
-
-// Enhanced part search component
-const PartSearchSelector: React.FC<{
-  onPartSelect: (part: InventoryItem) => void;
-  selectedPart?: InventoryItem;
-}> = ({ onPartSelect, selectedPart }) => {
+const PricingManagement: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('current');
+  const [showNewPricingDialog, setShowNewPricingDialog] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [selectedVcpn, setSelectedVcpn] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  
+  // Data states
+  const [pricingRecords, setPricingRecords] = useState<PricingRecord[]>([]);
+  const [priceHistory, setPriceHistory] = useState<PricingRecord[]>([]);
   const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
+  const [selectedPart, setSelectedPart] = useState<InventoryItem | null>(null);
   const [tableColumns, setTableColumns] = useState<string[]>([]);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  
+  // Form state
+  const [formData, setFormData] = useState<PricingFormData>({
+    keystone_vcpn: '',
+    part_name: '',
+    cost: 0,
+    list_price: 0,
+    markup_percentage: 0,
+    effective_start_date: new Date(),
+    notes: ''
+  });
 
-  const { toast } = useToast();
+  const supabase = getSupabaseClient();
 
-  // Check what columns exist in the inventory table
-  const checkTableStructure = useCallback(async () => {
+  // Add debug message
+  const addDebugMessage = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const debugMessage = `[${timestamp}] ${message}`;
+    console.log(debugMessage);
+    setDebugInfo(prev => [...prev, debugMessage].slice(-20)); // Keep last 20 messages
+  };
+
+  // Test database connection and table structure
+  const testDatabaseConnection = useCallback(async () => {
+    addDebugMessage('🔍 Testing database connection...');
+    
     try {
-      const supabase = getSupabaseClient();
+      // Test basic connection
+      const { data: testData, error: testError } = await supabase
+        .from('inventory')
+        .select('id')
+        .limit(1);
       
+      if (testError) {
+        addDebugMessage(`❌ Database connection failed: ${testError.message}`);
+        return false;
+      }
+      
+      addDebugMessage('✅ Database connection successful');
+      
+      // Check if pricing_records table exists
+      const { data: pricingTest, error: pricingError } = await supabase
+        .from('pricing_records')
+        .select('id')
+        .limit(1);
+      
+      if (pricingError) {
+        addDebugMessage(`❌ pricing_records table error: ${pricingError.message}`);
+        addDebugMessage('💡 You may need to create the pricing_records table in Supabase');
+        return false;
+      }
+      
+      addDebugMessage('✅ pricing_records table exists and accessible');
+      return true;
+      
+    } catch (error) {
+      addDebugMessage(`❌ Database test failed: ${error}`);
+      return false;
+    }
+  }, [supabase]);
+
+  // Load pricing records with enhanced debugging
+  const loadPricingRecords = useCallback(async () => {
+    addDebugMessage('🔄 Loading pricing records...');
+    setLoading(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from('pricing_records')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        addDebugMessage(`❌ Error loading pricing records: ${error.message}`);
+        addDebugMessage(`❌ Error details: ${JSON.stringify(error)}`);
+        console.error('Error loading pricing records:', error);
+      } else {
+        addDebugMessage(`✅ Loaded pricing records: ${data?.length || 0} records`);
+        addDebugMessage(`📊 Records data: ${JSON.stringify(data, null, 2)}`);
+        setPricingRecords(data || []);
+        
+        if (data && data.length > 0) {
+          addDebugMessage(`📋 First record: ${JSON.stringify(data[0])}`);
+        } else {
+          addDebugMessage('📋 No pricing records found in database');
+        }
+      }
+    } catch (error) {
+      addDebugMessage(`❌ Exception loading pricing records: ${error}`);
+      console.error('Exception loading pricing records:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
+
+  // Load table structure
+  const loadTableStructure = useCallback(async () => {
+    addDebugMessage('🔍 Loading table structure...');
+    
+    try {
       const { data, error } = await supabase
         .from('inventory')
         .select('*')
         .limit(1);
 
       if (error) {
-        console.error('Table structure check error:', error);
-        setSearchError(`Cannot access inventory table: ${error.message}`);
-        return;
-      }
-
-      if (data && data.length > 0) {
+        addDebugMessage(`❌ Error checking table structure: ${error.message}`);
+        console.error('Error checking table structure:', error);
+      } else if (data && data.length > 0) {
         const columns = Object.keys(data[0]);
         setTableColumns(columns);
+        addDebugMessage(`✅ Available inventory columns: ${columns.join(', ')}`);
         console.log('Available inventory columns:', columns);
-      } else {
-        console.log('Inventory table is empty, will use default column names');
-        setTableColumns(['keystone_vcpn', 'part_name', 'part_number', 'brand', 'description']);
       }
     } catch (error) {
-      console.error('Failed to check table structure:', error);
-      setSearchError('Failed to connect to inventory database');
+      addDebugMessage(`❌ Exception checking table structure: ${error}`);
+      console.error('Error checking table structure:', error);
     }
-  }, []);
+  }, [supabase]);
 
-  useEffect(() => {
-    checkTableStructure();
-  }, [checkTableStructure]);
-
-  // Search inventory table with flexible column mapping
-  const searchParts = useCallback(async (term: string) => {
+  // Search inventory
+  const searchInventory = useCallback(async (term: string) => {
     if (term.length < 2) {
       setSearchResults([]);
-      setShowResults(false);
-      setSearchError(null);
       return;
     }
 
-    setIsSearching(true);
-    setSearchError(null);
+    addDebugMessage(`🔍 Searching inventory for: "${term}"`);
 
     try {
-      const supabase = getSupabaseClient();
-      
-      let query = supabase.from('inventory').select('*');
-
       const searchConditions = [];
       
-      if (tableColumns.includes('part_name') || tableColumns.length === 0) {
-        searchConditions.push(`part_name.ilike.%${term}%`);
-      }
-      if (tableColumns.includes('name')) {
-        searchConditions.push(`name.ilike.%${term}%`);
-      }
-      if (tableColumns.includes('part_number') || tableColumns.length === 0) {
-        searchConditions.push(`part_number.ilike.%${term}%`);
-      }
-      if (tableColumns.includes('sku')) {
-        searchConditions.push(`sku.ilike.%${term}%`);
-      }
-      if (tableColumns.includes('keystone_vcpn') || tableColumns.length === 0) {
-        searchConditions.push(`keystone_vcpn.ilike.%${term}%`);
-      }
-      if (tableColumns.includes('brand') || tableColumns.length === 0) {
-        searchConditions.push(`brand.ilike.%${term}%`);
-      }
-      if (tableColumns.includes('manufacturer')) {
-        searchConditions.push(`manufacturer.ilike.%${term}%`);
-      }
-      if (tableColumns.includes('description') || tableColumns.length === 0) {
-        searchConditions.push(`description.ilike.%${term}%`);
-      }
+      // Build search conditions based on available columns
+      if (tableColumns.includes('part_name')) searchConditions.push(`part_name.ilike.%${term}%`);
+      if (tableColumns.includes('name')) searchConditions.push(`name.ilike.%${term}%`);
+      if (tableColumns.includes('part_number')) searchConditions.push(`part_number.ilike.%${term}%`);
+      if (tableColumns.includes('sku')) searchConditions.push(`sku.ilike.%${term}%`);
+      if (tableColumns.includes('keystone_vcpn')) searchConditions.push(`keystone_vcpn.ilike.%${term}%`);
+      if (tableColumns.includes('brand')) searchConditions.push(`brand.ilike.%${term}%`);
+      if (tableColumns.includes('description')) searchConditions.push(`description.ilike.%${term}%`);
 
       if (searchConditions.length === 0) {
-        searchConditions.push(`keystone_vcpn.ilike.%${term}%`);
+        addDebugMessage('❌ No searchable columns found');
+        console.warn('No searchable columns found');
+        return;
       }
 
-      query = query.or(searchConditions.join(','));
-      query = query.limit(20);
+      addDebugMessage(`🔍 Search conditions: ${searchConditions.join(' OR ')}`);
 
-      console.log('Search conditions:', searchConditions);
-
-      const { data, error } = await query;
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .or(searchConditions.join(','))
+        .limit(20);
 
       if (error) {
-        console.error('Search error details:', error);
-        setSearchError(`Search failed: ${error.message}`);
-        setSearchResults([]);
-        
-        toast({
-          title: "Search Error",
-          description: `Failed to search inventory: ${error.message}`,
-          variant: "destructive",
-        });
+        addDebugMessage(`❌ Search error: ${error.message}`);
+        console.error('Search error:', error);
       } else {
+        addDebugMessage(`✅ Search results: ${data?.length || 0} items found`);
+        setSearchResults(data || []);
         console.log('Search results:', data);
-        
-        const mappedResults = (data || []).map(item => ({
-          id: item.id,
-          keystone_vcpn: item.keystone_vcpn || item.vcpn || '',
-          part_name: item.part_name || item.name || 'Unknown Part',
-          part_number: item.part_number || item.sku || item.part_sku || '',
-          brand: item.brand || item.manufacturer || '',
-          category: item.category || '',
-          description: item.description || '',
-          cost: item.cost || item.unit_cost || 0,
-          list_price: item.list_price || item.price || item.retail_price || 0,
-          core_charge: item.core_charge || 0,
-          quantity_available: item.quantity_available || item.qty || item.stock || 0
-        }));
-
-        setSearchResults(mappedResults);
-        setShowResults(true);
-        setSearchError(null);
       }
     } catch (error) {
-      console.error('Search failed:', error);
-      setSearchError('Search request failed');
-      setSearchResults([]);
-      
-      toast({
-        title: "Search Error",
-        description: "Failed to search inventory database",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSearching(false);
+      addDebugMessage(`❌ Search exception: ${error}`);
+      console.error('Search error:', error);
     }
-  }, [tableColumns, toast]);
+  }, [supabase, tableColumns]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      searchParts(searchTerm);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchTerm, searchParts]);
-
+  // Handle part selection
   const handlePartSelect = (part: InventoryItem) => {
-    onPartSelect(part);
-    setSearchTerm(`${part.part_name} (${part.part_number || part.keystone_vcpn})`);
-    setShowResults(false);
-  };
-
-  return (
-    <div className="relative">
-      <Label htmlFor="part-search">Search Parts *</Label>
-      <div className="relative">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-        <Input
-          id="part-search"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search by part name, number, VCPN, brand..."
-          className="pl-10"
-          onFocus={() => searchTerm.length >= 2 && setShowResults(true)}
-        />
-        {isSearching && (
-          <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-gray-400" />
-        )}
-      </div>
-
-      {searchError && (
-        <Alert className="mt-2" variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{searchError}</AlertDescription>
-        </Alert>
-      )}
-
-      {showResults && searchResults.length > 0 && (
-        <div 
-          className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg"
-          style={{ 
-            maxHeight: '400px',
-            minHeight: '200px',
-            width: '100%',
-            zIndex: 9999
-          }}
-        >
-          <ScrollArea style={{ height: '400px' }}>
-            <div className="p-2">
-              {searchResults.map((part) => (
-                <div
-                  key={part.id}
-                  className="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 rounded-md"
-                  onClick={() => handlePartSelect(part)}
-                  style={{ minHeight: '80px' }}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-gray-900 text-base">{part.part_name}</div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        {part.part_number && `${part.part_number} • `}{part.brand}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        VCPN: {part.keystone_vcpn}
-                      </div>
-                      {part.description && (
-                        <div className="text-xs text-gray-500 mt-1 line-clamp-2">
-                          {part.description}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-right text-sm ml-4 flex-shrink-0">
-                      {part.cost > 0 && (
-                        <div className="text-gray-600">Cost: ${part.cost.toFixed(2)}</div>
-                      )}
-                      {part.list_price > 0 && (
-                        <div className="text-green-600 font-medium">List: ${part.list_price.toFixed(2)}</div>
-                      )}
-                      {part.quantity_available !== undefined && (
-                        <div className="text-xs text-gray-500 mt-1">Qty: {part.quantity_available}</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-      )}
-
-      {showResults && searchResults.length === 0 && searchTerm.length >= 2 && !isSearching && !searchError && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-4">
-          <div className="text-gray-500 text-sm">No parts found matching "{searchTerm}"</div>
-        </div>
-      )}
-
-      {selectedPart && (
-        <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-md">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="font-medium text-blue-900">{selectedPart.part_name}</div>
-              <div className="text-sm text-blue-700 mt-1">
-                {selectedPart.part_number && `${selectedPart.part_number} • `}{selectedPart.brand}
-              </div>
-              <div className="text-xs text-blue-600 mt-1">
-                VCPN: {selectedPart.keystone_vcpn}
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                onPartSelect({} as InventoryItem);
-                setSearchTerm('');
-                setShowResults(false);
-              }}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Pricing form component
-const PricingForm: React.FC<{
-  pricing?: PricingRecord;
-  onSave: (pricing: Partial<PricingRecord>) => void;
-  onCancel: () => void;
-  isEditing?: boolean;
-}> = ({ pricing, onSave, onCancel, isEditing = false }) => {
-  const [selectedPart, setSelectedPart] = useState<InventoryItem | undefined>();
-  const [formData, setFormData] = useState<Partial<PricingRecord>>({
-    keystone_vcpn: pricing?.keystone_vcpn || '',
-    part_name: pricing?.part_name || '',
-    cost: pricing?.cost || 0,
-    list_price: pricing?.list_price || 0,
-    markup_percentage: pricing?.markup_percentage || 0,
-    effective_start_date: pricing?.effective_start_date || new Date().toISOString().split('T')[0],
-    effective_end_date: pricing?.effective_end_date || '',
-    notes: pricing?.notes || '',
-    currency: pricing?.currency || 'USD',
-    core_charge: pricing?.core_charge || 0,
-    minimum_price: pricing?.minimum_price || 0,
-    maximum_discount_percentage: pricing?.maximum_discount_percentage || 0,
-    status: pricing?.status || 'draft'
-  });
-
-  const [calculationMode, setCalculationMode] = useState<'markup' | 'price'>('markup');
-
-  const handlePartSelect = (part: InventoryItem) => {
+    addDebugMessage(`✅ Selected part: ${part.part_name || part.name} (${part.keystone_vcpn})`);
+    
     setSelectedPart(part);
     setFormData(prev => ({
       ...prev,
       keystone_vcpn: part.keystone_vcpn,
-      part_name: part.part_name,
-      part_sku: part.part_number,
-      cost: part.cost || prev.cost,
-      list_price: part.list_price || prev.list_price,
-      core_charge: part.core_charge || prev.core_charge
+      part_name: part.part_name || part.name || '',
+      cost: part.cost || 0,
+      list_price: part.list_price || part.price || 0,
+      markup_percentage: part.cost && part.list_price ? 
+        Math.round(((part.list_price - part.cost) / part.cost) * 100) : 0
     }));
-
-    if (part.cost && part.list_price) {
-      const markup = calculateMarkupPercentage(part.cost, part.list_price);
-      setFormData(prev => ({
-        ...prev,
-        markup_percentage: markup
-      }));
-    }
+    setSearchResults([]);
+    setSearchTerm('');
   };
 
-  const handleCostChange = (cost: number) => {
+  // Calculate markup percentage
+  const calculateMarkupPercentage = (cost: number, listPrice: number): number => {
+    if (cost <= 0) return 0;
+    return Math.round(((listPrice - cost) / cost) * 100);
+  };
+
+  // Calculate list price from markup
+  const calculateListPrice = (cost: number, markupPercentage: number): number => {
+    return Math.round((cost * (1 + markupPercentage / 100)) * 100) / 100;
+  };
+
+  // Handle form changes
+  const handleFormChange = (field: keyof PricingFormData, value: any) => {
     setFormData(prev => {
-      const newData = { ...prev, cost };
-      if (calculationMode === 'markup' && prev.markup_percentage) {
-        newData.list_price = calculateMarkupPrice(cost, prev.markup_percentage);
-      }
-      return newData;
-    });
-  };
-
-  const handleMarkupChange = (markupPercentage: number) => {
-    setFormData(prev => {
-      const newData = { ...prev, markup_percentage: markupPercentage };
-      if (calculationMode === 'markup' && prev.cost) {
-        newData.list_price = calculateMarkupPrice(prev.cost, markupPercentage);
-      }
-      return newData;
-    });
-  };
-
-  const handlePriceChange = (listPrice: number) => {
-    setFormData(prev => {
-      const newData = { ...prev, list_price: listPrice };
-      if (calculationMode === 'price' && prev.cost && prev.cost > 0) {
-        newData.markup_percentage = calculateMarkupPercentage(prev.cost, listPrice);
-      }
-      return newData;
-    });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(formData);
-  };
-
-  return (
-    <div style={{ height: '70vh', overflow: 'auto', padding: '16px' }}>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {!isEditing && (
-          <PartSearchSelector
-            onPartSelect={handlePartSelect}
-            selectedPart={selectedPart}
-          />
-        )}
-
-        {(isEditing || selectedPart) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="part_name">Part Name</Label>
-              <Input
-                id="part_name"
-                value={formData.part_name}
-                onChange={(e) => setFormData(prev => ({ ...prev, part_name: e.target.value }))}
-                placeholder="Part name"
-                readOnly={isEditing}
-                className={isEditing ? "bg-gray-50" : ""}
-              />
-            </div>
-            <div>
-              <Label htmlFor="part_sku">Part Number</Label>
-              <Input
-                id="part_sku"
-                value={formData.part_sku}
-                onChange={(e) => setFormData(prev => ({ ...prev, part_sku: e.target.value }))}
-                placeholder="Part number"
-                readOnly={isEditing}
-                className={isEditing ? "bg-gray-50" : ""}
-              />
-            </div>
-            <div>
-              <Label htmlFor="vcpn">Keystone VCPN</Label>
-              <Input
-                id="vcpn"
-                value={formData.keystone_vcpn}
-                onChange={(e) => setFormData(prev => ({ ...prev, keystone_vcpn: e.target.value }))}
-                placeholder="VCPN"
-                readOnly={isEditing}
-                className={isEditing ? "bg-gray-50" : ""}
-              />
-            </div>
-            <div>
-              <Label htmlFor="currency">Currency</Label>
-              <Select value={formData.currency} onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD">USD</SelectItem>
-                  <SelectItem value="CAD">CAD</SelectItem>
-                  <SelectItem value="EUR">EUR</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )}
-
-        {(selectedPart || isEditing) && (
-          <>
-            <div className="space-y-4">
-              <div className="flex items-center space-x-4">
-                <Label>Calculation Mode:</Label>
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    checked={calculationMode === 'price'}
-                    onCheckedChange={(checked) => setCalculationMode(checked ? 'price' : 'markup')}
-                  />
-                  <span className="text-sm">
-                    {calculationMode === 'markup' ? 'Calculate Price from Markup %' : 'Calculate Markup % from Price'}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="cost">Cost *</Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    id="cost"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.cost}
-                    onChange={(e) => handleCostChange(parseFloat(e.target.value) || 0)}
-                    className="pl-10"
-                    placeholder="0.00"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="markup">Markup Percentage</Label>
-                  <div className="relative">
-                    <Percent className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="markup"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.markup_percentage?.toFixed(2)}
-                      onChange={(e) => handleMarkupChange(parseFloat(e.target.value) || 0)}
-                      className="pl-10"
-                      placeholder="0.00"
-                      disabled={calculationMode === 'price'}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="price">List Price *</Label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="price"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.list_price?.toFixed(2)}
-                      onChange={(e) => handlePriceChange(parseFloat(e.target.value) || 0)}
-                      className="pl-10"
-                      placeholder="0.00"
-                      disabled={calculationMode === 'markup'}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {formData.cost > 0 && formData.list_price > 0 && (
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Calculator className="h-4 w-4 text-blue-600" />
-                    <span className="font-medium text-blue-900">Pricing Calculation</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Cost:</span>
-                      <div className="font-medium">${formData.cost.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Markup:</span>
-                      <div className="font-medium">{formData.markup_percentage?.toFixed(2)}%</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">List Price:</span>
-                      <div className="font-medium text-green-600">${formData.list_price.toFixed(2)}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="core_charge">Core Charge</Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    id="core_charge"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.core_charge}
-                    onChange={(e) => setFormData(prev => ({ ...prev, core_charge: parseFloat(e.target.value) || 0 }))}
-                    className="pl-10"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="minimum_price">Minimum Price</Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    id="minimum_price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.minimum_price}
-                    onChange={(e) => setFormData(prev => ({ ...prev, minimum_price: parseFloat(e.target.value) || 0 }))}
-                    className="pl-10"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="start_date">Effective Start Date *</Label>
-                <Input
-                  id="start_date"
-                  type="date"
-                  value={formData.effective_start_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, effective_start_date: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="end_date">Effective End Date</Label>
-                <Input
-                  id="end_date"
-                  type="date"
-                  value={formData.effective_end_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, effective_end_date: e.target.value }))}
-                  placeholder="Leave blank for indefinite"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Add any notes about this pricing change..."
-                rows={3}
-              />
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={onCancel}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!selectedPart && !isEditing}>
-                <Save className="h-4 w-4 mr-2" />
-                {isEditing ? 'Update Pricing' : 'Create Pricing'}
-              </Button>
-            </div>
-          </>
-        )}
-      </form>
-    </div>
-  );
-};
-
-// Price history component
-const PriceHistoryView: React.FC<{
-  vcpn: string;
-  history: PriceHistory[];
-}> = ({ vcpn, history }) => {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center space-x-2">
-        <History className="h-5 w-5" />
-        <h3 className="text-lg font-semibold">Price History for {vcpn}</h3>
-      </div>
+      const updated = { ...prev, [field]: value };
       
-      <div className="space-y-2">
-        {history.map((record, index) => (
-          <Card key={record.id} className={index === 0 ? 'border-green-200 bg-green-50' : ''}>
-            <CardContent className="p-4">
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-2xl font-bold text-green-600">
-                      ${record.price.toFixed(2)}
-                    </span>
-                    <Badge variant={index === 0 ? 'default' : 'secondary'}>
-                      {record.markup_percentage.toFixed(1)}% markup
-                    </Badge>
-                    {index === 0 && <Badge variant="default">Current</Badge>}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    Effective: {new Date(record.effective_start).toLocaleDateString()}
-                    {record.effective_end && ` - ${new Date(record.effective_end).toLocaleDateString()}`}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    Created by {record.created_by}
-                  </div>
-                  {record.reason && (
-                    <div className="text-sm text-gray-600">
-                      Reason: {record.reason}
-                    </div>
-                  )}
-                </div>
-                <div className="text-right text-sm text-gray-500">
-                  {index === 0 ? (
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Clock className="h-4 w-4 text-gray-400" />
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-};
+      // Auto-calculate based on what changed
+      if (field === 'cost' || field === 'list_price') {
+        updated.markup_percentage = calculateMarkupPercentage(
+          field === 'cost' ? value : updated.cost,
+          field === 'list_price' ? value : updated.list_price
+        );
+      } else if (field === 'markup_percentage') {
+        updated.list_price = calculateListPrice(updated.cost, value);
+      }
+      
+      return updated;
+    });
+  };
 
-// Main pricing management component
-const PricingManagement: React.FC = () => {
-  const [pricingRecords, setPricingRecords] = useState<PricingRecord[]>([]);
-  const [priceChangeRequests, setPriceChangeRequests] = useState<PriceChangeRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [showPricingForm, setShowPricingForm] = useState(false);
-  const [editingPricing, setEditingPricing] = useState<PricingRecord | null>(null);
-  const [selectedVcpn, setSelectedVcpn] = useState<string | null>(null);
-  const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
+  // Save pricing record with enhanced debugging
+  const handleSavePricing = async () => {
+    addDebugMessage('💾 Starting save process...');
+    
+    if (!formData.keystone_vcpn || !formData.part_name || formData.cost <= 0 || formData.list_price <= 0) {
+      addDebugMessage('❌ Validation failed: Missing required fields');
+      alert('Please fill in all required fields with valid values');
+      return;
+    }
 
-  const { toast } = useToast();
-
-  useEffect(() => {
-    loadPricingData();
-  }, []);
-
-  const loadPricingData = async () => {
+    setSaving(true);
+    
     try {
-      setLoading(true);
-      setPricingRecords([]);
-      setPriceChangeRequests([]);
-      setError(null);
+      const pricingData = {
+        keystone_vcpn: formData.keystone_vcpn,
+        part_name: formData.part_name,
+        cost: formData.cost,
+        list_price: formData.list_price,
+        markup_percentage: formData.markup_percentage,
+        effective_start_date: formData.effective_start_date.toISOString().split('T')[0],
+        effective_end_date: formData.effective_end_date ? 
+          formData.effective_end_date.toISOString().split('T')[0] : null,
+        status: 'active',
+        created_by: 'admin',
+        notes: formData.notes || null
+      };
+
+      addDebugMessage(`💾 Saving pricing data: ${JSON.stringify(pricingData)}`);
+
+      const { data, error } = await supabase
+        .from('pricing_records')
+        .insert([pricingData])
+        .select();
+
+      if (error) {
+        addDebugMessage(`❌ Error saving pricing record: ${error.message}`);
+        addDebugMessage(`❌ Error details: ${JSON.stringify(error)}`);
+        console.error('Error saving pricing record:', error);
+        alert('Error saving pricing record: ' + error.message);
+      } else {
+        addDebugMessage(`✅ Pricing record saved successfully: ${JSON.stringify(data)}`);
+        console.log('Pricing record saved successfully:', data);
+        
+        // Reset form
+        setFormData({
+          keystone_vcpn: '',
+          part_name: '',
+          cost: 0,
+          list_price: 0,
+          markup_percentage: 0,
+          effective_start_date: new Date(),
+          notes: ''
+        });
+        setSelectedPart(null);
+        setShowNewPricingDialog(false);
+        
+        // Reload pricing records
+        addDebugMessage('🔄 Reloading pricing records after save...');
+        await loadPricingRecords();
+        
+        alert('Pricing record saved successfully!');
+      }
     } catch (error) {
-      console.error('Failed to load pricing data:', error);
-      setError('Failed to load pricing data');
-      toast({
-        title: "Loading Error",
-        description: "Failed to load pricing data",
-        variant: "destructive",
-      });
+      addDebugMessage(`❌ Exception saving pricing record: ${error}`);
+      console.error('Error saving pricing record:', error);
+      alert('Error saving pricing record');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const handleSavePricing = async (pricingData: Partial<PricingRecord>) => {
+  // Load price history
+  const loadPriceHistory = async (vcpn: string) => {
+    addDebugMessage(`🔍 Loading price history for: ${vcpn}`);
+    
     try {
-      console.log('Saving pricing data:', pricingData);
-      
-      toast({
-        title: "Success",
-        description: editingPricing ? "Pricing updated successfully" : "Pricing created successfully",
-      });
-      
-      setShowPricingForm(false);
-      setEditingPricing(null);
-      await loadPricingData();
+      const { data, error } = await supabase
+        .from('price_history')
+        .select('*')
+        .eq('keystone_vcpn', vcpn)
+        .order('effective_start_date', { ascending: false });
+
+      if (error) {
+        addDebugMessage(`❌ Error loading price history: ${error.message}`);
+        console.error('Error loading price history:', error);
+      } else {
+        addDebugMessage(`✅ Loaded price history: ${data?.length || 0} records`);
+        setPriceHistory(data || []);
+      }
     } catch (error) {
-      console.error('Failed to save pricing:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save pricing",
-        variant: "destructive",
-      });
+      addDebugMessage(`❌ Exception loading price history: ${error}`);
+      console.error('Error loading price history:', error);
     }
   };
 
-  const handleViewHistory = async (vcpn: string) => {
-    try {
-      const mockHistory: PriceHistory[] = [
-        {
-          id: '1',
-          keystone_vcpn: vcpn,
-          price: 125.99,
-          markup_percentage: 35.5,
-          effective_start: '2024-01-01',
-          created_by: 'admin@example.com',
-          reason: 'Current pricing'
-        },
-        {
-          id: '2',
-          keystone_vcpn: vcpn,
-          price: 119.99,
-          markup_percentage: 30.0,
-          effective_start: '2023-06-01',
-          effective_end: '2023-12-31',
-          created_by: 'admin@example.com',
-          reason: 'Summer pricing adjustment'
-        }
-      ];
-      
-      setPriceHistory(mockHistory);
-      setSelectedVcpn(vcpn);
-      setShowHistory(true);
-    } catch (error) {
-      console.error('Failed to load price history:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load price history",
-        variant: "destructive",
-      });
-    }
-  };
+  // Initialize component
+  useEffect(() => {
+    addDebugMessage('🚀 Initializing Pricing Management component...');
+    testDatabaseConnection();
+    loadTableStructure();
+    loadPricingRecords();
+  }, [testDatabaseConnection, loadTableStructure, loadPricingRecords]);
 
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchTerm) {
+        searchInventory(searchTerm);
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, searchInventory]);
+
+  // Filter pricing records
   const filteredRecords = pricingRecords.filter(record => {
-    const matchesSearch = record.keystone_vcpn.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         record.part_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         record.part_sku?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = selectedStatus === 'all' || record.status === selectedStatus;
+    const matchesSearch = !searchTerm || 
+      record.part_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.keystone_vcpn.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
+    
     return matchesSearch && matchesStatus;
   });
 
+  addDebugMessage(`📊 Filtered records: ${filteredRecords.length} of ${pricingRecords.length} total records`);
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Debug Panel */}
+      <Card className="bg-gray-50">
+        <CardHeader>
+          <CardTitle className="text-lg">Debug Information</CardTitle>
+          <CardDescription>Real-time debugging information</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-40">
+            <div className="space-y-1">
+              {debugInfo.map((message, index) => (
+                <div key={index} className="text-xs font-mono">
+                  {message}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Pricing Management</h1>
-          <p className="text-gray-600 mt-2">
+          <h1 className="text-3xl font-bold">Pricing Management</h1>
+          <p className="text-muted-foreground">
             Manage pricing, markups, and effective dates for your inventory
           </p>
+          <p className="text-sm text-blue-600">
+            Total Records: {pricingRecords.length} | Filtered: {filteredRecords.length} | Loading: {loading ? 'Yes' : 'No'}
+          </p>
         </div>
-        
-        <Button onClick={() => setShowPricingForm(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Pricing
-        </Button>
+        <Dialog open={showNewPricingDialog} onOpenChange={setShowNewPricingDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Pricing
+            </Button>
+          </DialogTrigger>
+          <DialogContent 
+            className="max-w-none max-h-none"
+            style={{
+              width: '95vw',
+              height: '95vh',
+              maxWidth: '95vw',
+              maxHeight: '95vh',
+              margin: '2.5vh auto'
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Create New Pricing</DialogTitle>
+              <DialogDescription>
+                Search for a part and set pricing with effective dates and markup calculations
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div style={{ height: '80vh', overflow: 'auto', padding: '16px' }}>
+              {/* Part Search */}
+              <div className="space-y-4 mb-6">
+                <Label htmlFor="search">Search Parts *</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="search"
+                    placeholder="Search by part name, number, VCPN, or brand..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                  
+                  {/* Search Results Dropdown */}
+                  {searchResults.length > 0 && (
+                    <div 
+                      className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-50 mt-1"
+                      style={{ 
+                        maxHeight: '400px',
+                        minHeight: '200px',
+                        width: '100%',
+                        zIndex: 9999
+                      }}
+                    >
+                      <ScrollArea className="max-h-96">
+                        {searchResults.map((item) => (
+                          <div
+                            key={item.id}
+                            className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100"
+                            onClick={() => handlePartSelect(item)}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="font-medium">
+                                  {item.part_name || item.name || 'Unnamed Part'}
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  {item.part_number || item.sku} • {item.keystone_vcpn}
+                                </div>
+                                {item.brand && (
+                                  <div className="text-sm text-gray-500">{item.brand}</div>
+                                )}
+                                {item.description && (
+                                  <div className="text-xs text-gray-400 mt-1 truncate">
+                                    {item.description}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-right ml-4">
+                                {item.cost && (
+                                  <div className="text-sm">Cost: ${item.cost}</div>
+                                )}
+                                {(item.list_price || item.price) && (
+                                  <div className="text-sm">Price: ${item.list_price || item.price}</div>
+                                )}
+                                {item.quantity && (
+                                  <div className="text-xs text-gray-500">Qty: {item.quantity}</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </ScrollArea>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Selected Part Display */}
+              {selectedPart && (
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Selected Part</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium">Part Name</Label>
+                        <p className="text-sm">{selectedPart.part_name || selectedPart.name}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Part Number</Label>
+                        <p className="text-sm">{selectedPart.part_number || selectedPart.sku}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">VCPN</Label>
+                        <p className="text-sm">{selectedPart.keystone_vcpn}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Brand</Label>
+                        <p className="text-sm">{selectedPart.brand || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Pricing Form */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Basic Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Basic Information</h3>
+                  
+                  <div>
+                    <Label htmlFor="vcpn">Keystone VCPN *</Label>
+                    <Input
+                      id="vcpn"
+                      value={formData.keystone_vcpn}
+                      onChange={(e) => handleFormChange('keystone_vcpn', e.target.value)}
+                      placeholder="Enter VCPN"
+                      disabled={!!selectedPart}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="partName">Part Name *</Label>
+                    <Input
+                      id="partName"
+                      value={formData.part_name}
+                      onChange={(e) => handleFormChange('part_name', e.target.value)}
+                      placeholder="Enter part name"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="notes">Notes</Label>
+                    <Textarea
+                      id="notes"
+                      value={formData.notes}
+                      onChange={(e) => handleFormChange('notes', e.target.value)}
+                      placeholder="Optional notes about this pricing"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+
+                {/* Pricing Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Pricing Information</h3>
+                  
+                  <div>
+                    <Label htmlFor="cost">Cost Price *</Label>
+                    <Input
+                      id="cost"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.cost}
+                      onChange={(e) => handleFormChange('cost', parseFloat(e.target.value) || 0)}
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="listPrice">List Price *</Label>
+                    <Input
+                      id="listPrice"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.list_price}
+                      onChange={(e) => handleFormChange('list_price', parseFloat(e.target.value) || 0)}
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="markup">Markup Percentage</Label>
+                    <Input
+                      id="markup"
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={formData.markup_percentage}
+                      onChange={(e) => handleFormChange('markup_percentage', parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Calculated automatically when cost/price changes
+                    </p>
+                  </div>
+
+                  {/* Effective Dates */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Effective Start Date *</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !formData.effective_start_date && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.effective_start_date ? (
+                              format(formData.effective_start_date, "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={formData.effective_start_date}
+                            onSelect={(date) => date && handleFormChange('effective_start_date', date)}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div>
+                      <Label>Effective End Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !formData.effective_end_date && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.effective_end_date ? (
+                              format(formData.effective_end_date, "PPP")
+                            ) : (
+                              <span>No end date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={formData.effective_end_date}
+                            onSelect={(date) => handleFormChange('effective_end_date', date)}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-4 mt-8 pt-6 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowNewPricingDialog(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSavePricing}
+                  disabled={saving || !formData.keystone_vcpn || !formData.part_name}
+                >
+                  {saving ? 'Saving...' : 'Save Pricing'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {error && (
-        <Alert className="mb-6" variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      <Tabs defaultValue="pricing" className="space-y-6">
+      {/* Main Content */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
-          <TabsTrigger value="pricing">Current Pricing</TabsTrigger>
-          <TabsTrigger value="requests">Price Change Requests</TabsTrigger>
-          <TabsTrigger value="analytics">Pricing Analytics</TabsTrigger>
+          <TabsTrigger value="current">Current Pricing</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="requests">Price Requests</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="pricing" className="space-y-6">
+        <TabsContent value="current" className="space-y-6">
+          {/* Search and Filters */}
           <Card>
-            <CardContent className="p-4">
+            <CardHeader>
+              <CardTitle>Search & Filter</CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1">
                   <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search by part name, number, or VCPN..."
+                      placeholder="Search by part name or VCPN..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-10"
                     />
                   </div>
                 </div>
-                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="w-48">
-                    <SelectValue />
+                    <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
@@ -924,108 +788,111 @@ const PricingManagement: React.FC = () => {
             </CardContent>
           </Card>
 
+          {/* Pricing Records Table */}
           <Card>
             <CardHeader>
               <CardTitle>Pricing Records</CardTitle>
               <CardDescription>
-                Manage pricing for all parts with effective date controls
+                {loading ? 'Loading pricing records...' : 
+                 filteredRecords.length === 0 ? 'No pricing records found. Create your first pricing record to get started.' :
+                 `Showing ${filteredRecords.length} of ${pricingRecords.length} pricing records`}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="text-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-                  <p>Loading pricing data...</p>
+                <div className="flex justify-center py-8">
+                  <div className="text-muted-foreground">Loading pricing records...</div>
                 </div>
               ) : filteredRecords.length === 0 ? (
                 <div className="text-center py-8">
-                  <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">No pricing records found</p>
-                  <Button 
-                    onClick={() => setShowPricingForm(true)}
-                    className="mt-4"
-                  >
+                  <div className="text-muted-foreground mb-4">
+                    No pricing records found
+                  </div>
+                  <Button onClick={() => setShowNewPricingDialog(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
                     Create First Pricing Record
                   </Button>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Part Name</TableHead>
-                      <TableHead>Part Number</TableHead>
-                      <TableHead>VCPN</TableHead>
-                      <TableHead>Cost</TableHead>
-                      <TableHead>List Price</TableHead>
-                      <TableHead>Markup %</TableHead>
-                      <TableHead>Effective Period</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRecords.map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-medium">{record.part_name}</TableCell>
-                        <TableCell>{record.part_sku}</TableCell>
-                        <TableCell className="text-sm text-gray-600">{record.keystone_vcpn}</TableCell>
-                        <TableCell>${record.cost.toFixed(2)}</TableCell>
-                        <TableCell className="font-semibold text-green-600">
-                          ${record.list_price.toFixed(2)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {record.markup_percentage.toFixed(1)}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>{new Date(record.effective_start_date).toLocaleDateString()}</div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Part Name</TableHead>
+                        <TableHead>VCPN</TableHead>
+                        <TableHead>Cost</TableHead>
+                        <TableHead>List Price</TableHead>
+                        <TableHead>Markup %</TableHead>
+                        <TableHead>Effective Date</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRecords.map((record) => (
+                        <TableRow key={record.id}>
+                          <TableCell className="font-medium">{record.part_name}</TableCell>
+                          <TableCell>{record.keystone_vcpn}</TableCell>
+                          <TableCell>${record.cost.toFixed(2)}</TableCell>
+                          <TableCell>${record.list_price.toFixed(2)}</TableCell>
+                          <TableCell>{record.markup_percentage}%</TableCell>
+                          <TableCell>
+                            {format(new Date(record.effective_start_date), "MMM dd, yyyy")}
                             {record.effective_end_date && (
-                              <div className="text-gray-500">
-                                to {new Date(record.effective_end_date).toLocaleDateString()}
+                              <div className="text-xs text-muted-foreground">
+                                to {format(new Date(record.effective_end_date), "MMM dd, yyyy")}
                               </div>
                             )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={
                               record.status === 'active' ? 'default' :
                               record.status === 'draft' ? 'secondary' :
-                              record.status === 'pending_approval' ? 'outline' :
-                              'destructive'
-                            }
-                          >
-                            {record.status.replace('_', ' ')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditingPricing(record);
-                                setShowPricingForm(true);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewHistory(record.keystone_vcpn)}
-                            >
-                              <History className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                              record.status === 'pending_approval' ? 'outline' : 'destructive'
+                            }>
+                              {record.status.replace('_', ' ')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedVcpn(record.keystone_vcpn);
+                                  loadPriceHistory(record.keystone_vcpn);
+                                  setShowHistory(true);
+                                }}
+                              >
+                                <History className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pricing Analytics</CardTitle>
+              <CardDescription>
+                Analyze pricing trends and markup performance
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8 text-muted-foreground">
+                Analytics dashboard coming soon...
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1035,92 +902,19 @@ const PricingManagement: React.FC = () => {
             <CardHeader>
               <CardTitle>Price Change Requests</CardTitle>
               <CardDescription>
-                Review and approve pending price changes
+                Manage and approve pricing change requests
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8">
-                <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No pending price change requests</p>
+              <div className="text-center py-8 text-muted-foreground">
+                Price request management coming soon...
               </div>
             </CardContent>
           </Card>
         </TabsContent>
-
-        <TabsContent value="analytics">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="h-8 w-8 text-green-500" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Average Markup</p>
-                    <p className="text-2xl font-bold">32.5%</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-2">
-                  <DollarSign className="h-8 w-8 text-blue-500" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total Pricing Records</p>
-                    <p className="text-2xl font-bold">0</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-2">
-                  <AlertTriangle className="h-8 w-8 text-yellow-500" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Expiring Soon</p>
-                    <p className="text-2xl font-bold">0</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
       </Tabs>
 
-      {/* FIXED: Pricing Form Dialog with proper JSX structure */}
-      <Dialog open={showPricingForm} onOpenChange={setShowPricingForm}>
-        <DialogContent 
-          className="max-w-none max-h-none"
-          style={{
-            width: '95vw',
-            height: '95vh',
-            maxWidth: '95vw',
-            maxHeight: '95vh',
-            margin: '2.5vh auto'
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>
-              {editingPricing ? 'Edit Pricing' : 'Create New Pricing'}
-            </DialogTitle>
-            <DialogDescription>
-              Search for a part and set pricing with effective dates and markup calculations
-            </DialogDescription>
-          </DialogHeader>
-          <PricingForm
-            pricing={editingPricing || undefined}
-            onSave={handleSavePricing}
-            onCancel={() => {
-              setShowPricingForm(false);
-              setEditingPricing(null);
-            }}
-            isEditing={!!editingPricing}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* FIXED: Price History Dialog with proper JSX structure */}
+      {/* Price History Dialog */}
       <Dialog open={showHistory} onOpenChange={setShowHistory}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1130,10 +924,999 @@ const PricingManagement: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           {selectedVcpn && (
-            <PriceHistoryView
-              vcpn={selectedVcpn}
-              history={priceHistory}
-            />
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                VCPN: {selectedVcpn}
+              </div>
+              {priceHistory.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  No price history found for this part
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {priceHistory.map((record, index) => (
+                    <div key={index} className="border rounded p-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-medium">${record.list_price.toFixed(2)}</div>
+                          <div className="text-sm text-muted-foreground">
+                            Cost: ${record.cost.toFixed(2)} • Markup: {record.markup_percentage}%
+                          </div>
+                        </div>
+                        <div className="text-right text-sm">
+                          <div>{format(new Date(record.effective_start_date), "MMM dd, yyyy")}</div>
+                          <Badge variant="outline">{record.status}</Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default PricingManagement;
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarIcon, Search, Plus, Edit, History, DollarSign, TrendingUp, AlertTriangle, CheckCircle } from 'lucide-react';
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { getSupabaseClient } from "@/lib/supabase";
+
+interface InventoryItem {
+  id: string;
+  keystone_vcpn: string;
+  name?: string;
+  part_name?: string;
+  part_number?: string;
+  sku?: string;
+  brand?: string;
+  description?: string;
+  cost?: number;
+  price?: number;
+  list_price?: number;
+  quantity?: number;
+}
+
+interface PricingRecord {
+  id: string;
+  keystone_vcpn: string;
+  part_name: string;
+  cost: number;
+  list_price: number;
+  markup_percentage: number;
+  effective_start_date: string;
+  effective_end_date?: string;
+  status: 'active' | 'draft' | 'pending_approval' | 'expired';
+  created_by: string;
+  created_at: string;
+  notes?: string;
+}
+
+interface PricingFormData {
+  keystone_vcpn: string;
+  part_name: string;
+  cost: number;
+  list_price: number;
+  markup_percentage: number;
+  effective_start_date: Date;
+  effective_end_date?: Date;
+  notes: string;
+}
+
+const PricingManagement: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('current');
+  const [showNewPricingDialog, setShowNewPricingDialog] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [selectedVcpn, setSelectedVcpn] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  
+  // Data states
+  const [pricingRecords, setPricingRecords] = useState<PricingRecord[]>([]);
+  const [priceHistory, setPriceHistory] = useState<PricingRecord[]>([]);
+  const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
+  const [selectedPart, setSelectedPart] = useState<InventoryItem | null>(null);
+  const [tableColumns, setTableColumns] = useState<string[]>([]);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  
+  // Form state
+  const [formData, setFormData] = useState<PricingFormData>({
+    keystone_vcpn: '',
+    part_name: '',
+    cost: 0,
+    list_price: 0,
+    markup_percentage: 0,
+    effective_start_date: new Date(),
+    notes: ''
+  });
+
+  const supabase = getSupabaseClient();
+
+  // Add debug message
+  const addDebugMessage = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const debugMessage = `[${timestamp}] ${message}`;
+    console.log(debugMessage);
+    setDebugInfo(prev => [...prev, debugMessage].slice(-20)); // Keep last 20 messages
+  };
+
+  // Test database connection and table structure
+  const testDatabaseConnection = useCallback(async () => {
+    addDebugMessage('🔍 Testing database connection...');
+    
+    try {
+      // Test basic connection
+      const { data: testData, error: testError } = await supabase
+        .from('inventory')
+        .select('id')
+        .limit(1);
+      
+      if (testError) {
+        addDebugMessage(`❌ Database connection failed: ${testError.message}`);
+        return false;
+      }
+      
+      addDebugMessage('✅ Database connection successful');
+      
+      // Check if pricing_records table exists
+      const { data: pricingTest, error: pricingError } = await supabase
+        .from('pricing_records')
+        .select('id')
+        .limit(1);
+      
+      if (pricingError) {
+        addDebugMessage(`❌ pricing_records table error: ${pricingError.message}`);
+        addDebugMessage('💡 You may need to create the pricing_records table in Supabase');
+        return false;
+      }
+      
+      addDebugMessage('✅ pricing_records table exists and accessible');
+      return true;
+      
+    } catch (error) {
+      addDebugMessage(`❌ Database test failed: ${error}`);
+      return false;
+    }
+  }, [supabase]);
+
+  // Load pricing records with enhanced debugging
+  const loadPricingRecords = useCallback(async () => {
+    addDebugMessage('🔄 Loading pricing records...');
+    setLoading(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from('pricing_records')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        addDebugMessage(`❌ Error loading pricing records: ${error.message}`);
+        addDebugMessage(`❌ Error details: ${JSON.stringify(error)}`);
+        console.error('Error loading pricing records:', error);
+      } else {
+        addDebugMessage(`✅ Loaded pricing records: ${data?.length || 0} records`);
+        addDebugMessage(`📊 Records data: ${JSON.stringify(data, null, 2)}`);
+        setPricingRecords(data || []);
+        
+        if (data && data.length > 0) {
+          addDebugMessage(`📋 First record: ${JSON.stringify(data[0])}`);
+        } else {
+          addDebugMessage('📋 No pricing records found in database');
+        }
+      }
+    } catch (error) {
+      addDebugMessage(`❌ Exception loading pricing records: ${error}`);
+      console.error('Exception loading pricing records:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase]);
+
+  // Load table structure
+  const loadTableStructure = useCallback(async () => {
+    addDebugMessage('🔍 Loading table structure...');
+    
+    try {
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .limit(1);
+
+      if (error) {
+        addDebugMessage(`❌ Error checking table structure: ${error.message}`);
+        console.error('Error checking table structure:', error);
+      } else if (data && data.length > 0) {
+        const columns = Object.keys(data[0]);
+        setTableColumns(columns);
+        addDebugMessage(`✅ Available inventory columns: ${columns.join(', ')}`);
+        console.log('Available inventory columns:', columns);
+      }
+    } catch (error) {
+      addDebugMessage(`❌ Exception checking table structure: ${error}`);
+      console.error('Error checking table structure:', error);
+    }
+  }, [supabase]);
+
+  // Search inventory
+  const searchInventory = useCallback(async (term: string) => {
+    if (term.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    addDebugMessage(`🔍 Searching inventory for: "${term}"`);
+
+    try {
+      const searchConditions = [];
+      
+      // Build search conditions based on available columns
+      if (tableColumns.includes('part_name')) searchConditions.push(`part_name.ilike.%${term}%`);
+      if (tableColumns.includes('name')) searchConditions.push(`name.ilike.%${term}%`);
+      if (tableColumns.includes('part_number')) searchConditions.push(`part_number.ilike.%${term}%`);
+      if (tableColumns.includes('sku')) searchConditions.push(`sku.ilike.%${term}%`);
+      if (tableColumns.includes('keystone_vcpn')) searchConditions.push(`keystone_vcpn.ilike.%${term}%`);
+      if (tableColumns.includes('brand')) searchConditions.push(`brand.ilike.%${term}%`);
+      if (tableColumns.includes('description')) searchConditions.push(`description.ilike.%${term}%`);
+
+      if (searchConditions.length === 0) {
+        addDebugMessage('❌ No searchable columns found');
+        console.warn('No searchable columns found');
+        return;
+      }
+
+      addDebugMessage(`🔍 Search conditions: ${searchConditions.join(' OR ')}`);
+
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .or(searchConditions.join(','))
+        .limit(20);
+
+      if (error) {
+        addDebugMessage(`❌ Search error: ${error.message}`);
+        console.error('Search error:', error);
+      } else {
+        addDebugMessage(`✅ Search results: ${data?.length || 0} items found`);
+        setSearchResults(data || []);
+        console.log('Search results:', data);
+      }
+    } catch (error) {
+      addDebugMessage(`❌ Search exception: ${error}`);
+      console.error('Search error:', error);
+    }
+  }, [supabase, tableColumns]);
+
+  // Handle part selection
+  const handlePartSelect = (part: InventoryItem) => {
+    addDebugMessage(`✅ Selected part: ${part.part_name || part.name} (${part.keystone_vcpn})`);
+    
+    setSelectedPart(part);
+    setFormData(prev => ({
+      ...prev,
+      keystone_vcpn: part.keystone_vcpn,
+      part_name: part.part_name || part.name || '',
+      cost: part.cost || 0,
+      list_price: part.list_price || part.price || 0,
+      markup_percentage: part.cost && part.list_price ? 
+        Math.round(((part.list_price - part.cost) / part.cost) * 100) : 0
+    }));
+    setSearchResults([]);
+    setSearchTerm('');
+  };
+
+  // Calculate markup percentage
+  const calculateMarkupPercentage = (cost: number, listPrice: number): number => {
+    if (cost <= 0) return 0;
+    return Math.round(((listPrice - cost) / cost) * 100);
+  };
+
+  // Calculate list price from markup
+  const calculateListPrice = (cost: number, markupPercentage: number): number => {
+    return Math.round((cost * (1 + markupPercentage / 100)) * 100) / 100;
+  };
+
+  // Handle form changes
+  const handleFormChange = (field: keyof PricingFormData, value: any) => {
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      
+      // Auto-calculate based on what changed
+      if (field === 'cost' || field === 'list_price') {
+        updated.markup_percentage = calculateMarkupPercentage(
+          field === 'cost' ? value : updated.cost,
+          field === 'list_price' ? value : updated.list_price
+        );
+      } else if (field === 'markup_percentage') {
+        updated.list_price = calculateListPrice(updated.cost, value);
+      }
+      
+      return updated;
+    });
+  };
+
+  // Save pricing record with enhanced debugging
+  const handleSavePricing = async () => {
+    addDebugMessage('💾 Starting save process...');
+    
+    if (!formData.keystone_vcpn || !formData.part_name || formData.cost <= 0 || formData.list_price <= 0) {
+      addDebugMessage('❌ Validation failed: Missing required fields');
+      alert('Please fill in all required fields with valid values');
+      return;
+    }
+
+    setSaving(true);
+    
+    try {
+      const pricingData = {
+        keystone_vcpn: formData.keystone_vcpn,
+        part_name: formData.part_name,
+        cost: formData.cost,
+        list_price: formData.list_price,
+        markup_percentage: formData.markup_percentage,
+        effective_start_date: formData.effective_start_date.toISOString().split('T')[0],
+        effective_end_date: formData.effective_end_date ? 
+          formData.effective_end_date.toISOString().split('T')[0] : null,
+        status: 'active',
+        created_by: 'admin',
+        notes: formData.notes || null
+      };
+
+      addDebugMessage(`💾 Saving pricing data: ${JSON.stringify(pricingData)}`);
+
+      const { data, error } = await supabase
+        .from('pricing_records')
+        .insert([pricingData])
+        .select();
+
+      if (error) {
+        addDebugMessage(`❌ Error saving pricing record: ${error.message}`);
+        addDebugMessage(`❌ Error details: ${JSON.stringify(error)}`);
+        console.error('Error saving pricing record:', error);
+        alert('Error saving pricing record: ' + error.message);
+      } else {
+        addDebugMessage(`✅ Pricing record saved successfully: ${JSON.stringify(data)}`);
+        console.log('Pricing record saved successfully:', data);
+        
+        // Reset form
+        setFormData({
+          keystone_vcpn: '',
+          part_name: '',
+          cost: 0,
+          list_price: 0,
+          markup_percentage: 0,
+          effective_start_date: new Date(),
+          notes: ''
+        });
+        setSelectedPart(null);
+        setShowNewPricingDialog(false);
+        
+        // Reload pricing records
+        addDebugMessage('🔄 Reloading pricing records after save...');
+        await loadPricingRecords();
+        
+        alert('Pricing record saved successfully!');
+      }
+    } catch (error) {
+      addDebugMessage(`❌ Exception saving pricing record: ${error}`);
+      console.error('Error saving pricing record:', error);
+      alert('Error saving pricing record');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Load price history
+  const loadPriceHistory = async (vcpn: string) => {
+    addDebugMessage(`🔍 Loading price history for: ${vcpn}`);
+    
+    try {
+      const { data, error } = await supabase
+        .from('price_history')
+        .select('*')
+        .eq('keystone_vcpn', vcpn)
+        .order('effective_start_date', { ascending: false });
+
+      if (error) {
+        addDebugMessage(`❌ Error loading price history: ${error.message}`);
+        console.error('Error loading price history:', error);
+      } else {
+        addDebugMessage(`✅ Loaded price history: ${data?.length || 0} records`);
+        setPriceHistory(data || []);
+      }
+    } catch (error) {
+      addDebugMessage(`❌ Exception loading price history: ${error}`);
+      console.error('Error loading price history:', error);
+    }
+  };
+
+  // Initialize component
+  useEffect(() => {
+    addDebugMessage('🚀 Initializing Pricing Management component...');
+    testDatabaseConnection();
+    loadTableStructure();
+    loadPricingRecords();
+  }, [testDatabaseConnection, loadTableStructure, loadPricingRecords]);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchTerm) {
+        searchInventory(searchTerm);
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, searchInventory]);
+
+  // Filter pricing records
+  const filteredRecords = pricingRecords.filter(record => {
+    const matchesSearch = !searchTerm || 
+      record.part_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.keystone_vcpn.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  addDebugMessage(`📊 Filtered records: ${filteredRecords.length} of ${pricingRecords.length} total records`);
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Debug Panel */}
+      <Card className="bg-gray-50">
+        <CardHeader>
+          <CardTitle className="text-lg">Debug Information</CardTitle>
+          <CardDescription>Real-time debugging information</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-40">
+            <div className="space-y-1">
+              {debugInfo.map((message, index) => (
+                <div key={index} className="text-xs font-mono">
+                  {message}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Pricing Management</h1>
+          <p className="text-muted-foreground">
+            Manage pricing, markups, and effective dates for your inventory
+          </p>
+          <p className="text-sm text-blue-600">
+            Total Records: {pricingRecords.length} | Filtered: {filteredRecords.length} | Loading: {loading ? 'Yes' : 'No'}
+          </p>
+        </div>
+        <Dialog open={showNewPricingDialog} onOpenChange={setShowNewPricingDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Pricing
+            </Button>
+          </DialogTrigger>
+          <DialogContent 
+            className="max-w-none max-h-none"
+            style={{
+              width: '95vw',
+              height: '95vh',
+              maxWidth: '95vw',
+              maxHeight: '95vh',
+              margin: '2.5vh auto'
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Create New Pricing</DialogTitle>
+              <DialogDescription>
+                Search for a part and set pricing with effective dates and markup calculations
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div style={{ height: '80vh', overflow: 'auto', padding: '16px' }}>
+              {/* Part Search */}
+              <div className="space-y-4 mb-6">
+                <Label htmlFor="search">Search Parts *</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="search"
+                    placeholder="Search by part name, number, VCPN, or brand..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                  
+                  {/* Search Results Dropdown */}
+                  {searchResults.length > 0 && (
+                    <div 
+                      className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-50 mt-1"
+                      style={{ 
+                        maxHeight: '400px',
+                        minHeight: '200px',
+                        width: '100%',
+                        zIndex: 9999
+                      }}
+                    >
+                      <ScrollArea className="max-h-96">
+                        {searchResults.map((item) => (
+                          <div
+                            key={item.id}
+                            className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100"
+                            onClick={() => handlePartSelect(item)}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="font-medium">
+                                  {item.part_name || item.name || 'Unnamed Part'}
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                  {item.part_number || item.sku} • {item.keystone_vcpn}
+                                </div>
+                                {item.brand && (
+                                  <div className="text-sm text-gray-500">{item.brand}</div>
+                                )}
+                                {item.description && (
+                                  <div className="text-xs text-gray-400 mt-1 truncate">
+                                    {item.description}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-right ml-4">
+                                {item.cost && (
+                                  <div className="text-sm">Cost: ${item.cost}</div>
+                                )}
+                                {(item.list_price || item.price) && (
+                                  <div className="text-sm">Price: ${item.list_price || item.price}</div>
+                                )}
+                                {item.quantity && (
+                                  <div className="text-xs text-gray-500">Qty: {item.quantity}</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </ScrollArea>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Selected Part Display */}
+              {selectedPart && (
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Selected Part</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium">Part Name</Label>
+                        <p className="text-sm">{selectedPart.part_name || selectedPart.name}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Part Number</Label>
+                        <p className="text-sm">{selectedPart.part_number || selectedPart.sku}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">VCPN</Label>
+                        <p className="text-sm">{selectedPart.keystone_vcpn}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Brand</Label>
+                        <p className="text-sm">{selectedPart.brand || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Pricing Form */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Basic Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Basic Information</h3>
+                  
+                  <div>
+                    <Label htmlFor="vcpn">Keystone VCPN *</Label>
+                    <Input
+                      id="vcpn"
+                      value={formData.keystone_vcpn}
+                      onChange={(e) => handleFormChange('keystone_vcpn', e.target.value)}
+                      placeholder="Enter VCPN"
+                      disabled={!!selectedPart}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="partName">Part Name *</Label>
+                    <Input
+                      id="partName"
+                      value={formData.part_name}
+                      onChange={(e) => handleFormChange('part_name', e.target.value)}
+                      placeholder="Enter part name"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="notes">Notes</Label>
+                    <Textarea
+                      id="notes"
+                      value={formData.notes}
+                      onChange={(e) => handleFormChange('notes', e.target.value)}
+                      placeholder="Optional notes about this pricing"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+
+                {/* Pricing Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Pricing Information</h3>
+                  
+                  <div>
+                    <Label htmlFor="cost">Cost Price *</Label>
+                    <Input
+                      id="cost"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.cost}
+                      onChange={(e) => handleFormChange('cost', parseFloat(e.target.value) || 0)}
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="listPrice">List Price *</Label>
+                    <Input
+                      id="listPrice"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.list_price}
+                      onChange={(e) => handleFormChange('list_price', parseFloat(e.target.value) || 0)}
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="markup">Markup Percentage</Label>
+                    <Input
+                      id="markup"
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={formData.markup_percentage}
+                      onChange={(e) => handleFormChange('markup_percentage', parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Calculated automatically when cost/price changes
+                    </p>
+                  </div>
+
+                  {/* Effective Dates */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Effective Start Date *</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !formData.effective_start_date && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.effective_start_date ? (
+                              format(formData.effective_start_date, "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={formData.effective_start_date}
+                            onSelect={(date) => date && handleFormChange('effective_start_date', date)}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div>
+                      <Label>Effective End Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !formData.effective_end_date && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.effective_end_date ? (
+                              format(formData.effective_end_date, "PPP")
+                            ) : (
+                              <span>No end date</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={formData.effective_end_date}
+                            onSelect={(date) => handleFormChange('effective_end_date', date)}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-4 mt-8 pt-6 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowNewPricingDialog(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSavePricing}
+                  disabled={saving || !formData.keystone_vcpn || !formData.part_name}
+                >
+                  {saving ? 'Saving...' : 'Save Pricing'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Main Content */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="current">Current Pricing</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="requests">Price Requests</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="current" className="space-y-6">
+          {/* Search and Filters */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Search & Filter</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by part name or VCPN..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="pending_approval">Pending Approval</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Pricing Records Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Pricing Records</CardTitle>
+              <CardDescription>
+                {loading ? 'Loading pricing records...' : 
+                 filteredRecords.length === 0 ? 'No pricing records found. Create your first pricing record to get started.' :
+                 `Showing ${filteredRecords.length} of ${pricingRecords.length} pricing records`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <div className="text-muted-foreground">Loading pricing records...</div>
+                </div>
+              ) : filteredRecords.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-muted-foreground mb-4">
+                    No pricing records found
+                  </div>
+                  <Button onClick={() => setShowNewPricingDialog(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create First Pricing Record
+                  </Button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Part Name</TableHead>
+                        <TableHead>VCPN</TableHead>
+                        <TableHead>Cost</TableHead>
+                        <TableHead>List Price</TableHead>
+                        <TableHead>Markup %</TableHead>
+                        <TableHead>Effective Date</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRecords.map((record) => (
+                        <TableRow key={record.id}>
+                          <TableCell className="font-medium">{record.part_name}</TableCell>
+                          <TableCell>{record.keystone_vcpn}</TableCell>
+                          <TableCell>${record.cost.toFixed(2)}</TableCell>
+                          <TableCell>${record.list_price.toFixed(2)}</TableCell>
+                          <TableCell>{record.markup_percentage}%</TableCell>
+                          <TableCell>
+                            {format(new Date(record.effective_start_date), "MMM dd, yyyy")}
+                            {record.effective_end_date && (
+                              <div className="text-xs text-muted-foreground">
+                                to {format(new Date(record.effective_end_date), "MMM dd, yyyy")}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              record.status === 'active' ? 'default' :
+                              record.status === 'draft' ? 'secondary' :
+                              record.status === 'pending_approval' ? 'outline' : 'destructive'
+                            }>
+                              {record.status.replace('_', ' ')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedVcpn(record.keystone_vcpn);
+                                  loadPriceHistory(record.keystone_vcpn);
+                                  setShowHistory(true);
+                                }}
+                              >
+                                <History className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pricing Analytics</CardTitle>
+              <CardDescription>
+                Analyze pricing trends and markup performance
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8 text-muted-foreground">
+                Analytics dashboard coming soon...
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="requests">
+          <Card>
+            <CardHeader>
+              <CardTitle>Price Change Requests</CardTitle>
+              <CardDescription>
+                Manage and approve pricing change requests
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8 text-muted-foreground">
+                Price request management coming soon...
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Price History Dialog */}
+      <Dialog open={showHistory} onOpenChange={setShowHistory}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Price History</DialogTitle>
+            <DialogDescription>
+              View historical pricing changes and effective dates
+            </DialogDescription>
+          </DialogHeader>
+          {selectedVcpn && (
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                VCPN: {selectedVcpn}
+              </div>
+              {priceHistory.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  No price history found for this part
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {priceHistory.map((record, index) => (
+                    <div key={index} className="border rounded p-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-medium">${record.list_price.toFixed(2)}</div>
+                          <div className="text-sm text-muted-foreground">
+                            Cost: ${record.cost.toFixed(2)} • Markup: {record.markup_percentage}%
+                          </div>
+                        </div>
+                        <div className="text-right text-sm">
+                          <div>{format(new Date(record.effective_start_date), "MMM dd, yyyy")}</div>
+                          <Badge variant="outline">{record.status}</Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </DialogContent>
       </Dialog>
