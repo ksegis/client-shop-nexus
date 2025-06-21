@@ -75,6 +75,7 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
       path: '/shop/settings',
       icon: 'Settings',
       children: profile?.role === 'admin' ? [
+        { name: 'Admin Settings', path: '/shop/admin/settings', icon: 'Shield' },
         { name: 'User Management', path: '/shop/admin/user-management', icon: 'UserCog' },
         { name: 'System Settings', path: '/shop/settings/system', icon: 'Cog' },
         { name: 'Keystone Config', path: '/shop/admin/keystone-config', icon: 'Key' },
