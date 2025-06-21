@@ -477,3 +477,4 @@ const InventorySyncManagement: React.FC = () => {
 
 export default InventorySyncManagement;
 
+
