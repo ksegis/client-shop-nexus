@@ -58,8 +58,9 @@ export const useNavigationLinks = (portalType: 'shop' | 'customer') => {
         { name: 'Parts Catalog', path: '/shop/parts', icon: 'Package' },
         { name: 'Inventory Management', path: '/shop/inventory', icon: 'Archive' },
         { name: 'Special Orders', path: '/shop/parts?tab=special-orders', icon: 'ShoppingCart' },
-        // Add pricing management for admins only
+        // Add admin-only inventory and pricing management
         ...(profile?.role === 'admin' ? [
+          { name: 'Inventory Sync', path: '/shop/admin/inventory-sync', icon: 'RefreshCw' },
           { name: 'Pricing Management', path: '/shop/admin/pricing', icon: 'DollarSign' },
         ] : [])
       ]

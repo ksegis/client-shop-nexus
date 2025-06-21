@@ -17,6 +17,7 @@ import { WorkOrdersProvider } from "@/pages/shop/work-orders/WorkOrdersContext";
 import UserManagement from "@/pages/shop/admin/UserManagement";
 import KeystoneConfig from "@/pages/shop/admin/KeystoneConfig";
 import PricingManagement from "@/pages/shop/admin/PricingManagement.tsx";
+import InventorySyncManagement from "@/pages/shop/admin/InventorySyncManagement";
 import SystemSettings from "@/pages/shop/settings/SystemSettings";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
@@ -24,6 +25,7 @@ import NewInvoice from "@/pages/shop/invoices/NewInvoice";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { CustomersProvider } from "@/pages/shop/customers/CustomersContext";
 import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
+
 
 const ShopRoutes = () => {
   return (
@@ -101,6 +103,14 @@ const ShopRoutes = () => {
           element={
             <ProtectedRoute>
               <PricingManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/inventory-sync"
+          element={
+            <ProtectedRoute>
+              <InventorySyncManagement />
             </ProtectedRoute>
           }
         />
