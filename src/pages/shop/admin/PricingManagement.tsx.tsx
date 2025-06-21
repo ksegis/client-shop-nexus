@@ -7,13 +7,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Plus } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Search, Plus, Edit, Trash2 } from 'lucide-react';
 import { getSupabaseClient } from "@/lib/supabase";
 
 interface InventoryItem {
   id: string;
-  keystone_vcpn: string;
-  [key: string]: any; // Allow any column names
+  keystone_vcpn?: string;
+  [key: string]: any;
 }
 
 interface PricingRecord {
@@ -31,15 +32,20 @@ interface PricingRecord {
 
 const PricingManagement: React.FC = () => {
   const [showNewPricingDialog, setShowNewPricingDialog] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [showEditPricingDialog, setShowEditPricingDialog] = useState(false);
+  const [inventorySearchTerm, setInventorySearchTerm] = useState('');
+  const [pricingSearchTerm, setPricingSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<PricingRecord | null>(null);
   
   // Data states
   const [pricingRecords, setPricingRecords] = useState<PricingRecord[]>([]);
-  const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
+  const [filteredPricingRecords, setFilteredPricingRecords] = useState<PricingRecord[]>([]);
+  const [inventorySearchResults, setInventorySearchResults] = useState<InventoryItem[]>([]);
   const [selectedPart, setSelectedPart] = useState<InventoryItem | null>(null);
   const [inventoryColumns, setInventoryColumns] = useState<string[]>([]);
+  const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set());
   
   // Form state
   const [formData, setFormData] = useState({
@@ -52,6 +58,22 @@ const PricingManagement: React.FC = () => {
   });
 
   const supabase = getSupabaseClient();
+
+  // Reset form to initial state
+  const resetForm = () => {
+    setFormData({
+      keystone_vcpn: '',
+      part_name: '',
+      cost: 0,
+      list_price: 0,
+      markup_percentage: 0,
+      notes: ''
+    });
+    setSelectedPart(null);
+    setInventorySearchTerm('');
+    setInventorySearchResults([]);
+    setEditingRecord(null);
+  };
 
   // Detect inventory table columns
   const detectInventoryColumns = useCallback(async () => {
@@ -82,23 +104,31 @@ const PricingManagement: React.FC = () => {
     }
   }, [supabase]);
 
-  // Load pricing records
-  const loadPricingRecords = useCallback(async () => {
-    console.log('🔄 Loading pricing records...');
+  // Load pricing records (only when searched)
+  const loadPricingRecords = useCallback(async (searchTerm: string = '') => {
+    if (!searchTerm.trim()) {
+      setPricingRecords([]);
+      setFilteredPricingRecords([]);
+      return;
+    }
+
+    console.log('🔄 Loading pricing records for search:', searchTerm);
     setLoading(true);
     
     try {
       const { data, error } = await supabase
         .from('pricing_records')
         .select('*')
-        .order('created_at', { ascending: false });
+        .or(`part_name.ilike.%${searchTerm}%,keystone_vcpn.ilike.%${searchTerm}%`)
+        .order('created_at', { ascending: false })
+        .limit(100); // Limit results for performance
 
       if (error) {
         console.error('❌ Error loading pricing records:', error);
       } else {
         console.log('✅ Loaded pricing records:', data?.length || 0, 'records');
-        console.log('📊 Records data:', data);
         setPricingRecords(data || []);
+        setFilteredPricingRecords(data || []);
       }
     } catch (error) {
       console.error('❌ Exception loading pricing records:', error);
@@ -110,18 +140,15 @@ const PricingManagement: React.FC = () => {
   // Search inventory with dynamic column detection
   const searchInventory = useCallback(async (term: string) => {
     if (term.length < 2) {
-      setSearchResults([]);
+      setInventorySearchResults([]);
       return;
     }
 
     console.log('🔍 Searching inventory for:', term);
-    console.log('📋 Available columns:', inventoryColumns);
 
     try {
-      // Build search conditions based on available columns
       const searchConditions = [];
       
-      // Common column name variations to check
       const columnVariations = [
         'name', 'part_name', 'product_name', 'title',
         'part_number', 'sku', 'product_number', 'item_number',
@@ -138,12 +165,8 @@ const PricingManagement: React.FC = () => {
 
       if (searchConditions.length === 0) {
         console.warn('❌ No searchable columns found in inventory table');
-        console.log('💡 Available columns:', inventoryColumns);
-        alert('No searchable columns found. Available columns: ' + inventoryColumns.join(', '));
         return;
       }
-
-      console.log('🔍 Search conditions:', searchConditions);
 
       const { data, error } = await supabase
         .from('inventory')
@@ -153,10 +176,9 @@ const PricingManagement: React.FC = () => {
 
       if (error) {
         console.error('❌ Search error:', error);
-        alert('Search error: ' + error.message);
       } else {
         console.log('✅ Search results:', data?.length || 0, 'items found');
-        setSearchResults(data || []);
+        setInventorySearchResults(data || []);
       }
     } catch (error) {
       console.error('❌ Search exception:', error);
@@ -165,7 +187,6 @@ const PricingManagement: React.FC = () => {
 
   // Get display name for a part
   const getPartDisplayName = (part: InventoryItem): string => {
-    // Try different possible name columns
     return part.name || part.part_name || part.product_name || part.title || 'Unnamed Part';
   };
 
@@ -174,14 +195,28 @@ const PricingManagement: React.FC = () => {
     return part.part_number || part.sku || part.product_number || part.item_number || 'N/A';
   };
 
+  // Generate a unique identifier for parts without VCPN
+  const generatePartId = (part: InventoryItem): string => {
+    if (part.keystone_vcpn) return part.keystone_vcpn;
+    
+    // Use part number or SKU as fallback
+    const partNum = getPartNumber(part);
+    if (partNum !== 'N/A') return partNum;
+    
+    // Last resort: use the database ID
+    return `ID-${part.id}`;
+  };
+
   // Handle part selection
   const handlePartSelect = (part: InventoryItem) => {
     const partName = getPartDisplayName(part);
-    console.log('✅ Selected part:', partName);
+    const partId = generatePartId(part);
+    
+    console.log('✅ Selected part:', partName, 'ID:', partId);
     
     setSelectedPart(part);
     setFormData({
-      keystone_vcpn: part.keystone_vcpn || '',
+      keystone_vcpn: partId, // Use generated ID if no VCPN
       part_name: partName,
       cost: part.cost || 0,
       list_price: part.list_price || part.price || 0,
@@ -189,8 +224,8 @@ const PricingManagement: React.FC = () => {
         Math.round(((part.list_price || part.price) - part.cost) / part.cost * 100) : 0,
       notes: ''
     });
-    setSearchResults([]);
-    setSearchTerm('');
+    setInventorySearchResults([]);
+    setInventorySearchTerm('');
   };
 
   // Handle form changes
@@ -198,7 +233,6 @@ const PricingManagement: React.FC = () => {
     setFormData(prev => {
       const updated = { ...prev, [field]: value };
       
-      // Auto-calculate markup percentage
       if (field === 'cost' || field === 'list_price') {
         const cost = field === 'cost' ? value : updated.cost;
         const listPrice = field === 'list_price' ? value : updated.list_price;
@@ -239,10 +273,23 @@ const PricingManagement: React.FC = () => {
 
       console.log('💾 Saving pricing data:', pricingData);
 
-      const { data, error } = await supabase
-        .from('pricing_records')
-        .insert([pricingData])
-        .select();
+      let result;
+      if (editingRecord) {
+        // Update existing record
+        result = await supabase
+          .from('pricing_records')
+          .update(pricingData)
+          .eq('id', editingRecord.id)
+          .select();
+      } else {
+        // Create new record
+        result = await supabase
+          .from('pricing_records')
+          .insert([pricingData])
+          .select();
+      }
+
+      const { data, error } = result;
 
       if (error) {
         console.error('❌ Error saving pricing record:', error);
@@ -250,23 +297,16 @@ const PricingManagement: React.FC = () => {
       } else {
         console.log('✅ Pricing record saved successfully:', data);
         
-        // Reset form
-        setFormData({
-          keystone_vcpn: '',
-          part_name: '',
-          cost: 0,
-          list_price: 0,
-          markup_percentage: 0,
-          notes: ''
-        });
-        setSelectedPart(null);
+        resetForm();
         setShowNewPricingDialog(false);
+        setShowEditPricingDialog(false);
         
-        // Reload pricing records
-        console.log('🔄 Reloading pricing records after save...');
-        await loadPricingRecords();
+        // Reload pricing records if we have a search term
+        if (pricingSearchTerm) {
+          await loadPricingRecords(pricingSearchTerm);
+        }
         
-        alert('Pricing record saved successfully!');
+        alert(`Pricing record ${editingRecord ? 'updated' : 'created'} successfully!`);
       }
     } catch (error) {
       console.error('❌ Exception saving pricing record:', error);
@@ -276,28 +316,111 @@ const PricingManagement: React.FC = () => {
     }
   };
 
+  // Handle edit record
+  const handleEditRecord = (record: PricingRecord) => {
+    setEditingRecord(record);
+    setFormData({
+      keystone_vcpn: record.keystone_vcpn,
+      part_name: record.part_name,
+      cost: record.cost,
+      list_price: record.list_price,
+      markup_percentage: record.markup_percentage,
+      notes: record.notes || ''
+    });
+    setShowEditPricingDialog(true);
+  };
+
+  // Handle dialog close
+  const handleDialogClose = (dialogType: 'new' | 'edit') => {
+    resetForm();
+    if (dialogType === 'new') {
+      setShowNewPricingDialog(false);
+    } else {
+      setShowEditPricingDialog(false);
+    }
+  };
+
+  // Handle record selection
+  const handleRecordSelection = (recordId: string, checked: boolean) => {
+    const newSelected = new Set(selectedRecords);
+    if (checked) {
+      newSelected.add(recordId);
+    } else {
+      newSelected.delete(recordId);
+    }
+    setSelectedRecords(newSelected);
+  };
+
+  // Handle select all
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedRecords(new Set(filteredPricingRecords.map(r => r.id)));
+    } else {
+      setSelectedRecords(new Set());
+    }
+  };
+
+  // Delete selected records
+  const handleDeleteSelected = async () => {
+    if (selectedRecords.size === 0) return;
+    
+    if (!confirm(`Are you sure you want to delete ${selectedRecords.size} selected records?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('pricing_records')
+        .delete()
+        .in('id', Array.from(selectedRecords));
+
+      if (error) {
+        console.error('❌ Error deleting records:', error);
+        alert('Error deleting records: ' + error.message);
+      } else {
+        console.log('✅ Deleted records successfully');
+        setSelectedRecords(new Set());
+        
+        // Reload pricing records
+        if (pricingSearchTerm) {
+          await loadPricingRecords(pricingSearchTerm);
+        }
+        
+        alert('Records deleted successfully!');
+      }
+    } catch (error) {
+      console.error('❌ Exception deleting records:', error);
+      alert('Error deleting records');
+    }
+  };
+
   // Initialize component
   useEffect(() => {
     console.log('🚀 Initializing Pricing Management component...');
-    const init = async () => {
-      await detectInventoryColumns();
-      await loadPricingRecords();
-    };
-    init();
-  }, [detectInventoryColumns, loadPricingRecords]);
+    detectInventoryColumns();
+  }, [detectInventoryColumns]);
 
-  // Debounced search
+  // Debounced inventory search
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm && inventoryColumns.length > 0) {
-        searchInventory(searchTerm);
+      if (inventorySearchTerm && inventoryColumns.length > 0) {
+        searchInventory(inventorySearchTerm);
       } else {
-        setSearchResults([]);
+        setInventorySearchResults([]);
       }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, searchInventory, inventoryColumns]);
+  }, [inventorySearchTerm, searchInventory, inventoryColumns]);
+
+  // Debounced pricing search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadPricingRecords(pricingSearchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [pricingSearchTerm, loadPricingRecords]);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -305,281 +428,445 @@ const PricingManagement: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold">Pricing Management</h1>
           <p className="text-muted-foreground">
-            Manage pricing, markups, and effective dates for your inventory
-          </p>
-          <p className="text-sm text-blue-600">
-            Total Records: {pricingRecords.length} | Loading: {loading ? 'Yes' : 'No'}
-          </p>
-          <p className="text-xs text-gray-500">
-            Inventory Columns: {inventoryColumns.join(', ')}
+            Search for parts to manage pricing, markups, and effective dates
           </p>
         </div>
         
-        <Dialog open={showNewPricingDialog} onOpenChange={setShowNewPricingDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Pricing
+        <div className="flex space-x-2">
+          {selectedRecords.size > 0 && (
+            <Button variant="destructive" onClick={handleDeleteSelected}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Selected ({selectedRecords.size})
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create New Pricing</DialogTitle>
-              <DialogDescription>
-                Search for a part and set pricing with markup calculations
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-6">
-              {/* Part Search */}
-              <div className="space-y-4">
-                <Label htmlFor="search">Search Parts *</Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="search"
-                    placeholder="Search by part name, number, VCPN, or brand..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                  
-                  {/* Search Results Dropdown */}
-                  {searchResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-50 mt-1">
-                      <ScrollArea className="max-h-60">
-                        {searchResults.map((item) => (
-                          <div
-                            key={item.id}
-                            className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100"
-                            onClick={() => handlePartSelect(item)}
-                          >
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="font-medium">
-                                  {getPartDisplayName(item)}
+          )}
+          
+          <Dialog open={showNewPricingDialog} onOpenChange={(open) => !open && handleDialogClose('new')}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                New Pricing
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Create New Pricing</DialogTitle>
+                <DialogDescription>
+                  Search for a part and set pricing with markup calculations
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-6">
+                {/* Part Search */}
+                <div className="space-y-4">
+                  <Label htmlFor="search">Search Parts *</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="search"
+                      placeholder="Search by part name, number, VCPN, or brand..."
+                      value={inventorySearchTerm}
+                      onChange={(e) => setInventorySearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                    
+                    {/* Search Results Dropdown */}
+                    {inventorySearchResults.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-50 mt-1">
+                        <ScrollArea className="max-h-60">
+                          {inventorySearchResults.map((item) => (
+                            <div
+                              key={item.id}
+                              className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100"
+                              onClick={() => handlePartSelect(item)}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <div className="font-medium">
+                                    {getPartDisplayName(item)}
+                                  </div>
+                                  <div className="text-sm text-gray-600">
+                                    {getPartNumber(item)} • {item.keystone_vcpn || 'No VCPN'}
+                                  </div>
+                                  {item.brand && (
+                                    <div className="text-sm text-gray-500">{item.brand}</div>
+                                  )}
                                 </div>
-                                <div className="text-sm text-gray-600">
-                                  {getPartNumber(item)} • {item.keystone_vcpn || 'No VCPN'}
+                                <div className="text-right ml-4">
+                                  {item.cost && (
+                                    <div className="text-sm">Cost: ${item.cost}</div>
+                                  )}
+                                  {(item.list_price || item.price) && (
+                                    <div className="text-sm">Price: ${item.list_price || item.price}</div>
+                                  )}
                                 </div>
-                                {item.brand && (
-                                  <div className="text-sm text-gray-500">{item.brand}</div>
-                                )}
-                              </div>
-                              <div className="text-right ml-4">
-                                {item.cost && (
-                                  <div className="text-sm">Cost: ${item.cost}</div>
-                                )}
-                                {(item.list_price || item.price) && (
-                                  <div className="text-sm">Price: ${item.list_price || item.price}</div>
-                                )}
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </ScrollArea>
+                          ))}
+                        </ScrollArea>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Selected Part Display */}
+                {selectedPart && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Selected Part</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <Label className="text-sm font-medium">Part Name</Label>
+                          <p className="text-sm">{getPartDisplayName(selectedPart)}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Part Number</Label>
+                          <p className="text-sm">{getPartNumber(selectedPart)}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Identifier</Label>
+                          <p className="text-sm">{generatePartId(selectedPart)}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Brand</Label>
+                          <p className="text-sm">{selectedPart.brand || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Pricing Form */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Basic Information</h3>
+                    
+                    <div>
+                      <Label htmlFor="vcpn">Part Identifier *</Label>
+                      <Input
+                        id="vcpn"
+                        value={formData.keystone_vcpn}
+                        onChange={(e) => handleFormChange('keystone_vcpn', e.target.value)}
+                        placeholder="Enter part identifier"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        VCPN, Part Number, or unique identifier
+                      </p>
                     </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Selected Part Display */}
-              {selectedPart && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Selected Part</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <Label className="text-sm font-medium">Part Name</Label>
-                        <p className="text-sm">{getPartDisplayName(selectedPart)}</p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium">Part Number</Label>
-                        <p className="text-sm">{getPartNumber(selectedPart)}</p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium">VCPN</Label>
-                        <p className="text-sm">{selectedPart.keystone_vcpn || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium">Brand</Label>
-                        <p className="text-sm">{selectedPart.brand || 'N/A'}</p>
-                      </div>
+                    <div>
+                      <Label htmlFor="partName">Part Name *</Label>
+                      <Input
+                        id="partName"
+                        value={formData.part_name}
+                        onChange={(e) => handleFormChange('part_name', e.target.value)}
+                        placeholder="Enter part name"
+                      />
                     </div>
-                  </CardContent>
-                </Card>
-              )}
 
-              {/* Pricing Form */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Basic Information</h3>
-                  
-                  <div>
-                    <Label htmlFor="vcpn">Keystone VCPN *</Label>
-                    <Input
-                      id="vcpn"
-                      value={formData.keystone_vcpn}
-                      onChange={(e) => handleFormChange('keystone_vcpn', e.target.value)}
-                      placeholder="Enter VCPN"
-                      disabled={!!selectedPart}
-                    />
+                    <div>
+                      <Label htmlFor="notes">Notes</Label>
+                      <Input
+                        id="notes"
+                        value={formData.notes}
+                        onChange={(e) => handleFormChange('notes', e.target.value)}
+                        placeholder="Optional notes"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <Label htmlFor="partName">Part Name *</Label>
-                    <Input
-                      id="partName"
-                      value={formData.part_name}
-                      onChange={(e) => handleFormChange('part_name', e.target.value)}
-                      placeholder="Enter part name"
-                    />
-                  </div>
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Pricing Information</h3>
+                    
+                    <div>
+                      <Label htmlFor="cost">Cost Price *</Label>
+                      <Input
+                        id="cost"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.cost}
+                        onChange={(e) => handleFormChange('cost', parseFloat(e.target.value) || 0)}
+                        placeholder="0.00"
+                      />
+                    </div>
 
-                  <div>
-                    <Label htmlFor="notes">Notes</Label>
-                    <Input
-                      id="notes"
-                      value={formData.notes}
-                      onChange={(e) => handleFormChange('notes', e.target.value)}
-                      placeholder="Optional notes"
-                    />
-                  </div>
-                </div>
+                    <div>
+                      <Label htmlFor="listPrice">List Price *</Label>
+                      <Input
+                        id="listPrice"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.list_price}
+                        onChange={(e) => handleFormChange('list_price', parseFloat(e.target.value) || 0)}
+                        placeholder="0.00"
+                      />
+                    </div>
 
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Pricing Information</h3>
-                  
-                  <div>
-                    <Label htmlFor="cost">Cost Price *</Label>
-                    <Input
-                      id="cost"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.cost}
-                      onChange={(e) => handleFormChange('cost', parseFloat(e.target.value) || 0)}
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="listPrice">List Price *</Label>
-                    <Input
-                      id="listPrice"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.list_price}
-                      onChange={(e) => handleFormChange('list_price', parseFloat(e.target.value) || 0)}
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="markup">Markup Percentage</Label>
-                    <Input
-                      id="markup"
-                      type="number"
-                      step="1"
-                      min="0"
-                      value={formData.markup_percentage}
-                      onChange={(e) => handleFormChange('markup_percentage', parseFloat(e.target.value) || 0)}
-                      placeholder="0"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Calculated automatically when cost/price changes
-                    </p>
+                    <div>
+                      <Label htmlFor="markup">Markup Percentage</Label>
+                      <Input
+                        id="markup"
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={formData.markup_percentage}
+                        onChange={(e) => handleFormChange('markup_percentage', parseFloat(e.target.value) || 0)}
+                        placeholder="0"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Calculated automatically when cost/price changes
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Action Buttons */}
-              <div className="flex justify-end space-x-4 pt-6 border-t">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowNewPricingDialog(false)}
-                  disabled={saving}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSavePricing}
-                  disabled={saving || !formData.keystone_vcpn || !formData.part_name}
-                >
-                  {saving ? 'Saving...' : 'Save Pricing'}
-                </Button>
+                {/* Action Buttons */}
+                <div className="flex justify-end space-x-4 pt-6 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDialogClose('new')}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSavePricing}
+                    disabled={saving || !formData.keystone_vcpn || !formData.part_name}
+                  >
+                    {saving ? 'Saving...' : 'Save Pricing'}
+                  </Button>
+                </div>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {/* Pricing Records Table */}
+      {/* Search Existing Pricing Records */}
       <Card>
         <CardHeader>
-          <CardTitle>Pricing Records</CardTitle>
+          <CardTitle>Search Pricing Records</CardTitle>
           <CardDescription>
-            {loading ? 'Loading pricing records...' : 
-             pricingRecords.length === 0 ? 'No pricing records found. Create your first pricing record to get started.' :
-             `Showing ${pricingRecords.length} pricing records`}
+            Search for existing pricing records to view, edit, or manage
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <div className="text-muted-foreground">Loading pricing records...</div>
-            </div>
-          ) : pricingRecords.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="text-muted-foreground mb-4">
-                No pricing records found
-              </div>
-              <Button onClick={() => setShowNewPricingDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create First Pricing Record
-              </Button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Part Name</TableHead>
-                    <TableHead>VCPN</TableHead>
-                    <TableHead>Cost</TableHead>
-                    <TableHead>List Price</TableHead>
-                    <TableHead>Markup %</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pricingRecords.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell className="font-medium">{record.part_name}</TableCell>
-                      <TableCell>{record.keystone_vcpn}</TableCell>
-                      <TableCell>${record.cost.toFixed(2)}</TableCell>
-                      <TableCell>${record.list_price.toFixed(2)}</TableCell>
-                      <TableCell>{record.markup_percentage}%</TableCell>
-                      <TableCell>
-                        <Badge variant="default">
-                          {record.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(record.created_at).toLocaleDateString()}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search pricing records by part name or identifier..."
+              value={pricingSearchTerm}
+              onChange={(e) => setPricingSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
         </CardContent>
       </Card>
+
+      {/* Pricing Records Table */}
+      {pricingSearchTerm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pricing Records</CardTitle>
+            <CardDescription>
+              {loading ? 'Searching pricing records...' : 
+               filteredPricingRecords.length === 0 ? 'No pricing records found for your search.' :
+               `Found ${filteredPricingRecords.length} pricing records`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="text-muted-foreground">Searching pricing records...</div>
+              </div>
+            ) : filteredPricingRecords.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-muted-foreground mb-4">
+                  No pricing records found for "{pricingSearchTerm}"
+                </div>
+                <Button onClick={() => setShowNewPricingDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create New Pricing Record
+                </Button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={selectedRecords.size === filteredPricingRecords.length && filteredPricingRecords.length > 0}
+                          onCheckedChange={handleSelectAll}
+                        />
+                      </TableHead>
+                      <TableHead>Part Name</TableHead>
+                      <TableHead>Identifier</TableHead>
+                      <TableHead>Cost</TableHead>
+                      <TableHead>List Price</TableHead>
+                      <TableHead>Markup %</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredPricingRecords.map((record) => (
+                      <TableRow key={record.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedRecords.has(record.id)}
+                            onCheckedChange={(checked) => handleRecordSelection(record.id, checked as boolean)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{record.part_name}</TableCell>
+                        <TableCell>{record.keystone_vcpn}</TableCell>
+                        <TableCell>${record.cost.toFixed(2)}</TableCell>
+                        <TableCell>${record.list_price.toFixed(2)}</TableCell>
+                        <TableCell>{record.markup_percentage}%</TableCell>
+                        <TableCell>
+                          <Badge variant="default">
+                            {record.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(record.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditRecord(record)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Edit Pricing Dialog */}
+      <Dialog open={showEditPricingDialog} onOpenChange={(open) => !open && handleDialogClose('edit')}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Pricing Record</DialogTitle>
+            <DialogDescription>
+              Update pricing information and markup calculations
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Pricing Form - Same as create but for editing */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Basic Information</h3>
+                
+                <div>
+                  <Label htmlFor="edit-vcpn">Part Identifier *</Label>
+                  <Input
+                    id="edit-vcpn"
+                    value={formData.keystone_vcpn}
+                    onChange={(e) => handleFormChange('keystone_vcpn', e.target.value)}
+                    placeholder="Enter part identifier"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-partName">Part Name *</Label>
+                  <Input
+                    id="edit-partName"
+                    value={formData.part_name}
+                    onChange={(e) => handleFormChange('part_name', e.target.value)}
+                    placeholder="Enter part name"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-notes">Notes</Label>
+                  <Input
+                    id="edit-notes"
+                    value={formData.notes}
+                    onChange={(e) => handleFormChange('notes', e.target.value)}
+                    placeholder="Optional notes"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Pricing Information</h3>
+                
+                <div>
+                  <Label htmlFor="edit-cost">Cost Price *</Label>
+                  <Input
+                    id="edit-cost"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.cost}
+                    onChange={(e) => handleFormChange('cost', parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-listPrice">List Price *</Label>
+                  <Input
+                    id="edit-listPrice"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.list_price}
+                    onChange={(e) => handleFormChange('list_price', parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-markup">Markup Percentage</Label>
+                  <Input
+                    id="edit-markup"
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={formData.markup_percentage}
+                    onChange={(e) => handleFormChange('markup_percentage', parseFloat(e.target.value) || 0)}
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Calculated automatically when cost/price changes
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-4 pt-6 border-t">
+              <Button
+                variant="outline"
+                onClick={() => handleDialogClose('edit')}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSavePricing}
+                disabled={saving || !formData.keystone_vcpn || !formData.part_name}
+              >
+                {saving ? 'Updating...' : 'Update Pricing'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
