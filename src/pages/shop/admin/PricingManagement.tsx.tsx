@@ -13,16 +13,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 interface InventoryItem {
   id: string;
   keystone_vcpn: string;
-  name?: string;
-  part_name?: string;
-  part_number?: string;
-  sku?: string;
-  brand?: string;
-  description?: string;
-  cost?: number;
-  price?: number;
-  list_price?: number;
-  quantity?: number;
+  [key: string]: any; // Allow any column names
 }
 
 interface PricingRecord {
@@ -48,6 +39,7 @@ const PricingManagement: React.FC = () => {
   const [pricingRecords, setPricingRecords] = useState<PricingRecord[]>([]);
   const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
   const [selectedPart, setSelectedPart] = useState<InventoryItem | null>(null);
+  const [inventoryColumns, setInventoryColumns] = useState<string[]>([]);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -60,6 +52,35 @@ const PricingManagement: React.FC = () => {
   });
 
   const supabase = getSupabaseClient();
+
+  // Detect inventory table columns
+  const detectInventoryColumns = useCallback(async () => {
+    console.log('🔍 Detecting inventory table columns...');
+    
+    try {
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .limit(1);
+
+      if (error) {
+        console.error('❌ Error detecting columns:', error);
+        return [];
+      }
+
+      if (data && data.length > 0) {
+        const columns = Object.keys(data[0]);
+        console.log('✅ Available inventory columns:', columns);
+        setInventoryColumns(columns);
+        return columns;
+      }
+
+      return [];
+    } catch (error) {
+      console.error('❌ Exception detecting columns:', error);
+      return [];
+    }
+  }, [supabase]);
 
   // Load pricing records
   const loadPricingRecords = useCallback(async () => {
@@ -76,6 +97,7 @@ const PricingManagement: React.FC = () => {
         console.error('❌ Error loading pricing records:', error);
       } else {
         console.log('✅ Loaded pricing records:', data?.length || 0, 'records');
+        console.log('📊 Records data:', data);
         setPricingRecords(data || []);
       }
     } catch (error) {
@@ -85,7 +107,7 @@ const PricingManagement: React.FC = () => {
     }
   }, [supabase]);
 
-  // Search inventory
+  // Search inventory with dynamic column detection
   const searchInventory = useCallback(async (term: string) => {
     if (term.length < 2) {
       setSearchResults([]);
@@ -93,16 +115,45 @@ const PricingManagement: React.FC = () => {
     }
 
     console.log('🔍 Searching inventory for:', term);
+    console.log('📋 Available columns:', inventoryColumns);
 
     try {
+      // Build search conditions based on available columns
+      const searchConditions = [];
+      
+      // Common column name variations to check
+      const columnVariations = [
+        'name', 'part_name', 'product_name', 'title',
+        'part_number', 'sku', 'product_number', 'item_number',
+        'keystone_vcpn', 'vcpn',
+        'brand', 'manufacturer',
+        'description', 'desc', 'product_description'
+      ];
+
+      columnVariations.forEach(col => {
+        if (inventoryColumns.includes(col)) {
+          searchConditions.push(`${col}.ilike.%${term}%`);
+        }
+      });
+
+      if (searchConditions.length === 0) {
+        console.warn('❌ No searchable columns found in inventory table');
+        console.log('💡 Available columns:', inventoryColumns);
+        alert('No searchable columns found. Available columns: ' + inventoryColumns.join(', '));
+        return;
+      }
+
+      console.log('🔍 Search conditions:', searchConditions);
+
       const { data, error } = await supabase
         .from('inventory')
         .select('*')
-        .or(`part_name.ilike.%${term}%,name.ilike.%${term}%,part_number.ilike.%${term}%,keystone_vcpn.ilike.%${term}%,brand.ilike.%${term}%`)
+        .or(searchConditions.join(','))
         .limit(20);
 
       if (error) {
         console.error('❌ Search error:', error);
+        alert('Search error: ' + error.message);
       } else {
         console.log('✅ Search results:', data?.length || 0, 'items found');
         setSearchResults(data || []);
@@ -110,20 +161,32 @@ const PricingManagement: React.FC = () => {
     } catch (error) {
       console.error('❌ Search exception:', error);
     }
-  }, [supabase]);
+  }, [supabase, inventoryColumns]);
+
+  // Get display name for a part
+  const getPartDisplayName = (part: InventoryItem): string => {
+    // Try different possible name columns
+    return part.name || part.part_name || part.product_name || part.title || 'Unnamed Part';
+  };
+
+  // Get part number for a part
+  const getPartNumber = (part: InventoryItem): string => {
+    return part.part_number || part.sku || part.product_number || part.item_number || 'N/A';
+  };
 
   // Handle part selection
   const handlePartSelect = (part: InventoryItem) => {
-    console.log('✅ Selected part:', part.part_name || part.name);
+    const partName = getPartDisplayName(part);
+    console.log('✅ Selected part:', partName);
     
     setSelectedPart(part);
     setFormData({
-      keystone_vcpn: part.keystone_vcpn,
-      part_name: part.part_name || part.name || '',
+      keystone_vcpn: part.keystone_vcpn || '',
+      part_name: partName,
       cost: part.cost || 0,
       list_price: part.list_price || part.price || 0,
-      markup_percentage: part.cost && part.list_price ? 
-        Math.round(((part.list_price - part.cost) / part.cost) * 100) : 0,
+      markup_percentage: part.cost && (part.list_price || part.price) ? 
+        Math.round(((part.list_price || part.price) - part.cost) / part.cost * 100) : 0,
       notes: ''
     });
     setSearchResults([]);
@@ -216,13 +279,17 @@ const PricingManagement: React.FC = () => {
   // Initialize component
   useEffect(() => {
     console.log('🚀 Initializing Pricing Management component...');
-    loadPricingRecords();
-  }, [loadPricingRecords]);
+    const init = async () => {
+      await detectInventoryColumns();
+      await loadPricingRecords();
+    };
+    init();
+  }, [detectInventoryColumns, loadPricingRecords]);
 
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm) {
+      if (searchTerm && inventoryColumns.length > 0) {
         searchInventory(searchTerm);
       } else {
         setSearchResults([]);
@@ -230,7 +297,7 @@ const PricingManagement: React.FC = () => {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, searchInventory]);
+  }, [searchTerm, searchInventory, inventoryColumns]);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -242,6 +309,9 @@ const PricingManagement: React.FC = () => {
           </p>
           <p className="text-sm text-blue-600">
             Total Records: {pricingRecords.length} | Loading: {loading ? 'Yes' : 'No'}
+          </p>
+          <p className="text-xs text-gray-500">
+            Inventory Columns: {inventoryColumns.join(', ')}
           </p>
         </div>
         
@@ -287,10 +357,10 @@ const PricingManagement: React.FC = () => {
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
                                 <div className="font-medium">
-                                  {item.part_name || item.name || 'Unnamed Part'}
+                                  {getPartDisplayName(item)}
                                 </div>
                                 <div className="text-sm text-gray-600">
-                                  {item.part_number || item.sku} • {item.keystone_vcpn}
+                                  {getPartNumber(item)} • {item.keystone_vcpn || 'No VCPN'}
                                 </div>
                                 {item.brand && (
                                   <div className="text-sm text-gray-500">{item.brand}</div>
@@ -323,15 +393,15 @@ const PricingManagement: React.FC = () => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
                         <Label className="text-sm font-medium">Part Name</Label>
-                        <p className="text-sm">{selectedPart.part_name || selectedPart.name}</p>
+                        <p className="text-sm">{getPartDisplayName(selectedPart)}</p>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Part Number</Label>
-                        <p className="text-sm">{selectedPart.part_number || selectedPart.sku}</p>
+                        <p className="text-sm">{getPartNumber(selectedPart)}</p>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">VCPN</Label>
-                        <p className="text-sm">{selectedPart.keystone_vcpn}</p>
+                        <p className="text-sm">{selectedPart.keystone_vcpn || 'N/A'}</p>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Brand</Label>
