@@ -218,7 +218,7 @@ class InventorySyncService {
         return this.getMockInventoryData(limit);
       }
 
-      const response = await fetch(`${proxyUrl}/inventory?limit=${limit}`, {
+      const response = await fetch(`${proxyUrl}/inventory/full?limit=${limit}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiToken}`,
@@ -490,7 +490,7 @@ class InventorySyncService {
         return false;
       }
 
-      const response = await fetch(`${proxyUrl}/inventory/${keystone_vcpn}`, {
+      const response = await fetch(`${proxyUrl}/inventory/check/${keystone_vcpn}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiToken}`,
@@ -730,4 +730,24 @@ class InventorySyncService {
 export { InventorySyncService };
 export const inventorySyncService = new InventorySyncService();
 export default inventorySyncService;
+
+
+/*
+KEYSTONE API ENDPOINTS DISCOVERED:
+Base URL: https://146-190-161-109.nip.io
+
+Inventory Endpoints:
+- /inventory/full - Complete inventory data (used for full sync)
+- /inventory/bulk - Bulk operations
+- /inventory/updates - Incremental updates
+- /inventory/check/{vcpn} - Check specific item (used for single part updates)
+
+Other Available Endpoints:
+- /health - Health check
+- /parts/search - Part search
+- /pricing/bulk - Bulk pricing
+- /shipping/options - Shipping options
+- /orders/ship - Order shipping
+- /orders/history - Order history
+*/
 
