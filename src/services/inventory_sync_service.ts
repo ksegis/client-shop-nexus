@@ -766,7 +766,7 @@ class InventorySyncService {
       images: keystoneItem.image_url ? [keystoneItem.image_url] : keystoneItem.images || [],
       keystone_synced: true,
       keystone_last_sync: new Date().toISOString(),
-      keystone_sync_status: 'success',
+      keystone_sync_status: 'synced', // Use allowed value: 'synced' instead of 'success'
       updated_at: new Date().toISOString()
     };
   }
@@ -966,7 +966,7 @@ class InventorySyncService {
         // Note: in_stock is a generated column - do not set it manually
         keystone_synced: true,
         keystone_last_sync: new Date().toISOString(),
-        keystone_sync_status: 'mock',
+        keystone_sync_status: 'synced', // Use allowed value: 'synced' instead of 'mock'
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
