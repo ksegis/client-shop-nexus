@@ -16,7 +16,7 @@ import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
 import { WorkOrdersProvider } from "@/pages/shop/work-orders/WorkOrdersContext";
 import UserManagement from "@/pages/shop/admin/UserManagement";
 import KeystoneConfig from "@/pages/shop/admin/KeystoneConfig";
-import PricingManagement from "@/pages/shop/admin/pricing_management_ui";
+import PricingManagement from "@/pages/shop/admin/PricingManagement.tsx";
 import SystemSettings from "@/pages/shop/settings/SystemSettings";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
