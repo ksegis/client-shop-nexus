@@ -98,24 +98,37 @@ const checkRateLimit = async (path: string): Promise<{
   }
 };
 
-// Types for the inventory sync system
+// Types for the inventory sync system - Updated to match actual database schema
 export interface InventoryItem {
   id?: string;
   keystone_vcpn?: string;
-  part_number?: string;
+  sku?: string; // part_number in Keystone maps to sku in database
   name?: string;
   description?: string;
   brand?: string;
   cost?: number;
-  list_price?: number;
-  quantity_available?: number;
+  price?: number; // list_price in Keystone maps to price in database
+  quantity?: number; // quantity_available in Keystone maps to quantity in database
   category?: string;
-  subcategory?: string;
+  supplier?: string;
+  reorder_level?: number;
   weight?: number;
   dimensions?: string;
-  image_url?: string;
-  last_updated?: string;
-  status?: 'active' | 'inactive' | 'discontinued';
+  images?: any; // jsonb field for image URLs
+  warehouse?: string;
+  location?: string;
+  warranty?: string;
+  compatibility?: any; // jsonb field
+  features?: any; // jsonb field
+  rating?: number;
+  reviews?: number;
+  featured?: boolean;
+  availability?: string; // status in Keystone maps to availability in database
+  in_stock?: boolean;
+  core_charge?: number;
+  keystone_synced?: boolean;
+  keystone_last_sync?: string;
+  keystone_sync_status?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -734,9 +747,33 @@ class InventorySyncService {
     this.syncStatus.currentOperation = 'Cancelled';
   }
 
+  // Transform Keystone data to match database schema
+  private transformKeystoneData(keystoneItem: any): InventoryItem {
+    return {
+      keystone_vcpn: keystoneItem.keystone_vcpn || keystoneItem.vcpn,
+      sku: keystoneItem.part_number || keystoneItem.sku,
+      name: keystoneItem.name || keystoneItem.title,
+      description: keystoneItem.description,
+      brand: keystoneItem.brand || keystoneItem.manufacturer,
+      cost: keystoneItem.cost ? parseFloat(keystoneItem.cost) : undefined,
+      price: keystoneItem.list_price || keystoneItem.price ? parseFloat(keystoneItem.list_price || keystoneItem.price) : undefined,
+      quantity: keystoneItem.quantity_available || keystoneItem.quantity || 0,
+      category: keystoneItem.category,
+      weight: keystoneItem.weight ? parseFloat(keystoneItem.weight) : undefined,
+      dimensions: keystoneItem.dimensions,
+      availability: keystoneItem.status || 'active',
+      in_stock: (keystoneItem.quantity_available || keystoneItem.quantity || 0) > 0,
+      images: keystoneItem.image_url ? [keystoneItem.image_url] : keystoneItem.images || [],
+      keystone_synced: true,
+      keystone_last_sync: new Date().toISOString(),
+      keystone_sync_status: 'success',
+      updated_at: new Date().toISOString()
+    };
+  }
+
   // Private helper methods
 
-  private async processBatch(items: InventoryItem[]): Promise<SyncResult> {
+  private async processBatch(items: any[]): Promise<SyncResult> {
     const result: SyncResult = {
       success: true,
       message: '',
@@ -749,9 +786,11 @@ class InventorySyncService {
       timestamp: new Date().toISOString()
     };
 
-    for (const item of items) {
+    for (const keystoneItem of items) {
       try {
-        const wasUpdated = await this.upsertInventoryItem(item);
+        // Transform Keystone data to match database schema
+        const transformedItem = this.transformKeystoneData(keystoneItem);
+        const wasUpdated = await this.upsertInventoryItem(transformedItem);
         
         result.itemsProcessed++;
         
@@ -762,7 +801,7 @@ class InventorySyncService {
         }
         
       } catch (error) {
-        result.errors.push(`Failed to process item ${item.keystone_vcpn || item.part_number}: ${error.message}`);
+        result.errors.push(`Failed to process item ${keystoneItem.keystone_vcpn || keystoneItem.part_number}: ${error.message}`);
         result.itemsSkipped++;
       }
     }
@@ -912,18 +951,22 @@ class InventorySyncService {
       mockItems.push({
         id: `mock-${i}`,
         keystone_vcpn: `MOCK${i.toString().padStart(6, '0')}`,
-        part_number: `PART-${i}`,
+        sku: `PART-${i}`,
         name: `Mock Part ${i}`,
         description: `This is a mock inventory item for testing purposes`,
         brand: 'Mock Brand',
         cost: 10.00 + i,
-        list_price: 20.00 + i,
-        quantity_available: 100 - i,
+        price: 20.00 + i,
+        quantity: 100 - i,
         category: 'Test Category',
-        subcategory: 'Test Subcategory',
+        supplier: 'Mock Supplier',
         weight: 1.0 + (i * 0.1),
         dimensions: '10x10x10',
-        status: 'active',
+        availability: 'active',
+        in_stock: true,
+        keystone_synced: true,
+        keystone_last_sync: new Date().toISOString(),
+        keystone_sync_status: 'mock',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
