@@ -210,11 +210,33 @@ class InventorySyncService {
   // Get inventory data from Keystone API via DigitalOcean proxy
   async getInventoryFromKeystone(limit: number = 1000): Promise<InventoryItem[]> {
     try {
-      const apiToken = import.meta.env.VITE_KEYSTONE_API_TOKEN;
+      // Environment detection and token selection
+      const isDevelopment = import.meta.env.DEV || import.meta.env.VITE_ENVIRONMENT === 'development';
+      const isProduction = import.meta.env.VITE_ENVIRONMENT === 'production';
+      
+      // Use appropriate token based on environment
+      let apiToken;
+      if (isProduction) {
+        apiToken = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD;
+        console.log('🏭 Using PRODUCTION Keystone API token');
+      } else {
+        apiToken = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV;
+        console.log('🔧 Using DEVELOPMENT Keystone API token');
+      }
+      
       const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
 
-      if (!apiToken || !proxyUrl) {
-        console.warn('⚠️ Keystone API not configured, using mock data');
+      if (!apiToken) {
+        const envType = isProduction ? 'PRODUCTION' : 'DEVELOPMENT';
+        const expectedVar = isProduction ? 'VITE_KEYSTONE_SECURITY_TOKEN_PROD' : 'VITE_KEYSTONE_SECURITY_TOKEN_DEV';
+        console.warn(`⚠️ ${envType} Keystone API token not configured. Please set ${expectedVar} environment variable.`);
+        console.log('🔄 Falling back to mock data for development');
+        return this.getMockInventoryData(limit);
+      }
+
+      if (!proxyUrl) {
+        console.warn('⚠️ Keystone proxy URL not configured. Please set VITE_KEYSTONE_PROXY_URL environment variable.');
+        console.log('🔄 Falling back to mock data for development');
         return this.getMockInventoryData(limit);
       }
 
@@ -484,8 +506,18 @@ class InventorySyncService {
     try {
       console.log(`🔄 Updating single part: ${keystone_vcpn}`);
       
-      // Fetch the specific part from Keystone
-      const apiToken = import.meta.env.VITE_KEYSTONE_API_TOKEN;
+      // Environment detection and token selection
+      const isDevelopment = import.meta.env.DEV || import.meta.env.VITE_ENVIRONMENT === 'development';
+      const isProduction = import.meta.env.VITE_ENVIRONMENT === 'production';
+      
+      // Use appropriate token based on environment
+      let apiToken;
+      if (isProduction) {
+        apiToken = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD;
+      } else {
+        apiToken = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV;
+      }
+      
       const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
 
       if (!apiToken || !proxyUrl) {
