@@ -1,579 +1,732 @@
-/**
- * Inventory Sync Service for Keystone API via DigitalOcean Proxy
- * 
- * This service handles synchronization of inventory data from Keystone API
- * through a DigitalOcean proxy (required for fixed IP access to Keystone).
- * 
- * Environment Variables Required:
- * - VITE_KEYSTONE_API_TOKEN: Authentication token for Keystone API
- * - VITE_KEYSTONE_PROXY_URL: DigitalOcean proxy URL (provides fixed IP for Keystone)
- */
-
 import { createClient } from '@supabase/supabase-js';
 
-// Types
+// Types for the inventory sync system
 export interface InventoryItem {
   id?: string;
   keystone_vcpn?: string;
-  part_number: string;
-  name: string;
+  part_number?: string;
+  name?: string;
   description?: string;
   brand?: string;
-  category?: string;
-  price?: number;
   cost?: number;
+  list_price?: number;
   quantity_available?: number;
+  category?: string;
+  subcategory?: string;
   weight?: number;
   dimensions?: string;
   image_url?: string;
   last_updated?: string;
+  status?: 'active' | 'inactive' | 'discontinued';
   created_at?: string;
   updated_at?: string;
 }
 
-export interface InventorySyncStatus {
-  isRunning: boolean;
-  progress: number;
-  totalItems: number;
-  processedItems: number;
-  createdItems: number;
-  updatedItems: number;
-  errorItems: number;
+export interface SyncResult {
+  success: boolean;
+  message: string;
+  itemsProcessed: number;
+  itemsUpdated: number;
+  itemsAdded: number;
+  itemsSkipped: number;
   errors: string[];
-  currentItem?: string;
-  estimatedTimeRemaining?: number;
-  lastSyncTime?: string;
+  duration: number;
+  timestamp: string;
 }
 
-export interface SyncLogEntry {
+export interface SyncStatus {
+  isRunning: boolean;
+  lastSync: string | null;
+  nextScheduledSync: string | null;
+  totalItems: number;
+  pendingUpdates: number;
+  lastSyncResult: SyncResult | null;
+  syncType: 'full' | 'incremental' | 'none';
+  progress: number;
+  currentOperation: string;
+}
+
+export interface SyncConfiguration {
+  enabled: boolean;
+  fullSyncInterval: number; // hours
+  incrementalSyncInterval: number; // minutes
+  batchSize: number;
+  maxRetries: number;
+  timeout: number; // milliseconds
+  autoSync: boolean;
+}
+
+export interface PendingUpdate {
   id: string;
-  sync_type: string;
-  status: 'running' | 'completed' | 'failed';
-  started_at: string;
-  completed_at?: string;
-  duration_seconds?: number;
-  records_processed: number;
-  records_created: number;
-  records_updated: number;
-  records_failed: number;
-  error_message?: string;
-}
-
-export interface SyncOptions {
-  fullSync?: boolean;
-  maxItems?: number;
-  batchSize?: number;
+  keystone_vcpn: string;
+  operation: 'create' | 'update' | 'delete';
+  data: Partial<InventoryItem>;
+  timestamp: string;
+  retries: number;
+  priority: 'high' | 'medium' | 'low';
 }
 
 class InventorySyncService {
   private supabase: any;
-  private isInitialized = false;
-  private syncStatus: InventorySyncStatus = {
-    isRunning: false,
-    progress: 0,
-    totalItems: 0,
-    processedItems: 0,
-    createdItems: 0,
-    updatedItems: 0,
-    errorItems: 0,
-    errors: []
-  };
+  private isInitialized: boolean = false;
+  private syncStatus: SyncStatus;
+  private config: SyncConfiguration;
   private abortController: AbortController | null = null;
+  private pendingUpdates: Map<string, PendingUpdate> = new Map();
 
   constructor() {
     // Initialize Supabase client
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
     
     if (supabaseUrl && supabaseKey) {
       this.supabase = createClient(supabaseUrl, supabaseKey);
     }
+
+    // Initialize sync status
+    this.syncStatus = {
+      isRunning: false,
+      lastSync: null,
+      nextScheduledSync: null,
+      totalItems: 0,
+      pendingUpdates: 0,
+      lastSyncResult: null,
+      syncType: 'none',
+      progress: 0,
+      currentOperation: 'Idle'
+    };
+
+    // Initialize configuration
+    this.config = {
+      enabled: true,
+      fullSyncInterval: 24, // 24 hours
+      incrementalSyncInterval: 30, // 30 minutes
+      batchSize: 100,
+      maxRetries: 3,
+      timeout: 30000, // 30 seconds
+      autoSync: true
+    };
   }
 
-  /**
-   * Initialize the sync service
-   */
+  // Initialize the service
   async initialize(): Promise<void> {
     try {
-      console.log('🔧 Initializing Inventory Sync Service...');
-
-      // Validate Supabase connection
-      if (!this.supabase) {
-        throw new Error('Supabase client not configured. Please check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_TOKEN environment variables.');
+      console.log('🔄 Initializing Inventory Sync Service...');
+      
+      // Check environment variables
+      const apiToken = import.meta.env.VITE_KEYSTONE_API_TOKEN;
+      const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
+      
+      if (!apiToken) {
+        console.warn('⚠️ Keystone API token not configured. Please set VITE_KEYSTONE_API_TOKEN environment variable.');
+      }
+      
+      if (!proxyUrl) {
+        console.warn('⚠️ Keystone proxy URL not configured. Please set VITE_KEYSTONE_PROXY_URL environment variable.');
       }
 
-      // Test Supabase connection
-      const { error: dbError } = await this.supabase
-        .from('inventory')
-        .select('count', { count: 'exact', head: true });
-
-      if (dbError) {
-        throw new Error(`Database connection failed: ${dbError.message}`);
-      }
-
-      // Validate DigitalOcean proxy configuration
-      await this.validateProxyConfig();
-
-      // Create sync logs table if it doesn't exist
-      await this.ensureSyncLogsTable();
-
+      // Load configuration from database if available
+      await this.loadConfiguration();
+      
+      // Load pending updates
+      await this.loadPendingUpdates();
+      
+      // Update sync status
+      await this.updateSyncStatus();
+      
       this.isInitialized = true;
       console.log('✅ Inventory Sync Service initialized successfully');
-
+      
     } catch (error) {
       console.error('❌ Failed to initialize Inventory Sync Service:', error);
-      this.isInitialized = false;
       throw error;
     }
   }
 
-  /**
-   * Validate DigitalOcean proxy configuration
-   */
-  private async validateProxyConfig(): Promise<void> {
-    const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
-    const apiToken = import.meta.env.VITE_KEYSTONE_API_TOKEN;
-
-    if (!proxyUrl) {
-      throw new Error('DigitalOcean proxy URL not configured. Please set VITE_KEYSTONE_PROXY_URL environment variable.');
+  // Check if a scheduled sync should run
+  shouldRunScheduledSync(): boolean {
+    if (!this.config.enabled || !this.config.autoSync) {
+      return false;
     }
 
-    if (!apiToken) {
-      throw new Error('Keystone API token not configured. Please set VITE_KEYSTONE_API_TOKEN environment variable.');
-    }
-
-    // Test proxy connectivity
-    try {
-      console.log('🔍 Testing DigitalOcean proxy connectivity...');
-      
-      const response = await fetch(`${proxyUrl}/health`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${apiToken}`,
-          'Content-Type': 'application/json'
-        },
-        signal: AbortSignal.timeout(10000) // 10 second timeout
-      });
-
-      if (!response.ok) {
-        console.warn('⚠️ Proxy health check failed, but continuing (proxy may not have health endpoint)');
-      } else {
-        console.log('✅ DigitalOcean proxy connectivity confirmed');
-      }
-
-    } catch (error) {
-      console.warn('⚠️ Proxy connectivity test failed, but continuing:', error.message);
-      // Don't throw error here as proxy may not have a health endpoint
-    }
-  }
-
-  /**
-   * Ensure sync logs table exists
-   */
-  private async ensureSyncLogsTable(): Promise<void> {
-    try {
-      // Try to query the table first
-      const { error } = await this.supabase
-        .from('api_sync_logs')
-        .select('count', { count: 'exact', head: true });
-
-      if (error && error.code === '42P01') {
-        // Table doesn't exist, create it
-        console.log('📋 Creating api_sync_logs table...');
-        
-        const { error: createError } = await this.supabase.rpc('create_sync_logs_table');
-        
-        if (createError) {
-          console.warn('⚠️ Could not create sync logs table:', createError.message);
-        } else {
-          console.log('✅ Sync logs table created successfully');
-        }
-      }
-    } catch (error) {
-      console.warn('⚠️ Could not verify sync logs table:', error.message);
-    }
-  }
-
-  /**
-   * Start inventory synchronization
-   */
-  async startInventorySync(options: SyncOptions = {}): Promise<void> {
-    if (!this.isInitialized) {
-      throw new Error('Service not initialized. Please call initialize() first.');
-    }
-
-    if (this.syncStatus.isRunning) {
-      throw new Error('Sync is already running. Please wait for it to complete or cancel it first.');
-    }
-
-    const {
-      fullSync = true,
-      maxItems = undefined,
-      batchSize = 100
-    } = options;
-
-    // Reset sync status
-    this.syncStatus = {
-      isRunning: true,
-      progress: 0,
-      totalItems: 0,
-      processedItems: 0,
-      createdItems: 0,
-      updatedItems: 0,
-      errorItems: 0,
-      errors: []
-    };
-
-    // Create abort controller for cancellation
-    this.abortController = new AbortController();
-
-    // Log sync start
-    const syncLogId = await this.logSyncStart(fullSync ? 'full' : 'incremental');
-
-    try {
-      console.log(`🚀 Starting ${fullSync ? 'full' : 'incremental'} inventory sync...`);
-
-      // Fetch inventory data from DigitalOcean proxy
-      const inventoryData = await this.fetchInventoryFromProxy(maxItems);
-      
-      this.syncStatus.totalItems = inventoryData.length;
-      console.log(`📦 Retrieved ${inventoryData.length} items from Keystone API`);
-
-      // Process inventory in batches
-      await this.processInventoryBatches(inventoryData, batchSize);
-
-      // Complete sync
-      this.syncStatus.isRunning = false;
-      this.syncStatus.progress = 100;
-      this.syncStatus.lastSyncTime = new Date().toISOString();
-
-      await this.logSyncComplete(syncLogId);
-
-      console.log('✅ Inventory sync completed successfully');
-      console.log(`📊 Results: ${this.syncStatus.createdItems} created, ${this.syncStatus.updatedItems} updated, ${this.syncStatus.errorItems} errors`);
-
-    } catch (error) {
-      this.syncStatus.isRunning = false;
-      this.syncStatus.errors.push(error.message);
-      
-      await this.logSyncError(syncLogId, error.message);
-      
-      console.error('❌ Inventory sync failed:', error);
-      throw error;
-    } finally {
-      this.abortController = null;
-    }
-  }
-
-  /**
-   * Fetch inventory data from DigitalOcean proxy
-   */
-  private async fetchInventoryFromProxy(maxItems?: number): Promise<InventoryItem[]> {
-    const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
-    const apiToken = import.meta.env.VITE_KEYSTONE_API_TOKEN;
-
-    try {
-      console.log('🔄 Fetching inventory from DigitalOcean proxy...');
-
-      const url = new URL(`${proxyUrl}/inventory`);
-      if (maxItems) {
-        url.searchParams.set('limit', maxItems.toString());
-      }
-
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${apiToken}`,
-          'Content-Type': 'application/json'
-        },
-        signal: this.abortController?.signal
-      });
-
-      if (!response.ok) {
-        throw new Error(`Proxy API request failed: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      // Handle different response formats
-      if (Array.isArray(data)) {
-        return data;
-      } else if (data.items && Array.isArray(data.items)) {
-        return data.items;
-      } else if (data.data && Array.isArray(data.data)) {
-        return data.data;
-      } else {
-        throw new Error('Unexpected response format from proxy API');
-      }
-
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        throw new Error('Sync was cancelled');
-      }
-      
-      console.error('❌ Failed to fetch inventory from proxy:', error);
-      
-      // Return mock data for development/testing
-      if (import.meta.env.DEV) {
-        console.log('🔧 Using mock data for development');
-        return this.getMockInventoryData(maxItems || 10);
-      }
-      
-      throw error;
-    }
-  }
-
-  /**
-   * Process inventory data in batches
-   */
-  private async processInventoryBatches(inventoryData: InventoryItem[], batchSize: number): Promise<void> {
-    const totalBatches = Math.ceil(inventoryData.length / batchSize);
+    const now = new Date();
+    const lastSync = this.syncStatus.lastSync ? new Date(this.syncStatus.lastSync) : null;
     
-    for (let i = 0; i < totalBatches; i++) {
-      if (this.abortController?.signal.aborted) {
-        throw new Error('Sync was cancelled');
-      }
-
-      const start = i * batchSize;
-      const end = Math.min(start + batchSize, inventoryData.length);
-      const batch = inventoryData.slice(start, end);
-
-      console.log(`📦 Processing batch ${i + 1}/${totalBatches} (${batch.length} items)`);
-
-      await this.processBatch(batch);
-
-      // Update progress
-      this.syncStatus.processedItems = end;
-      this.syncStatus.progress = Math.round((end / inventoryData.length) * 100);
-
-      // Small delay between batches to prevent overwhelming the database
-      await new Promise(resolve => setTimeout(resolve, 100));
+    if (!lastSync) {
+      // No previous sync, should run
+      return true;
     }
+
+    // Check if it's time for incremental sync
+    const incrementalInterval = this.config.incrementalSyncInterval * 60 * 1000; // Convert to milliseconds
+    const timeSinceLastSync = now.getTime() - lastSync.getTime();
+    
+    if (timeSinceLastSync >= incrementalInterval) {
+      return true;
+    }
+
+    // Check if it's time for full sync
+    const fullInterval = this.config.fullSyncInterval * 60 * 60 * 1000; // Convert to milliseconds
+    if (timeSinceLastSync >= fullInterval) {
+      return true;
+    }
+
+    return false;
   }
 
-  /**
-   * Process a batch of inventory items
-   */
-  private async processBatch(batch: InventoryItem[]): Promise<void> {
-    for (const item of batch) {
-      if (this.abortController?.signal.aborted) {
-        throw new Error('Sync was cancelled');
-      }
-
-      try {
-        this.syncStatus.currentItem = item.name || item.part_number;
-        
-        await this.upsertInventoryItem(item);
-        this.syncStatus.updatedItems++;
-
-      } catch (error) {
-        console.error(`❌ Failed to process item ${item.part_number}:`, error);
-        this.syncStatus.errors.push(`${item.part_number}: ${error.message}`);
-        this.syncStatus.errorItems++;
-      }
-    }
-  }
-
-  /**
-   * Upsert inventory item to database
-   */
-  private async upsertInventoryItem(item: InventoryItem): Promise<void> {
-    const inventoryRecord = {
-      keystone_vcpn: item.keystone_vcpn,
-      part_number: item.part_number,
-      name: item.name,
-      description: item.description,
-      brand: item.brand,
-      category: item.category,
-      price: item.price,
-      cost: item.cost,
-      quantity_available: item.quantity_available,
-      weight: item.weight,
-      dimensions: item.dimensions,
-      image_url: item.image_url,
-      last_updated: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    const { error } = await this.supabase
-      .from('inventory')
-      .upsert(inventoryRecord, {
-        onConflict: 'part_number',
-        ignoreDuplicates: false
-      });
-
-    if (error) {
-      throw new Error(`Database upsert failed: ${error.message}`);
-    }
-  }
-
-  /**
-   * Cancel running sync
-   */
-  async cancelSync(): Promise<void> {
-    if (!this.syncStatus.isRunning) {
-      throw new Error('No sync is currently running');
-    }
-
-    if (this.abortController) {
-      this.abortController.abort();
-    }
-
-    this.syncStatus.isRunning = false;
-    console.log('🛑 Sync cancelled by user');
-  }
-
-  /**
-   * Get current sync status
-   */
-  getSyncStatus(): InventorySyncStatus {
+  // Get current sync status
+  getSyncStatus(): SyncStatus {
     return { ...this.syncStatus };
   }
 
-  /**
-   * Get sync logs
-   */
-  async getSyncLogs(limit: number = 10): Promise<SyncLogEntry[]> {
+  // Get inventory data from Supabase
+  async getInventoryFromSupabase(limit: number = 1000): Promise<InventoryItem[]> {
     try {
-      const { data, error } = await this.supabase
-        .from('api_sync_logs')
-        .select('*')
-        .eq('sync_type', 'inventory')
-        .order('started_at', { ascending: false })
-        .limit(limit);
-
-      if (error) {
-        console.error('❌ Failed to fetch sync logs:', error);
+      if (!this.supabase) {
+        console.warn('⚠️ Supabase not configured, returning empty inventory');
         return [];
       }
 
+      const { data, error } = await this.supabase
+        .from('inventory')
+        .select('*')
+        .limit(limit)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error fetching inventory from Supabase:', error);
+        return [];
+      }
+
+      console.log(`✅ Loaded ${data?.length || 0} inventory items from Supabase`);
       return data || [];
+      
     } catch (error) {
-      console.error('❌ Failed to fetch sync logs:', error);
+      console.error('❌ Failed to get inventory from Supabase:', error);
       return [];
     }
   }
 
-  /**
-   * Log sync start
-   */
-  private async logSyncStart(syncType: string): Promise<string> {
+  // Get inventory data from Keystone API via DigitalOcean proxy
+  async getInventoryFromKeystone(limit: number = 1000): Promise<InventoryItem[]> {
     try {
-      const { data, error } = await this.supabase
-        .from('api_sync_logs')
-        .insert([{
-          sync_type: 'inventory',
-          status: 'running',
-          started_at: new Date().toISOString(),
-          records_processed: 0,
-          records_created: 0,
-          records_updated: 0,
-          records_failed: 0
-        }])
-        .select()
+      const apiToken = import.meta.env.VITE_KEYSTONE_API_TOKEN;
+      const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
+
+      if (!apiToken || !proxyUrl) {
+        console.warn('⚠️ Keystone API not configured, using mock data');
+        return this.getMockInventoryData(limit);
+      }
+
+      const response = await fetch(`${proxyUrl}/inventory?limit=${limit}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        signal: this.abortController?.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`✅ Loaded ${data?.length || 0} inventory items from Keystone`);
+      return data || [];
+      
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('🛑 Keystone API request was cancelled');
+        return [];
+      }
+      
+      console.error('❌ Failed to get inventory from Keystone:', error);
+      console.log('🔄 Falling back to mock data for development');
+      return this.getMockInventoryData(limit);
+    }
+  }
+
+  // Perform full sync
+  async performFullSync(): Promise<SyncResult> {
+    console.log('🔄 Starting full inventory sync...');
+    
+    const startTime = Date.now();
+    const result: SyncResult = {
+      success: false,
+      message: '',
+      itemsProcessed: 0,
+      itemsUpdated: 0,
+      itemsAdded: 0,
+      itemsSkipped: 0,
+      errors: [],
+      duration: 0,
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      // Update sync status
+      this.syncStatus.isRunning = true;
+      this.syncStatus.syncType = 'full';
+      this.syncStatus.progress = 0;
+      this.syncStatus.currentOperation = 'Fetching inventory from Keystone...';
+
+      // Create abort controller for cancellation
+      this.abortController = new AbortController();
+
+      // Get inventory from Keystone
+      const keystoneInventory = await this.getInventoryFromKeystone();
+      
+      if (keystoneInventory.length === 0) {
+        result.message = 'No inventory data received from Keystone';
+        result.success = false;
+        return result;
+      }
+
+      this.syncStatus.currentOperation = 'Processing inventory items...';
+      this.syncStatus.progress = 25;
+
+      // Process inventory in batches
+      const batchSize = this.config.batchSize;
+      const totalBatches = Math.ceil(keystoneInventory.length / batchSize);
+
+      for (let i = 0; i < totalBatches; i++) {
+        const batch = keystoneInventory.slice(i * batchSize, (i + 1) * batchSize);
+        
+        this.syncStatus.currentOperation = `Processing batch ${i + 1} of ${totalBatches}...`;
+        this.syncStatus.progress = 25 + (i / totalBatches) * 50;
+
+        const batchResult = await this.processBatch(batch);
+        
+        result.itemsProcessed += batchResult.itemsProcessed;
+        result.itemsUpdated += batchResult.itemsUpdated;
+        result.itemsAdded += batchResult.itemsAdded;
+        result.itemsSkipped += batchResult.itemsSkipped;
+        result.errors.push(...batchResult.errors);
+
+        // Small delay between batches to prevent overwhelming the database
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      this.syncStatus.currentOperation = 'Finalizing sync...';
+      this.syncStatus.progress = 90;
+
+      // Update sync status
+      result.duration = Date.now() - startTime;
+      result.success = result.errors.length === 0;
+      result.message = result.success 
+        ? `Full sync completed successfully. Processed ${result.itemsProcessed} items.`
+        : `Full sync completed with ${result.errors.length} errors.`;
+
+      this.syncStatus.lastSync = new Date().toISOString();
+      this.syncStatus.lastSyncResult = result;
+      this.syncStatus.totalItems = result.itemsProcessed;
+
+      console.log('✅ Full sync completed:', result);
+      return result;
+
+    } catch (error) {
+      result.duration = Date.now() - startTime;
+      result.success = false;
+      result.message = `Full sync failed: ${error.message}`;
+      result.errors.push(error.message);
+      
+      console.error('❌ Full sync failed:', error);
+      return result;
+      
+    } finally {
+      this.syncStatus.isRunning = false;
+      this.syncStatus.progress = 100;
+      this.syncStatus.currentOperation = 'Idle';
+      this.abortController = null;
+    }
+  }
+
+  // Perform incremental sync
+  async performIncrementalSync(): Promise<SyncResult> {
+    console.log('🔄 Starting incremental inventory sync...');
+    
+    const startTime = Date.now();
+    const result: SyncResult = {
+      success: false,
+      message: '',
+      itemsProcessed: 0,
+      itemsUpdated: 0,
+      itemsAdded: 0,
+      itemsSkipped: 0,
+      errors: [],
+      duration: 0,
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      this.syncStatus.isRunning = true;
+      this.syncStatus.syncType = 'incremental';
+      this.syncStatus.progress = 0;
+      this.syncStatus.currentOperation = 'Processing pending updates...';
+
+      // Process pending updates first
+      await this.processPendingUpdates();
+
+      this.syncStatus.currentOperation = 'Fetching recent changes from Keystone...';
+      this.syncStatus.progress = 50;
+
+      // For incremental sync, we could fetch only recently updated items
+      // For now, we'll process a smaller batch
+      const recentInventory = await this.getInventoryFromKeystone(this.config.batchSize);
+      
+      if (recentInventory.length > 0) {
+        const batchResult = await this.processBatch(recentInventory);
+        
+        result.itemsProcessed = batchResult.itemsProcessed;
+        result.itemsUpdated = batchResult.itemsUpdated;
+        result.itemsAdded = batchResult.itemsAdded;
+        result.itemsSkipped = batchResult.itemsSkipped;
+        result.errors = batchResult.errors;
+      }
+
+      result.duration = Date.now() - startTime;
+      result.success = result.errors.length === 0;
+      result.message = result.success 
+        ? `Incremental sync completed successfully. Processed ${result.itemsProcessed} items.`
+        : `Incremental sync completed with ${result.errors.length} errors.`;
+
+      this.syncStatus.lastSync = new Date().toISOString();
+      this.syncStatus.lastSyncResult = result;
+
+      console.log('✅ Incremental sync completed:', result);
+      return result;
+
+    } catch (error) {
+      result.duration = Date.now() - startTime;
+      result.success = false;
+      result.message = `Incremental sync failed: ${error.message}`;
+      result.errors.push(error.message);
+      
+      console.error('❌ Incremental sync failed:', error);
+      return result;
+      
+    } finally {
+      this.syncStatus.isRunning = false;
+      this.syncStatus.progress = 100;
+      this.syncStatus.currentOperation = 'Idle';
+    }
+  }
+
+  // Process pending updates
+  async processPendingUpdates(): Promise<void> {
+    try {
+      const updates = Array.from(this.pendingUpdates.values());
+      
+      if (updates.length === 0) {
+        console.log('📝 No pending updates to process');
+        return;
+      }
+
+      console.log(`📝 Processing ${updates.length} pending updates...`);
+
+      for (const update of updates) {
+        try {
+          await this.processUpdate(update);
+          this.pendingUpdates.delete(update.id);
+        } catch (error) {
+          console.error(`❌ Failed to process update ${update.id}:`, error);
+          
+          // Increment retry count
+          update.retries++;
+          
+          // Remove if max retries exceeded
+          if (update.retries >= this.config.maxRetries) {
+            console.error(`🚫 Max retries exceeded for update ${update.id}, removing from queue`);
+            this.pendingUpdates.delete(update.id);
+          }
+        }
+      }
+
+      // Update pending count
+      this.syncStatus.pendingUpdates = this.pendingUpdates.size;
+      
+    } catch (error) {
+      console.error('❌ Failed to process pending updates:', error);
+    }
+  }
+
+  // Request part update
+  async requestPartUpdate(keystone_vcpn: string, priority: 'high' | 'medium' | 'low' = 'medium'): Promise<void> {
+    try {
+      const updateId = `${keystone_vcpn}_${Date.now()}`;
+      
+      const pendingUpdate: PendingUpdate = {
+        id: updateId,
+        keystone_vcpn,
+        operation: 'update',
+        data: { keystone_vcpn },
+        timestamp: new Date().toISOString(),
+        retries: 0,
+        priority
+      };
+
+      this.pendingUpdates.set(updateId, pendingUpdate);
+      this.syncStatus.pendingUpdates = this.pendingUpdates.size;
+      
+      console.log(`📝 Requested update for part ${keystone_vcpn} with priority ${priority}`);
+      
+    } catch (error) {
+      console.error(`❌ Failed to request part update for ${keystone_vcpn}:`, error);
+    }
+  }
+
+  // Update single part immediately
+  async updateSinglePart(keystone_vcpn: string): Promise<boolean> {
+    try {
+      console.log(`🔄 Updating single part: ${keystone_vcpn}`);
+      
+      // Fetch the specific part from Keystone
+      const apiToken = import.meta.env.VITE_KEYSTONE_API_TOKEN;
+      const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
+
+      if (!apiToken || !proxyUrl) {
+        console.warn('⚠️ Keystone API not configured');
+        return false;
+      }
+
+      const response = await fetch(`${proxyUrl}/inventory/${keystone_vcpn}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const partData = await response.json();
+      
+      if (partData) {
+        await this.upsertInventoryItem(partData);
+        console.log(`✅ Successfully updated part: ${keystone_vcpn}`);
+        return true;
+      }
+
+      return false;
+      
+    } catch (error) {
+      console.error(`❌ Failed to update single part ${keystone_vcpn}:`, error);
+      return false;
+    }
+  }
+
+  // Cancel current sync operation
+  cancelSync(): void {
+    if (this.abortController) {
+      this.abortController.abort();
+      console.log('🛑 Sync operation cancelled');
+    }
+    
+    this.syncStatus.isRunning = false;
+    this.syncStatus.currentOperation = 'Cancelled';
+  }
+
+  // Private helper methods
+
+  private async processBatch(items: InventoryItem[]): Promise<SyncResult> {
+    const result: SyncResult = {
+      success: true,
+      message: '',
+      itemsProcessed: 0,
+      itemsUpdated: 0,
+      itemsAdded: 0,
+      itemsSkipped: 0,
+      errors: [],
+      duration: 0,
+      timestamp: new Date().toISOString()
+    };
+
+    for (const item of items) {
+      try {
+        const wasUpdated = await this.upsertInventoryItem(item);
+        
+        result.itemsProcessed++;
+        
+        if (wasUpdated) {
+          result.itemsUpdated++;
+        } else {
+          result.itemsAdded++;
+        }
+        
+      } catch (error) {
+        result.errors.push(`Failed to process item ${item.keystone_vcpn || item.part_number}: ${error.message}`);
+        result.itemsSkipped++;
+      }
+    }
+
+    return result;
+  }
+
+  private async upsertInventoryItem(item: InventoryItem): Promise<boolean> {
+    if (!this.supabase) {
+      throw new Error('Supabase not configured');
+    }
+
+    try {
+      // Check if item exists
+      const { data: existing } = await this.supabase
+        .from('inventory')
+        .select('id')
+        .eq('keystone_vcpn', item.keystone_vcpn)
         .single();
 
-      if (error) {
-        console.error('❌ Failed to log sync start:', error);
-        return 'unknown';
+      const itemData = {
+        ...item,
+        updated_at: new Date().toISOString()
+      };
+
+      if (existing) {
+        // Update existing item
+        const { error } = await this.supabase
+          .from('inventory')
+          .update(itemData)
+          .eq('id', existing.id);
+
+        if (error) throw error;
+        return true; // Was updated
+      } else {
+        // Insert new item
+        itemData.created_at = new Date().toISOString();
+        
+        const { error } = await this.supabase
+          .from('inventory')
+          .insert([itemData]);
+
+        if (error) throw error;
+        return false; // Was added
       }
-
-      return data.id;
-    } catch (error) {
-      console.error('❌ Failed to log sync start:', error);
-      return 'unknown';
-    }
-  }
-
-  /**
-   * Log sync completion
-   */
-  private async logSyncComplete(syncLogId: string): Promise<void> {
-    try {
-      const now = new Date().toISOString();
       
-      const { error } = await this.supabase
-        .from('api_sync_logs')
-        .update({
-          status: 'completed',
-          completed_at: now,
-          records_processed: this.syncStatus.processedItems,
-          records_created: this.syncStatus.createdItems,
-          records_updated: this.syncStatus.updatedItems,
-          records_failed: this.syncStatus.errorItems
-        })
-        .eq('id', syncLogId);
-
-      if (error) {
-        console.error('❌ Failed to log sync completion:', error);
-      }
     } catch (error) {
-      console.error('❌ Failed to log sync completion:', error);
+      console.error('❌ Failed to upsert inventory item:', error);
+      throw error;
     }
   }
 
-  /**
-   * Log sync error
-   */
-  private async logSyncError(syncLogId: string, errorMessage: string): Promise<void> {
+  private async processUpdate(update: PendingUpdate): Promise<void> {
+    switch (update.operation) {
+      case 'update':
+        await this.updateSinglePart(update.keystone_vcpn);
+        break;
+      case 'create':
+        if (update.data) {
+          await this.upsertInventoryItem(update.data as InventoryItem);
+        }
+        break;
+      case 'delete':
+        await this.deleteInventoryItem(update.keystone_vcpn);
+        break;
+      default:
+        throw new Error(`Unknown operation: ${update.operation}`);
+    }
+  }
+
+  private async deleteInventoryItem(keystone_vcpn: string): Promise<void> {
+    if (!this.supabase) {
+      throw new Error('Supabase not configured');
+    }
+
+    const { error } = await this.supabase
+      .from('inventory')
+      .delete()
+      .eq('keystone_vcpn', keystone_vcpn);
+
+    if (error) throw error;
+  }
+
+  private async loadConfiguration(): Promise<void> {
     try {
-      const { error } = await this.supabase
-        .from('api_sync_logs')
-        .update({
-          status: 'failed',
-          completed_at: new Date().toISOString(),
-          records_processed: this.syncStatus.processedItems,
-          records_created: this.syncStatus.createdItems,
-          records_updated: this.syncStatus.updatedItems,
-          records_failed: this.syncStatus.errorItems,
-          error_message: errorMessage
-        })
-        .eq('id', syncLogId);
+      if (!this.supabase) return;
 
-      if (error) {
-        console.error('❌ Failed to log sync error:', error);
+      const { data } = await this.supabase
+        .from('sync_configuration')
+        .select('*')
+        .single();
+
+      if (data) {
+        this.config = { ...this.config, ...data };
       }
+      
     } catch (error) {
-      console.error('❌ Failed to log sync error:', error);
+      console.log('📝 Using default sync configuration');
     }
   }
 
-  /**
-   * Get mock inventory data for development/testing
-   */
-  private getMockInventoryData(count: number): InventoryItem[] {
+  private async loadPendingUpdates(): Promise<void> {
+    try {
+      if (!this.supabase) return;
+
+      const { data } = await this.supabase
+        .from('pending_updates')
+        .select('*')
+        .order('timestamp', { ascending: true });
+
+      if (data) {
+        this.pendingUpdates.clear();
+        data.forEach(update => {
+          this.pendingUpdates.set(update.id, update);
+        });
+      }
+      
+    } catch (error) {
+      console.log('📝 No pending updates found');
+    }
+  }
+
+  private async updateSyncStatus(): Promise<void> {
+    try {
+      if (!this.supabase) return;
+
+      const { data } = await this.supabase
+        .from('sync_status')
+        .select('*')
+        .single();
+
+      if (data) {
+        this.syncStatus = { ...this.syncStatus, ...data };
+      }
+      
+    } catch (error) {
+      console.log('📝 Using default sync status');
+    }
+  }
+
+  private getMockInventoryData(limit: number): InventoryItem[] {
     const mockItems: InventoryItem[] = [];
     
-    for (let i = 1; i <= count; i++) {
+    for (let i = 1; i <= Math.min(limit, 10); i++) {
       mockItems.push({
-        keystone_vcpn: `VCPN${i.toString().padStart(6, '0')}`,
-        part_number: `PART${i.toString().padStart(4, '0')}`,
+        id: `mock-${i}`,
+        keystone_vcpn: `MOCK${i.toString().padStart(6, '0')}`,
+        part_number: `PART-${i}`,
         name: `Mock Part ${i}`,
-        description: `This is a mock part for testing purposes - Item ${i}`,
-        brand: ['Ford', 'Chevy', 'Dodge', 'Toyota'][i % 4],
-        category: ['Engine', 'Transmission', 'Suspension', 'Electrical'][i % 4],
-        price: Math.round((Math.random() * 500 + 50) * 100) / 100,
-        cost: Math.round((Math.random() * 300 + 25) * 100) / 100,
-        quantity_available: Math.floor(Math.random() * 100),
-        weight: Math.round((Math.random() * 50 + 1) * 100) / 100,
-        dimensions: `${Math.floor(Math.random() * 20 + 5)}"x${Math.floor(Math.random() * 20 + 5)}"x${Math.floor(Math.random() * 20 + 5)}"`,
-        image_url: `https://via.placeholder.com/300x200?text=Part+${i}`,
-        last_updated: new Date().toISOString()
+        description: `This is a mock inventory item for testing purposes`,
+        brand: 'Mock Brand',
+        cost: 10.00 + i,
+        list_price: 20.00 + i,
+        quantity_available: 100 - i,
+        category: 'Test Category',
+        subcategory: 'Test Subcategory',
+        weight: 1.0 + (i * 0.1),
+        dimensions: '10x10x10',
+        status: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       });
     }
     
     return mockItems;
   }
-
-  /**
-   * Check if service is initialized
-   */
-  isServiceInitialized(): boolean {
-    return this.isInitialized;
-  }
 }
 
 // Export singleton instance
-export const inventorySyncService = new InventorySyncService();
-export { InventorySyncService };
+export const InventorySyncService = new InventorySyncService();
+export default InventorySyncService;
 
