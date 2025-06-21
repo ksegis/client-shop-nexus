@@ -18,7 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Import services
-import { InventorySyncService } from "@/services/InventorySyncService";
+import { InventorySyncService } from "@/services/inventory_sync_service";
 import { getSyncScheduler } from "@/services/SyncScheduler";
 import { getPricingSyncService, PricingSyncService, PricingData } from "@/services/pricing_sync_service";
 import { getPricingSyncScheduler, PricingSyncScheduler } from "@/services/pricing_sync_scheduler";
