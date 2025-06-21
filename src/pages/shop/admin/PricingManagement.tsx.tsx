@@ -349,36 +349,6 @@ const PricingManagement: React.FC = () => {
     setShowEditDialog(true);
   };
 
-  // Handle making record inactive (set end date to today)
-  const handleMakeInactive = async (record: PricingRecord) => {
-    if (!confirm(`Make "${record.part_name}" pricing inactive as of today?`)) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('pricing_records')
-        .update({ 
-          effective_end_date: getCurrentDate(),
-          status: 'inactive'
-        })
-        .eq('id', record.id);
-
-      if (error) {
-        console.error('❌ Error making record inactive:', error);
-        alert('Error making record inactive: ' + error.message);
-      } else {
-        if (pricingSearchTerm) {
-          await loadPricingRecords(pricingSearchTerm);
-        }
-        alert('Pricing record made inactive successfully!');
-      }
-    } catch (error) {
-      console.error('❌ Exception making record inactive:', error);
-      alert('Error making record inactive');
-    }
-  };
-
   // Initialize component
   useEffect(() => {
     detectInventoryColumns();
@@ -784,25 +754,13 @@ const PricingManagement: React.FC = () => {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <div className="flex space-x-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditRecord(record)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              {statusInfo.status === 'Active' && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleMakeInactive(record)}
-                                  className="text-orange-600 hover:text-orange-700"
-                                >
-                                  End Today
-                                </Button>
-                              )}
-                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditRecord(record)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       );
