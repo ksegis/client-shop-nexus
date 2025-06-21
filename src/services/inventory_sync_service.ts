@@ -1,53 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Rate limiting function (import from your existing location)
-const checkRateLimit = async (path: string): Promise<{
-  success: boolean;
-  limit: number;
-  remaining: number;
-  reset: string;
-}> => {
+// Rate limiter function (imported from your existing rate limiter)
+const checkRateLimit = async (endpoint: string) => {
   try {
-    // Get client IP
-    const ip = await fetch('https://api.ipify.org?format=json')
-      .then(res => res.json())
-      .then(data => data.ip)
-      .catch(() => 'unknown');
-
-    // Get Supabase configuration
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vqkxrbflwhunvbotjdds.supabase.co';
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN || '';
-    
-    const rateLimiterUrl = `${supabaseUrl}/functions/v1/rate-limiter`;
-    const requestBody = { ip, path };
-
-    console.log(`🔍 Checking rate limit for path: ${path}`);
-    console.log(`📍 Client IP: ${ip}`);
-    console.log(`🌐 Rate limiter URL: ${rateLimiterUrl}`);
-
-    const response = await fetch(rateLimiterUrl, {
+    const response = await fetch('/functions/v1/rate-limiter', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${anonKey}`
-      },
-      body: JSON.stringify(requestBody)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint })
     });
 
-    console.log(`📥 Response status: ${response.status}`);
-
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error(`❌ Rate limiter response error: ${response.status} - ${JSON.stringify(errorData)}`);
-      throw new Error(`Rate limiter returned ${response.status}: ${JSON.stringify(errorData)}`);
+      throw new Error(`Rate limiter returned ${response.status}: ${await response.text()}`);
     }
 
-    const result = await response.json();
-    console.log(`✅ Rate limit check passed. ${result.remaining}/${result.limit} requests remaining.`);
-    return result;
-
+    return await response.json();
   } catch (error) {
-    console.error('❌ Rate limit check failed:', error.message);
+    console.error('❌ Rate limiter response error:', error);
+    console.error('❌ Rate limit check failed:', error);
     console.error('❌ Full error details:', error);
     throw error;
   }
@@ -79,11 +48,15 @@ interface InventoryItem {
 
 interface SyncStatus {
   isRunning: boolean;
-  lastSync: string | null;
+  lastSuccessfulSync: string | null;
+  nextPlannedSync: string | null;
   totalItems: number;
   syncedItems: number;
   errors: string[];
   progress: number;
+  lastSyncAttempt: string | null;
+  lastSyncResult: 'success' | 'failed' | 'partial' | null;
+  failureReason: string | null;
 }
 
 interface SyncConfiguration {
@@ -91,6 +64,8 @@ interface SyncConfiguration {
   maxRetries: number;
   retryDelay: number;
   enableRateLimit: boolean;
+  syncIntervalHours: number;
+  enableAutoSync: boolean;
 }
 
 class InventorySyncService {
@@ -105,14 +80,18 @@ class InventorySyncService {
     const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN || '';
     this.supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Initialize sync status
+    // Initialize sync status with enhanced tracking
     this.syncStatus = {
       isRunning: false,
-      lastSync: null,
+      lastSuccessfulSync: this.getStoredSyncStatus('lastSuccessfulSync'),
+      nextPlannedSync: this.calculateNextPlannedSync(),
       totalItems: 0,
       syncedItems: 0,
       errors: [],
-      progress: 0
+      progress: 0,
+      lastSyncAttempt: this.getStoredSyncStatus('lastSyncAttempt'),
+      lastSyncResult: this.getStoredSyncStatus('lastSyncResult') as 'success' | 'failed' | 'partial' | null,
+      failureReason: this.getStoredSyncStatus('failureReason')
     };
 
     // Default configuration
@@ -120,8 +99,60 @@ class InventorySyncService {
       batchSize: 50,
       maxRetries: 3,
       retryDelay: 1000,
-      enableRateLimit: true
+      enableRateLimit: true,
+      syncIntervalHours: 24, // Daily sync by default
+      enableAutoSync: true
     };
+  }
+
+  // Get stored sync status from localStorage
+  private getStoredSyncStatus(key: string): string | null {
+    try {
+      return localStorage.getItem(`inventory_sync_${key}`);
+    } catch {
+      return null;
+    }
+  }
+
+  // Store sync status to localStorage
+  private storeSyncStatus(key: string, value: string): void {
+    try {
+      localStorage.setItem(`inventory_sync_${key}`, value);
+    } catch (error) {
+      console.warn('Failed to store sync status:', error);
+    }
+  }
+
+  // Calculate next planned sync based on last successful sync and interval
+  private calculateNextPlannedSync(): string | null {
+    const lastSync = this.getStoredSyncStatus('lastSuccessfulSync');
+    if (!lastSync) return null;
+
+    const lastSyncDate = new Date(lastSync);
+    const nextSync = new Date(lastSyncDate.getTime() + (this.syncConfiguration.syncIntervalHours * 60 * 60 * 1000));
+    return nextSync.toISOString();
+  }
+
+  // Update sync status and persist to storage
+  private updateSyncStatus(updates: Partial<SyncStatus>): void {
+    Object.assign(this.syncStatus, updates);
+
+    // Persist critical status to localStorage
+    if (updates.lastSuccessfulSync) {
+      this.storeSyncStatus('lastSuccessfulSync', updates.lastSuccessfulSync);
+    }
+    if (updates.lastSyncAttempt) {
+      this.storeSyncStatus('lastSyncAttempt', updates.lastSyncAttempt);
+    }
+    if (updates.lastSyncResult) {
+      this.storeSyncStatus('lastSyncResult', updates.lastSyncResult);
+    }
+    if (updates.failureReason !== undefined) {
+      this.storeSyncStatus('failureReason', updates.failureReason || '');
+    }
+
+    // Recalculate next planned sync
+    this.syncStatus.nextPlannedSync = this.calculateNextPlannedSync();
   }
 
   // Get current environment setting from admin choice or fallback to env var
@@ -155,22 +186,29 @@ class InventorySyncService {
     }
   }
 
-  // Get inventory data from Keystone API with admin environment awareness
+  // Get inventory data from Keystone API with production-safe error handling
   async getInventoryFromKeystone(limit: number = 1000): Promise<InventoryItem[]> {
     const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
     const apiToken = this.getApiToken();
+    const environment = this.getCurrentEnvironment();
 
     // Log environment variables for debugging
     console.log('🔧 Environment check:');
-    console.log(`- Current Environment: ${this.getCurrentEnvironment().toUpperCase()}`);
+    console.log(`- Current Environment: ${environment.toUpperCase()}`);
     console.log(`- VITE_SUPABASE_URL: ${import.meta.env.VITE_SUPABASE_URL ? 'Set' : 'Missing'}`);
     console.log(`- VITE_SUPABASE_ANON_TOKEN: ${import.meta.env.VITE_SUPABASE_ANON_TOKEN ? 'Set' : 'Missing'}`);
     console.log(`- VITE_KEYSTONE_PROXY_URL: ${proxyUrl ? 'Set' : 'Missing'}`);
     console.log(`- API Token: ${apiToken ? 'Set' : 'Missing'}`);
 
     if (!proxyUrl || !apiToken) {
-      console.error('❌ Missing required environment variables for Keystone API');
-      throw new Error('Missing Keystone API configuration');
+      const error = 'Missing required environment variables for Keystone API';
+      console.error('❌', error);
+      this.updateSyncStatus({
+        lastSyncAttempt: new Date().toISOString(),
+        lastSyncResult: 'failed',
+        failureReason: 'Missing API configuration'
+      });
+      throw new Error(error);
     }
 
     // Check rate limit before making API call
@@ -184,8 +222,22 @@ class InventorySyncService {
     }
 
     if (!rateLimitPassed) {
-      console.log('🔄 Rate limited, falling back to mock data');
-      return this.getMockInventoryData(limit);
+      const error = 'Rate limit exceeded for Keystone API';
+      console.error('❌', error);
+      this.updateSyncStatus({
+        lastSyncAttempt: new Date().toISOString(),
+        lastSyncResult: 'failed',
+        failureReason: 'Rate limit exceeded'
+      });
+      
+      // In production, never fall back to mock data - throw error instead
+      if (environment === 'production') {
+        throw new Error(error);
+      } else {
+        // In development, allow mock data for testing
+        console.log('🔄 Development mode: Falling back to mock data due to rate limiting');
+        return this.getMockInventoryData(limit);
+      }
     }
 
     try {
@@ -210,13 +262,35 @@ class InventorySyncService {
       const data = await response.json();
       console.log(`✅ Successfully loaded ${data.length || 0} inventory items from Keystone`);
       
+      // Update successful sync status
+      this.updateSyncStatus({
+        lastSyncAttempt: new Date().toISOString(),
+        lastSyncResult: 'success',
+        failureReason: null
+      });
+      
       // Transform Keystone data to match our database schema
       return data.map((item: any) => this.transformKeystoneData(item));
 
     } catch (error) {
       console.error('❌ Failed to get inventory from Keystone:', error);
-      console.log('🔄 Falling back to mock data due to API error');
-      return this.getMockInventoryData(limit);
+      
+      // Update failed sync status
+      this.updateSyncStatus({
+        lastSyncAttempt: new Date().toISOString(),
+        lastSyncResult: 'failed',
+        failureReason: error.message || 'Unknown API error'
+      });
+
+      // In production, never fall back to mock data - throw error instead
+      if (environment === 'production') {
+        console.error('🚨 Production mode: No fallback available. Sync failed.');
+        throw error;
+      } else {
+        // In development, allow mock data for testing
+        console.log('🔄 Development mode: Falling back to mock data due to API error');
+        return this.getMockInventoryData(limit);
+      }
     }
   }
 
@@ -239,7 +313,7 @@ class InventorySyncService {
       images: keystoneItem.image_url ? { urls: [keystoneItem.image_url] } : null,
       keystone_synced: true,
       keystone_last_sync: new Date().toISOString(),
-      keystone_sync_status: 'synced', // Use allowed value: 'synced' instead of 'success'
+      keystone_sync_status: 'synced',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -285,6 +359,10 @@ class InventorySyncService {
 
       if (keystoneInventory.length === 0) {
         console.log('⚠️ No inventory items received from Keystone');
+        this.updateSyncStatus({
+          lastSyncResult: 'failed',
+          failureReason: 'No inventory items received'
+        });
         return;
       }
 
@@ -300,28 +378,61 @@ class InventorySyncService {
         const batch = keystoneInventory.slice(i, i + batchSize);
         
         try {
-          await this.processBatch(batch, i / batchSize + 1, Math.ceil(keystoneInventory.length / batchSize));
-          processedItems += batch.length;
-          this.syncStatus.syncedItems = processedItems;
-          this.syncStatus.progress = (processedItems / keystoneInventory.length) * 100;
-
-          // Add delay between batches to respect rate limits
-          if (i + batchSize < keystoneInventory.length) {
+          // Wait between batches to respect rate limits
+          if (i > 0) {
             console.log('⏳ Waiting 1s between batches to respect rate limits...');
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
+
+          const { error } = await this.supabase
+            .from('inventory')
+            .upsert(batch, { 
+              onConflict: 'keystone_vcpn',
+              ignoreDuplicates: false 
+            });
+
+          if (error) {
+            console.error(`❌ Error upserting batch ${Math.floor(i / batchSize) + 1}:`, error);
+            this.syncStatus.errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${error.message}`);
+          } else {
+            processedItems += batch.length;
+            console.log(`✅ Successfully processed batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(keystoneInventory.length / batchSize)}...`);
+          }
+
+          this.syncStatus.syncedItems = processedItems;
+          this.syncStatus.progress = (processedItems / keystoneInventory.length) * 100;
+
         } catch (batchError) {
-          console.error(`❌ Error processing batch ${i / batchSize + 1}:`, batchError);
-          this.syncStatus.errors.push(`Batch ${i / batchSize + 1}: ${batchError.message}`);
+          console.error(`❌ Failed to process batch ${Math.floor(i / batchSize) + 1}:`, batchError);
+          this.syncStatus.errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${batchError.message}`);
         }
       }
 
-      this.syncStatus.lastSync = new Date().toISOString();
-      console.log(`✅ Full sync completed successfully. Processed ${processedItems} items.`);
+      // Determine final sync result
+      const hasErrors = this.syncStatus.errors.length > 0;
+      const syncResult = hasErrors ? 'partial' : 'success';
+      
+      if (syncResult === 'success') {
+        console.log(`✅ Full sync completed successfully. Processed ${processedItems} items.`);
+        this.updateSyncStatus({
+          lastSuccessfulSync: new Date().toISOString(),
+          lastSyncResult: 'success',
+          failureReason: null
+        });
+      } else {
+        console.log(`⚠️ Full sync completed with ${this.syncStatus.errors.length} errors.`);
+        this.updateSyncStatus({
+          lastSyncResult: 'partial',
+          failureReason: `${this.syncStatus.errors.length} batch errors occurred`
+        });
+      }
 
     } catch (error) {
       console.error('❌ Full sync failed:', error);
-      this.syncStatus.errors.push(`Full sync failed: ${error.message}`);
+      this.updateSyncStatus({
+        lastSyncResult: 'failed',
+        failureReason: error.message || 'Unknown sync error'
+      });
       throw error;
     } finally {
       this.syncStatus.isRunning = false;
@@ -329,34 +440,26 @@ class InventorySyncService {
     }
   }
 
-  // Process a batch of inventory items
-  private async processBatch(items: InventoryItem[], batchNumber: number, totalBatches: number): Promise<void> {
-    console.log(`🔄 Processing batch ${batchNumber} of ${totalBatches} (${items.length} items)...`);
-
-    try {
-      const { data, error } = await this.supabase
-        .from('inventory')
-        .upsert(items, { 
-          onConflict: 'keystone_vcpn',
-          ignoreDuplicates: false 
-        })
-        .select();
-
-      if (error) {
-        console.error(`❌ Database error in batch ${batchNumber}:`, error);
-        throw error;
-      }
-
-      console.log(`✅ Successfully processed batch ${batchNumber} of ${totalBatches}...`);
-    } catch (error) {
-      console.error(`❌ Failed to process batch ${batchNumber}:`, error);
-      throw error;
-    }
-  }
-
   // Get current sync status
   getSyncStatus(): SyncStatus {
     return { ...this.syncStatus };
+  }
+
+  // Check if scheduled sync should run
+  shouldRunScheduledSync(): boolean {
+    if (!this.syncConfiguration.enableAutoSync) {
+      return false;
+    }
+
+    const now = new Date();
+    const nextSync = this.syncStatus.nextPlannedSync;
+    
+    if (!nextSync) {
+      // No previous sync, should run
+      return true;
+    }
+
+    return now >= new Date(nextSync);
   }
 
   // Cancel running sync
@@ -367,34 +470,10 @@ class InventorySyncService {
     }
   }
 
-  // Check if scheduled sync should run
-  shouldRunScheduledSync(): boolean {
-    if (this.syncStatus.isRunning) {
-      return false;
-    }
-
-    const lastSync = this.syncStatus.lastSync;
-    if (!lastSync) {
-      return true;
-    }
-
-    const lastSyncTime = new Date(lastSync);
-    const now = new Date();
-    const hoursSinceLastSync = (now.getTime() - lastSyncTime.getTime()) / (1000 * 60 * 60);
-
-    return hoursSinceLastSync >= 24; // Run daily
-  }
-
-  // Perform incremental sync (placeholder for future implementation)
-  async performIncrementalSync(): Promise<void> {
-    console.log('🔄 Incremental sync not yet implemented, performing full sync...');
-    return this.performFullSync(100);
-  }
-
   // Process pending updates (placeholder for future implementation)
   async processPendingUpdates(): Promise<void> {
     console.log('🔄 Processing pending updates...');
-    // Implementation for processing pending updates
+    // Implementation for processing queued updates
   }
 
   // Request part update (placeholder for future implementation)
@@ -449,9 +528,15 @@ class InventorySyncService {
     }
   }
 
-  // Generate mock inventory data for testing
+  // Generate mock inventory data for testing (DEVELOPMENT ONLY)
   private getMockInventoryData(limit: number): InventoryItem[] {
-    console.log(`🎭 Generating ${Math.min(limit, 10)} mock inventory items for testing`);
+    const environment = this.getCurrentEnvironment();
+    
+    if (environment === 'production') {
+      throw new Error('Mock data is not allowed in production environment');
+    }
+
+    console.log(`🎭 DEVELOPMENT MODE: Generating ${Math.min(limit, 10)} mock inventory items for testing`);
     
     const mockItems: InventoryItem[] = [];
     
@@ -473,7 +558,7 @@ class InventorySyncService {
         availability: 'active',
         keystone_synced: true,
         keystone_last_sync: new Date().toISOString(),
-        keystone_sync_status: 'synced', // Use allowed value: 'synced' instead of 'mock'
+        keystone_sync_status: 'synced',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
@@ -481,10 +566,36 @@ class InventorySyncService {
     
     return mockItems;
   }
+
+  // Get sync configuration
+  getSyncConfiguration(): SyncConfiguration {
+    return { ...this.syncConfiguration };
+  }
+
+  // Update sync configuration
+  updateSyncConfiguration(updates: Partial<SyncConfiguration>): void {
+    Object.assign(this.syncConfiguration, updates);
+    
+    // Recalculate next planned sync if interval changed
+    if (updates.syncIntervalHours) {
+      this.syncStatus.nextPlannedSync = this.calculateNextPlannedSync();
+    }
+  }
 }
 
 // Export both class and singleton instance for compatibility
 export { InventorySyncService };
 export const inventorySyncService = new InventorySyncService();
 export default inventorySyncService;
+
+/*
+Available Keystone API Endpoints (for reference):
+- /inventory/full - Full inventory data (POST with limit parameter)
+- /inventory/bulk - Bulk inventory operations  
+- /inventory/updates - Incremental updates
+- /inventory/check/{vcpn} - Check specific items
+- /orders/create - Create new orders
+- /orders/status - Check order status
+- /orders/history - Order history
+*/
 
