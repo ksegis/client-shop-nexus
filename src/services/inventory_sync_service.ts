@@ -726,7 +726,8 @@ class InventorySyncService {
   }
 }
 
-// Export singleton instance
+// Export both class and singleton instance for compatibility
+export { InventorySyncService };
 export const inventorySyncService = new InventorySyncService();
 export default inventorySyncService;
 
