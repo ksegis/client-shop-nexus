@@ -1,5 +1,5 @@
 // Updated Sync Scheduler - Works with existing inventory table
-import InventorySyncService from './InventorySyncService';
+import { InventorySyncService } from './InventorySyncService';
 
 interface SchedulerConfig {
   enableDailySync: boolean;
