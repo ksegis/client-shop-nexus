@@ -749,5 +749,4 @@ Other Available Endpoints:
 - /shipping/options - Shipping options
 - /orders/ship - Order shipping
 - /orders/history - Order history
-*/
 
