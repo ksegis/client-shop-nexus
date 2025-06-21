@@ -762,7 +762,7 @@ class InventorySyncService {
       weight: keystoneItem.weight ? parseFloat(keystoneItem.weight) : undefined,
       dimensions: keystoneItem.dimensions,
       availability: keystoneItem.status || 'active',
-      in_stock: (keystoneItem.quantity_available || keystoneItem.quantity || 0) > 0,
+      // Note: in_stock is a generated column - do not set it manually
       images: keystoneItem.image_url ? [keystoneItem.image_url] : keystoneItem.images || [],
       keystone_synced: true,
       keystone_last_sync: new Date().toISOString(),
@@ -963,7 +963,7 @@ class InventorySyncService {
         weight: 1.0 + (i * 0.1),
         dimensions: '10x10x10',
         availability: 'active',
-        in_stock: true,
+        // Note: in_stock is a generated column - do not set it manually
         keystone_synced: true,
         keystone_last_sync: new Date().toISOString(),
         keystone_sync_status: 'mock',
