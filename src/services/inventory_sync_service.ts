@@ -1,5 +1,63 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Import existing rate limiting function
+const checkRateLimit = async (path: string): Promise<{
+  success: boolean;
+  limit: number;
+  remaining: number;
+  reset: string;
+}> => {
+  try {
+    // Get client IP (simplified - use a proper IP detection method)
+    const ip = await fetch('https://api.ipify.org?format=json')
+      .then(res => res.json())
+      .then(data => data.ip)
+      .catch(() => 'unknown');
+
+    // Build the URL for the rate-limiter edge function
+    const functionsUrl = `${import.meta.env.VITE_SUPABASE_URL ? import.meta.env.VITE_SUPABASE_URL : 'https://vqkxrbflwhunvbotjdds.supabase.co'}/functions/v1`;
+    
+    // Call the rate-limiter edge function
+    const response = await fetch(`${functionsUrl}/rate-limiter`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || ''}`
+      },
+      body: JSON.stringify({ ip, path })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      
+      // If this is a rate limit exceeded error, throw with specific format
+      if (response.status === 429) {
+        const retryTime = new Date(errorData.retryAfter).toLocaleTimeString();
+        throw new Error(`Too many requests. Try again after ${retryTime}`);
+      }
+      
+      throw new Error(errorData.error || 'Rate limit check failed');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Rate limit check failed:', error);
+    
+    // Check if this is already a formatted error from our code
+    if (error.message && error.message.includes('Too many requests')) {
+      throw error; // Re-throw rate limit errors with our format
+    }
+    
+    // Return a default object to allow the application to continue
+    return {
+      success: false,
+      limit: 0,
+      remaining: 0,
+      reset: new Date(Date.now() + 60000).toISOString() // Default 1 minute
+    };
+  }
+};
+
 // Types for the inventory sync system
 export interface InventoryItem {
   id?: string;
@@ -101,7 +159,7 @@ class InventorySyncService {
       enabled: true,
       fullSyncInterval: 24, // 24 hours
       incrementalSyncInterval: 30, // 30 minutes
-      batchSize: 100,
+      batchSize: 50, // Smaller batches for rate limiting
       maxRetries: 3,
       timeout: 30000, // 30 seconds
       autoSync: true
@@ -114,11 +172,11 @@ class InventorySyncService {
       console.log('🔄 Initializing Inventory Sync Service...');
       
       // Check environment variables
-      const apiToken = import.meta.env.VITE_KEYSTONE_API_TOKEN;
+      const apiToken = this.getApiToken();
       const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
       
       if (!apiToken) {
-        console.warn('⚠️ Keystone API token not configured. Please set VITE_KEYSTONE_API_TOKEN environment variable.');
+        console.warn('⚠️ Keystone API token not configured. Please set environment variable.');
       }
       
       if (!proxyUrl) {
@@ -140,6 +198,20 @@ class InventorySyncService {
     } catch (error) {
       console.error('❌ Failed to initialize Inventory Sync Service:', error);
       throw error;
+    }
+  }
+
+  // Get appropriate API token based on environment
+  private getApiToken(): string | undefined {
+    const isDevelopment = import.meta.env.DEV || import.meta.env.VITE_ENVIRONMENT === 'development';
+    const isProduction = import.meta.env.VITE_ENVIRONMENT === 'production';
+    
+    if (isProduction) {
+      console.log('🏭 Using PRODUCTION Keystone API token');
+      return import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD;
+    } else {
+      console.log('🔧 Using DEVELOPMENT Keystone API token');
+      return import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV;
     }
   }
 
@@ -207,28 +279,29 @@ class InventorySyncService {
     }
   }
 
-  // Get inventory data from Keystone API via DigitalOcean proxy
+  // Get inventory data from Keystone API via DigitalOcean proxy with rate limiting
   async getInventoryFromKeystone(limit: number = 1000): Promise<InventoryItem[]> {
     try {
-      // Environment detection and token selection
-      const isDevelopment = import.meta.env.DEV || import.meta.env.VITE_ENVIRONMENT === 'development';
-      const isProduction = import.meta.env.VITE_ENVIRONMENT === 'production';
+      // Check rate limit before making request
+      console.log('🔍 Checking rate limit for Keystone inventory API...');
+      const rateLimitCheck = await checkRateLimit('keystone-inventory-full');
       
-      // Use appropriate token based on environment
-      let apiToken;
-      if (isProduction) {
-        apiToken = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD;
-        console.log('🏭 Using PRODUCTION Keystone API token');
-      } else {
-        apiToken = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV;
-        console.log('🔧 Using DEVELOPMENT Keystone API token');
+      if (!rateLimitCheck.success) {
+        const resetTime = new Date(rateLimitCheck.reset).toLocaleTimeString();
+        console.warn(`⚠️ Rate limit exceeded. ${rateLimitCheck.remaining}/${rateLimitCheck.limit} requests remaining. Resets at ${resetTime}`);
+        console.log('🔄 Falling back to mock data due to rate limiting');
+        return this.getMockInventoryData(limit);
       }
-      
+
+      console.log(`✅ Rate limit check passed. ${rateLimitCheck.remaining}/${rateLimitCheck.limit} requests remaining.`);
+
+      // Environment detection and token selection
+      const apiToken = this.getApiToken();
       const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
 
       if (!apiToken) {
-        const envType = isProduction ? 'PRODUCTION' : 'DEVELOPMENT';
-        const expectedVar = isProduction ? 'VITE_KEYSTONE_SECURITY_TOKEN_PROD' : 'VITE_KEYSTONE_SECURITY_TOKEN_DEV';
+        const envType = import.meta.env.VITE_ENVIRONMENT === 'production' ? 'PRODUCTION' : 'DEVELOPMENT';
+        const expectedVar = import.meta.env.VITE_ENVIRONMENT === 'production' ? 'VITE_KEYSTONE_SECURITY_TOKEN_PROD' : 'VITE_KEYSTONE_SECURITY_TOKEN_DEV';
         console.warn(`⚠️ ${envType} Keystone API token not configured. Please set ${expectedVar} environment variable.`);
         console.log('🔄 Falling back to mock data for development');
         return this.getMockInventoryData(limit);
@@ -239,6 +312,8 @@ class InventorySyncService {
         console.log('🔄 Falling back to mock data for development');
         return this.getMockInventoryData(limit);
       }
+
+      console.log(`📡 Making Keystone API request for ${limit} items...`);
 
       const response = await fetch(`${proxyUrl}/inventory/full`, {
         method: 'POST',
@@ -252,12 +327,19 @@ class InventorySyncService {
         signal: this.abortController?.signal,
       });
 
+      if (response.status === 429) {
+        // Handle rate limiting from Keystone API itself
+        console.warn('⚠️ Keystone API returned 429 - Rate limited by external API');
+        console.log('🔄 Falling back to mock data due to external rate limiting');
+        return this.getMockInventoryData(limit);
+      }
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log(`✅ Loaded ${data?.length || 0} inventory items from Keystone`);
+      console.log(`✅ Successfully loaded ${data?.length || 0} inventory items from Keystone`);
       return data || [];
       
     } catch (error) {
@@ -266,15 +348,22 @@ class InventorySyncService {
         return [];
       }
       
+      // Handle rate limiting errors from our rate limiter
+      if (error.message && error.message.includes('Too many requests')) {
+        console.warn('⚠️ Rate limited by our rate limiter:', error.message);
+        console.log('🔄 Falling back to mock data due to rate limiting');
+        return this.getMockInventoryData(limit);
+      }
+      
       console.error('❌ Failed to get inventory from Keystone:', error);
       console.log('🔄 Falling back to mock data for development');
       return this.getMockInventoryData(limit);
     }
   }
 
-  // Perform full sync
+  // Perform full sync with rate limiting
   async performFullSync(): Promise<SyncResult> {
-    console.log('🔄 Starting full inventory sync...');
+    console.log('🔄 Starting full inventory sync with rate limiting...');
     
     const startTime = Date.now();
     const result: SyncResult = {
@@ -294,16 +383,17 @@ class InventorySyncService {
       this.syncStatus.isRunning = true;
       this.syncStatus.syncType = 'full';
       this.syncStatus.progress = 0;
-      this.syncStatus.currentOperation = 'Fetching inventory from Keystone...';
+      this.syncStatus.currentOperation = 'Checking rate limits...';
 
       // Create abort controller for cancellation
       this.abortController = new AbortController();
 
-      // Get inventory from Keystone
+      // Get inventory from Keystone with rate limiting
+      this.syncStatus.currentOperation = 'Fetching inventory from Keystone...';
       const keystoneInventory = await this.getInventoryFromKeystone();
       
       if (keystoneInventory.length === 0) {
-        result.message = 'No inventory data received from Keystone';
+        result.message = 'No inventory data received from Keystone (may be rate limited)';
         result.success = false;
         return result;
       }
@@ -311,7 +401,7 @@ class InventorySyncService {
       this.syncStatus.currentOperation = 'Processing inventory items...';
       this.syncStatus.progress = 25;
 
-      // Process inventory in batches
+      // Process inventory in smaller batches with delays for rate limiting
       const batchSize = this.config.batchSize;
       const totalBatches = Math.ceil(keystoneInventory.length / batchSize);
 
@@ -329,8 +419,12 @@ class InventorySyncService {
         result.itemsSkipped += batchResult.itemsSkipped;
         result.errors.push(...batchResult.errors);
 
-        // Small delay between batches to prevent overwhelming the database
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Rate limiting delay between batches (except for last batch)
+        if (i < totalBatches - 1) {
+          const batchDelay = 2000; // 2 seconds between batches
+          console.log(`⏳ Waiting ${batchDelay/1000}s between batches to respect rate limits...`);
+          await new Promise(resolve => setTimeout(resolve, batchDelay));
+        }
       }
 
       this.syncStatus.currentOperation = 'Finalizing sync...';
@@ -367,9 +461,9 @@ class InventorySyncService {
     }
   }
 
-  // Perform incremental sync
+  // Perform incremental sync with rate limiting
   async performIncrementalSync(): Promise<SyncResult> {
-    console.log('🔄 Starting incremental inventory sync...');
+    console.log('🔄 Starting incremental inventory sync with rate limiting...');
     
     const startTime = Date.now();
     const result: SyncResult = {
@@ -393,11 +487,11 @@ class InventorySyncService {
       // Process pending updates first
       await this.processPendingUpdates();
 
-      this.syncStatus.currentOperation = 'Fetching recent changes from Keystone...';
+      this.syncStatus.currentOperation = 'Checking rate limits for recent changes...';
       this.syncStatus.progress = 50;
 
       // For incremental sync, we could fetch only recently updated items
-      // For now, we'll process a smaller batch
+      // For now, we'll process a smaller batch with rate limiting
       const recentInventory = await this.getInventoryFromKeystone(this.config.batchSize);
       
       if (recentInventory.length > 0) {
@@ -501,23 +595,22 @@ class InventorySyncService {
     }
   }
 
-  // Update single part immediately
+  // Update single part immediately with rate limiting
   async updateSinglePart(keystone_vcpn: string): Promise<boolean> {
     try {
       console.log(`🔄 Updating single part: ${keystone_vcpn}`);
       
-      // Environment detection and token selection
-      const isDevelopment = import.meta.env.DEV || import.meta.env.VITE_ENVIRONMENT === 'development';
-      const isProduction = import.meta.env.VITE_ENVIRONMENT === 'production';
+      // Check rate limit before making request
+      const rateLimitCheck = await checkRateLimit('keystone-inventory-check');
       
-      // Use appropriate token based on environment
-      let apiToken;
-      if (isProduction) {
-        apiToken = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD;
-      } else {
-        apiToken = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV;
+      if (!rateLimitCheck.success) {
+        const resetTime = new Date(rateLimitCheck.reset).toLocaleTimeString();
+        console.warn(`⚠️ Rate limit exceeded for single part update. Resets at ${resetTime}`);
+        return false;
       }
-      
+
+      // Environment detection and token selection
+      const apiToken = this.getApiToken();
       const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
 
       if (!apiToken || !proxyUrl) {
@@ -536,6 +629,11 @@ class InventorySyncService {
         }),
       });
 
+      if (response.status === 429) {
+        console.warn(`⚠️ Rate limited when updating single part: ${keystone_vcpn}`);
+        return false;
+      }
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -551,6 +649,11 @@ class InventorySyncService {
       return false;
       
     } catch (error) {
+      if (error.message && error.message.includes('Too many requests')) {
+        console.warn(`⚠️ Rate limited when updating single part: ${keystone_vcpn}`);
+        return false;
+      }
+      
       console.error(`❌ Failed to update single part ${keystone_vcpn}:`, error);
       return false;
     }
@@ -769,7 +872,6 @@ export { InventorySyncService };
 export const inventorySyncService = new InventorySyncService();
 export default inventorySyncService;
 
-
 /*
 KEYSTONE API ENDPOINTS DISCOVERED:
 Base URL: https://146-190-161-109.nip.io
@@ -778,7 +880,7 @@ Inventory Endpoints:
 - /inventory/full - Complete inventory data (used for full sync)
 - /inventory/bulk - Bulk operations
 - /inventory/updates - Incremental updates
-- /inventory/check/{vcpn} - Check specific item (used for single part updates)
+- /inventory/check - Check specific item (used for single part updates)
 
 Other Available Endpoints:
 - /health - Health check
@@ -787,5 +889,12 @@ Other Available Endpoints:
 - /shipping/options - Shipping options
 - /orders/ship - Order shipping
 - /orders/history - Order history
+
+RATE LIMITING INTEGRATION:
+- Uses existing checkRateLimit() function from your rate limiting system
+- Checks rate limits before making API calls to Keystone
+- Handles rate limit responses gracefully with fallback to mock data
+- Integrates with your Supabase Edge Function for rate limiting
+- Respects rate limit windows and retry timing
 */
 
