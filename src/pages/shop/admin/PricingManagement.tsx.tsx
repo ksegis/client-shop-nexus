@@ -7,8 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Edit, Trash2, Plus, X } from 'lucide-react';
+import { Search, Edit, Plus, X, Calendar } from 'lucide-react';
 import { getSupabaseClient } from "@/lib/supabase";
 
 interface InventoryItem {
@@ -25,6 +24,7 @@ interface PricingRecord {
   list_price: number;
   markup_percentage: number;
   effective_start_date: string;
+  effective_end_date?: string;
   status: string;
   created_at: string;
   notes?: string;
@@ -45,7 +45,6 @@ const PricingManagement: React.FC = () => {
   const [inventorySearchResults, setInventorySearchResults] = useState<InventoryItem[]>([]);
   const [selectedPart, setSelectedPart] = useState<InventoryItem | null>(null);
   const [inventoryColumns, setInventoryColumns] = useState<string[]>([]);
-  const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set());
   
   // Form state
   const [formData, setFormData] = useState({
@@ -54,10 +53,30 @@ const PricingManagement: React.FC = () => {
     cost: 0,
     list_price: 0,
     markup_percentage: 0,
+    effective_start_date: new Date().toISOString().split('T')[0],
+    effective_end_date: '',
     notes: ''
   });
 
   const supabase = getSupabaseClient();
+
+  // Get current date for comparisons
+  const getCurrentDate = () => new Date().toISOString().split('T')[0];
+
+  // Calculate record status based on effective dates
+  const calculateRecordStatus = (startDate: string, endDate?: string): { status: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } => {
+    const today = getCurrentDate();
+    const start = startDate;
+    const end = endDate;
+
+    if (start > today) {
+      return { status: 'Future', variant: 'secondary' };
+    } else if (end && end <= today) {
+      return { status: 'Expired', variant: 'destructive' };
+    } else {
+      return { status: 'Active', variant: 'default' };
+    }
+  };
 
   // Reset form to initial state
   const resetForm = () => {
@@ -67,6 +86,8 @@ const PricingManagement: React.FC = () => {
       cost: 0,
       list_price: 0,
       markup_percentage: 0,
+      effective_start_date: getCurrentDate(),
+      effective_end_date: '',
       notes: ''
     });
     setSelectedPart(null);
@@ -202,15 +223,15 @@ const PricingManagement: React.FC = () => {
     const partId = generatePartId(part);
     
     setSelectedPart(part);
-    setFormData({
+    setFormData(prev => ({
+      ...prev,
       keystone_vcpn: partId,
       part_name: partName,
       cost: part.cost || 0,
       list_price: part.list_price || part.price || 0,
       markup_percentage: part.cost && (part.list_price || part.price) ? 
-        Math.round(((part.list_price || part.price) - part.cost) / part.cost * 100) : 0,
-      notes: ''
-    });
+        Math.round(((part.list_price || part.price) - part.cost) / part.cost * 100) : 0
+    }));
     setInventorySearchResults([]);
     setInventorySearchTerm('');
   };
@@ -234,10 +255,27 @@ const PricingManagement: React.FC = () => {
     });
   };
 
+  // Validate dates
+  const validateDates = (): string | null => {
+    const { effective_start_date, effective_end_date } = formData;
+    
+    if (effective_end_date && effective_end_date <= effective_start_date) {
+      return 'End date must be after start date';
+    }
+    
+    return null;
+  };
+
   // Save pricing record
   const handleSavePricing = async () => {
     if (!formData.keystone_vcpn || !formData.part_name || formData.cost <= 0 || formData.list_price <= 0) {
       alert('Please fill in all required fields with valid values');
+      return;
+    }
+
+    const dateError = validateDates();
+    if (dateError) {
+      alert(dateError);
       return;
     }
 
@@ -250,8 +288,9 @@ const PricingManagement: React.FC = () => {
         cost: formData.cost,
         list_price: formData.list_price,
         markup_percentage: formData.markup_percentage,
-        effective_start_date: new Date().toISOString().split('T')[0],
-        status: 'active',
+        effective_start_date: formData.effective_start_date,
+        effective_end_date: formData.effective_end_date || null,
+        status: 'active', // This will be calculated based on dates
         created_by: 'admin',
         notes: formData.notes || null
       };
@@ -303,60 +342,40 @@ const PricingManagement: React.FC = () => {
       cost: record.cost,
       list_price: record.list_price,
       markup_percentage: record.markup_percentage,
+      effective_start_date: record.effective_start_date,
+      effective_end_date: record.effective_end_date || '',
       notes: record.notes || ''
     });
     setShowEditDialog(true);
   };
 
-  // Handle record selection
-  const handleRecordSelection = (recordId: string, checked: boolean) => {
-    const newSelected = new Set(selectedRecords);
-    if (checked) {
-      newSelected.add(recordId);
-    } else {
-      newSelected.delete(recordId);
-    }
-    setSelectedRecords(newSelected);
-  };
-
-  // Handle select all
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedRecords(new Set(filteredPricingRecords.map(r => r.id)));
-    } else {
-      setSelectedRecords(new Set());
-    }
-  };
-
-  // Delete selected records
-  const handleDeleteSelected = async () => {
-    if (selectedRecords.size === 0) return;
-    
-    if (!confirm(`Are you sure you want to delete ${selectedRecords.size} selected records?`)) {
+  // Handle making record inactive (set end date to today)
+  const handleMakeInactive = async (record: PricingRecord) => {
+    if (!confirm(`Make "${record.part_name}" pricing inactive as of today?`)) {
       return;
     }
 
     try {
       const { error } = await supabase
         .from('pricing_records')
-        .delete()
-        .in('id', Array.from(selectedRecords));
+        .update({ 
+          effective_end_date: getCurrentDate(),
+          status: 'inactive'
+        })
+        .eq('id', record.id);
 
       if (error) {
-        console.error('❌ Error deleting records:', error);
-        alert('Error deleting records: ' + error.message);
+        console.error('❌ Error making record inactive:', error);
+        alert('Error making record inactive: ' + error.message);
       } else {
-        setSelectedRecords(new Set());
-        
         if (pricingSearchTerm) {
           await loadPricingRecords(pricingSearchTerm);
         }
-        
-        alert('Records deleted successfully!');
+        alert('Pricing record made inactive successfully!');
       }
     } catch (error) {
-      console.error('❌ Exception deleting records:', error);
-      alert('Error deleting records');
+      console.error('❌ Exception making record inactive:', error);
+      alert('Error making record inactive');
     }
   };
 
@@ -393,17 +412,8 @@ const PricingManagement: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold">Pricing Management</h1>
           <p className="text-muted-foreground">
-            Create new pricing records and manage existing ones
+            Create new pricing records and manage effective dates
           </p>
-        </div>
-        
-        <div className="flex space-x-2">
-          {selectedRecords.size > 0 && (
-            <Button variant="destructive" onClick={handleDeleteSelected}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Selected ({selectedRecords.size})
-            </Button>
-          )}
         </div>
       </div>
 
@@ -414,7 +424,7 @@ const PricingManagement: React.FC = () => {
             <div>
               <CardTitle>Create New Pricing Record</CardTitle>
               <CardDescription>
-                Search for a part from inventory and set pricing information
+                Search for a part from inventory and set pricing with effective dates
               </CardDescription>
             </div>
             {!showCreateForm ? (
@@ -524,7 +534,7 @@ const PricingManagement: React.FC = () => {
             )}
 
             {/* Pricing Form */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Basic Information</h3>
                 
@@ -607,6 +617,58 @@ const PricingManagement: React.FC = () => {
                   </p>
                 </div>
               </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Effective Dates</h3>
+                
+                <div>
+                  <Label htmlFor="startDate">Effective Start Date *</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="startDate"
+                      type="date"
+                      value={formData.effective_start_date}
+                      onChange={(e) => handleFormChange('effective_start_date', e.target.value)}
+                      disabled={editingRecord && formData.effective_start_date <= getCurrentDate()}
+                      className="pl-10"
+                    />
+                  </div>
+                  {editingRecord && formData.effective_start_date <= getCurrentDate() && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Start date cannot be changed for active/past records
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="endDate">Effective End Date</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="endDate"
+                      type="date"
+                      value={formData.effective_end_date}
+                      onChange={(e) => handleFormChange('effective_end_date', e.target.value)}
+                      min={formData.effective_start_date}
+                      className="pl-10"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Leave blank for indefinite pricing. Set to make pricing inactive.
+                  </p>
+                </div>
+
+                {/* Status Preview */}
+                <div>
+                  <Label className="text-sm font-medium">Status Preview</Label>
+                  <div className="mt-1">
+                    <Badge variant={calculateRecordStatus(formData.effective_start_date, formData.effective_end_date).variant}>
+                      {calculateRecordStatus(formData.effective_start_date, formData.effective_end_date).status}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Action Buttons */}
@@ -638,7 +700,7 @@ const PricingManagement: React.FC = () => {
         <CardHeader>
           <CardTitle>Search Existing Pricing Records</CardTitle>
           <CardDescription>
-            Search for existing pricing records to view, edit, or manage
+            Search for existing pricing records to view, edit, or manage effective dates
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -688,55 +750,63 @@ const PricingManagement: React.FC = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-12">
-                        <Checkbox
-                          checked={selectedRecords.size === filteredPricingRecords.length && filteredPricingRecords.length > 0}
-                          onCheckedChange={handleSelectAll}
-                        />
-                      </TableHead>
                       <TableHead>Part Name</TableHead>
                       <TableHead>Identifier</TableHead>
                       <TableHead>Cost</TableHead>
                       <TableHead>List Price</TableHead>
                       <TableHead>Markup %</TableHead>
+                      <TableHead>Start Date</TableHead>
+                      <TableHead>End Date</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredPricingRecords.map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedRecords.has(record.id)}
-                            onCheckedChange={(checked) => handleRecordSelection(record.id, checked as boolean)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">{record.part_name}</TableCell>
-                        <TableCell>{record.keystone_vcpn}</TableCell>
-                        <TableCell>${record.cost.toFixed(2)}</TableCell>
-                        <TableCell>${record.list_price.toFixed(2)}</TableCell>
-                        <TableCell>{record.markup_percentage}%</TableCell>
-                        <TableCell>
-                          <Badge variant="default">
-                            {record.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {new Date(record.created_at).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditRecord(record)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filteredPricingRecords.map((record) => {
+                      const statusInfo = calculateRecordStatus(record.effective_start_date, record.effective_end_date);
+                      return (
+                        <TableRow key={record.id}>
+                          <TableCell className="font-medium">{record.part_name}</TableCell>
+                          <TableCell>{record.keystone_vcpn}</TableCell>
+                          <TableCell>${record.cost.toFixed(2)}</TableCell>
+                          <TableCell>${record.list_price.toFixed(2)}</TableCell>
+                          <TableCell>{record.markup_percentage}%</TableCell>
+                          <TableCell>{new Date(record.effective_start_date).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            {record.effective_end_date ? 
+                              new Date(record.effective_end_date).toLocaleDateString() : 
+                              'Indefinite'
+                            }
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={statusInfo.variant}>
+                              {statusInfo.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditRecord(record)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              {statusInfo.status === 'Active' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleMakeInactive(record)}
+                                  className="text-orange-600 hover:text-orange-700"
+                                >
+                                  End Today
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -747,16 +817,16 @@ const PricingManagement: React.FC = () => {
 
       {/* Edit Pricing Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Pricing Record</DialogTitle>
             <DialogDescription>
-              Update pricing information and markup calculations
+              Update pricing information and effective dates
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Basic Information</h3>
                 
@@ -834,6 +904,58 @@ const PricingManagement: React.FC = () => {
                   <p className="text-xs text-muted-foreground mt-1">
                     Calculated automatically when cost/price changes
                   </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Effective Dates</h3>
+                
+                <div>
+                  <Label htmlFor="edit-startDate">Effective Start Date *</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="edit-startDate"
+                      type="date"
+                      value={formData.effective_start_date}
+                      onChange={(e) => handleFormChange('effective_start_date', e.target.value)}
+                      disabled={formData.effective_start_date <= getCurrentDate()}
+                      className="pl-10"
+                    />
+                  </div>
+                  {formData.effective_start_date <= getCurrentDate() && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Start date cannot be changed for active/past records
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-endDate">Effective End Date</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="edit-endDate"
+                      type="date"
+                      value={formData.effective_end_date}
+                      onChange={(e) => handleFormChange('effective_end_date', e.target.value)}
+                      min={formData.effective_start_date}
+                      className="pl-10"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Set to today or future date to make pricing inactive
+                  </p>
+                </div>
+
+                {/* Status Preview */}
+                <div>
+                  <Label className="text-sm font-medium">Status Preview</Label>
+                  <div className="mt-1">
+                    <Badge variant={calculateRecordStatus(formData.effective_start_date, formData.effective_end_date).variant}>
+                      {calculateRecordStatus(formData.effective_start_date, formData.effective_end_date).status}
+                    </Badge>
+                  </div>
                 </div>
               </div>
             </div>
