@@ -218,12 +218,15 @@ class InventorySyncService {
         return this.getMockInventoryData(limit);
       }
 
-      const response = await fetch(`${proxyUrl}/inventory/full?limit=${limit}`, {
-        method: 'GET',
+      const response = await fetch(`${proxyUrl}/inventory/full`, {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiToken}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          limit: limit
+        }),
         signal: this.abortController?.signal,
       });
 
@@ -490,12 +493,15 @@ class InventorySyncService {
         return false;
       }
 
-      const response = await fetch(`${proxyUrl}/inventory/check/${keystone_vcpn}`, {
-        method: 'GET',
+      const response = await fetch(`${proxyUrl}/inventory/check`, {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiToken}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          vcpn: keystone_vcpn
+        }),
       });
 
       if (!response.ok) {
@@ -750,3 +756,4 @@ Other Available Endpoints:
 - /orders/ship - Order shipping
 - /orders/history - Order history
 */
+
