@@ -23,6 +23,9 @@ import { getSyncScheduler } from "@/services/SyncScheduler";
 import { getPricingSyncService, PricingSyncService, PricingData } from "@/services/pricing_sync_service";
 import { getPricingSyncScheduler, PricingSyncScheduler } from "@/services/pricing_sync_scheduler";
 
+// Import the new ProductPriceCheck component
+import ProductPriceCheck from '@/components/ProductPriceCheck';
+
 // Interface matching your existing inventory table structure
 interface InventoryPart {
   id: string;
@@ -100,7 +103,7 @@ interface CartItem {
   maxQuantity: number;
 }
 
-// Enhanced pricing display component
+// Enhanced pricing display component - NOW WITH PRODUCTPRICECHECK INTEGRATION
 const PricingDisplay: React.FC<{
   part: InventoryPart;
   onRefreshPricing: (vcpn: string) => void;
@@ -108,17 +111,27 @@ const PricingDisplay: React.FC<{
 }> = ({ part, onRefreshPricing, isRefreshing = false }) => {
   const { toast } = useToast();
   
+  // If part has a VCPN, use the ProductPriceCheck component
+  if (part.keystone_vcpn) {
+    return (
+      <ProductPriceCheck
+        vcpn={part.keystone_vcpn}
+        listPrice={part.list_price || part.price}
+        productName={part.name}
+        showComparison={true}
+        autoCheck={false}
+        className="border-0 shadow-none p-0"
+      />
+    );
+  }
+  
+  // Fallback for parts without VCPN - use original pricing display
   const handleRefreshPricing = () => {
-    if (!part.keystone_vcpn) {
-      toast({
-        title: "No VCPN",
-        description: "This part doesn't have a Keystone VCPN for pricing updates",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    onRefreshPricing(part.keystone_vcpn);
+    toast({
+      title: "No VCPN",
+      description: "This part doesn't have a Keystone VCPN for pricing updates",
+      variant: "destructive",
+    });
   };
 
   const isPricingStale = part.pricing_stale || 
@@ -149,18 +162,16 @@ const PricingDisplay: React.FC<{
           )}
         </div>
         
-        {/* Pricing refresh button */}
-        {part.keystone_vcpn && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRefreshPricing}
-            disabled={isRefreshing}
-            className="h-8 w-8 p-0"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </Button>
-        )}
+        {/* Pricing refresh button - disabled for non-VCPN parts */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleRefreshPricing}
+          disabled={true}
+          className="h-8 w-8 p-0 opacity-50"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Additional pricing info */}
@@ -177,22 +188,8 @@ const PricingDisplay: React.FC<{
 
       {/* Pricing status indicator */}
       <div className="flex items-center space-x-2 text-xs">
-        {isPricingStale ? (
-          <>
-            <AlertTriangle className="h-3 w-3 text-yellow-500" />
-            <span className="text-yellow-600">Pricing may be outdated</span>
-          </>
-        ) : (
-          <>
-            <CheckCircle className="h-3 w-3 text-green-500" />
-            <span className="text-green-600">Current pricing</span>
-          </>
-        )}
-        {part.pricing_last_updated && (
-          <span className="text-gray-500">
-            Updated {new Date(part.pricing_last_updated).toLocaleDateString()}
-          </span>
-        )}
+        <AlertTriangle className="h-3 w-3 text-gray-400" />
+        <span className="text-gray-500">No live pricing available</span>
       </div>
     </div>
   );
@@ -1302,8 +1299,9 @@ const PartsPage: React.FC = () => {
             </Label>
             <Slider
               value={priceRange}
-              onValueChange={setPriceRange}
+              onValueChange={(value) => setPriceRange(value as [number, number])}
               max={1000}
+              min={0}
               step={10}
               className="w-full"
             />
@@ -1408,7 +1406,7 @@ const PartsPage: React.FC = () => {
                           )}
                         </div>
 
-                        {/* Enhanced Pricing Display */}
+                        {/* INTEGRATED PRODUCTPRICECHECK COMPONENT */}
                         <PricingDisplay
                           part={part}
                           onRefreshPricing={handleRefreshPricing}
@@ -1438,7 +1436,7 @@ const PartsPage: React.FC = () => {
                             size="sm"
                           >
                             <Plus className="h-4 w-4 mr-1" />
-                            Add to Cart
+                            Add
                           </Button>
                           <Button
                             variant="outline"
@@ -1455,13 +1453,11 @@ const PartsPage: React.FC = () => {
                 ))}
               </div>
             ) : (
-              /* List View */
               <Card className="mb-8">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Part</TableHead>
-                      <TableHead>SKU</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Pricing</TableHead>
                       <TableHead>Stock</TableHead>
@@ -1473,36 +1469,29 @@ const PartsPage: React.FC = () => {
                       <TableRow key={part.id}>
                         <TableCell>
                           <div className="flex items-center space-x-3">
-                            <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
+                            <div className="w-12 h-12 bg-gray-200 rounded-md flex items-center justify-center">
                               <Package className="h-6 w-6 text-gray-400" />
                             </div>
                             <div>
-                              <p 
+                              <h3 
                                 className="font-medium cursor-pointer hover:text-blue-600"
                                 onClick={() => handlePartClick(part)}
                               >
                                 {part.name}
-                              </p>
-                              {part.description && (
-                                <p className="text-sm text-gray-600 line-clamp-1">
-                                  {part.description}
-                                </p>
-                              )}
+                              </h3>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {part.sku && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {part.sku}
+                                  </Badge>
+                                )}
+                                {part.keystone_vcpn && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {part.keystone_vcpn}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            {part.sku && (
-                              <Badge variant="outline" className="text-xs">
-                                {part.sku}
-                              </Badge>
-                            )}
-                            {part.keystone_vcpn && (
-                              <Badge variant="secondary" className="text-xs">
-                                {part.keystone_vcpn}
-                              </Badge>
-                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -1513,6 +1502,7 @@ const PartsPage: React.FC = () => {
                           )}
                         </TableCell>
                         <TableCell>
+                          {/* INTEGRATED PRODUCTPRICECHECK COMPONENT */}
                           <PricingDisplay
                             part={part}
                             onRefreshPricing={handleRefreshPricing}
@@ -1648,9 +1638,9 @@ const PartsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Enhanced Pricing Information */}
+              {/* INTEGRATED PRODUCTPRICECHECK COMPONENT IN DIALOG */}
               <div>
-                <Label className="text-sm font-medium text-gray-500 mb-2 block">Pricing Information</Label>
+                <Label className="text-sm font-medium text-gray-500 mb-2 block">Live Pricing Information</Label>
                 <PricingDisplay
                   part={selectedPart}
                   onRefreshPricing={handleRefreshPricing}
