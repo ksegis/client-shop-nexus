@@ -40,7 +40,7 @@ interface SyncStatus {
   deltaSyncIntervalHours: number;
 }
 
-export class InventorySyncService {
+class InventorySyncService {
   private isRunning: boolean = false;
   private isCancelled: boolean = false;
   private progress: number = 0;
