@@ -5,6 +5,29 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Type definitions for exports
+export interface InventorySyncStatus {
+  isRunning: boolean;
+  progress: number;
+  currentBatch: number;
+  totalBatches: number;
+  syncedItems: number;
+  errors: number;
+  lastSyncTime: string | null;
+  lastSyncResult: string;
+  lastSyncError: any;
+  nextPlannedSync: string | null;
+  enableAutoSync: boolean;
+  syncIntervalHours: number;
+}
+
+export interface SyncLogEntry {
+  timestamp: string;
+  level: 'info' | 'warning' | 'error';
+  message: string;
+  details?: any;
+}
+
 export class InventorySyncService {
   constructor() {
     this.isRunning = false;
@@ -666,10 +689,11 @@ export class InventorySyncService {
 }
 
 // Create and export singleton instance
-const inventorySyncService = new InventorySyncService();
+export const inventorySyncService = new InventorySyncService();
 
 // Load saved status on initialization
 inventorySyncService.loadSyncStatus();
 
+// Export default for backward compatibility
 export default inventorySyncService;
 
