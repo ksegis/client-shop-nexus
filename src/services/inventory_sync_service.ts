@@ -22,6 +22,7 @@ export interface InventorySyncStatus {
   isRateLimited: boolean;
   rateLimitRetryAfter: string | null;
   rateLimitMessage: string | null;
+  rateLimitTimeRemaining: number | null;
 }
 
 export interface SyncLogEntry {
@@ -201,14 +202,13 @@ export class InventorySyncService {
       const message = `API is rate limited. Retry in ${this.formatDuration(timeRemaining)}.`;
       console.log(`⏰ ${message}`);
       
-      // In production, throw error (no mock data)
-      if (environment === 'production') {
-        throw new Error(message);
-      }
-      
-      // In development, return mock data
-      console.log('🔄 Falling back to mock data due to rate limiting');
-      return this.getMockInventoryData(limit);
+      // Return special rate limit indicator instead of throwing error
+      return { 
+        isRateLimited: true, 
+        message,
+        timeRemaining,
+        data: environment === 'development' ? this.getMockInventoryData(limit) : []
+      };
     }
     
     console.log(`🔧 Environment check:`);
@@ -269,14 +269,16 @@ export class InventorySyncService {
               `Rate limited on ${rateLimitInfo.function}. ${rateLimitInfo.message}`
             );
             
-            // In production, throw error with rate limit info
-            if (environment === 'production') {
-              throw new Error(`Rate limited. Retry in ${this.formatDuration(rateLimitInfo.retryAfterSeconds)}.`);
-            }
+            // Return special rate limit indicator instead of throwing error
+            const message = `Rate limited. Retry in ${this.formatDuration(rateLimitInfo.retryAfterSeconds)}.`;
+            console.log(`⏰ ${message}`);
             
-            // In development, return mock data
-            console.log('🔄 Falling back to mock data due to rate limiting');
-            return this.getMockInventoryData(limit);
+            return { 
+              isRateLimited: true, 
+              message,
+              timeRemaining: rateLimitInfo.retryAfterSeconds,
+              data: environment === 'development' ? this.getMockInventoryData(limit) : []
+            };
           }
         }
         
@@ -427,7 +429,7 @@ export class InventorySyncService {
     return { data: results, error: null };
   }
 
-  // Perform full sync with rate limit awareness
+  // Perform full sync with rate limit awareness - FIXED VERSION
   async performFullSync(limit = 1000) {
     if (this.isRunning) {
       throw new Error('Sync is already running');
@@ -453,7 +455,29 @@ export class InventorySyncService {
 
     try {
       // Get inventory data from Keystone
-      const inventoryData = await this.getInventoryFromKeystone(limit);
+      const inventoryResponse = await this.getInventoryFromKeystone(limit);
+      
+      // FIXED: Check if response indicates rate limiting
+      if (inventoryResponse && inventoryResponse.isRateLimited) {
+        console.log(`⏰ Sync stopped due to rate limiting: ${inventoryResponse.message}`);
+        this.lastSyncResult = 'failed';
+        this.lastSyncError = inventoryResponse.message;
+        this.lastSyncTime = new Date().toISOString();
+        this.updateSyncStatus('idle', inventoryResponse.message);
+        this.saveSyncStatus();
+        
+        return {
+          success: false,
+          message: inventoryResponse.message,
+          syncedItems: 0,
+          errors: [inventoryResponse.message],
+          isRateLimited: true,
+          timeRemaining: inventoryResponse.timeRemaining
+        };
+      }
+      
+      // Use the actual inventory data (could be real data or mock data)
+      const inventoryData = inventoryResponse.data || inventoryResponse;
       
       if (!inventoryData || inventoryData.length === 0) {
         console.log('⚠️ No inventory data received from Keystone');
