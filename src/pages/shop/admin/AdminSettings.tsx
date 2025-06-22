@@ -17,7 +17,8 @@ import {
   Calendar,
   Activity,
   Database,
-  Zap
+  Zap,
+  Bug
 } from 'lucide-react';
 import { inventorySyncService } from '@/services/inventory_sync_service';
 
@@ -39,6 +40,7 @@ const AdminSettings: React.FC = () => {
   const [lastChanged, setLastChanged] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
   // Load current environment setting on component mount
   useEffect(() => {
@@ -75,6 +77,14 @@ const AdminSettings: React.FC = () => {
     // Update state
     setEnvironment(newEnvironment);
     setLastChanged(timestamp);
+    
+    // Debug logging
+    console.log('🔄 Environment Change Debug:');
+    console.log('- New Environment:', newEnvironment);
+    console.log('- DEV Token Available:', !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV);
+    console.log('- PROD Token Available:', !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD);
+    console.log('- DEV Token Value:', import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV ? 'SET' : 'UNDEFINED');
+    console.log('- PROD Token Value:', import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD ? 'SET' : 'UNDEFINED');
     
     // Show confirmation and reload page to ensure all services pick up the new setting
     alert(`Environment switched to ${newEnvironment.toUpperCase()}. Page will reload to apply changes.`);
@@ -148,12 +158,84 @@ const AdminSettings: React.FC = () => {
     }
   };
 
+  const handleDebugConsole = () => {
+    console.log('🔍 Environment Variables Debug:');
+    console.log('Current Environment State:', environment);
+    console.log('localStorage admin_environment:', localStorage.getItem('admin_environment'));
+    console.log('VITE_KEYSTONE_SECURITY_TOKEN_DEV:', import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV ? 'SET' : 'UNDEFINED');
+    console.log('VITE_KEYSTONE_SECURITY_TOKEN_PROD:', import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD ? 'SET' : 'UNDEFINED');
+    console.log('VITE_KEYSTONE_PROXY_URL:', import.meta.env.VITE_KEYSTONE_PROXY_URL || 'UNDEFINED');
+    console.log('All VITE_KEYSTONE vars:', Object.keys(import.meta.env).filter(k => k.startsWith('VITE_KEYSTONE')));
+    console.log('All environment variables:', import.meta.env);
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center space-x-2 mb-6">
-        <Shield className="h-6 w-6 text-blue-600" />
-        <h1 className="text-2xl font-bold">Admin Settings</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-2">
+          <Shield className="h-6 w-6 text-blue-600" />
+          <h1 className="text-2xl font-bold">Admin Settings</h1>
+        </div>
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => setShowDebug(!showDebug)}
+          className="flex items-center space-x-2"
+        >
+          <Bug className="h-4 w-4" />
+          <span>{showDebug ? 'Hide Debug' : 'Show Debug'}</span>
+        </Button>
       </div>
+
+      {/* Debug Information - Only shown when toggled */}
+      {showDebug && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2 text-orange-800">
+              <Bug className="h-5 w-5" />
+              <span>Debug Information</span>
+            </CardTitle>
+            <CardDescription className="text-orange-700">
+              Environment variable debugging - only visible when debug mode is enabled
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-orange-800">Environment State</Label>
+                <div className="bg-white p-3 rounded border text-xs space-y-1">
+                  <div><strong>Current:</strong> {environment}</div>
+                  <div><strong>localStorage:</strong> {localStorage.getItem('admin_environment') || 'null'}</div>
+                  <div><strong>Last Changed:</strong> {lastChanged || 'Never'}</div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-orange-800">Environment Variables</Label>
+                <div className="bg-white p-3 rounded border text-xs space-y-1">
+                  <div><strong>DEV Token:</strong> {import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV ? '✅ SET' : '❌ UNDEFINED'}</div>
+                  <div><strong>PROD Token:</strong> {import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD ? '✅ SET' : '❌ UNDEFINED'}</div>
+                  <div><strong>Proxy URL:</strong> {import.meta.env.VITE_KEYSTONE_PROXY_URL ? '✅ SET' : '❌ UNDEFINED'}</div>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-orange-800">All VITE_KEYSTONE Variables</Label>
+              <div className="bg-white p-3 rounded border text-xs">
+                {Object.keys(import.meta.env).filter(k => k.startsWith('VITE_KEYSTONE')).join(', ') || 'None found'}
+              </div>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleDebugConsole}
+              className="flex items-center space-x-2"
+            >
+              <Activity className="h-4 w-4" />
+              <span>Log to Console</span>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Environment Control */}
       <Card>
@@ -393,18 +475,33 @@ const AdminSettings: React.FC = () => {
               <p className="font-mono text-xs bg-gray-100 p-2 rounded">
                 {import.meta.env.VITE_SUPABASE_URL ? '✅ Configured' : '❌ Missing'}
               </p>
+              {showDebug && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Value: {import.meta.env.VITE_SUPABASE_URL ? 'SET' : 'undefined'}
+                </p>
+              )}
             </div>
             <div>
               <Label className="text-xs font-medium text-gray-600">Supabase Token</Label>
               <p className="font-mono text-xs bg-gray-100 p-2 rounded">
                 {import.meta.env.VITE_SUPABASE_ANON_TOKEN ? '✅ Configured' : '❌ Missing'}
               </p>
+              {showDebug && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Value: {import.meta.env.VITE_SUPABASE_ANON_TOKEN ? 'SET' : 'undefined'}
+                </p>
+              )}
             </div>
             <div>
               <Label className="text-xs font-medium text-gray-600">Keystone Proxy URL</Label>
               <p className="font-mono text-xs bg-gray-100 p-2 rounded">
                 {import.meta.env.VITE_KEYSTONE_PROXY_URL || '❌ Missing'}
               </p>
+              {showDebug && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Value: {import.meta.env.VITE_KEYSTONE_PROXY_URL || 'undefined'}
+                </p>
+              )}
             </div>
             <div>
               <Label className="text-xs font-medium text-gray-600">
@@ -416,6 +513,19 @@ const AdminSettings: React.FC = () => {
                   : (import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV ? '✅ Configured' : '❌ Missing')
                 }
               </p>
+              {showDebug && (
+                <>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Variable: VITE_KEYSTONE_SECURITY_TOKEN_{environment === 'production' ? 'PROD' : 'DEV'}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Value: {environment === 'production' 
+                      ? (import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD ? 'SET' : 'undefined')
+                      : (import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV ? 'SET' : 'undefined')
+                    }
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </CardContent>
@@ -456,7 +566,6 @@ const AdminSettings: React.FC = () => {
     </div>
   );
 };
-
 
 export default AdminSettings;
 
