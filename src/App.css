@@ -348,4 +348,155 @@
 .read-the-docs {
   color: #888;
 }
+/* ========================================
+   CLEAN NAV LOGO STYLES - Add to app.css
+   ======================================== */
+
+/* Base nav logo styles - Clean CSS without !important */
+.nav-logo {
+  /* Size - Following web application best practices */
+  max-height: 44px; /* Optimal size for header visibility (was 32px) */
+  height: 44px; /* Fixed height for consistency */
+  width: auto; /* Maintain aspect ratio */
+  
+  /* Spacing */
+  margin-right: 16px; /* Consistent spacing from navigation items */
+  
+  /* Behavior */
+  flex-shrink: 0; /* Prevent logo from shrinking in flex containers */
+  cursor: pointer; /* Indicate it's clickable */
+  
+  /* Smooth interactions */
+  transition: transform 0.3s ease, filter 0.3s ease;
+  
+  /* Ensure crisp rendering */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+/* Hover effects for better user experience */
+.nav-logo:hover {
+  transform: scale(1.05); /* Subtle scale effect */
+  filter: brightness(1.1); /* Slight brightness increase */
+}
+
+/* Focus state for keyboard accessibility */
+.nav-logo:focus {
+  outline: 2px solid var(--ctc-purple, #5c3987); /* Use brand color if available */
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Active state for click feedback */
+.nav-logo:active {
+  transform: scale(0.98); /* Slight press effect */
+}
+
+/* Size variants (optional - for different contexts) */
+.nav-logo-small {
+  max-height: 32px;
+  height: 32px;
+  margin-right: 12px;
+}
+
+.nav-logo-large {
+  max-height: 48px;
+  height: 48px;
+  margin-right: 20px;
+}
+
+/* Dark mode support */
+.nav-logo-dark {
+  filter: brightness(0.9); /* Slightly dimmer in dark mode */
+}
+
+.nav-logo-dark:hover {
+  filter: brightness(1.1); /* Normal brightness on hover */
+}
+
+/* Responsive design - Tablet */
+@media (max-width: 768px) {
+  .nav-logo {
+    max-height: 40px; /* Slightly smaller on tablets */
+    height: 40px;
+    margin-right: 12px; /* Reduced margin for smaller screens */
+  }
+  
+  .nav-logo-large {
+    max-height: 44px; /* Scale down large variant */
+    height: 44px;
+    margin-right: 16px;
+  }
+}
+
+/* Responsive design - Mobile */
+@media (max-width: 480px) {
+  .nav-logo {
+    max-height: 36px; /* Compact size for mobile */
+    height: 36px;
+    margin-right: 8px; /* Minimal margin on mobile */
+  }
+  
+  .nav-logo-small {
+    max-height: 28px;
+    height: 28px;
+    margin-right: 6px;
+  }
+  
+  .nav-logo-large {
+    max-height: 40px;
+    height: 40px;
+    margin-right: 12px;
+  }
+}
+
+/* High DPI displays (Retina, etc.) */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .nav-logo {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* Loading state (optional - for dynamic logo loading) */
+.nav-logo.loading {
+  opacity: 0.6;
+  animation: logoLoading 1.5s ease-in-out infinite;
+}
+
+@keyframes logoLoading {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Print styles (hide logo in print or make it smaller) */
+@media print {
+  .nav-logo {
+    max-height: 24px;
+    height: 24px;
+    margin-right: 8px;
+  }
+}
+
+/* Accessibility improvements */
+.nav-logo[alt=""] {
+  /* Ensure logos have proper alt text for screen readers */
+  outline: 2px solid red; /* Debug: highlight logos without alt text */
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .nav-logo {
+    transition: none; /* Disable animations for users who prefer reduced motion */
+  }
+  
+  .nav-logo:hover {
+    transform: none; /* No scale effect for reduced motion users */
+  }
+}
+
 

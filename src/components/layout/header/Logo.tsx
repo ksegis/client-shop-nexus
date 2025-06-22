@@ -6,9 +6,10 @@ import ctcLogo from '../../../assets/ctc_logo.jpg';
 interface LogoProps {
   portalType: 'shop' | 'customer';
   theme?: 'light' | 'dark' | 'auto';
+  size?: 'small' | 'normal' | 'large';
 }
 
-export const Logo = ({ portalType, theme = 'auto' }: LogoProps) => {
+export const Logo = ({ portalType, theme = 'auto', size = 'normal' }: LogoProps) => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -39,24 +40,37 @@ export const Logo = ({ portalType, theme = 'auto' }: LogoProps) => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Generate CSS classes based on props
+  const getLogoClasses = () => {
+    const baseClass = 'nav-logo';
+    const sizeClass = size !== 'normal' ? `${baseClass}-${size}` : '';
+    const themeClass = isDarkMode ? `${baseClass}-dark` : '';
+    
+    return [baseClass, sizeClass, themeClass].filter(Boolean).join(' ');
+  };
+
+  // Get the appropriate link destination
+  const getLinkDestination = () => {
+    return portalType === 'customer' ? '/customer' : '/shop';
+  };
+
   return (
     <div className="flex items-center">
-      <Link to={portalType === 'customer' ? '/customer' : '/shop'}>
-        <div className="flex items-center">
-          <img 
-            src={ctcLogo} 
-            alt="Custom Truck Connections" 
-            className="nav-logo"
-            // Fallback inline styles if nav-logo class isn't defined yet
-            style={{ 
-              maxHeight: '32px', 
-              width: 'auto', 
-              height: 'auto',
-              marginRight: '16px'
-            }}
-          />
-        </div>
+      <Link 
+        to={getLinkDestination()}
+        className="flex items-center"
+        aria-label={`Go to ${portalType} dashboard`}
+      >
+        <img 
+          src={ctcLogo} 
+          alt="Custom Truck Connections" 
+          className={getLogoClasses()}
+          // Removed inline styles - now using clean CSS classes
+          loading="eager" // Logo should load immediately
+          decoding="sync" // Synchronous decoding for critical logo
+        />
       </Link>
     </div>
   );
 };
+
