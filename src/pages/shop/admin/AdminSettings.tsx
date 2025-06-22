@@ -208,6 +208,7 @@ import { inventorySyncService } from '@/services/inventory_sync_service';
 import { priceCheckService } from '@/services/price_check_service';
 import { shippingQuoteService } from '@/services/shipping_quote_service';
 import { dropshipOrderService } from '@/services/dropship_order_service';
+import { orderTrackingService } from '@/services/order_tracking_service';
 
 const AdminSettings = () => {
   // Existing state variables
@@ -240,7 +241,7 @@ const AdminSettings = () => {
   const [shippingQuoteResults, setShippingQuoteResults] = useState([]);
   const [shippingQuoteLoading, setShippingQuoteLoading] = useState(false);
 
-  // NEW: Dropship order state variables
+  // Dropship order state variables
   const [dropshipOrderStatus, setDropshipOrderStatus] = useState(null);
   const [dropshipOrderItems, setDropshipOrderItems] = useState('');
   const [customerInfo, setCustomerInfo] = useState({
@@ -264,6 +265,13 @@ const AdminSettings = () => {
   const [dropshipOrderResults, setDropshipOrderResults] = useState(null);
   const [dropshipOrderLoading, setDropshipOrderLoading] = useState(false);
 
+  // NEW: Order tracking state variables
+  const [orderTrackingStatus, setOrderTrackingStatus] = useState(null);
+  const [trackingOrderRefs, setTrackingOrderRefs] = useState('');
+  const [trackingResults, setTrackingResults] = useState([]);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingStatistics, setTrackingStatistics] = useState(null);
+
   // Load initial data
   useEffect(() => {
     loadDebugMode();
@@ -278,15 +286,16 @@ const AdminSettings = () => {
 
   // Auto-refresh status every 10 seconds when rate limited
   useEffect(() => {
-    if (priceCheckStatus?.isRateLimited || shippingQuoteStatus?.isRateLimited || dropshipOrderStatus?.isRateLimited) {
+    if (priceCheckStatus?.isRateLimited || shippingQuoteStatus?.isRateLimited || dropshipOrderStatus?.isRateLimited || orderTrackingStatus?.isRateLimited) {
       const interval = setInterval(() => {
         refreshPriceCheckStatus();
         refreshShippingQuoteStatus();
         refreshDropshipOrderStatus();
+        refreshOrderTrackingStatus();
       }, 10000);
       return () => clearInterval(interval);
     }
-  }, [priceCheckStatus?.isRateLimited, shippingQuoteStatus?.isRateLimited, dropshipOrderStatus?.isRateLimited]);
+  }, [priceCheckStatus?.isRateLimited, shippingQuoteStatus?.isRateLimited, dropshipOrderStatus?.isRateLimited, orderTrackingStatus?.isRateLimited]);
 
   const loadDebugMode = () => {
     try {
@@ -328,6 +337,7 @@ const AdminSettings = () => {
       refreshPriceCheckStatus();
       refreshShippingQuoteStatus();
       refreshDropshipOrderStatus();
+      refreshOrderTrackingStatus();
     } catch (error) {
       console.error('Error refreshing status:', error);
     }
@@ -357,6 +367,18 @@ const AdminSettings = () => {
       setDropshipOrderStatus(status);
     } catch (error) {
       console.error('Error refreshing dropship order status:', error);
+    }
+  };
+
+  const refreshOrderTrackingStatus = () => {
+    try {
+      const status = orderTrackingService.getStatus();
+      setOrderTrackingStatus(status);
+      
+      const stats = orderTrackingService.getTrackingStatistics();
+      setTrackingStatistics(stats);
+    } catch (error) {
+      console.error('Error refreshing order tracking status:', error);
     }
   };
 
@@ -568,7 +590,7 @@ const AdminSettings = () => {
     refreshShippingQuoteStatus();
   };
 
-  // NEW: Handle dropship order placement
+  // Handle dropship order placement
   const handleDropshipOrder = async () => {
     // Validate required fields
     if (!dropshipOrderItems.trim()) {
@@ -653,10 +675,64 @@ const AdminSettings = () => {
     }
   };
 
-  // NEW: Clear dropship order rate limit (for testing)
+  // Clear dropship order rate limit (for testing)
   const handleClearDropshipRateLimit = () => {
     dropshipOrderService.clearRateLimit();
     refreshDropshipOrderStatus();
+  };
+
+  // NEW: Handle order tracking
+  const handleOrderTracking = async () => {
+    if (!trackingOrderRefs.trim()) {
+      alert('Please enter at least one order reference');
+      return;
+    }
+
+    setTrackingLoading(true);
+    setTrackingResults([]);
+
+    try {
+      // Parse order references from textarea
+      const orderReferences = trackingOrderRefs
+        .split(/[\n,\s]+/)
+        .map(ref => ref.trim())
+        .filter(ref => ref.length > 0);
+
+      if (orderReferences.length === 0) {
+        alert('Please enter valid order references');
+        return;
+      }
+
+      if (orderReferences.length > 20) {
+        alert('Maximum 20 orders can be tracked per request');
+        return;
+      }
+
+      const result = await orderTrackingService.trackOrders(orderReferences);
+      
+      if (result.success) {
+        setTrackingResults(result.results);
+        console.log('Order tracking successful:', result);
+      } else {
+        console.error('Order tracking failed:', result.message);
+        alert(`Order tracking failed: ${result.message}`);
+      }
+
+      // Refresh status to update rate limiting info
+      refreshOrderTrackingStatus();
+
+    } catch (error) {
+      console.error('Order tracking error:', error);
+      alert(`Order tracking error: ${error.message}`);
+    } finally {
+      setTrackingLoading(false);
+    }
+  };
+
+  // NEW: Clear order tracking rate limit (for testing)
+  const handleClearTrackingRateLimit = () => {
+    orderTrackingService.clearRateLimit();
+    refreshOrderTrackingStatus();
   };
 
   // Safe formatting functions
@@ -738,6 +814,22 @@ const AdminSettings = () => {
     return <Badge variant={config.variant} className={config.className}>{status}</Badge>;
   };
 
+  const getTrackingStatusBadge = (status) => {
+    const statusMap = {
+      'Order Received': { className: 'bg-blue-100 text-blue-800 border-blue-200' },
+      'Processing': { className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+      'Shipped': { className: 'bg-purple-100 text-purple-800 border-purple-200' },
+      'In Transit': { className: 'bg-orange-100 text-orange-800 border-orange-200' },
+      'Out for Delivery': { className: 'bg-green-100 text-green-800 border-green-200' },
+      'Delivered': { className: 'bg-green-100 text-green-800 border-green-200' },
+      'Exception': { className: 'bg-red-100 text-red-800 border-red-200' },
+      'Returned': { className: 'bg-gray-100 text-gray-800 border-gray-200' }
+    };
+    
+    const config = statusMap[status] || { className: 'bg-gray-100 text-gray-600 border-gray-200' };
+    return <Badge variant="outline" className={config.className}>{status}</Badge>;
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -767,7 +859,7 @@ const AdminSettings = () => {
       </div>
 
       {/* Rate Limit Alert */}
-      {(syncStatus?.isRateLimited || priceCheckStatus?.isRateLimited || shippingQuoteStatus?.isRateLimited || dropshipOrderStatus?.isRateLimited) && (
+      {(syncStatus?.isRateLimited || priceCheckStatus?.isRateLimited || shippingQuoteStatus?.isRateLimited || dropshipOrderStatus?.isRateLimited || orderTrackingStatus?.isRateLimited) && (
         <Alert className="border-orange-200 bg-orange-50">
           <AlertTriangle className="h-4 w-4 text-orange-600" />
           <AlertDescription className="text-orange-800">
@@ -800,6 +892,12 @@ const AdminSettings = () => {
                 {dropshipOrderStatus?.isRateLimited && (
                   <>
                     Dropship Order: {dropshipOrderStatus.rateLimitMessage}
+                    <br />
+                  </>
+                )}
+                {orderTrackingStatus?.isRateLimited && (
+                  <>
+                    Order Tracking: {orderTrackingStatus.rateLimitMessage}
                     <br />
                   </>
                 )}
@@ -1210,7 +1308,7 @@ const AdminSettings = () => {
         </CardContent>
       </Card>
 
-      {/* NEW: Dropship Order Placement */}
+      {/* Dropship Order Placement */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1484,6 +1582,219 @@ const AdminSettings = () => {
         </CardContent>
       </Card>
 
+      {/* NEW: Order Tracking */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5" />
+            Order Tracking
+          </CardTitle>
+          <CardDescription>
+            Track order status and delivery information (1 tracking request per 3 minutes)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Order Tracking Status */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium">Tracking Status</Label>
+              <div className="flex items-center gap-2 mt-1">
+                {orderTrackingStatus?.isRateLimited ? (
+                  <>
+                    <Badge variant="destructive">Rate Limited</Badge>
+                    <Timer className="h-4 w-4 text-orange-500" />
+                    <span className="text-sm text-muted-foreground">
+                      {orderTrackingStatus.rateLimitMessage}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      Available
+                    </Badge>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <span className="text-sm text-muted-foreground">Ready to track orders</span>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            <div>
+              <Label className="text-sm font-medium">Last Tracking Request</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                {safeFormatRelativeTime(orderTrackingStatus?.lastTrackingTime)}
+              </p>
+            </div>
+          </div>
+
+          {/* Order References Input */}
+          <div>
+            <Label className="text-sm font-medium">Order References to Track (max 20)</Label>
+            <Textarea
+              placeholder="Enter order references separated by commas, spaces, or new lines&#10;Example:&#10;DO-1750623630250-A5CN01&#10;DO-1750623630251-B6DN02&#10;DO-1750623630252-C7EO03"
+              value={trackingOrderRefs}
+              onChange={(e) => setTrackingOrderRefs(e.target.value)}
+              className="mt-1"
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Enter up to 20 order references. Use order references from placed dropship orders.
+            </p>
+          </div>
+
+          {/* Track Orders Button */}
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleOrderTracking}
+              disabled={trackingLoading || orderTrackingStatus?.isRateLimited || !trackingOrderRefs.trim()}
+              className="flex items-center gap-2"
+            >
+              {trackingLoading ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+              {trackingLoading ? 'Tracking Orders...' : 'Track Orders'}
+            </Button>
+            
+            {debugMode && !orderTrackingStatus?.isRateLimited && (
+              <Button
+                variant="outline"
+                onClick={handleClearTrackingRateLimit}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Clear Rate Limit
+              </Button>
+            )}
+          </div>
+
+          {/* Tracking Results */}
+          {trackingResults.length > 0 && (
+            <div>
+              <Label className="text-sm font-medium">Tracking Results</Label>
+              <div className="mt-2 space-y-4 max-h-96 overflow-y-auto">
+                {trackingResults.map((result, index) => (
+                  <div key={index} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="font-medium">{result.orderReference}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {result.carrier} • {result.trackingNumber}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        {getTrackingStatusBadge(result.status)}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {result.currentLocation}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                      <div>
+                        <p><strong>Est. Delivery:</strong> {result.estimatedDeliveryDate ? 
+                          new Date(result.estimatedDeliveryDate).toLocaleDateString() : 'TBD'}</p>
+                        <p><strong>Last Updated:</strong> {safeFormatRelativeTime(result.lastUpdated)}</p>
+                      </div>
+                      <div>
+                        {result.signatureRequired && (
+                          <p><strong>Signature Required:</strong> Yes</p>
+                        )}
+                        {result.insuranceValue && (
+                          <p><strong>Insurance:</strong> ${result.insuranceValue}</p>
+                        )}
+                        {result.deliveryInstructions && (
+                          <p><strong>Instructions:</strong> {result.deliveryInstructions}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Tracking Events */}
+                    {result.events && result.events.length > 0 && (
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground">Tracking History</Label>
+                        <div className="mt-2 space-y-2 max-h-32 overflow-y-auto">
+                          {result.events.map((event, eventIndex) => (
+                            <div key={eventIndex} className="flex items-start gap-3 text-xs">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{event.status}</span>
+                                  <span className="text-muted-foreground">
+                                    {new Date(event.timestamp).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <p className="text-muted-foreground">{event.description}</p>
+                                <p className="text-muted-foreground">{event.location}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tracking Statistics */}
+          {debugMode && trackingStatistics && (
+            <div>
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Tracking Statistics
+              </Label>
+              <div className="mt-2 grid grid-cols-3 gap-4 text-sm">
+                <div className="p-3 border rounded">
+                  <p className="font-medium">{trackingStatistics.totalRequests}</p>
+                  <p className="text-muted-foreground">Total Requests</p>
+                </div>
+                <div className="p-3 border rounded">
+                  <p className="font-medium">{trackingStatistics.totalOrdersTracked}</p>
+                  <p className="text-muted-foreground">Orders Tracked</p>
+                </div>
+                <div className="p-3 border rounded">
+                  <p className="font-medium">{trackingStatistics.successRate}%</p>
+                  <p className="text-muted-foreground">Success Rate</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Recent Tracking History */}
+          {debugMode && orderTrackingStatus?.trackingHistory?.length > 0 && (
+            <div>
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <History className="h-4 w-4" />
+                Recent Tracking Requests
+              </Label>
+              <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                {orderTrackingStatus.trackingHistory.map((item, index) => (
+                  <div key={item.id} className="flex items-center justify-between p-2 border rounded text-sm">
+                    <div>
+                      <p className="font-medium">{item.orderReferences?.length || 0} orders tracked</p>
+                      <p className="text-muted-foreground">
+                        {safeFormatRelativeTime(item.timestamp)} • {item.environment}
+                        {item.orderReferences && item.orderReferences.length > 0 && (
+                          <span> • {item.orderReferences[0]}{item.orderReferences.length > 1 ? ` +${item.orderReferences.length - 1} more` : ''}</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <Badge variant={item.success ? "default" : "destructive"} className="text-xs">
+                        {item.success ? 'Success' : 'Failed'}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* API Status */}
       <Card>
         <CardHeader>
@@ -1496,7 +1807,7 @@ const AdminSettings = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-5 gap-6">
+          <div className="grid grid-cols-6 gap-6">
             <div>
               <Label className="text-sm font-medium">Keystone API</Label>
               <div className="flex items-center gap-2 mt-1">
@@ -1567,6 +1878,26 @@ const AdminSettings = () => {
                     <Badge variant="destructive">Rate Limited</Badge>
                     <span className="text-sm text-muted-foreground">
                       ({dropshipOrderService.formatTimeRemaining(dropshipOrderService.getTimeUntilNextOrder())} remaining)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      Available
+                    </Badge>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">Order Tracking API</Label>
+              <div className="flex items-center gap-2 mt-1">
+                {orderTrackingStatus?.isRateLimited ? (
+                  <>
+                    <Badge variant="destructive">Rate Limited</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      ({orderTrackingService.formatTimeRemaining(orderTrackingService.getTimeUntilNextTracking())} remaining)
                     </span>
                   </>
                 ) : (
@@ -1843,6 +2174,13 @@ const AdminSettings = () => {
                     <p className="text-sm font-medium">Dropship Order Status</p>
                     <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
                       <pre>{JSON.stringify(dropshipOrderStatus, null, 2)}</pre>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium">Order Tracking Status</p>
+                    <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
+                      <pre>{JSON.stringify(orderTrackingStatus, null, 2)}</pre>
                     </div>
                   </div>
                 </div>
