@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 import { 
   Shield, 
   Settings, 
@@ -18,7 +19,9 @@ import {
   Activity,
   Database,
   Zap,
-  Bug
+  Bug,
+  Timer,
+  Pause
 } from 'lucide-react';
 import { inventorySyncService } from '@/services/inventory_sync_service';
 
@@ -65,6 +68,26 @@ const safeFormatRelativeTime = (dateValue) => {
   }
 };
 
+const safeFormatDuration = (seconds) => {
+  if (!seconds || seconds <= 0) return '0s';
+  try {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    } else {
+      return `${remainingSeconds}s`;
+    }
+  } catch (error) {
+    console.warn('Error formatting duration:', error);
+    return '0s';
+  }
+};
+
 const safeFormatNumber = (value, options = {}) => {
   if (value === null || value === undefined || value === '') return '0';
   try {
@@ -94,7 +117,7 @@ const safeDisplayValue = (value, fallback = 'Unknown') => {
   return String(value);
 };
 
-// Safe sync status interface
+// Safe sync status interface with rate limiting
 interface SafeSyncStatus {
   isRunning: boolean;
   lastSuccessfulSync: string | null;
@@ -106,6 +129,10 @@ interface SafeSyncStatus {
   lastSyncAttempt: string | null;
   lastSyncResult: 'success' | 'failed' | 'partial' | 'never' | null;
   failureReason: string | null;
+  isRateLimited: boolean;
+  rateLimitRetryAfter: string | null;
+  rateLimitMessage: string | null;
+  rateLimitTimeRemaining: number | null;
 }
 
 const AdminSettings: React.FC = () => {
@@ -114,6 +141,7 @@ const AdminSettings: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<SafeSyncStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [rateLimitCountdown, setRateLimitCountdown] = useState<number | null>(null);
 
   // Load current environment setting on component mount
   useEffect(() => {
@@ -135,6 +163,34 @@ const AdminSettings: React.FC = () => {
     }
   }, []);
 
+  // Set up countdown timer for rate limiting
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    
+    if (syncStatus?.isRateLimited && syncStatus?.rateLimitTimeRemaining) {
+      setRateLimitCountdown(syncStatus.rateLimitTimeRemaining);
+      
+      interval = setInterval(() => {
+        setRateLimitCountdown(prev => {
+          if (prev === null || prev <= 1) {
+            // Rate limit expired, reload sync status
+            loadSyncStatus();
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      setRateLimitCountdown(null);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [syncStatus?.isRateLimited, syncStatus?.rateLimitTimeRemaining]);
+
   const loadSyncStatus = () => {
     try {
       const status = inventorySyncService?.getSyncStatus?.();
@@ -150,7 +206,11 @@ const AdminSettings: React.FC = () => {
           progress: Number(status.progress) || 0,
           lastSyncAttempt: status.lastSyncTime || null,
           lastSyncResult: status.lastSyncResult || 'never',
-          failureReason: status.lastSyncError || null
+          failureReason: status.lastSyncError || null,
+          isRateLimited: Boolean(status.isRateLimited),
+          rateLimitRetryAfter: status.rateLimitRetryAfter || null,
+          rateLimitMessage: status.rateLimitMessage || null,
+          rateLimitTimeRemaining: status.rateLimitTimeRemaining || null
         };
         setSyncStatus(safeStatus);
       }
@@ -167,7 +227,11 @@ const AdminSettings: React.FC = () => {
         progress: 0,
         lastSyncAttempt: null,
         lastSyncResult: 'never',
-        failureReason: null
+        failureReason: null,
+        isRateLimited: false,
+        rateLimitRetryAfter: null,
+        rateLimitMessage: null,
+        rateLimitTimeRemaining: null
       });
     }
   };
@@ -211,7 +275,21 @@ const AdminSettings: React.FC = () => {
     }
   };
 
+  const getRateLimitBadge = () => {
+    if (!syncStatus?.isRateLimited) {
+      return <Badge variant="default" className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Available</Badge>;
+    }
+    
+    return <Badge variant="destructive"><Pause className="w-3 h-3 mr-1" />Rate Limited</Badge>;
+  };
+
   const handleTestSync = async () => {
+    if (syncStatus?.isRateLimited) {
+      const timeRemaining = rateLimitCountdown || syncStatus.rateLimitTimeRemaining || 0;
+      alert(`Cannot sync: API is rate limited. Retry in ${safeFormatDuration(timeRemaining)}.`);
+      return;
+    }
+
     setIsLoading(true);
     try {
       if (inventorySyncService?.performFullSync) {
@@ -225,6 +303,7 @@ const AdminSettings: React.FC = () => {
       const errorMessage = error?.message || 'Unknown error occurred';
       alert(`Test sync failed: ${errorMessage}`);
       console.error('Test sync error:', error);
+      loadSyncStatus(); // Refresh status to get any rate limit info
     } finally {
       setIsLoading(false);
     }
@@ -239,6 +318,8 @@ const AdminSettings: React.FC = () => {
       console.log('VITE_KEYSTONE_SECURITY_TOKEN_PROD:', import.meta.env?.VITE_KEYSTONE_SECURITY_TOKEN_PROD ? 'SET' : 'UNDEFINED');
       console.log('VITE_KEYSTONE_PROXY_URL:', import.meta.env?.VITE_KEYSTONE_PROXY_URL || 'UNDEFINED');
       console.log('All VITE_KEYSTONE vars:', Object.keys(import.meta.env || {}).filter(k => k.startsWith('VITE_KEYSTONE')));
+      console.log('Rate Limit Status:', syncStatus?.isRateLimited ? 'ACTIVE' : 'NONE');
+      console.log('Rate Limit Retry After:', syncStatus?.rateLimitRetryAfter);
       console.log('All environment variables:', import.meta.env);
     } catch (error) {
       console.error('Error in debug console:', error);
@@ -273,6 +354,43 @@ const AdminSettings: React.FC = () => {
         </Button>
       </div>
 
+      {/* Rate Limit Alert */}
+      {syncStatus?.isRateLimited && (
+        <Alert className="border-orange-200 bg-orange-50">
+          <Timer className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <strong className="text-orange-800">API Rate Limited</strong>
+                {getRateLimitBadge()}
+              </div>
+              <p className="text-orange-700">
+                {syncStatus.rateLimitMessage || 'The Keystone API is currently rate limited.'}
+              </p>
+              {rateLimitCountdown && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Time remaining:</span>
+                    <span className="font-mono font-medium">{safeFormatDuration(rateLimitCountdown)}</span>
+                  </div>
+                  <Progress 
+                    value={syncStatus.rateLimitTimeRemaining ? 
+                      ((syncStatus.rateLimitTimeRemaining - rateLimitCountdown) / syncStatus.rateLimitTimeRemaining) * 100 : 0
+                    } 
+                    className="h-2"
+                  />
+                </div>
+              )}
+              {syncStatus.rateLimitRetryAfter && (
+                <p className="text-xs text-orange-600">
+                  Retry available at: {safeFormatDate(syncStatus.rateLimitRetryAfter)}
+                </p>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Debug Information - Only shown when toggled */}
       {showDebug && (
         <Card className="border-orange-200 bg-orange-50">
@@ -302,6 +420,15 @@ const AdminSettings: React.FC = () => {
                   <div><strong>PROD Token:</strong> {getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_PROD') ? '✅ SET' : '❌ UNDEFINED'}</div>
                   <div><strong>Proxy URL:</strong> {getEnvVar('VITE_KEYSTONE_PROXY_URL') ? '✅ SET' : '❌ UNDEFINED'}</div>
                 </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-orange-800">Rate Limit Status</Label>
+              <div className="bg-white p-3 rounded border text-xs space-y-1">
+                <div><strong>Rate Limited:</strong> {syncStatus?.isRateLimited ? '🔴 YES' : '🟢 NO'}</div>
+                <div><strong>Retry After:</strong> {syncStatus?.rateLimitRetryAfter ? safeFormatDate(syncStatus.rateLimitRetryAfter) : 'N/A'}</div>
+                <div><strong>Time Remaining:</strong> {rateLimitCountdown ? safeFormatDuration(rateLimitCountdown) : 'N/A'}</div>
+                <div><strong>Message:</strong> {syncStatus?.rateLimitMessage || 'None'}</div>
               </div>
             </div>
             <div className="space-y-2">
@@ -391,6 +518,55 @@ const AdminSettings: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* API Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Zap className="h-5 w-5" />
+            <span>API Status</span>
+          </CardTitle>
+          <CardDescription>
+            Current API availability and rate limiting status
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-600">Keystone API</Label>
+              <div className="flex items-center space-x-2">
+                {getRateLimitBadge()}
+                {syncStatus?.isRateLimited && rateLimitCountdown && (
+                  <span className="text-xs text-gray-500">
+                    ({safeFormatDuration(rateLimitCountdown)} remaining)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-600">Supabase Database</Label>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span className="text-sm">Available</span>
+              </div>
+            </div>
+          </div>
+
+          {syncStatus?.isRateLimited && syncStatus.rateLimitRetryAfter && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-600">Rate Limit Details</Label>
+              <div className="bg-gray-50 p-3 rounded border text-sm space-y-1">
+                <div><strong>Retry Available:</strong> {safeFormatDate(syncStatus.rateLimitRetryAfter)}</div>
+                <div><strong>Time Remaining:</strong> {rateLimitCountdown ? safeFormatDuration(rateLimitCountdown) : 'Calculating...'}</div>
+                {syncStatus.rateLimitMessage && (
+                  <div><strong>Message:</strong> {syncStatus.rateLimitMessage}</div>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Sync Status Dashboard */}
       <Card>
         <CardHeader>
@@ -428,10 +604,11 @@ const AdminSettings: React.FC = () => {
                     <Calendar className="h-4 w-4 text-blue-600" />
                     <div>
                       <p className="text-sm font-medium">
-                        {safeFormatDate(syncStatus.nextPlannedSync)}
+                        {syncStatus.isRateLimited ? 'Delayed (Rate Limited)' : safeFormatDate(syncStatus.nextPlannedSync)}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {syncStatus.nextPlannedSync ? 'Scheduled' : 'Not scheduled'}
+                        {syncStatus.isRateLimited ? 'Waiting for API availability' : 
+                         syncStatus.nextPlannedSync ? 'Scheduled' : 'Not scheduled'}
                       </p>
                     </div>
                   </div>
@@ -488,6 +665,12 @@ const AdminSettings: React.FC = () => {
                       </Badge>
                     </div>
                     <div className="flex justify-between text-sm">
+                      <span>API Status:</span>
+                      <Badge variant={syncStatus.isRateLimited ? "destructive" : "default"}>
+                        {syncStatus.isRateLimited ? 'Rate Limited' : 'Available'}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between text-sm">
                       <span>Last Attempt:</span>
                       <span className="font-medium text-xs">
                         {safeFormatRelativeTime(syncStatus.lastSyncAttempt)}
@@ -515,13 +698,24 @@ const AdminSettings: React.FC = () => {
             
             <Button 
               onClick={handleTestSync}
-              disabled={isLoading || (syncStatus?.isRunning)}
+              disabled={isLoading || (syncStatus?.isRunning) || (syncStatus?.isRateLimited)}
               size="sm"
               className="flex items-center space-x-2"
             >
               <Database className="h-4 w-4" />
-              <span>{isLoading ? 'Testing...' : 'Test Sync'}</span>
+              <span>
+                {isLoading ? 'Testing...' : 
+                 syncStatus?.isRateLimited ? 'Rate Limited' : 
+                 'Test Sync'}
+              </span>
             </Button>
+
+            {syncStatus?.isRateLimited && rateLimitCountdown && (
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <Timer className="h-4 w-4" />
+                <span>Retry in {safeFormatDuration(rateLimitCountdown)}</span>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

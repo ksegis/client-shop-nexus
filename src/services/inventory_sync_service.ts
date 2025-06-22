@@ -19,6 +19,9 @@ export interface InventorySyncStatus {
   nextPlannedSync: string | null;
   enableAutoSync: boolean;
   syncIntervalHours: number;
+  isRateLimited: boolean;
+  rateLimitRetryAfter: string | null;
+  rateLimitMessage: string | null;
 }
 
 export interface SyncLogEntry {
@@ -44,6 +47,14 @@ export class InventorySyncService {
     this.enableAutoSync = false;
     this.batchSize = 50;
     this.batchDelayMs = 1000; // 1 second delay between batches
+    
+    // Rate limiting properties
+    this.isRateLimited = false;
+    this.rateLimitRetryAfter = null;
+    this.rateLimitMessage = null;
+    
+    // Load saved status
+    this.loadSyncStatus();
   }
 
   // Get current environment (development or production)
@@ -82,15 +93,123 @@ export class InventorySyncService {
     }
   }
 
-  // DISABLED: Rate limiter check (bypassed to avoid 405 errors)
-  async checkRateLimit(endpoint) {
-    console.log('🔄 Rate limiter disabled - bypassing check');
-    return { success: true, note: 'Rate limiting disabled' };
+  // Check if currently rate limited
+  isCurrentlyRateLimited() {
+    if (!this.isRateLimited || !this.rateLimitRetryAfter) {
+      return false;
+    }
+    
+    try {
+      const retryTime = new Date(this.rateLimitRetryAfter);
+      const now = new Date();
+      
+      if (now >= retryTime) {
+        // Rate limit has expired
+        this.clearRateLimit();
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error checking rate limit status:', error);
+      this.clearRateLimit();
+      return false;
+    }
   }
 
-  // Get inventory data from Keystone API
+  // Set rate limit information
+  setRateLimit(retryAfterSeconds, message = null) {
+    const retryTime = new Date(Date.now() + (retryAfterSeconds * 1000));
+    
+    this.isRateLimited = true;
+    this.rateLimitRetryAfter = retryTime.toISOString();
+    this.rateLimitMessage = message || `Rate limited. Retry after ${this.formatDuration(retryAfterSeconds)}.`;
+    
+    console.log(`⏰ Rate limited until: ${retryTime.toLocaleString()}`);
+    console.log(`⏰ Retry in: ${this.formatDuration(retryAfterSeconds)}`);
+    
+    this.saveSyncStatus();
+  }
+
+  // Clear rate limit information
+  clearRateLimit() {
+    this.isRateLimited = false;
+    this.rateLimitRetryAfter = null;
+    this.rateLimitMessage = null;
+    this.saveSyncStatus();
+  }
+
+  // Format duration in human-readable format
+  formatDuration(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    } else {
+      return `${remainingSeconds}s`;
+    }
+  }
+
+  // Get time remaining until rate limit expires
+  getRateLimitTimeRemaining() {
+    if (!this.isCurrentlyRateLimited()) {
+      return null;
+    }
+    
+    try {
+      const retryTime = new Date(this.rateLimitRetryAfter);
+      const now = new Date();
+      const diffMs = retryTime.getTime() - now.getTime();
+      const diffSeconds = Math.ceil(diffMs / 1000);
+      
+      return diffSeconds > 0 ? diffSeconds : 0;
+    } catch (error) {
+      console.error('Error calculating rate limit time remaining:', error);
+      return null;
+    }
+  }
+
+  // Parse rate limit error response
+  parseRateLimitError(errorText) {
+    try {
+      const errorData = JSON.parse(errorText);
+      if (errorData.retry_after_seconds) {
+        return {
+          retryAfterSeconds: errorData.retry_after_seconds,
+          message: errorData.error || 'Rate limit exceeded',
+          function: errorData.function || 'Unknown'
+        };
+      }
+    } catch (error) {
+      console.warn('Could not parse rate limit error:', error);
+    }
+    
+    return null;
+  }
+
+  // Get inventory data from Keystone API with rate limit handling
   async getInventoryFromKeystone(limit = 1000) {
     const environment = this.getCurrentEnvironment();
+    
+    // Check if currently rate limited
+    if (this.isCurrentlyRateLimited()) {
+      const timeRemaining = this.getRateLimitTimeRemaining();
+      const message = `API is rate limited. Retry in ${this.formatDuration(timeRemaining)}.`;
+      console.log(`⏰ ${message}`);
+      
+      // In production, throw error (no mock data)
+      if (environment === 'production') {
+        throw new Error(message);
+      }
+      
+      // In development, return mock data
+      console.log('🔄 Falling back to mock data due to rate limiting');
+      return this.getMockInventoryData(limit);
+    }
     
     console.log(`🔧 Environment check:`);
     console.log(`- Current Environment: ${environment.toUpperCase()}`);
@@ -140,7 +259,34 @@ export class InventorySyncService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
+        
+        // Handle rate limiting specifically
+        if (response.status === 429) {
+          const rateLimitInfo = this.parseRateLimitError(errorText);
+          if (rateLimitInfo) {
+            this.setRateLimit(
+              rateLimitInfo.retryAfterSeconds, 
+              `Rate limited on ${rateLimitInfo.function}. ${rateLimitInfo.message}`
+            );
+            
+            // In production, throw error with rate limit info
+            if (environment === 'production') {
+              throw new Error(`Rate limited. Retry in ${this.formatDuration(rateLimitInfo.retryAfterSeconds)}.`);
+            }
+            
+            // In development, return mock data
+            console.log('🔄 Falling back to mock data due to rate limiting');
+            return this.getMockInventoryData(limit);
+          }
+        }
+        
         throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      // Clear any existing rate limit on successful response
+      if (this.isRateLimited) {
+        console.log('✅ Rate limit cleared - API call successful');
+        this.clearRateLimit();
       }
 
       const data = await response.json();
@@ -156,84 +302,99 @@ export class InventorySyncService {
         throw error;
       }
       
-      // In development, fall back to mock data
+      // In development, return mock data
       console.log('🔄 Falling back to mock data due to API error');
       return this.getMockInventoryData(limit);
     }
   }
 
   // Transform Keystone data to Supabase format
-  transformInventoryData(keystoneData) {
-    if (!Array.isArray(keystoneData)) {
-      console.warn('⚠️ Keystone data is not an array:', keystoneData);
-      return [];
-    }
-
-    return keystoneData.map(item => ({
+  transformKeystoneData(keystoneItems) {
+    return keystoneItems.map(item => ({
       sku: item.sku || item.partNumber || `UNKNOWN-${Date.now()}`,
-      keystone_vcpn: item.vcpn || item.sku || item.partNumber,
-      description: item.description || item.name || 'No description available',
+      keystone_vcpn: item.vcpn || item.keystone_vcpn || null,
+      description: item.description || item.name || 'No description',
       price: parseFloat(item.price || item.cost || 0),
       quantity: parseInt(item.quantity || item.stock || 0),
       keystone_sync_status: 'synced',
       last_keystone_sync: new Date().toISOString(),
-      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }));
   }
 
-  // FIXED: Database upsert with multiple fallback strategies
-  async upsertInventoryBatch(items, batchNumber) {
-    console.log(`📦 Upserting batch ${batchNumber} with ${items.length} items`);
+  // Upsert items to Supabase with multiple fallback strategies
+  async upsertItemsToSupabase(items) {
+    const transformedItems = this.transformKeystoneData(items);
     
-    // Strategy 1: Try with keystone_vcpn conflict resolution
+    // Strategy 1: Try keystone_vcpn conflict resolution
     try {
       const { data, error } = await supabase
         .from('inventory')
-        .upsert(items, { 
+        .upsert(transformedItems, { 
           onConflict: 'keystone_vcpn',
           ignoreDuplicates: false 
         })
         .select();
 
       if (!error) {
-        console.log(`✅ Batch ${batchNumber} upserted successfully using keystone_vcpn`);
+        console.log(`✅ Successfully upserted ${transformedItems.length} items using keystone_vcpn conflict resolution`);
         return { data, error: null };
       }
       
-      console.log(`⚠️ keystone_vcpn conflict failed, trying sku...`);
-    } catch (err) {
-      console.log(`⚠️ keystone_vcpn strategy failed:`, err.message);
+      console.warn('⚠️ keystone_vcpn conflict resolution failed, trying sku...', error);
+    } catch (error) {
+      console.warn('⚠️ keystone_vcpn conflict resolution failed, trying sku...', error);
     }
 
-    // Strategy 2: Try with sku conflict resolution
+    // Strategy 2: Try sku conflict resolution
     try {
       const { data, error } = await supabase
         .from('inventory')
-        .upsert(items, { 
+        .upsert(transformedItems, { 
           onConflict: 'sku',
           ignoreDuplicates: false 
         })
         .select();
 
       if (!error) {
-        console.log(`✅ Batch ${batchNumber} upserted successfully using sku`);
+        console.log(`✅ Successfully upserted ${transformedItems.length} items using sku conflict resolution`);
         return { data, error: null };
       }
       
-      console.log(`⚠️ sku conflict failed, trying manual insert...`);
-    } catch (err) {
-      console.log(`⚠️ sku strategy failed:`, err.message);
+      console.warn('⚠️ sku conflict resolution failed, trying individual inserts...', error);
+    } catch (error) {
+      console.warn('⚠️ sku conflict resolution failed, trying individual inserts...', error);
     }
 
-    // Strategy 3: Manual insert with duplicate checking
-    try {
-      const insertedItems = [];
-      const errors = [];
-      
-      for (const item of items) {
-        try {
-          // Try to insert individual item
+    // Strategy 3: Individual item processing
+    const results = [];
+    const errors = [];
+    
+    for (const item of transformedItems) {
+      try {
+        // Check if item exists
+        const { data: existing } = await supabase
+          .from('inventory')
+          .select('id')
+          .eq('sku', item.sku)
+          .single();
+
+        if (existing) {
+          // Update existing item
+          const { data, error } = await supabase
+            .from('inventory')
+            .update(item)
+            .eq('sku', item.sku)
+            .select()
+            .single();
+            
+          if (error) {
+            errors.push({ item: item.sku, error: error.message });
+          } else {
+            results.push(data);
+          }
+        } else {
+          // Insert new item
           const { data, error } = await supabase
             .from('inventory')
             .insert(item)
@@ -241,168 +402,153 @@ export class InventorySyncService {
             .single();
             
           if (error) {
-            // If duplicate, try to update instead
-            if (error.code === '23505') { // Unique violation
-              const { data: updateData, error: updateError } = await supabase
-                .from('inventory')
-                .update({
-                  description: item.description,
-                  price: item.price,
-                  quantity: item.quantity,
-                  keystone_sync_status: item.keystone_sync_status,
-                  last_keystone_sync: item.last_keystone_sync,
-                  updated_at: item.updated_at
-                })
-                .eq('sku', item.sku)
-                .select()
-                .single();
-                
-              if (updateError) {
-                errors.push({ item: item.sku, error: updateError.message });
-              } else {
-                insertedItems.push(updateData);
-              }
-            } else {
-              errors.push({ item: item.sku, error: error.message });
-            }
+            errors.push({ item: item.sku, error: error.message });
           } else {
-            insertedItems.push(data);
+            results.push(data);
           }
-        } catch (itemError) {
-          errors.push({ item: item.sku, error: itemError.message });
         }
+      } catch (error) {
+        errors.push({ item: item.sku, error: error.message });
       }
-      
-      console.log(`✅ Batch ${batchNumber} processed manually: ${insertedItems.length} success, ${errors.length} errors`);
-      
-      if (errors.length > 0) {
-        console.warn(`⚠️ Some items in batch ${batchNumber} had errors:`, errors);
-      }
-      
-      return { 
-        data: insertedItems, 
-        error: errors.length > 0 ? { message: `${errors.length} items failed`, details: errors } : null 
-      };
-      
-    } catch (err) {
-      console.error(`❌ Manual insert strategy failed for batch ${batchNumber}:`, err);
-      return { data: null, error: err };
     }
+    
+    if (errors.length > 0) {
+      console.warn(`⚠️ ${errors.length} items failed individual processing:`, errors);
+      return { 
+        data: results, 
+        error: { 
+          message: `${errors.length} items failed`, 
+          details: errors 
+        } 
+      };
+    }
+    
+    console.log(`✅ Successfully processed ${results.length} items individually`);
+    return { data: results, error: null };
   }
 
-  // Perform full inventory sync
-  async performFullSync() {
+  // Perform full sync with rate limit awareness
+  async performFullSync(limit = 1000) {
     if (this.isRunning) {
-      console.log('⚠️ Sync already running');
-      return { success: false, message: 'Sync already in progress' };
+      throw new Error('Sync is already running');
+    }
+
+    // Check if rate limited before starting
+    if (this.isCurrentlyRateLimited()) {
+      const timeRemaining = this.getRateLimitTimeRemaining();
+      const message = `Cannot sync: API is rate limited. Retry in ${this.formatDuration(timeRemaining)}.`;
+      throw new Error(message);
     }
 
     this.isRunning = true;
     this.isCancelled = false;
     this.progress = 0;
     this.currentBatch = 0;
-    this.totalBatches = 0;
+    this.totalBatches = Math.ceil(limit / this.batchSize);
     this.syncedItems = 0;
     this.errors = [];
-    this.lastSyncError = null;
+
+    console.log(`🚀 Starting full sync with limit: ${limit}`);
+    this.updateSyncStatus('running', `Starting sync of ${limit} items`);
 
     try {
-      console.log('🚀 Starting full inventory sync...');
-      this.updateSyncStatus('running', 'Full sync in progress');
-
       // Get inventory data from Keystone
-      const keystoneData = await this.getInventoryFromKeystone();
+      const inventoryData = await this.getInventoryFromKeystone(limit);
       
-      if (!keystoneData || keystoneData.length === 0) {
-        throw new Error('No inventory data received from Keystone API');
+      if (!inventoryData || inventoryData.length === 0) {
+        console.log('⚠️ No inventory data received from Keystone');
+        this.lastSyncResult = 'failed';
+        this.lastSyncError = 'No data received from Keystone API';
+        this.lastSyncTime = new Date().toISOString();
+        this.updateSyncStatus('idle', 'No data received from Keystone API');
+        this.saveSyncStatus();
+        
+        return {
+          success: false,
+          message: 'No data received from Keystone API',
+          syncedItems: 0,
+          errors: ['No data received']
+        };
       }
 
-      // Transform data
-      const transformedData = this.transformInventoryData(keystoneData);
-      console.log(`📊 Transformed ${transformedData.length} items for database`);
-
+      console.log(`📦 Processing ${inventoryData.length} items in batches of ${this.batchSize}`);
+      
       // Process in batches
-      this.totalBatches = Math.ceil(transformedData.length / this.batchSize);
-      console.log(`📦 Processing ${this.totalBatches} batches of ${this.batchSize} items each`);
+      const batches = [];
+      for (let i = 0; i < inventoryData.length; i += this.batchSize) {
+        batches.push(inventoryData.slice(i, i + this.batchSize));
+      }
+      
+      this.totalBatches = batches.length;
+      let totalSynced = 0;
 
-      for (let i = 0; i < transformedData.length; i += this.batchSize) {
+      for (let i = 0; i < batches.length; i++) {
         if (this.isCancelled) {
           console.log('🛑 Sync cancelled by user');
           break;
         }
 
-        this.currentBatch++;
-        const batch = transformedData.slice(i, i + this.batchSize);
+        this.currentBatch = i + 1;
+        this.progress = (i / batches.length);
         
-        console.log(`📦 Processing batch ${this.currentBatch}/${this.totalBatches} (${batch.length} items)`);
+        console.log(`📦 Processing batch ${this.currentBatch}/${this.totalBatches} (${batches[i].length} items)`);
+        this.updateSyncStatus('running', `Processing batch ${this.currentBatch}/${this.totalBatches}`);
 
         try {
-          const { data, error } = await this.upsertInventoryBatch(batch, this.currentBatch);
+          const result = await this.upsertItemsToSupabase(batches[i]);
           
-          if (error) {
-            console.error(`❌ Error upserting batch ${this.currentBatch}:`, error);
-            this.errors.push({
-              batch: this.currentBatch,
-              error: error.message || error,
-              items: batch.length
-            });
+          if (result.error) {
+            console.error(`❌ Error upserting batch ${this.currentBatch}:`, result.error);
+            this.errors.push(`Batch ${this.currentBatch}: ${result.error.message}`);
           } else {
-            this.syncedItems += data?.length || batch.length;
-            console.log(`✅ Batch ${this.currentBatch} completed: ${data?.length || batch.length} items synced`);
+            const batchSynced = result.data?.length || 0;
+            totalSynced += batchSynced;
+            console.log(`✅ Batch ${this.currentBatch} completed: ${batchSynced} items synced`);
           }
-        } catch (batchError) {
-          console.error(`❌ Batch ${this.currentBatch} failed:`, batchError);
-          this.errors.push({
-            batch: this.currentBatch,
-            error: batchError.message,
-            items: batch.length
-          });
+        } catch (error) {
+          console.error(`❌ Error processing batch ${this.currentBatch}:`, error);
+          this.errors.push(`Batch ${this.currentBatch}: ${error.message}`);
         }
 
-        // Update progress
-        this.progress = Math.round((this.currentBatch / this.totalBatches) * 100);
+        this.syncedItems = totalSynced;
         
-        // Add delay between batches to avoid overwhelming the database
-        if (this.currentBatch < this.totalBatches && !this.isCancelled) {
+        // Add delay between batches (except for the last one)
+        if (i < batches.length - 1) {
           await new Promise(resolve => setTimeout(resolve, this.batchDelayMs));
         }
       }
 
-      // Update final status
-      const hasErrors = this.errors.length > 0;
-      const resultStatus = this.isCancelled ? 'cancelled' : (hasErrors ? 'partial' : 'success');
-      const resultMessage = this.isCancelled 
-        ? 'Sync cancelled by user'
-        : hasErrors 
-          ? `Sync completed with ${this.errors.length} batch errors`
-          : `Sync completed successfully: ${this.syncedItems} items synced`;
-
+      this.progress = 1;
       this.lastSyncTime = new Date().toISOString();
-      this.lastSyncResult = resultStatus;
-      this.lastSyncError = hasErrors ? this.errors : null;
-
-      this.updateSyncStatus('idle', resultMessage);
+      
+      if (this.errors.length === 0) {
+        this.lastSyncResult = 'success';
+        this.lastSyncError = null;
+        console.log(`✅ Full sync completed successfully: ${totalSynced} items synced`);
+        this.updateSyncStatus('idle', `Sync completed: ${totalSynced} items synced`);
+      } else {
+        this.lastSyncResult = 'partial';
+        this.lastSyncError = `${this.errors.length} batch errors occurred`;
+        console.log(`⚠️ Sync completed with errors: ${totalSynced} items synced, ${this.errors.length} errors`);
+        this.updateSyncStatus('idle', `Sync completed with ${this.errors.length} errors`);
+      }
+      
       this.saveSyncStatus();
-
-      console.log(`🎉 Full sync completed: ${resultStatus}`);
-      console.log(`📊 Final stats: ${this.syncedItems} items synced, ${this.errors.length} batch errors`);
-
+      
       return {
-        success: !hasErrors && !this.isCancelled,
-        message: resultMessage,
-        stats: {
-          totalItems: transformedData.length,
-          syncedItems: this.syncedItems,
-          batchErrors: this.errors.length,
-          batches: this.totalBatches
-        }
+        success: this.errors.length === 0,
+        message: this.errors.length === 0 
+          ? `Successfully synced ${totalSynced} items`
+          : `Synced ${totalSynced} items with ${this.errors.length} errors`,
+        syncedItems: totalSynced,
+        errors: this.errors
       };
 
     } catch (error) {
       console.error('❌ Full sync failed:', error);
       this.lastSyncError = error.message;
       this.lastSyncResult = 'failed';
-      this.lastSyncTime = new Date().toISOString(); // FIXED: Always set a timestamp
+      this.lastSyncTime = new Date().toISOString();
       this.updateSyncStatus('idle', `Sync failed: ${error.message}`);
       this.saveSyncStatus();
       
@@ -459,7 +605,7 @@ export class InventorySyncService {
     localStorage.setItem('inventory_sync_status', JSON.stringify(statusData));
   }
 
-  // Save comprehensive sync status
+  // Save comprehensive sync status including rate limit info
   saveSyncStatus() {
     const statusData = {
       lastSyncTime: this.lastSyncTime,
@@ -469,13 +615,16 @@ export class InventorySyncService {
       errors: this.errors,
       syncIntervalHours: this.syncIntervalHours,
       enableAutoSync: this.enableAutoSync,
-      nextPlannedSync: this.getNextPlannedSync()
+      nextPlannedSync: this.getNextPlannedSync(),
+      isRateLimited: this.isRateLimited,
+      rateLimitRetryAfter: this.rateLimitRetryAfter,
+      rateLimitMessage: this.rateLimitMessage
     };
     
     localStorage.setItem('inventory_sync_comprehensive_status', JSON.stringify(statusData));
   }
 
-  // Load sync status from localStorage
+  // Load sync status from localStorage including rate limit info
   loadSyncStatus() {
     try {
       const statusData = localStorage.getItem('inventory_sync_comprehensive_status');
@@ -488,13 +637,16 @@ export class InventorySyncService {
         this.errors = parsed.errors || [];
         this.syncIntervalHours = parsed.syncIntervalHours || 24;
         this.enableAutoSync = parsed.enableAutoSync || false;
+        this.isRateLimited = parsed.isRateLimited || false;
+        this.rateLimitRetryAfter = parsed.rateLimitRetryAfter || null;
+        this.rateLimitMessage = parsed.rateLimitMessage || null;
       }
     } catch (error) {
       console.error('Error loading sync status:', error);
     }
   }
 
-  // Get next planned sync time - FIXED: Handle null lastSyncTime
+  // Get next planned sync time
   getNextPlannedSync() {
     if (!this.enableAutoSync || !this.lastSyncTime) {
       return null;
@@ -510,7 +662,7 @@ export class InventorySyncService {
     }
   }
 
-  // Get current sync status - FIXED: Ensure all values are defined
+  // Get current sync status including rate limit information
   getSyncStatus() {
     return {
       isRunning: this.isRunning || false,
@@ -524,13 +676,17 @@ export class InventorySyncService {
       lastSyncError: this.lastSyncError || null,
       nextPlannedSync: this.getNextPlannedSync(),
       enableAutoSync: this.enableAutoSync || false,
-      syncIntervalHours: this.syncIntervalHours || 24
+      syncIntervalHours: this.syncIntervalHours || 24,
+      isRateLimited: this.isCurrentlyRateLimited(),
+      rateLimitRetryAfter: this.rateLimitRetryAfter,
+      rateLimitMessage: this.rateLimitMessage,
+      rateLimitTimeRemaining: this.getRateLimitTimeRemaining()
     };
   }
 
   // Check if scheduled sync should run
   shouldRunScheduledSync() {
-    if (!this.enableAutoSync || this.isRunning) {
+    if (!this.enableAutoSync || this.isRunning || this.isCurrentlyRateLimited()) {
       return false;
     }
     
@@ -582,8 +738,6 @@ export class InventorySyncService {
     try {
       console.log(`🔄 Updating single part: ${sku}`);
       
-      // This would typically fetch just one part from Keystone
-      // For now, we'll update the sync status
       const { data, error } = await supabase
         .from('inventory')
         .update({
@@ -598,113 +752,18 @@ export class InventorySyncService {
         throw error;
       }
 
-      console.log(`✅ Part ${sku} marked for update`);
+      console.log(`✅ Updated part ${sku} status to pending`);
       return data;
     } catch (error) {
-      console.error(`❌ Error updating part ${sku}:`, error);
+      console.error(`❌ Failed to update part ${sku}:`, error);
       throw error;
-    }
-  }
-
-  // Request part update (queue for next sync)
-  async requestPartUpdate(sku, priority = 'normal') {
-    try {
-      const { data, error } = await supabase
-        .from('inventory')
-        .update({
-          keystone_sync_status: 'pending',
-          updated_at: new Date().toISOString()
-        })
-        .eq('sku', sku)
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      console.log(`✅ Part ${sku} queued for update with ${priority} priority`);
-      return data;
-    } catch (error) {
-      console.error(`❌ Error queuing part ${sku}:`, error);
-      throw error;
-    }
-  }
-
-  // Process pending updates
-  async processPendingUpdates() {
-    try {
-      const { data: pendingItems, error } = await supabase
-        .from('inventory')
-        .select('sku')
-        .eq('keystone_sync_status', 'pending')
-        .limit(100);
-
-      if (error) {
-        throw error;
-      }
-
-      if (!pendingItems || pendingItems.length === 0) {
-        console.log('✅ No pending updates to process');
-        return { processed: 0 };
-      }
-
-      console.log(`🔄 Processing ${pendingItems.length} pending updates`);
-      
-      // For now, just mark them as synced
-      // In a real implementation, you'd fetch fresh data from Keystone
-      const { error: updateError } = await supabase
-        .from('inventory')
-        .update({
-          keystone_sync_status: 'synced',
-          last_keystone_sync: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('keystone_sync_status', 'pending');
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      console.log(`✅ Processed ${pendingItems.length} pending updates`);
-      return { processed: pendingItems.length };
-    } catch (error) {
-      console.error('❌ Error processing pending updates:', error);
-      throw error;
-    }
-  }
-
-  // Perform incremental sync (only changed items)
-  async performIncrementalSync() {
-    console.log('🔄 Starting incremental sync...');
-    
-    try {
-      // Process any pending updates first
-      const result = await this.processPendingUpdates();
-      
-      console.log(`✅ Incremental sync completed: ${result.processed} items processed`);
-      return {
-        success: true,
-        message: `Incremental sync completed: ${result.processed} items processed`,
-        processed: result.processed
-      };
-    } catch (error) {
-      console.error('❌ Incremental sync failed:', error);
-      return {
-        success: false,
-        message: `Incremental sync failed: ${error.message}`,
-        error: error.message
-      };
     }
   }
 }
 
-// Create and export singleton instance
+// Named export for the service instance
 export const inventorySyncService = new InventorySyncService();
 
-// Load saved status on initialization
-inventorySyncService.loadSyncStatus();
-
-// Export default for backward compatibility
+// Default export for backward compatibility
 export default inventorySyncService;
 
