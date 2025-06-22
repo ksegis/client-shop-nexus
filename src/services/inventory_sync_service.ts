@@ -38,7 +38,7 @@ export class InventorySyncService {
     this.syncedItems = 0;
     this.errors = [];
     this.lastSyncTime = null;
-    this.lastSyncResult = 'unknown';
+    this.lastSyncResult = 'never';
     this.lastSyncError = null;
     this.syncIntervalHours = 24; // Default 24 hours
     this.enableAutoSync = false;
@@ -402,6 +402,7 @@ export class InventorySyncService {
       console.error('❌ Full sync failed:', error);
       this.lastSyncError = error.message;
       this.lastSyncResult = 'failed';
+      this.lastSyncTime = new Date().toISOString(); // FIXED: Always set a timestamp
       this.updateSyncStatus('idle', `Sync failed: ${error.message}`);
       this.saveSyncStatus();
       
@@ -480,9 +481,9 @@ export class InventorySyncService {
       const statusData = localStorage.getItem('inventory_sync_comprehensive_status');
       if (statusData) {
         const parsed = JSON.parse(statusData);
-        this.lastSyncTime = parsed.lastSyncTime;
-        this.lastSyncResult = parsed.lastSyncResult || 'unknown';
-        this.lastSyncError = parsed.lastSyncError;
+        this.lastSyncTime = parsed.lastSyncTime || null;
+        this.lastSyncResult = parsed.lastSyncResult || 'never';
+        this.lastSyncError = parsed.lastSyncError || null;
         this.syncedItems = parsed.syncedItems || 0;
         this.errors = parsed.errors || [];
         this.syncIntervalHours = parsed.syncIntervalHours || 24;
@@ -493,32 +494,37 @@ export class InventorySyncService {
     }
   }
 
-  // Get next planned sync time
+  // Get next planned sync time - FIXED: Handle null lastSyncTime
   getNextPlannedSync() {
     if (!this.enableAutoSync || !this.lastSyncTime) {
       return null;
     }
     
-    const lastSync = new Date(this.lastSyncTime);
-    const nextSync = new Date(lastSync.getTime() + (this.syncIntervalHours * 60 * 60 * 1000));
-    return nextSync.toISOString();
+    try {
+      const lastSync = new Date(this.lastSyncTime);
+      const nextSync = new Date(lastSync.getTime() + (this.syncIntervalHours * 60 * 60 * 1000));
+      return nextSync.toISOString();
+    } catch (error) {
+      console.error('Error calculating next planned sync:', error);
+      return null;
+    }
   }
 
-  // Get current sync status
+  // Get current sync status - FIXED: Ensure all values are defined
   getSyncStatus() {
     return {
-      isRunning: this.isRunning,
-      progress: this.progress,
-      currentBatch: this.currentBatch,
-      totalBatches: this.totalBatches,
-      syncedItems: this.syncedItems,
-      errors: this.errors.length,
-      lastSyncTime: this.lastSyncTime,
-      lastSyncResult: this.lastSyncResult,
-      lastSyncError: this.lastSyncError,
+      isRunning: this.isRunning || false,
+      progress: this.progress || 0,
+      currentBatch: this.currentBatch || 0,
+      totalBatches: this.totalBatches || 0,
+      syncedItems: this.syncedItems || 0,
+      errors: this.errors?.length || 0,
+      lastSyncTime: this.lastSyncTime || null,
+      lastSyncResult: this.lastSyncResult || 'never',
+      lastSyncError: this.lastSyncError || null,
       nextPlannedSync: this.getNextPlannedSync(),
-      enableAutoSync: this.enableAutoSync,
-      syncIntervalHours: this.syncIntervalHours
+      enableAutoSync: this.enableAutoSync || false,
+      syncIntervalHours: this.syncIntervalHours || 24
     };
   }
 
@@ -533,7 +539,12 @@ export class InventorySyncService {
       return false;
     }
     
-    return new Date() >= new Date(nextSync);
+    try {
+      return new Date() >= new Date(nextSync);
+    } catch (error) {
+      console.error('Error checking scheduled sync:', error);
+      return false;
+    }
   }
 
   // Cancel running sync
