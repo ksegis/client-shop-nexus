@@ -1503,65 +1503,83 @@ const AdminSettings = () => {
           {/* Tracking Results */}
           {trackingResults.length > 0 && (
             <div>
-              <Label className="text-sm font-medium">Tracking Results</Label>
-              <div className="mt-2 space-y-4 max-h-96 overflow-y-auto">
+              <Label className="text-sm font-medium">Order Tracking Results</Label>
+              <div className="mt-2 space-y-3 max-h-80 overflow-y-auto">
                 {trackingResults.map((result, index) => (
-                  <div key={index} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
+                  <div key={index} className="p-4 border rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
                       <div>
                         <p className="font-medium">{result.orderReference}</p>
                         <p className="text-sm text-muted-foreground">
-                          {result.carrier} • {result.trackingNumber}
+                          {result.trackingNumber && `Tracking: ${result.trackingNumber}`}
                         </p>
                       </div>
                       <div className="text-right">
                         {getTrackingStatusBadge(result.status)}
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {result.currentLocation}
-                        </p>
+                        {result.carrier && (
+                          <p className="text-xs text-muted-foreground mt-1">{result.carrier}</p>
+                        )}
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
-                      <div>
-                        <p><strong>Est. Delivery:</strong> {result.estimatedDeliveryDate ? 
-                          new Date(result.estimatedDeliveryDate).toLocaleDateString() : 'TBD'}</p>
-                        <p><strong>Last Updated:</strong> {safeFormatRelativeTime(result.lastUpdated)}</p>
+                    {result.error ? (
+                      <p className="text-sm text-red-600">{result.error}</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          {result.estimatedDelivery && (
+                            <p><strong>Est. Delivery:</strong> {new Date(result.estimatedDelivery).toLocaleDateString()}</p>
+                          )}
+                          {result.actualDelivery && (
+                            <p><strong>Delivered:</strong> {new Date(result.actualDelivery).toLocaleDateString()}</p>
+                          )}
+                          {result.lastUpdate && (
+                            <p><strong>Last Update:</strong> {safeFormatRelativeTime(result.lastUpdate)}</p>
+                          )}
+                        </div>
+                        <div>
+                          {result.currentLocation && (
+                            <p><strong>Location:</strong> {result.currentLocation}</p>
+                          )}
+                          {result.shippingMethod && (
+                            <p><strong>Method:</strong> {result.shippingMethod}</p>
+                          )}
+                          {result.totalValue && (
+                            <p><strong>Value:</strong> ${result.totalValue.toFixed(2)}</p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        {result.signatureRequired && (
-                          <p><strong>Signature Required:</strong> Yes</p>
-                        )}
-                        {result.insuranceValue && (
-                          <p><strong>Insurance:</strong> ${result.insuranceValue}</p>
-                        )}
-                        {result.deliveryInstructions && (
-                          <p><strong>Instructions:</strong> {result.deliveryInstructions}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Tracking Events */}
-                    {result.events && result.events.length > 0 && (
-                      <div>
-                        <Label className="text-xs font-medium text-muted-foreground">Tracking History</Label>
-                        <div className="mt-2 space-y-2 max-h-32 overflow-y-auto">
-                          {result.events.map((event, eventIndex) => (
-                            <div key={eventIndex} className="flex items-start gap-3 text-xs">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                              <div className="flex-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium">{event.status}</span>
-                                  <span className="text-muted-foreground">
-                                    {new Date(event.timestamp).toLocaleDateString()}
-                                  </span>
-                                </div>
-                                <p className="text-muted-foreground">{event.description}</p>
-                                <p className="text-muted-foreground">{event.location}</p>
-                              </div>
+                    )}
+                    
+                    {result.trackingEvents && result.trackingEvents.length > 0 && (
+                      <div className="mt-3 pt-3 border-t">
+                        <p className="text-sm font-medium mb-2">Recent Events:</p>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {result.trackingEvents.slice(0, 3).map((event, eventIndex) => (
+                            <div key={eventIndex} className="text-xs text-muted-foreground">
+                              <span className="font-medium">{event.status}</span>
+                              {event.location && <span> - {event.location}</span>}
+                              {event.timestamp && (
+                                <span className="float-right">
+                                  {new Date(event.timestamp).toLocaleDateString()}
+                                </span>
+                              )}
                             </div>
                           ))}
                         </div>
+                      </div>
+                    )}
+                    
+                    {result.trackingUrl && (
+                      <div className="mt-3 pt-3 border-t">
+                        <a 
+                          href={result.trackingUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:underline"
+                        >
+                          View Full Tracking Details →
+                        </a>
                       </div>
                     )}
                   </div>
@@ -1569,187 +1587,6 @@ const AdminSettings = () => {
               </div>
             </div>
           )}
-
-          {/* Tracking Statistics */}
-          {debugMode && trackingStatistics && (
-            <div>
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" />
-                Tracking Statistics
-              </Label>
-              <div className="mt-2 grid grid-cols-3 gap-4 text-sm">
-                <div className="p-3 border rounded">
-                  <p className="font-medium">{trackingStatistics.totalRequests}</p>
-                  <p className="text-muted-foreground">Total Requests</p>
-                </div>
-                <div className="p-3 border rounded">
-                  <p className="font-medium">{trackingStatistics.totalOrdersTracked}</p>
-                  <p className="text-muted-foreground">Orders Tracked</p>
-                </div>
-                <div className="p-3 border rounded">
-                  <p className="font-medium">{trackingStatistics.successRate}%</p>
-                  <p className="text-muted-foreground">Success Rate</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Recent Tracking History */}
-          {debugMode && orderTrackingStatus?.trackingHistory?.length > 0 && (
-            <div>
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <History className="h-4 w-4" />
-                Recent Tracking Requests
-              </Label>
-              <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                {orderTrackingStatus.trackingHistory.map((item, index) => (
-                  <div key={item.id} className="flex items-center justify-between p-2 border rounded text-sm">
-                    <div>
-                      <p className="font-medium">{item.orderReferences?.length || 0} orders tracked</p>
-                      <p className="text-muted-foreground">
-                        {safeFormatRelativeTime(item.timestamp)} • {item.environment}
-                        {item.orderReferences && item.orderReferences.length > 0 && (
-                          <span> • {item.orderReferences[0]}{item.orderReferences.length > 1 ? ` +${item.orderReferences.length - 1} more` : ''}</span>
-                        )}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant={item.success ? "default" : "destructive"} className="text-xs">
-                        {item.success ? 'Success' : 'Failed'}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* API Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5" />
-            API Status
-          </CardTitle>
-          <CardDescription>
-            Current API availability and rate limiting status
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-6 gap-6">
-            <div>
-              <Label className="text-sm font-medium">Keystone API</Label>
-              <div className="flex items-center gap-2 mt-1">
-                {syncStatus?.isRateLimited ? (
-                  <>
-                    <Badge variant="destructive">Rate Limited</Badge>
-                    <span className="text-sm text-muted-foreground">
-                      ({syncStatus.rateLimitTimeRemaining ? 
-                        `${Math.floor(syncStatus.rateLimitTimeRemaining / 3600)}h ${Math.floor((syncStatus.rateLimitTimeRemaining % 3600) / 60)}m remaining` : 
-                        'Calculating...'})
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                      Available
-                    </Badge>
-                  </>
-                )}
-              </div>
-            </div>
-            
-            <div>
-              <Label className="text-sm font-medium">Price Check API</Label>
-              <div className="flex items-center gap-2 mt-1">
-                {priceCheckStatus?.isRateLimited ? (
-                  <>
-                    <Badge variant="destructive">Rate Limited</Badge>
-                    <span className="text-sm text-muted-foreground">
-                      ({priceCheckService.formatTimeRemaining(priceCheckService.getTimeUntilNextCheck())} remaining)
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                      Available
-                    </Badge>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium">Shipping Quote API</Label>
-              <div className="flex items-center gap-2 mt-1">
-                {shippingQuoteStatus?.isRateLimited ? (
-                  <>
-                    <Badge variant="destructive">Rate Limited</Badge>
-                    <span className="text-sm text-muted-foreground">
-                      ({shippingQuoteService.formatTimeRemaining(shippingQuoteService.getTimeUntilNextQuote())} remaining)
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                      Available
-                    </Badge>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium">Dropship Order API</Label>
-              <div className="flex items-center gap-2 mt-1">
-                {dropshipOrderStatus?.isRateLimited ? (
-                  <>
-                    <Badge variant="destructive">Rate Limited</Badge>
-                    <span className="text-sm text-muted-foreground">
-                      ({dropshipOrderService.formatTimeRemaining(dropshipOrderService.getTimeUntilNextOrder())} remaining)
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                      Available
-                    </Badge>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium">Order Tracking API</Label>
-              <div className="flex items-center gap-2 mt-1">
-                {orderTrackingStatus?.isRateLimited ? (
-                  <>
-                    <Badge variant="destructive">Rate Limited</Badge>
-                    <span className="text-sm text-muted-foreground">
-                      ({orderTrackingService.formatTimeRemaining(orderTrackingService.getTimeUntilNextTracking())} remaining)
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                      Available
-                    </Badge>
-                  </>
-                )}
-              </div>
-            </div>
-            
-            <div>
-              <Label className="text-sm font-medium">Supabase Database</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                  Available
-                </Badge>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
@@ -1761,44 +1598,52 @@ const AdminSettings = () => {
             Inventory Sync Status
           </CardTitle>
           <CardDescription>
-            Monitor the status and health of your inventory synchronization
+            Current status of Keystone inventory synchronization
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-6">
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <Label className="text-sm font-medium">Last Successful Sync</Label>
+              <Label className="text-sm font-medium">Sync Status</Label>
               <div className="flex items-center gap-2 mt-1">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span className="text-sm">{safeFormatRelativeTime(syncStatus?.lastSyncTime)}</span>
+                {syncStatus?.lastSyncStatus ? getStatusBadge(syncStatus.lastSyncStatus) : getStatusBadge('never')}
+                {syncStatus?.isRateLimited && <Timer className="h-4 w-4 text-orange-500" />}
               </div>
             </div>
             
             <div>
-              <Label className="text-sm font-medium">Next Planned Sync</Label>
-              <div className="flex items-center gap-2 mt-1">
-                {syncStatus?.isRateLimited ? (
-                  <>
-                    <Clock className="h-4 w-4 text-orange-500" />
-                    <span className="text-sm text-orange-600">Delayed (Rate Limited)</span>
-                  </>
-                ) : (
-                  <>
-                    <Clock className="h-4 w-4 text-blue-500" />
-                    <span className="text-sm">Waiting for API availability</span>
-                  </>
-                )}
-              </div>
+              <Label className="text-sm font-medium">Last Sync</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                {safeFormatRelativeTime(syncStatus?.lastSyncTime)}
+              </p>
             </div>
             
             <div>
-              <Label className="text-sm font-medium">Last Sync Result</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                {getStatusBadge(syncStatus?.lastSyncResult || 'never')}
-              </div>
+              <Label className="text-sm font-medium">Next Sync</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                {safeFormatFutureTime(syncStatus?.nextSyncTime)}
+              </p>
+            </div>
+            
+            <div>
+              <Label className="text-sm font-medium">Items Synced</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                {safeDisplayValue(syncStatus?.itemsSynced, '0')}
+              </p>
             </div>
           </div>
+
+          {syncStatus?.isRateLimited && (
+            <Alert className="border-orange-200 bg-orange-50">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription className="text-orange-800">
+                <strong>Rate Limited:</strong> GetInventoryFull API is rate limited. 
+                Next sync available in {syncStatus.rateLimitTimeRemaining ? 
+                  `${Math.floor(syncStatus.rateLimitTimeRemaining / 3600)}h ${Math.floor((syncStatus.rateLimitTimeRemaining % 3600) / 60)}m` : 
+                  'calculating...'}
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Delta Sync Status */}
           {deltaSyncSettings.enabled && (
