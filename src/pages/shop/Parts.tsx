@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, Database, RotateCcw, Clock, CheckCircle, XCircle, AlertTriangle, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
+import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,21 +12,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// Import services
-import { InventorySyncService } from "@/services/inventory_sync_service";
-import { getSyncScheduler } from "@/services/SyncScheduler";
-import { getPricingSyncService, PricingSyncService, PricingData } from "@/services/pricing_sync_service";
-import { getPricingSyncScheduler, PricingSyncScheduler } from "@/services/pricing_sync_scheduler";
-
-// Import the new ProductPriceCheck component
+// Import the ProductPriceCheck component
 import ProductPriceCheck from '@/components/product_price_check_component';
 
-// Interface matching your existing inventory table structure
+// Simplified interface for inventory parts
 interface InventoryPart {
   id: string;
   name: string;
@@ -44,7 +36,6 @@ interface InventoryPart {
   keystone_vcpn?: string;
   keystone_synced?: boolean;
   keystone_last_sync?: string;
-  keystone_sync_status?: string;
   
   // Optional additional columns
   warehouse?: string;
@@ -53,42 +44,8 @@ interface InventoryPart {
   weight?: number;
   dimensions?: string;
   warranty?: string;
-  features?: string[];
-  images?: string[];
-  rating?: number;
-  reviews?: number;
-  featured?: boolean;
-  availability?: string;
-  in_stock?: boolean;
-  
-  // Enhanced pricing information
-  pricing_data?: PricingData;
-  pricing_last_updated?: string;
-  pricing_stale?: boolean;
   list_price?: number;
   discount_percentage?: number;
-}
-
-interface SyncStatus {
-  lastFullSync?: any;
-  lastIncrementalSync?: any;
-  pendingRequests: number;
-  nextScheduledSync?: string;
-  syncStats?: any;
-}
-
-interface PricingSyncStatus {
-  lastFullSync?: string;
-  lastIncrementalSync?: string;
-  totalParts: number;
-  syncedParts: number;
-  staleParts: number;
-  pendingUpdates: number;
-  isRunning: boolean;
-  nextScheduledSync?: string;
-  recentLogs: any[];
-  errorRate: number;
-  averageSyncTime: number;
 }
 
 interface CartItem {
@@ -98,19 +55,14 @@ interface CartItem {
   quantity: number;
   sku?: string;
   category?: string;
-  image?: string;
   inStock: boolean;
   maxQuantity: number;
 }
 
-// Enhanced pricing display component - NOW WITH PRODUCTPRICECHECK INTEGRATION
+// Enhanced pricing display component with ProductPriceCheck integration
 const PricingDisplay: React.FC<{
   part: InventoryPart;
-  onRefreshPricing: (vcpn: string) => void;
-  isRefreshing?: boolean;
-}> = ({ part, onRefreshPricing, isRefreshing = false }) => {
-  const { toast } = useToast();
-  
+}> = ({ part }) => {
   // If part has a VCPN, use the ProductPriceCheck component
   if (part.keystone_vcpn) {
     return (
@@ -126,18 +78,6 @@ const PricingDisplay: React.FC<{
   }
   
   // Fallback for parts without VCPN - use original pricing display
-  const handleRefreshPricing = () => {
-    toast({
-      title: "No VCPN",
-      description: "This part doesn't have a Keystone VCPN for pricing updates",
-      variant: "destructive",
-    });
-  };
-
-  const isPricingStale = part.pricing_stale || 
-    (part.pricing_last_updated && 
-     new Date().getTime() - new Date(part.pricing_last_updated).getTime() > 24 * 60 * 60 * 1000);
-
   const discountPercentage = part.list_price && part.price 
     ? Math.round(((part.list_price - part.price) / part.list_price) * 100)
     : 0;
@@ -161,17 +101,6 @@ const PricingDisplay: React.FC<{
             </Badge>
           )}
         </div>
-        
-        {/* Pricing refresh button - disabled for non-VCPN parts */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleRefreshPricing}
-          disabled={true}
-          className="h-8 w-8 p-0 opacity-50"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </Button>
       </div>
 
       {/* Additional pricing info */}
@@ -188,197 +117,12 @@ const PricingDisplay: React.FC<{
 
       {/* Pricing status indicator */}
       <div className="flex items-center space-x-2 text-xs">
-        <AlertTriangle className="h-3 w-3 text-gray-400" />
-        <span className="text-gray-500">No live pricing available</span>
+        <DollarSign className="h-3 w-3 text-gray-400" />
+        <span className="text-gray-500">
+          {part.keystone_vcpn ? 'Live pricing available' : 'Standard pricing'}
+        </span>
       </div>
     </div>
-  );
-};
-
-// Enhanced sync status component with pricing information
-const EnhancedSyncStatus: React.FC<{
-  inventoryStatus: SyncStatus;
-  pricingStatus: PricingSyncStatus;
-  onInventorySync: () => void;
-  onPricingSync: () => void;
-  isInventorySyncing: boolean;
-  isPricingSyncing: boolean;
-}> = ({ 
-  inventoryStatus, 
-  pricingStatus, 
-  onInventorySync, 
-  onPricingSync, 
-  isInventorySyncing, 
-  isPricingSyncing 
-}) => {
-  return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Database className="h-5 w-5" />
-          <span>Sync Status</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="inventory" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="inventory">Inventory</TabsTrigger>
-            <TabsTrigger value="pricing">Pricing</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="inventory" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-2">
-                    <Package className="h-4 w-4 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium">Total Parts</p>
-                      <p className="text-2xl font-bold">{inventoryStatus.syncStats?.total_parts || 0}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium">Synced</p>
-                      <p className="text-2xl font-bold">{inventoryStatus.syncStats?.synced_parts || 0}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-2">
-                    <Clock className="h-4 w-4 text-yellow-500" />
-                    <div>
-                      <p className="text-sm font-medium">Pending</p>
-                      <p className="text-2xl font-bold">{inventoryStatus.pendingRequests || 0}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                Last sync: {inventoryStatus.lastFullSync ? 
-                  new Date(inventoryStatus.lastFullSync).toLocaleString() : 'Never'}
-              </div>
-              <Button 
-                onClick={onInventorySync}
-                disabled={isInventorySyncing}
-                size="sm"
-              >
-                {isInventorySyncing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Full Sync
-                  </>
-                )}
-              </Button>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="pricing" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-2">
-                    <DollarSign className="h-4 w-4 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium">Total Parts</p>
-                      <p className="text-2xl font-bold">{pricingStatus.totalParts}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-2">
-                    <TrendingUp className="h-4 w-4 text-green-500" />
-                    <div>
-                      <p className="text-sm font-medium">Current Pricing</p>
-                      <p className="text-2xl font-bold">{pricingStatus.syncedParts}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-2">
-                    <TrendingDown className="h-4 w-4 text-yellow-500" />
-                    <div>
-                      <p className="text-sm font-medium">Stale Pricing</p>
-                      <p className="text-2xl font-bold">{pricingStatus.staleParts}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-2">
-                    <Clock className="h-4 w-4 text-blue-500" />
-                    <div>
-                      <p className="text-sm font-medium">Pending Updates</p>
-                      <p className="text-2xl font-bold">{pricingStatus.pendingUpdates}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                Last pricing sync: {pricingStatus.lastFullSync ? 
-                  new Date(pricingStatus.lastFullSync).toLocaleString() : 'Never'}
-              </div>
-              <Button 
-                onClick={onPricingSync}
-                disabled={isPricingSyncing}
-                size="sm"
-              >
-                {isPricingSyncing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Syncing Pricing...
-                  </>
-                ) : (
-                  <>
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Sync Pricing
-                  </>
-                )}
-              </Button>
-            </div>
-            
-            {pricingStatus.errorRate > 0 && (
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Pricing Sync Issues</AlertTitle>
-                <AlertDescription>
-                  {pricingStatus.errorRate.toFixed(1)}% error rate in recent pricing syncs. 
-                  Average sync time: {pricingStatus.averageSyncTime.toFixed(1)}s
-                </AlertDescription>
-              </Alert>
-            )}
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
   );
 };
 
@@ -402,7 +146,7 @@ const LoadingWrapper: React.FC<{
   return <>{children}</>;
 };
 
-// Cart Drawer Component - Integrated directly into Parts component
+// Cart Drawer Component
 const CartDrawer: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -431,7 +175,7 @@ const CartDrawer: React.FC<{
 
   // Calculate totals
   const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-  const tax = subtotal * 0.08; // 8% tax rate - adjust as needed
+  const tax = subtotal * 0.08; // 8% tax rate
   const shipping = subtotal > 100 ? 0 : 15; // Free shipping over $100
   const total = subtotal + tax + shipping;
   const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
@@ -639,7 +383,7 @@ const CartDrawer: React.FC<{
   );
 };
 
-// Main Parts component with enhanced pricing integration
+// Main Parts component - simplified version
 const PartsPage: React.FC = () => {
   // State management
   const [parts, setParts] = useState<InventoryPart[]>([]);
@@ -662,391 +406,77 @@ const PartsPage: React.FC = () => {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [isCartOpen, setIsCartOpen] = useState(false);
   
-  // Sync state
-  const [inventoryStatus, setInventoryStatus] = useState<SyncStatus>({
-    pendingRequests: 0
-  });
-  const [pricingStatus, setPricingStatus] = useState<PricingSyncStatus>({
-    totalParts: 0,
-    syncedParts: 0,
-    staleParts: 0,
-    pendingUpdates: 0,
-    isRunning: false,
-    recentLogs: [],
-    errorRate: 0,
-    averageSyncTime: 0
-  });
-  const [isFullSyncing, setIsFullSyncing] = useState(false);
-  const [isPricingSyncing, setIsPricingSyncing] = useState(false);
-  const [refreshingPricing, setRefreshingPricing] = useState<Set<string>>(new Set());
-  
-  // Service instances
-  const [inventorySync, setInventorySync] = useState<InventorySyncService | null>(null);
-  const [pricingSync, setPricingSync] = useState<PricingSyncService | null>(null);
-  const [pricingScheduler, setPricingScheduler] = useState<PricingSyncScheduler | null>(null);
-  const [scheduler, setScheduler] = useState<any>(null);
-  
   const { toast } = useToast();
 
-  // Initialize services
-  useEffect(() => {
-    const initializeServices = async () => {
-      try {
-        console.log('🔧 Initializing services...');
-        
-        // Initialize inventory sync service
-        const inventorySyncService = new InventorySyncService();
-        await inventorySyncService.initialize();
-        setInventorySync(inventorySyncService);
-        
-        // Initialize pricing sync service
-        const pricingSyncService = getPricingSyncService();
-        await pricingSyncService.initialize();
-        setPricingSync(pricingSyncService);
-        
-        // Initialize pricing scheduler
-        const pricingSchedulerService = getPricingSyncScheduler();
-        await pricingSchedulerService.initialize();
-        await pricingSchedulerService.start();
-        setPricingScheduler(pricingSchedulerService);
-        
-        // Initialize inventory scheduler
-        const syncScheduler = getSyncScheduler();
-        await syncScheduler.initialize();
-        setScheduler(syncScheduler);
-        
-        console.log('✅ All services initialized successfully');
-        
-      } catch (error) {
-        console.error('❌ Failed to initialize services:', error);
-        toast({
-          title: "Service Initialization Failed",
-          description: "Some features may not work properly. Please refresh the page.",
-          variant: "destructive",
-        });
-      }
-    };
-
-    initializeServices();
-  }, [toast]);
-
-  // Load inventory data with pricing integration
+  // Simplified data loading - you can replace this with your actual data source
   const loadInventoryData = useCallback(async () => {
-    if (!inventorySync || !pricingSync) return;
-
     try {
-      console.log('📊 Loading inventory data...');
       setIsLoading(true);
-
-      // Load inventory from Supabase
-      const inventoryData = await inventorySync.getInventoryFromSupabase({
-        limit: 1000,
-        includeStale: true
-      });
-
-      if (inventoryData && inventoryData.length > 0) {
-        console.log(`✅ Loaded ${inventoryData.length} parts from database`);
-        
-        // Enhance parts with pricing data
-        const enhancedParts = await enhanceParts(inventoryData);
-        setParts(enhancedParts);
-        
-        // Cache the data
-        localStorage.setItem('inventory_cache', JSON.stringify(enhancedParts));
-        localStorage.setItem('inventory_cache_timestamp', new Date().toISOString());
-      } else {
-        // Try to load from cache
-        const cachedData = localStorage.getItem('inventory_cache');
-        if (cachedData) {
-          console.log('📦 Loading from cache...');
-          const parsedData = JSON.parse(cachedData);
-          const enhancedParts = await enhanceParts(parsedData);
-          setParts(enhancedParts);
-        }
+      
+      // Try to load from cache first
+      const cachedData = localStorage.getItem('inventory_cache');
+      if (cachedData) {
+        console.log('📦 Loading from cache...');
+        const parsedData = JSON.parse(cachedData);
+        setParts(parsedData);
+        setIsLoading(false);
+        return;
       }
+
+      // If no cache, you can add your actual data loading logic here
+      // For now, we'll use mock data to prevent errors
+      console.log('📊 Loading inventory data...');
+      
+      // Mock data for demonstration - replace with your actual data loading
+      const mockParts: InventoryPart[] = [
+        {
+          id: '1',
+          name: 'Sample Part 1',
+          description: 'This is a sample part for testing',
+          sku: 'SAMPLE-001',
+          quantity: 10,
+          price: 25.99,
+          category: 'Electronics',
+          keystone_vcpn: 'TEST-001',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          list_price: 29.99
+        },
+        {
+          id: '2',
+          name: 'Sample Part 2',
+          description: 'Another sample part',
+          sku: 'SAMPLE-002',
+          quantity: 5,
+          price: 15.50,
+          category: 'Hardware',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ];
+
+      setParts(mockParts);
+      
+      // Cache the data
+      localStorage.setItem('inventory_cache', JSON.stringify(mockParts));
+      localStorage.setItem('inventory_cache_timestamp', new Date().toISOString());
 
     } catch (error) {
       console.error('❌ Failed to load inventory data:', error);
-      
-      // Try to load from cache as fallback
-      const cachedData = localStorage.getItem('inventory_cache');
-      if (cachedData) {
-        console.log('📦 Loading from cache as fallback...');
-        const parsedData = JSON.parse(cachedData);
-        setParts(parsedData);
-      }
-      
       toast({
         title: "Data Loading Error",
-        description: "Failed to load inventory data. Using cached data if available.",
+        description: "Failed to load inventory data. Please refresh the page.",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
-  }, [inventorySync, pricingSync, toast]);
-
-  // Enhance parts with pricing data
-  const enhanceParts = async (parts: InventoryPart[]): Promise<InventoryPart[]> => {
-    if (!pricingSync) return parts;
-
-    try {
-      // Get VCPNs for pricing lookup
-      const vcpns = parts
-        .filter(part => part.keystone_vcpn)
-        .map(part => part.keystone_vcpn!);
-
-      if (vcpns.length === 0) return parts;
-
-      // Get pricing data from Supabase
-      const pricingData = await pricingSync.getPricingFromSupabase({
-        vcpns,
-        includeStale: true
-      });
-
-      // Create pricing lookup map
-      const pricingMap = new Map<string, PricingData>();
-      pricingData.forEach(pricing => {
-        pricingMap.set(pricing.keystone_vcpn, pricing);
-      });
-
-      // Enhance parts with pricing data
-      return parts.map(part => {
-        if (!part.keystone_vcpn) return part;
-
-        const pricing = pricingMap.get(part.keystone_vcpn);
-        if (!pricing) return part;
-
-        // Check if pricing is stale (older than 24 hours)
-        const pricingAge = pricing.keystone_last_sync 
-          ? new Date().getTime() - new Date(pricing.keystone_last_sync).getTime()
-          : Infinity;
-        const isStale = pricingAge > 24 * 60 * 60 * 1000;
-
-        return {
-          ...part,
-          price: pricing.price || part.price,
-          list_price: pricing.list_price || undefined,
-          core_charge: pricing.core_charge || part.core_charge,
-          cost: pricing.cost || part.cost,
-          pricing_data: pricing,
-          pricing_last_updated: pricing.keystone_last_sync,
-          pricing_stale: isStale,
-          discount_percentage: pricing.list_price && pricing.price
-            ? Math.round(((pricing.list_price - pricing.price) / pricing.list_price) * 100)
-            : undefined
-        };
-      });
-
-    } catch (error) {
-      console.error('❌ Failed to enhance parts with pricing:', error);
-      return parts;
-    }
-  };
-
-  // Load sync status
-  const loadSyncStatus = useCallback(async () => {
-    try {
-      if (inventorySync) {
-        const invStatus = await inventorySync.getSyncStatus();
-        setInventoryStatus(invStatus);
-      }
-
-      if (pricingSync) {
-        const pricStatus = await pricingSync.getPricingSyncStatus();
-        setPricingStatus(pricStatus);
-      }
-    } catch (error) {
-      console.error('❌ Failed to load sync status:', error);
-    }
-  }, [inventorySync, pricingSync]);
+  }, [toast]);
 
   // Initial data load
   useEffect(() => {
-    if (inventorySync && pricingSync) {
-      loadInventoryData();
-      loadSyncStatus();
-    }
-  }, [inventorySync, pricingSync, loadInventoryData, loadSyncStatus]);
-
-  // Refresh sync status periodically
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!isFullSyncing && !isPricingSyncing) {
-        loadSyncStatus();
-      }
-    }, 30000); // Every 30 seconds
-
-    return () => clearInterval(interval);
-  }, [loadSyncStatus, isFullSyncing, isPricingSyncing]);
-
-  // Handle full inventory sync
-  const handleFullSync = async () => {
-    if (!scheduler) {
-      toast({
-        title: "Service Not Ready",
-        description: "Sync service is not initialized yet. Please wait a moment.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    console.log('🔄 Starting full inventory sync...');
-    setIsFullSyncing(true);
-    
-    // Set timeout to prevent endless spinning
-    const timeoutId = setTimeout(() => {
-      setIsFullSyncing(false);
-      toast({
-        title: "Sync Timeout",
-        description: "The sync operation took too long and was cancelled. Please try again.",
-        variant: "destructive",
-      });
-    }, 60000); // 60 second timeout
-
-    try {
-      const result = await scheduler.triggerFullSync();
-      console.log('✅ Full sync result:', result);
-      
-      if (result.success) {
-        toast({
-          title: "Sync Completed",
-          description: result.message,
-          variant: "default",
-        });
-        
-        // Reload data after successful sync
-        await loadInventoryData();
-        await loadSyncStatus();
-      } else {
-        toast({
-          title: "Sync Failed",
-          description: result.message,
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error('❌ Full sync error:', error);
-      toast({
-        title: "Sync Error",
-        description: `Sync failed: ${error.message}`,
-        variant: "destructive",
-      });
-    } finally {
-      clearTimeout(timeoutId);
-      setIsFullSyncing(false);
-    }
-  };
-
-  // Handle full pricing sync
-  const handlePricingSync = async () => {
-    if (!pricingScheduler) {
-      toast({
-        title: "Service Not Ready",
-        description: "Pricing sync service is not initialized yet. Please wait a moment.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    console.log('🔄 Starting full pricing sync...');
-    setIsPricingSyncing(true);
-    
-    // Set timeout to prevent endless spinning
-    const timeoutId = setTimeout(() => {
-      setIsPricingSyncing(false);
-      toast({
-        title: "Pricing Sync Timeout",
-        description: "The pricing sync took too long and was cancelled. Please try again.",
-        variant: "destructive",
-      });
-    }, 60000); // 60 second timeout
-
-    try {
-      const result = await pricingScheduler.triggerFullSync();
-      console.log('✅ Pricing sync result:', result);
-      
-      if (result.success) {
-        toast({
-          title: "Pricing Sync Completed",
-          description: result.message,
-          variant: "default",
-        });
-        
-        // Reload data after successful sync
-        await loadInventoryData();
-        await loadSyncStatus();
-      } else {
-        toast({
-          title: "Pricing Sync Failed",
-          description: result.message,
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error('❌ Pricing sync error:', error);
-      toast({
-        title: "Pricing Sync Error",
-        description: `Pricing sync failed: ${error.message}`,
-        variant: "destructive",
-      });
-    } finally {
-      clearTimeout(timeoutId);
-      setIsPricingSyncing(false);
-    }
-  };
-
-  // Handle individual part pricing refresh
-  const handleRefreshPricing = async (vcpn: string) => {
-    if (!pricingSync) {
-      toast({
-        title: "Service Not Ready",
-        description: "Pricing service is not initialized yet.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    console.log(`🔄 Refreshing pricing for ${vcpn}...`);
-    
-    // Add to refreshing set
-    setRefreshingPricing(prev => new Set(prev).add(vcpn));
-
-    try {
-      const result = await pricingSync.updateSinglePartPricing(vcpn);
-      
-      if (result.success) {
-        toast({
-          title: "Pricing Updated",
-          description: `Pricing refreshed for ${vcpn}`,
-          variant: "default",
-        });
-        
-        // Reload data to show updated pricing
-        await loadInventoryData();
-      } else {
-        toast({
-          title: "Pricing Update Failed",
-          description: result.message,
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error(`❌ Failed to refresh pricing for ${vcpn}:`, error);
-      toast({
-        title: "Pricing Update Error",
-        description: `Failed to update pricing: ${error.message}`,
-        variant: "destructive",
-      });
-    } finally {
-      // Remove from refreshing set
-      setRefreshingPricing(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(vcpn);
-        return newSet;
-      });
-    }
-  };
+    loadInventoryData();
+  }, [loadInventoryData]);
 
   // Cart functions
   const addToCart = (partId: string, quantity: number = 1) => {
@@ -1213,16 +643,6 @@ const PartsPage: React.FC = () => {
           </Button>
         </div>
       </div>
-
-      {/* Enhanced Sync Status */}
-      <EnhancedSyncStatus
-        inventoryStatus={inventoryStatus}
-        pricingStatus={pricingStatus}
-        onInventorySync={handleFullSync}
-        onPricingSync={handlePricingSync}
-        isInventorySyncing={isFullSyncing}
-        isPricingSyncing={isPricingSyncing}
-      />
 
       {/* Search and Filters */}
       <Card className="mb-6">
@@ -1407,11 +827,7 @@ const PartsPage: React.FC = () => {
                         </div>
 
                         {/* INTEGRATED PRODUCTPRICECHECK COMPONENT */}
-                        <PricingDisplay
-                          part={part}
-                          onRefreshPricing={handleRefreshPricing}
-                          isRefreshing={refreshingPricing.has(part.keystone_vcpn || '')}
-                        />
+                        <PricingDisplay part={part} />
 
                         {/* Stock Status */}
                         <div className="flex items-center justify-between text-sm">
@@ -1503,11 +919,7 @@ const PartsPage: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           {/* INTEGRATED PRODUCTPRICECHECK COMPONENT */}
-                          <PricingDisplay
-                            part={part}
-                            onRefreshPricing={handleRefreshPricing}
-                            isRefreshing={refreshingPricing.has(part.keystone_vcpn || '')}
-                          />
+                          <PricingDisplay part={part} />
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
@@ -1641,11 +1053,7 @@ const PartsPage: React.FC = () => {
               {/* INTEGRATED PRODUCTPRICECHECK COMPONENT IN DIALOG */}
               <div>
                 <Label className="text-sm font-medium text-gray-500 mb-2 block">Live Pricing Information</Label>
-                <PricingDisplay
-                  part={selectedPart}
-                  onRefreshPricing={handleRefreshPricing}
-                  isRefreshing={refreshingPricing.has(selectedPart.keystone_vcpn || '')}
-                />
+                <PricingDisplay part={selectedPart} />
               </div>
 
               {/* Description */}
@@ -1716,12 +1124,6 @@ const PartsPage: React.FC = () => {
                     <div>
                       <span className="text-gray-500">Keystone VCPN:</span>
                       <p>{selectedPart.keystone_vcpn}</p>
-                    </div>
-                  )}
-                  {selectedPart.pricing_last_updated && (
-                    <div>
-                      <span className="text-gray-500">Pricing Updated:</span>
-                      <p>{new Date(selectedPart.pricing_last_updated).toLocaleString()}</p>
                     </div>
                   )}
                 </div>
