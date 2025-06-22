@@ -33,6 +33,8 @@ export interface SyncLogEntry {
 }
 
 export class InventorySyncService {
+  private isInitialized: boolean = false;
+
   constructor() {
     this.isRunning = false;
     this.isCancelled = false;
@@ -53,9 +55,67 @@ export class InventorySyncService {
     this.isRateLimited = false;
     this.rateLimitRetryAfter = null;
     this.rateLimitMessage = null;
+  }
+
+  // ADDED: Initialize method that the application expects
+  async initialize() {
+    if (this.isInitialized) {
+      console.log('📋 InventorySyncService already initialized');
+      return;
+    }
+
+    try {
+      console.log('🚀 Initializing InventorySyncService...');
+      
+      // Load saved status from localStorage
+      this.loadSyncStatus();
+      
+      // Verify environment variables
+      this.verifyEnvironmentVariables();
+      
+      // Check if we're currently rate limited and log status
+      if (this.isCurrentlyRateLimited()) {
+        const timeRemaining = this.getRateLimitTimeRemaining();
+        console.log(`⏰ Service initialized with active rate limit. Retry in ${this.formatDuration(timeRemaining)}`);
+      }
+      
+      this.isInitialized = true;
+      console.log('✅ InventorySyncService initialized successfully');
+      
+    } catch (error) {
+      console.error('❌ Failed to initialize InventorySyncService:', error);
+      throw error;
+    }
+  }
+
+  // ADDED: Verify that required environment variables are present
+  private verifyEnvironmentVariables() {
+    const requiredVars = [
+      'VITE_SUPABASE_URL',
+      'VITE_SUPABASE_ANON_TOKEN',
+      'VITE_KEYSTONE_PROXY_URL'
+    ];
+
+    const missingVars = requiredVars.filter(varName => !import.meta.env[varName]);
     
-    // Load saved status
-    this.loadSyncStatus();
+    if (missingVars.length > 0) {
+      console.warn('⚠️ Missing environment variables:', missingVars);
+    }
+
+    // Check for at least one API token
+    const hasDevToken = !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV;
+    const hasProdToken = !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD;
+    
+    if (!hasDevToken && !hasProdToken) {
+      console.warn('⚠️ No Keystone API tokens found (neither DEV nor PROD)');
+    }
+
+    console.log('🔧 Environment variables check:');
+    console.log(`- VITE_SUPABASE_URL: ${import.meta.env.VITE_SUPABASE_URL ? 'Set ✅' : 'Missing ❌'}`);
+    console.log(`- VITE_SUPABASE_ANON_TOKEN: ${import.meta.env.VITE_SUPABASE_ANON_TOKEN ? 'Set ✅' : 'Missing ❌'}`);
+    console.log(`- VITE_KEYSTONE_PROXY_URL: ${import.meta.env.VITE_KEYSTONE_PROXY_URL ? 'Set ✅' : 'Missing ❌'}`);
+    console.log(`- VITE_KEYSTONE_SECURITY_TOKEN_DEV: ${hasDevToken ? 'Set ✅' : 'Missing ❌'}`);
+    console.log(`- VITE_KEYSTONE_SECURITY_TOKEN_PROD: ${hasProdToken ? 'Set ✅' : 'Missing ❌'}`);
   }
 
   // Get current environment (development or production)
