@@ -24,7 +24,7 @@ import { getPricingSyncService, PricingSyncService, PricingData } from "@/servic
 import { getPricingSyncScheduler, PricingSyncScheduler } from "@/services/pricing_sync_scheduler";
 
 // Import the new ProductPriceCheck component
-import ProductPriceCheck from '@/components/ProductPriceCheck';
+import ProductPriceCheck from '@/components/product_price_check_component';
 
 // Interface matching your existing inventory table structure
 interface InventoryPart {
