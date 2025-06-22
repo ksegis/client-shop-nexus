@@ -207,6 +207,7 @@ import {
 import { inventorySyncService } from '@/services/inventory_sync_service';
 import { priceCheckService } from '@/services/price_check_service';
 import { shippingQuoteService } from '@/services/shipping_quote_service';
+import { dropshipOrderService } from '@/services/dropship_order_service';
 
 const AdminSettings = () => {
   // Existing state variables
@@ -238,7 +239,30 @@ const AdminSettings = () => {
   });
   const [shippingQuoteResults, setShippingQuoteResults] = useState([]);
   const [shippingQuoteLoading, setShippingQuoteLoading] = useState(false);
-  const [showShippingHistory, setShowShippingHistory] = useState(false);
+
+  // NEW: Dropship order state variables
+  const [dropshipOrderStatus, setDropshipOrderStatus] = useState(null);
+  const [dropshipOrderItems, setDropshipOrderItems] = useState('');
+  const [customerInfo, setCustomerInfo] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: ''
+  });
+  const [orderShippingAddress, setOrderShippingAddress] = useState({
+    address1: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'US'
+  });
+  const [orderDetails, setOrderDetails] = useState({
+    specialInstructions: '',
+    poNumber: '',
+    shippingMethod: 'standard'
+  });
+  const [dropshipOrderResults, setDropshipOrderResults] = useState(null);
+  const [dropshipOrderLoading, setDropshipOrderLoading] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -254,14 +278,15 @@ const AdminSettings = () => {
 
   // Auto-refresh status every 10 seconds when rate limited
   useEffect(() => {
-    if (priceCheckStatus?.isRateLimited || shippingQuoteStatus?.isRateLimited) {
+    if (priceCheckStatus?.isRateLimited || shippingQuoteStatus?.isRateLimited || dropshipOrderStatus?.isRateLimited) {
       const interval = setInterval(() => {
         refreshPriceCheckStatus();
         refreshShippingQuoteStatus();
+        refreshDropshipOrderStatus();
       }, 10000);
       return () => clearInterval(interval);
     }
-  }, [priceCheckStatus?.isRateLimited, shippingQuoteStatus?.isRateLimited]);
+  }, [priceCheckStatus?.isRateLimited, shippingQuoteStatus?.isRateLimited, dropshipOrderStatus?.isRateLimited]);
 
   const loadDebugMode = () => {
     try {
@@ -302,6 +327,7 @@ const AdminSettings = () => {
       // Also refresh other service statuses
       refreshPriceCheckStatus();
       refreshShippingQuoteStatus();
+      refreshDropshipOrderStatus();
     } catch (error) {
       console.error('Error refreshing status:', error);
     }
@@ -322,6 +348,15 @@ const AdminSettings = () => {
       setShippingQuoteStatus(status);
     } catch (error) {
       console.error('Error refreshing shipping quote status:', error);
+    }
+  };
+
+  const refreshDropshipOrderStatus = () => {
+    try {
+      const status = dropshipOrderService.getStatus();
+      setDropshipOrderStatus(status);
+    } catch (error) {
+      console.error('Error refreshing dropship order status:', error);
     }
   };
 
@@ -533,6 +568,97 @@ const AdminSettings = () => {
     refreshShippingQuoteStatus();
   };
 
+  // NEW: Handle dropship order placement
+  const handleDropshipOrder = async () => {
+    // Validate required fields
+    if (!dropshipOrderItems.trim()) {
+      alert('Please enter at least one item');
+      return;
+    }
+
+    if (!customerInfo.firstName || !customerInfo.lastName || !customerInfo.email) {
+      alert('Please fill in customer first name, last name, and email');
+      return;
+    }
+
+    if (!orderShippingAddress.address1 || !orderShippingAddress.city || !orderShippingAddress.state || !orderShippingAddress.zipCode) {
+      alert('Please fill in all required shipping address fields');
+      return;
+    }
+
+    setDropshipOrderLoading(true);
+    setDropshipOrderResults(null);
+
+    try {
+      // Parse items from textarea (format: VCPN:quantity)
+      const items = dropshipOrderItems
+        .split(/[\n,]+/)
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => {
+          const parts = line.split(':');
+          if (parts.length !== 2) {
+            throw new Error(`Invalid item format: ${line}. Use format: VCPN:quantity`);
+          }
+          return {
+            vcpn: parts[0].trim(),
+            quantity: parseInt(parts[1].trim()),
+            unitPrice: 25.99 // Default price for testing
+          };
+        });
+
+      if (items.length === 0) {
+        alert('Please enter valid items');
+        return;
+      }
+
+      if (items.length > 100) {
+        alert('Maximum 100 items allowed per order');
+        return;
+      }
+
+      const orderRequest = {
+        customerInfo,
+        shippingAddress: orderShippingAddress,
+        items,
+        shippingMethod: orderDetails.shippingMethod,
+        specialInstructions: orderDetails.specialInstructions,
+        poNumber: orderDetails.poNumber
+      };
+
+      const result = await dropshipOrderService.placeDropshipOrder(orderRequest);
+      
+      if (result.success) {
+        setDropshipOrderResults(result);
+        console.log('Dropship order successful:', result);
+        
+        // Clear form on success
+        setDropshipOrderItems('');
+        setCustomerInfo({ firstName: '', lastName: '', email: '', phone: '' });
+        setOrderShippingAddress({ address1: '', city: '', state: '', zipCode: '', country: 'US' });
+        setOrderDetails({ specialInstructions: '', poNumber: '', shippingMethod: 'standard' });
+      } else {
+        console.error('Dropship order failed:', result.message);
+        alert(`Order placement failed: ${result.message}`);
+      }
+
+      // Refresh status to update rate limiting info
+      refreshDropshipOrderStatus();
+
+    } catch (error) {
+      console.error('Dropship order error:', error);
+      alert(`Order placement error: ${error.message}`);
+    } finally {
+      setDropshipOrderLoading(false);
+    }
+  };
+
+  // NEW: Clear dropship order rate limit (for testing)
+  const handleClearDropshipRateLimit = () => {
+    dropshipOrderService.clearRateLimit();
+    refreshDropshipOrderStatus();
+  };
+
   // Safe formatting functions
   const safeFormatDate = (dateValue) => {
     if (!dateValue) return 'Never';
@@ -641,7 +767,7 @@ const AdminSettings = () => {
       </div>
 
       {/* Rate Limit Alert */}
-      {(syncStatus?.isRateLimited || priceCheckStatus?.isRateLimited || shippingQuoteStatus?.isRateLimited) && (
+      {(syncStatus?.isRateLimited || priceCheckStatus?.isRateLimited || shippingQuoteStatus?.isRateLimited || dropshipOrderStatus?.isRateLimited) && (
         <Alert className="border-orange-200 bg-orange-50">
           <AlertTriangle className="h-4 w-4 text-orange-600" />
           <AlertDescription className="text-orange-800">
@@ -668,6 +794,12 @@ const AdminSettings = () => {
                 {shippingQuoteStatus?.isRateLimited && (
                   <>
                     Shipping Quote: {shippingQuoteStatus.rateLimitMessage}
+                    <br />
+                  </>
+                )}
+                {dropshipOrderStatus?.isRateLimited && (
+                  <>
+                    Dropship Order: {dropshipOrderStatus.rateLimitMessage}
                     <br />
                   </>
                 )}
@@ -1075,29 +1207,275 @@ const AdminSettings = () => {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
 
-          {/* Shipping Quote History */}
-          {debugMode && shippingQuoteStatus?.quoteHistory?.length > 0 && (
+      {/* NEW: Dropship Order Placement */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            Dropship Order Placement
+          </CardTitle>
+          <CardDescription>
+            Place dropship orders directly with Keystone (1 order per 2 minutes)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Dropship Order Status */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium">Order Placement Status</Label>
+              <div className="flex items-center gap-2 mt-1">
+                {dropshipOrderStatus?.isRateLimited ? (
+                  <>
+                    <Badge variant="destructive">Rate Limited</Badge>
+                    <Timer className="h-4 w-4 text-orange-500" />
+                    <span className="text-sm text-muted-foreground">
+                      {dropshipOrderStatus.rateLimitMessage}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      Available
+                    </Badge>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <span className="text-sm text-muted-foreground">Ready to place order</span>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            <div>
+              <Label className="text-sm font-medium">Last Order Placed</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                {safeFormatRelativeTime(dropshipOrderStatus?.lastOrderTime)}
+              </p>
+            </div>
+          </div>
+
+          {/* Customer Information */}
+          <div>
+            <Label className="text-sm font-medium">Customer Information</Label>
+            <div className="grid grid-cols-2 gap-4 mt-2">
+              <div>
+                <Input
+                  placeholder="First Name *"
+                  value={customerInfo.firstName}
+                  onChange={(e) => setCustomerInfo({...customerInfo, firstName: e.target.value})}
+                />
+              </div>
+              <div>
+                <Input
+                  placeholder="Last Name *"
+                  value={customerInfo.lastName}
+                  onChange={(e) => setCustomerInfo({...customerInfo, lastName: e.target.value})}
+                />
+              </div>
+              <div>
+                <Input
+                  placeholder="Email Address *"
+                  type="email"
+                  value={customerInfo.email}
+                  onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
+                />
+              </div>
+              <div>
+                <Input
+                  placeholder="Phone Number"
+                  value={customerInfo.phone}
+                  onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Order Items */}
+          <div>
+            <Label className="text-sm font-medium">Order Items (max 100)</Label>
+            <Textarea
+              placeholder="Enter items in format VCPN:quantity, one per line&#10;Example:&#10;WIDGET-001:2&#10;GADGET-002:1&#10;DEVICE-003:5"
+              value={dropshipOrderItems}
+              onChange={(e) => setDropshipOrderItems(e.target.value)}
+              className="mt-1"
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Enter up to 100 items. Format: VCPN:quantity (one per line)
+            </p>
+          </div>
+
+          {/* Shipping Address */}
+          <div>
+            <Label className="text-sm font-medium">Shipping Address</Label>
+            <div className="grid grid-cols-2 gap-4 mt-2">
+              <div>
+                <Input
+                  placeholder="Address *"
+                  value={orderShippingAddress.address1}
+                  onChange={(e) => setOrderShippingAddress({...orderShippingAddress, address1: e.target.value})}
+                />
+              </div>
+              <div>
+                <Input
+                  placeholder="City *"
+                  value={orderShippingAddress.city}
+                  onChange={(e) => setOrderShippingAddress({...orderShippingAddress, city: e.target.value})}
+                />
+              </div>
+              <div>
+                <Input
+                  placeholder="State *"
+                  value={orderShippingAddress.state}
+                  onChange={(e) => setOrderShippingAddress({...orderShippingAddress, state: e.target.value})}
+                />
+              </div>
+              <div>
+                <Input
+                  placeholder="ZIP Code *"
+                  value={orderShippingAddress.zipCode}
+                  onChange={(e) => setOrderShippingAddress({...orderShippingAddress, zipCode: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Order Details */}
+          <div>
+            <Label className="text-sm font-medium">Order Details</Label>
+            <div className="grid grid-cols-2 gap-4 mt-2">
+              <div>
+                <Label className="text-xs text-muted-foreground">Shipping Method</Label>
+                <select
+                  value={orderDetails.shippingMethod}
+                  onChange={(e) => setOrderDetails({...orderDetails, shippingMethod: e.target.value})}
+                  className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="standard">Standard Shipping</option>
+                  <option value="expedited">Expedited Shipping</option>
+                  <option value="overnight">Overnight Shipping</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">PO Number</Label>
+                <Input
+                  placeholder="Purchase Order Number"
+                  value={orderDetails.poNumber}
+                  onChange={(e) => setOrderDetails({...orderDetails, poNumber: e.target.value})}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div className="mt-2">
+              <Label className="text-xs text-muted-foreground">Special Instructions</Label>
+              <Textarea
+                placeholder="Any special delivery instructions..."
+                value={orderDetails.specialInstructions}
+                onChange={(e) => setOrderDetails({...orderDetails, specialInstructions: e.target.value})}
+                className="mt-1"
+                rows={2}
+              />
+            </div>
+          </div>
+
+          {/* Place Order Button */}
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleDropshipOrder}
+              disabled={dropshipOrderLoading || dropshipOrderStatus?.isRateLimited || !dropshipOrderItems.trim() || !customerInfo.firstName || !customerInfo.lastName || !customerInfo.email || !orderShippingAddress.address1}
+              className="flex items-center gap-2"
+            >
+              {dropshipOrderLoading ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Package className="h-4 w-4" />
+              )}
+              {dropshipOrderLoading ? 'Placing Order...' : 'Place Dropship Order'}
+            </Button>
+            
+            {debugMode && !dropshipOrderStatus?.isRateLimited && (
+              <Button
+                variant="outline"
+                onClick={handleClearDropshipRateLimit}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Clear Rate Limit
+              </Button>
+            )}
+          </div>
+
+          {/* Order Results */}
+          {dropshipOrderResults && (
+            <div>
+              <Label className="text-sm font-medium">Order Confirmation</Label>
+              <div className="mt-2 p-4 border rounded-lg bg-green-50 border-green-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <span className="font-medium text-green-800">Order Placed Successfully!</span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p><strong>Order Reference:</strong> {dropshipOrderResults.orderReference}</p>
+                    <p><strong>Keystone Order ID:</strong> {dropshipOrderResults.keystoneOrderId || 'Pending'}</p>
+                    <p><strong>Total Items:</strong> {dropshipOrderResults.totalItems}</p>
+                  </div>
+                  <div>
+                    <p><strong>Total Value:</strong> ${dropshipOrderResults.totalValue?.toFixed(2) || 'Calculating...'}</p>
+                    <p><strong>Est. Shipping:</strong> ${dropshipOrderResults.estimatedShipping?.toFixed(2) || 'TBD'}</p>
+                    <p><strong>Est. Delivery:</strong> {dropshipOrderResults.estimatedDeliveryDate ? 
+                      new Date(dropshipOrderResults.estimatedDeliveryDate).toLocaleDateString() : 'TBD'}</p>
+                  </div>
+                </div>
+                
+                {dropshipOrderResults.trackingInfo && (
+                  <div className="mt-3 pt-3 border-t border-green-300">
+                    <p className="text-sm"><strong>Tracking Number:</strong> {dropshipOrderResults.trackingInfo.trackingNumber}</p>
+                    <p className="text-sm"><strong>Carrier:</strong> {dropshipOrderResults.trackingInfo.carrier}</p>
+                    {dropshipOrderResults.trackingInfo.trackingUrl && (
+                      <p className="text-sm">
+                        <strong>Track Order:</strong> 
+                        <a href={dropshipOrderResults.trackingInfo.trackingUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-1">
+                          {dropshipOrderResults.trackingInfo.trackingUrl}
+                        </a>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Order History */}
+          {debugMode && dropshipOrderStatus?.orderHistory?.length > 0 && (
             <div>
               <Label className="text-sm font-medium flex items-center gap-2">
                 <History className="h-4 w-4" />
-                Recent Shipping Quotes
+                Recent Orders
               </Label>
               <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                {shippingQuoteStatus.quoteHistory.map((item, index) => (
+                {dropshipOrderStatus.orderHistory.map((item, index) => (
                   <div key={item.id} className="flex items-center justify-between p-2 border rounded text-sm">
                     <div>
-                      <p className="font-medium">{safeFormatRelativeTime(item.timestamp)}</p>
+                      <p className="font-medium">{item.orderReference}</p>
                       <p className="text-muted-foreground">
-                        {item.itemCount} items • {item.success ? `${item.optionCount} options` : 'Failed'}
-                        {item.shippingAddress && (
-                          <span> • {item.shippingAddress.city}, {item.shippingAddress.state}</span>
+                        {safeFormatRelativeTime(item.timestamp)} • {item.itemCount} items
+                        {item.keystoneOrderId && <span> • {item.keystoneOrderId}</span>}
+                        {item.customerInfo && (
+                          <span> • {item.customerInfo.firstName} {item.customerInfo.lastName}</span>
                         )}
                       </p>
                     </div>
-                    <Badge variant={item.success ? "default" : "destructive"} className="text-xs">
-                      {item.success ? 'Success' : 'Failed'}
-                    </Badge>
+                    <div className="text-right">
+                      <Badge variant={item.success ? "default" : "destructive"} className="text-xs">
+                        {item.success ? 'Success' : 'Failed'}
+                      </Badge>
+                      {item.totalValue && (
+                        <p className="text-xs text-muted-foreground mt-1">${item.totalValue.toFixed(2)}</p>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1118,7 +1496,7 @@ const AdminSettings = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-4 gap-6">
+          <div className="grid grid-cols-5 gap-6">
             <div>
               <Label className="text-sm font-medium">Keystone API</Label>
               <div className="flex items-center gap-2 mt-1">
@@ -1169,6 +1547,26 @@ const AdminSettings = () => {
                     <Badge variant="destructive">Rate Limited</Badge>
                     <span className="text-sm text-muted-foreground">
                       ({shippingQuoteService.formatTimeRemaining(shippingQuoteService.getTimeUntilNextQuote())} remaining)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      Available
+                    </Badge>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">Dropship Order API</Label>
+              <div className="flex items-center gap-2 mt-1">
+                {dropshipOrderStatus?.isRateLimited ? (
+                  <>
+                    <Badge variant="destructive">Rate Limited</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      ({dropshipOrderService.formatTimeRemaining(dropshipOrderService.getTimeUntilNextOrder())} remaining)
                     </span>
                   </>
                 ) : (
@@ -1438,6 +1836,13 @@ const AdminSettings = () => {
                     <p className="text-sm font-medium">Shipping Quote Status</p>
                     <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
                       <pre>{JSON.stringify(shippingQuoteStatus, null, 2)}</pre>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium">Dropship Order Status</p>
+                    <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
+                      <pre>{JSON.stringify(dropshipOrderStatus, null, 2)}</pre>
                     </div>
                   </div>
                 </div>
