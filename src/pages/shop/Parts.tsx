@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
+import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, Truck, MapPin, Clock, Shield, Edit } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 
 // Import the ProductPriceCheck component
 import ProductPriceCheck from '@/components/product_price_check_component';
@@ -57,6 +58,291 @@ interface CartItem {
   category?: string;
   inStock: boolean;
   maxQuantity: number;
+  vcpn?: string;
+  weight?: number;
+}
+
+// Shipping interfaces
+interface ShippingAddress {
+  name?: string;
+  company?: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  phone?: string;
+  email?: string;
+}
+
+interface ShippingOption {
+  carrierId: string;
+  carrierName: string;
+  serviceCode: string;
+  serviceName: string;
+  cost: number;
+  currency: string;
+  estimatedDeliveryDays: number;
+  estimatedDeliveryDate?: string;
+  trackingAvailable: boolean;
+  insuranceAvailable: boolean;
+  signatureRequired?: boolean;
+  warehouseId: string;
+  warehouseName: string;
+  warehouseLocation: string;
+}
+
+interface ShippingQuoteResponse {
+  success: boolean;
+  message: string;
+  requestId: string;
+  timestamp: string;
+  shippingOptions: ShippingOption[];
+  totalItems: number;
+  totalWeight?: number;
+  estimatedPackages: number;
+  isRateLimited?: boolean;
+  nextAllowedTime?: string;
+  rateLimitMessage?: string;
+}
+
+// Enhanced Shipping Quote Service
+class EnhancedShippingQuoteService {
+  private static readonly RATE_LIMIT_MINUTES = 5; // 5 minutes between quotes
+  private static readonly MAX_ITEMS_PER_REQUEST = 50;
+  private static readonly STORAGE_KEY = 'shipping_quote_status';
+  
+  private isRateLimited: boolean = false;
+  private lastQuoteTime: string | null = null;
+  private nextAllowedTime: string | null = null;
+
+  constructor() {
+    this.loadRateLimitStatus();
+  }
+
+  private loadRateLimitStatus(): void {
+    try {
+      const stored = localStorage.getItem(EnhancedShippingQuoteService.STORAGE_KEY);
+      if (stored) {
+        const status = JSON.parse(stored);
+        this.lastQuoteTime = status.lastQuoteTime;
+        this.checkRateLimit();
+      }
+    } catch (error) {
+      console.error('Error loading shipping quote rate limit status:', error);
+    }
+  }
+
+  private saveRateLimitStatus(): void {
+    try {
+      const status = {
+        lastQuoteTime: this.lastQuoteTime,
+        nextAllowedTime: this.nextAllowedTime,
+        isRateLimited: this.isRateLimited
+      };
+      localStorage.setItem(EnhancedShippingQuoteService.STORAGE_KEY, JSON.stringify(status));
+    } catch (error) {
+      console.error('Error saving shipping quote rate limit status:', error);
+    }
+  }
+
+  private checkRateLimit(): void {
+    if (!this.lastQuoteTime) {
+      this.isRateLimited = false;
+      this.nextAllowedTime = null;
+      return;
+    }
+
+    const lastQuote = new Date(this.lastQuoteTime);
+    const now = new Date();
+    const timeDiff = now.getTime() - lastQuote.getTime();
+    const minutesDiff = timeDiff / (1000 * 60);
+
+    if (minutesDiff < EnhancedShippingQuoteService.RATE_LIMIT_MINUTES) {
+      this.isRateLimited = true;
+      const nextAllowed = new Date(lastQuote.getTime() + (EnhancedShippingQuoteService.RATE_LIMIT_MINUTES * 60 * 1000));
+      this.nextAllowedTime = nextAllowed.toISOString();
+    } else {
+      this.isRateLimited = false;
+      this.nextAllowedTime = null;
+    }
+  }
+
+  public getRateLimitStatus(): { isRateLimited: boolean; nextAllowedTime: string | null; remainingTime: string | null } {
+    this.checkRateLimit();
+    
+    let remainingTime = null;
+    if (this.isRateLimited && this.nextAllowedTime) {
+      const now = new Date();
+      const nextAllowed = new Date(this.nextAllowedTime);
+      const timeDiff = nextAllowed.getTime() - now.getTime();
+      
+      if (timeDiff > 0) {
+        const minutes = Math.floor(timeDiff / (1000 * 60));
+        const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+        remainingTime = `${minutes}m ${seconds}s`;
+      }
+    }
+
+    return {
+      isRateLimited: this.isRateLimited,
+      nextAllowedTime: this.nextAllowedTime,
+      remainingTime
+    };
+  }
+
+  public async getShippingQuotes(cartItems: CartItem[], shippingAddress: ShippingAddress): Promise<ShippingQuoteResponse> {
+    // Check rate limiting
+    this.checkRateLimit();
+    if (this.isRateLimited) {
+      const status = this.getRateLimitStatus();
+      return {
+        success: false,
+        message: `Rate limited. Next quote allowed in ${status.remainingTime}`,
+        requestId: '',
+        timestamp: new Date().toISOString(),
+        shippingOptions: [],
+        totalItems: 0,
+        estimatedPackages: 0,
+        isRateLimited: true,
+        nextAllowedTime: this.nextAllowedTime,
+        rateLimitMessage: `Please wait ${status.remainingTime} before requesting another shipping quote.`
+      };
+    }
+
+    try {
+      // Convert cart items to shipping quote format
+      const items = cartItems.map(item => ({
+        vcpn: item.vcpn || item.sku || item.id,
+        quantity: item.quantity,
+        weight: item.weight || 1.0 // Default weight if not specified
+      }));
+
+      // For development mode, return mock data
+      const isDevelopment = import.meta.env.DEV || !import.meta.env.VITE_KEYSTONE_PROXY_URL;
+      
+      if (isDevelopment) {
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Update rate limiting
+        this.lastQuoteTime = new Date().toISOString();
+        this.checkRateLimit();
+        this.saveRateLimitStatus();
+
+        // Generate mock shipping options
+        const mockOptions: ShippingOption[] = [
+          {
+            carrierId: 'ups',
+            carrierName: 'UPS',
+            serviceCode: 'ground',
+            serviceName: 'Ground',
+            cost: 15.99,
+            currency: 'USD',
+            estimatedDeliveryDays: 3,
+            estimatedDeliveryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            trackingAvailable: true,
+            insuranceAvailable: true,
+            signatureRequired: false,
+            warehouseId: 'main',
+            warehouseName: 'Main Warehouse',
+            warehouseLocation: 'Los Angeles, CA'
+          },
+          {
+            carrierId: 'fedex',
+            carrierName: 'FedEx',
+            serviceCode: 'express',
+            serviceName: 'Express',
+            cost: 28.50,
+            currency: 'USD',
+            estimatedDeliveryDays: 2,
+            estimatedDeliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            trackingAvailable: true,
+            insuranceAvailable: true,
+            signatureRequired: false,
+            warehouseId: 'east',
+            warehouseName: 'East Coast Hub',
+            warehouseLocation: 'Atlanta, GA'
+          },
+          {
+            carrierId: 'usps',
+            carrierName: 'USPS',
+            serviceCode: 'priority',
+            serviceName: 'Priority Mail',
+            cost: 12.75,
+            currency: 'USD',
+            estimatedDeliveryDays: 2,
+            estimatedDeliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            trackingAvailable: true,
+            insuranceAvailable: false,
+            signatureRequired: false,
+            warehouseId: 'main',
+            warehouseName: 'Main Warehouse',
+            warehouseLocation: 'Los Angeles, CA'
+          },
+          {
+            carrierId: 'ups',
+            carrierName: 'UPS',
+            serviceCode: 'overnight',
+            serviceName: 'Next Day Air',
+            cost: 45.99,
+            currency: 'USD',
+            estimatedDeliveryDays: 1,
+            estimatedDeliveryDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            trackingAvailable: true,
+            insuranceAvailable: true,
+            signatureRequired: true,
+            warehouseId: 'main',
+            warehouseName: 'Main Warehouse',
+            warehouseLocation: 'Los Angeles, CA'
+          }
+        ];
+
+        return {
+          success: true,
+          message: 'Shipping quotes retrieved successfully (mock data)',
+          requestId: `mock-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          shippingOptions: mockOptions,
+          totalItems: cartItems.reduce((sum, item) => sum + item.quantity, 0),
+          totalWeight: cartItems.reduce((sum, item) => sum + (item.weight || 1.0) * item.quantity, 0),
+          estimatedPackages: Math.ceil(cartItems.length / 5) // Estimate 5 items per package
+        };
+      }
+
+      // Production API call would go here
+      // For now, return mock data even in production
+      return {
+        success: false,
+        message: 'Production shipping quotes not yet implemented',
+        requestId: '',
+        timestamp: new Date().toISOString(),
+        shippingOptions: [],
+        totalItems: 0,
+        estimatedPackages: 0
+      };
+
+    } catch (error) {
+      console.error('Error getting shipping quotes:', error);
+      return {
+        success: false,
+        message: `Error getting shipping quotes: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        requestId: '',
+        timestamp: new Date().toISOString(),
+        shippingOptions: [],
+        totalItems: 0,
+        estimatedPackages: 0
+      };
+    }
+  }
+
+  public clearRateLimit(): void {
+    this.isRateLimited = false;
+    this.lastQuoteTime = null;
+    this.nextAllowedTime = null;
+    localStorage.removeItem(EnhancedShippingQuoteService.STORAGE_KEY);
+  }
 }
 
 // Enhanced pricing display component with ProductPriceCheck integration
@@ -146,8 +432,8 @@ const LoadingWrapper: React.FC<{
   return <>{children}</>;
 };
 
-// Cart Drawer Component
-const CartDrawer: React.FC<{
+// Enhanced Cart Drawer Component with Shipping Quotes
+const EnhancedCartDrawer: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   cart: { [key: string]: number };
@@ -158,6 +444,21 @@ const CartDrawer: React.FC<{
 }> = ({ isOpen, onClose, cart, parts, onUpdateQuantity, onRemoveItem, onClearCart }) => {
   const { toast } = useToast();
   
+  // State for shipping functionality
+  const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
+    address1: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'US'
+  });
+  const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
+  const [selectedShippingOption, setSelectedShippingOption] = useState<ShippingOption | null>(null);
+  const [isGettingQuotes, setIsGettingQuotes] = useState(false);
+  const [showShippingForm, setShowShippingForm] = useState(false);
+  const [shippingQuoteService] = useState(() => new EnhancedShippingQuoteService());
+  const [rateLimitStatus, setRateLimitStatus] = useState(shippingQuoteService.getRateLimitStatus());
+
   // Convert cart object to cart items with part details
   const cartItems: CartItem[] = Object.entries(cart).map(([partId, quantity]) => {
     const part = parts.find(p => p.id === partId);
@@ -169,16 +470,40 @@ const CartDrawer: React.FC<{
       sku: part?.sku || part?.keystone_vcpn,
       category: part?.category,
       inStock: (part?.quantity || 0) > 0,
-      maxQuantity: part?.quantity || 0
+      maxQuantity: part?.quantity || 0,
+      vcpn: part?.keystone_vcpn,
+      weight: part?.weight || 1.0
     };
   }).filter(item => item.quantity > 0);
 
   // Calculate totals
   const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
   const tax = subtotal * 0.08; // 8% tax rate
-  const shipping = subtotal > 100 ? 0 : 15; // Free shipping over $100
-  const total = subtotal + tax + shipping;
+  const shippingCost = selectedShippingOption ? selectedShippingOption.cost : (subtotal > 100 ? 0 : 15);
+  const total = subtotal + tax + shippingCost;
   const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
+
+  // Update rate limit status periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRateLimitStatus(shippingQuoteService.getRateLimitStatus());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [shippingQuoteService]);
+
+  // Prevent body scroll when drawer is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   // Handle quantity updates
   const handleQuantityChange = (partId: string, newQuantity: number) => {
@@ -203,18 +528,85 @@ const CartDrawer: React.FC<{
     }
   };
 
-  // Prevent body scroll when drawer is open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
+  // Handle shipping address changes
+  const handleAddressChange = (field: keyof ShippingAddress, value: string) => {
+    setShippingAddress(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Get shipping quotes
+  const handleGetShippingQuotes = async () => {
+    if (!shippingAddress.address1 || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode) {
+      toast({
+        title: "Address Required",
+        description: "Please fill in all required address fields",
+        variant: "destructive",
+      });
+      return;
     }
-    
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen]);
+
+    if (cartItems.length === 0) {
+      toast({
+        title: "Empty Cart",
+        description: "Add items to cart before getting shipping quotes",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGettingQuotes(true);
+    try {
+      const response = await shippingQuoteService.getShippingQuotes(cartItems, shippingAddress);
+      
+      if (response.success) {
+        setShippingOptions(response.shippingOptions);
+        setSelectedShippingOption(null); // Reset selection
+        toast({
+          title: "Shipping Quotes Retrieved",
+          description: `Found ${response.shippingOptions.length} shipping options`,
+          variant: "default",
+        });
+      } else {
+        if (response.isRateLimited) {
+          toast({
+            title: "Rate Limited",
+            description: response.rateLimitMessage || "Please wait before requesting another quote",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Quote Error",
+            description: response.message,
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to get shipping quotes",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGettingQuotes(false);
+      setRateLimitStatus(shippingQuoteService.getRateLimitStatus());
+    }
+  };
+
+  // Select shipping option
+  const handleSelectShippingOption = (option: ShippingOption) => {
+    setSelectedShippingOption(option);
+    toast({
+      title: "Shipping Selected",
+      description: `${option.carrierName} ${option.serviceName} - $${option.cost.toFixed(2)}`,
+      variant: "default",
+    });
+  };
+
+  // Check if address is complete
+  const isAddressComplete = shippingAddress.address1 && shippingAddress.city && shippingAddress.state && shippingAddress.zipCode;
 
   if (!isOpen) return null;
 
@@ -231,159 +623,365 @@ const CartDrawer: React.FC<{
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b">
-            <h2 className="text-lg font-semibold">Shopping Cart</h2>
             <div className="flex items-center space-x-2">
-              <Badge variant="secondary">
-                {totalItems} {totalItems === 1 ? 'item' : 'items'}
-              </Badge>
-              <Button variant="ghost" size="sm" onClick={onClose}>
-                <X className="h-4 w-4" />
-              </Button>
+              <ShoppingCart className="h-5 w-5" />
+              <h2 className="text-lg font-semibold">Shopping Cart</h2>
+              {totalItems > 0 && (
+                <Badge variant="secondary">{totalItems} items</Badge>
+              )}
             </div>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
           </div>
 
-          {/* Cart Items */}
-          <ScrollArea className="flex-1 p-4">
-            {cartItems.length === 0 ? (
-              <div className="text-center py-8">
-                <ShoppingCart className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <p className="text-gray-500 mb-4">Your cart is empty</p>
-                <Button onClick={onClose} variant="outline">
-                  Continue Shopping
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {cartItems.map((item) => (
-                  <Card key={item.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start space-x-3">
-                        {/* Placeholder for item image */}
-                        <div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center">
-                          <Package className="h-6 w-6 text-gray-400" />
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-sm truncate">{item.name}</h3>
-                          {item.sku && (
-                            <p className="text-xs text-gray-500">SKU: {item.sku}</p>
-                          )}
-                          {item.category && (
-                            <p className="text-xs text-gray-500">{item.category}</p>
-                          )}
+          {/* Content */}
+          <div className="flex-1 flex flex-col">
+            {/* Cart Items */}
+            <ScrollArea className="flex-1 p-4">
+              {cartItems.length === 0 ? (
+                <div className="text-center py-8">
+                  <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-gray-500">Your cart is empty</p>
+                  <Button variant="outline" onClick={onClose} className="mt-4">
+                    Continue Shopping
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {cartItems.map((item) => (
+                    <Card key={item.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start space-x-3">
+                          {/* Placeholder for item image */}
+                          <div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center">
+                            <Package className="h-6 w-6 text-gray-400" />
+                          </div>
                           
-                          <div className="flex items-center justify-between mt-2">
-                            <span className="font-semibold text-green-600">
-                              ${item.price.toFixed(2)}
-                            </span>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-sm truncate">{item.name}</h3>
+                            {item.sku && (
+                              <p className="text-xs text-gray-500">SKU: {item.sku}</p>
+                            )}
+                            {item.category && (
+                              <p className="text-xs text-gray-500">{item.category}</p>
+                            )}
                             
-                            {/* Quantity controls */}
-                            <div className="flex items-center space-x-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              
-                              <span className="w-8 text-center text-sm font-medium">
-                                {item.quantity}
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="font-semibold text-green-600">
+                                ${item.price.toFixed(2)}
                               </span>
                               
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
-                                disabled={item.quantity >= item.maxQuantity}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                              
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => onRemoveItem(item.id)}
-                                className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
+                              {/* Quantity controls */}
+                              <div className="flex items-center space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </Button>
+                                
+                                <span className="w-8 text-center text-sm font-medium">
+                                  {item.quantity}
+                                </span>
+                                
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
+                                  disabled={item.quantity >= item.maxQuantity}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                                
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => onRemoveItem(item.id)}
+                                  className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {/* Stock status */}
+                            <div className="mt-1">
+                              {item.inStock ? (
+                                <span className="text-xs text-green-600">
+                                  {item.maxQuantity} in stock
+                                </span>
+                              ) : (
+                                <span className="text-xs text-red-600">Out of stock</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+
+                  {/* Shipping Address Section */}
+                  {cartItems.length > 0 && (
+                    <Card className="mt-6">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="h-4 w-4" />
+                            <CardTitle className="text-sm">Shipping Address</CardTitle>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowShippingForm(!showShippingForm)}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      
+                      {showShippingForm && (
+                        <CardContent className="space-y-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label htmlFor="address1" className="text-xs">Address *</Label>
+                              <Input
+                                id="address1"
+                                placeholder="123 Main St"
+                                value={shippingAddress.address1}
+                                onChange={(e) => handleAddressChange('address1', e.target.value)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="address2" className="text-xs">Apt/Suite</Label>
+                              <Input
+                                id="address2"
+                                placeholder="Apt 1"
+                                value={shippingAddress.address2 || ''}
+                                onChange={(e) => handleAddressChange('address2', e.target.value)}
+                                className="h-8 text-xs"
+                              />
                             </div>
                           </div>
                           
-                          {/* Stock status */}
-                          <div className="mt-1">
-                            {item.inStock ? (
-                              <span className="text-xs text-green-600">
-                                {item.maxQuantity} in stock
-                              </span>
-                            ) : (
-                              <span className="text-xs text-red-600">Out of stock</span>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label htmlFor="city" className="text-xs">City *</Label>
+                              <Input
+                                id="city"
+                                placeholder="Los Angeles"
+                                value={shippingAddress.city}
+                                onChange={(e) => handleAddressChange('city', e.target.value)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="state" className="text-xs">State *</Label>
+                              <Input
+                                id="state"
+                                placeholder="CA"
+                                value={shippingAddress.state}
+                                onChange={(e) => handleAddressChange('state', e.target.value)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label htmlFor="zipCode" className="text-xs">ZIP Code *</Label>
+                              <Input
+                                id="zipCode"
+                                placeholder="90210"
+                                value={shippingAddress.zipCode}
+                                onChange={(e) => handleAddressChange('zipCode', e.target.value)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="country" className="text-xs">Country</Label>
+                              <Select value={shippingAddress.country} onValueChange={(value) => handleAddressChange('country', value)}>
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="US">United States</SelectItem>
+                                  <SelectItem value="CA">Canada</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          {/* Get Shipping Quotes Button */}
+                          <div className="pt-2">
+                            <Button
+                              onClick={handleGetShippingQuotes}
+                              disabled={!isAddressComplete || isGettingQuotes || rateLimitStatus.isRateLimited}
+                              className="w-full h-8 text-xs"
+                              size="sm"
+                            >
+                              {isGettingQuotes ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  Getting Quotes...
+                                </>
+                              ) : rateLimitStatus.isRateLimited ? (
+                                <>
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  Rate Limited ({rateLimitStatus.remainingTime})
+                                </>
+                              ) : (
+                                <>
+                                  <Truck className="h-3 w-3 mr-1" />
+                                  Get Shipping Quotes
+                                </>
+                              )}
+                            </Button>
+                            
+                            {rateLimitStatus.isRateLimited && (
+                              <p className="text-xs text-orange-600 mt-1 text-center">
+                                Next quote allowed in {rateLimitStatus.remainingTime}
+                              </p>
                             )}
                           </div>
+                        </CardContent>
+                      )}
+                    </Card>
+                  )}
+
+                  {/* Shipping Options */}
+                  {shippingOptions.length > 0 && (
+                    <Card className="mt-4">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center space-x-2">
+                          <Truck className="h-4 w-4" />
+                          <CardTitle className="text-sm">Shipping Options</CardTitle>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {shippingOptions.map((option, index) => (
+                          <div
+                            key={index}
+                            className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                              selectedShippingOption === option
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                            onClick={() => handleSelectShippingOption(option)}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <span className="font-medium text-sm">
+                                    {option.carrierName} - {option.serviceName}
+                                  </span>
+                                  {option.trackingAvailable && (
+                                    <Badge variant="outline" className="text-xs">
+                                      <Package className="h-2 w-2 mr-1" />
+                                      Tracking
+                                    </Badge>
+                                  )}
+                                  {option.signatureRequired && (
+                                    <Badge variant="outline" className="text-xs">
+                                      <Shield className="h-2 w-2 mr-1" />
+                                      Signature
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {option.estimatedDeliveryDays} days delivery • From: {option.warehouseLocation}
+                                </p>
+                                {option.estimatedDeliveryDate && (
+                                  <p className="text-xs text-gray-500">
+                                    Est. delivery: {new Date(option.estimatedDeliveryDate).toLocaleDateString()}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <span className="font-semibold text-sm">
+                                  ${option.cost.toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </ScrollArea>
+
+            {/* Footer with totals and checkout */}
+            {cartItems.length > 0 && (
+              <div className="border-t p-4 space-y-4">
+                {/* Price breakdown */}
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span>${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Tax:</span>
+                    <span>${tax.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Shipping:</span>
+                    <span>
+                      {selectedShippingOption ? (
+                        <div className="text-right">
+                          <div>${selectedShippingOption.cost.toFixed(2)}</div>
+                          <div className="text-xs text-gray-500">
+                            {selectedShippingOption.carrierName} {selectedShippingOption.serviceName}
+                          </div>
+                        </div>
+                      ) : shippingCost === 0 ? (
+                        'FREE'
+                      ) : (
+                        `$${shippingCost.toFixed(2)}`
+                      )}
+                    </span>
+                  </div>
+                  {!selectedShippingOption && shippingCost === 0 && (
+                    <p className="text-xs text-green-600">🎉 Free shipping on orders over $100!</p>
+                  )}
+                  <Separator />
+                  <div className="flex justify-between font-semibold text-lg">
+                    <span>Total:</span>
+                    <span>${total.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="space-y-2">
+                  <Button className="w-full" size="lg">
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Proceed to Checkout
+                  </Button>
+                  
+                  <div className="flex space-x-2">
+                    <Button variant="outline" onClick={onClose} className="flex-1">
+                      Continue Shopping
+                    </Button>
+                    <Button variant="ghost" onClick={onClearCart} className="flex-1">
+                      Clear Cart
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
-          </ScrollArea>
-
-          {/* Footer with totals and checkout */}
-          {cartItems.length > 0 && (
-            <div className="border-t p-4 space-y-4">
-              {/* Price breakdown */}
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span>${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Tax:</span>
-                  <span>${tax.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Shipping:</span>
-                  <span>{shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`}</span>
-                </div>
-                {shipping === 0 && (
-                  <p className="text-xs text-green-600">🎉 Free shipping on orders over $100!</p>
-                )}
-                <Separator />
-                <div className="flex justify-between font-semibold text-lg">
-                  <span>Total:</span>
-                  <span>${total.toFixed(2)}</span>
-                </div>
-              </div>
-
-              {/* Action buttons */}
-              <div className="space-y-2">
-                <Button className="w-full" size="lg">
-                  <ArrowRight className="h-4 w-4 mr-2" />
-                  Proceed to Checkout
-                </Button>
-                
-                <div className="flex space-x-2">
-                  <Button variant="outline" onClick={onClose} className="flex-1">
-                    Continue Shopping
-                  </Button>
-                  <Button variant="ghost" onClick={onClearCart} className="flex-1">
-                    Clear Cart
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-// Main Parts component - simplified version
+// Main Parts component - complete version with all existing functionality
 const PartsPage: React.FC = () => {
   // State management
   const [parts, setParts] = useState<InventoryPart[]>([]);
@@ -440,7 +1038,8 @@ const PartsPage: React.FC = () => {
           keystone_vcpn: 'TEST-001',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          list_price: 29.99
+          list_price: 29.99,
+          weight: 2.5
         },
         {
           id: '2',
@@ -451,7 +1050,22 @@ const PartsPage: React.FC = () => {
           price: 15.50,
           category: 'Hardware',
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          weight: 1.2
+        },
+        {
+          id: '3',
+          name: 'Premium Component',
+          description: 'High-quality premium component with Keystone integration',
+          sku: 'PREM-003',
+          quantity: 8,
+          price: 45.99,
+          category: 'Electronics',
+          keystone_vcpn: 'TEST-003',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          list_price: 52.99,
+          weight: 3.1
         }
       ];
 
@@ -985,10 +1599,10 @@ const PartsPage: React.FC = () => {
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-600">
-                  Showing {startIndex + 1} to {Math.min(endIndex, filteredParts.length)} of {filteredParts.length} parts
+                <p className="text-sm text-gray-700">
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredParts.length)} of {filteredParts.length} results
                 </p>
-                <div className="flex space-x-2">
+                <div className="flex items-center space-x-2">
                   <Button
                     variant="outline"
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
@@ -996,7 +1610,7 @@ const PartsPage: React.FC = () => {
                   >
                     Previous
                   </Button>
-                  <span className="flex items-center px-4 py-2 text-sm">
+                  <span className="text-sm">
                     Page {currentPage} of {totalPages}
                   </span>
                   <Button
@@ -1170,8 +1784,8 @@ const PartsPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Cart Drawer */}
-      <CartDrawer
+      {/* Enhanced Cart Drawer with Shipping Quotes */}
+      <EnhancedCartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         cart={cart}
