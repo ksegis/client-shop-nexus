@@ -19,7 +19,7 @@ import {
   RefreshCw, 
   Eye, 
   EyeOff, 
-  Sync,
+  RotateCcw,
   DollarSign,
   Search,
   Timer,
@@ -76,7 +76,6 @@ import {
   Focus,
   Maximize,
   Minimize,
-  RotateCcw,
   RotateCw,
   FlipHorizontal,
   FlipVertical,
@@ -142,12 +141,9 @@ import {
   Forward,
   AtSign,
   Hash,
-  DollarSign as Dollar,
   Percent,
   Equal,
   NotEqual,
-  Plus as PlusIcon,
-  Minus as MinusIcon,
   Asterisk,
   Slash,
   Backslash,
@@ -173,14 +169,12 @@ import {
   Delete,
   Backspace,
   Insert,
-  Home as HomeKey,
   End,
   PageUp,
   PageDown,
   ArrowUp,
   ArrowDown,
   ArrowLeft,
-  ArrowRight as ArrowRightIcon,
   ChevronUp,
   ChevronDown,
   ChevronLeft,
@@ -200,17 +194,19 @@ import {
   Pentagon,
   Hexagon,
   Octagon,
-  Star as StarIcon,
-  Heart as HeartIcon,
   Spade,
   Club,
   Clubs,
   Diamonds,
   Hearts,
-  Spades
+  Spades,
+  MapPin,
+  Building,
+  Warehouse
 } from 'lucide-react';
 import { inventorySyncService } from '@/services/inventory_sync_service';
 import { priceCheckService } from '@/services/price_check_service';
+import { shippingQuoteService } from '@/services/shipping_quote_service';
 
 const AdminSettings = () => {
   // Existing state variables
@@ -224,12 +220,25 @@ const AdminSettings = () => {
     intervalHours: 12
   });
 
-  // New price check state variables
+  // Price check state variables
   const [priceCheckStatus, setPriceCheckStatus] = useState(null);
   const [priceCheckVcpns, setPriceCheckVcpns] = useState('');
   const [priceCheckResults, setPriceCheckResults] = useState([]);
   const [priceCheckLoading, setPriceCheckLoading] = useState(false);
-  const [showPriceHistory, setShowPriceHistory] = useState(false);
+
+  // Shipping quote state variables
+  const [shippingQuoteStatus, setShippingQuoteStatus] = useState(null);
+  const [shippingQuoteItems, setShippingQuoteItems] = useState('');
+  const [shippingAddress, setShippingAddress] = useState({
+    address1: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'US'
+  });
+  const [shippingQuoteResults, setShippingQuoteResults] = useState([]);
+  const [shippingQuoteLoading, setShippingQuoteLoading] = useState(false);
+  const [showShippingHistory, setShowShippingHistory] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -243,13 +252,16 @@ const AdminSettings = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-refresh price check status every 10 seconds when rate limited
+  // Auto-refresh status every 10 seconds when rate limited
   useEffect(() => {
-    if (priceCheckStatus?.isRateLimited) {
-      const interval = setInterval(refreshPriceCheckStatus, 10000);
+    if (priceCheckStatus?.isRateLimited || shippingQuoteStatus?.isRateLimited) {
+      const interval = setInterval(() => {
+        refreshPriceCheckStatus();
+        refreshShippingQuoteStatus();
+      }, 10000);
       return () => clearInterval(interval);
     }
-  }, [priceCheckStatus?.isRateLimited]);
+  }, [priceCheckStatus?.isRateLimited, shippingQuoteStatus?.isRateLimited]);
 
   const loadDebugMode = () => {
     try {
@@ -287,8 +299,9 @@ const AdminSettings = () => {
       setSyncStatus(status);
       setLastRefresh(new Date());
       
-      // Also refresh price check status
+      // Also refresh other service statuses
       refreshPriceCheckStatus();
+      refreshShippingQuoteStatus();
     } catch (error) {
       console.error('Error refreshing status:', error);
     }
@@ -300,6 +313,15 @@ const AdminSettings = () => {
       setPriceCheckStatus(status);
     } catch (error) {
       console.error('Error refreshing price check status:', error);
+    }
+  };
+
+  const refreshShippingQuoteStatus = () => {
+    try {
+      const status = shippingQuoteService.getStatus();
+      setShippingQuoteStatus(status);
+    } catch (error) {
+      console.error('Error refreshing shipping quote status:', error);
     }
   };
 
@@ -385,7 +407,7 @@ const AdminSettings = () => {
     }
   };
 
-  // NEW: Handle price check
+  // Handle price check
   const handlePriceCheck = async () => {
     if (!priceCheckVcpns.trim()) {
       alert('Please enter at least one VCPN');
@@ -433,10 +455,82 @@ const AdminSettings = () => {
     }
   };
 
-  // NEW: Clear price check rate limit (for testing)
+  // Clear price check rate limit (for testing)
   const handleClearPriceRateLimit = () => {
     priceCheckService.clearRateLimit();
     refreshPriceCheckStatus();
+  };
+
+  // Handle shipping quote
+  const handleShippingQuote = async () => {
+    if (!shippingQuoteItems.trim()) {
+      alert('Please enter at least one item');
+      return;
+    }
+
+    if (!shippingAddress.address1 || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode) {
+      alert('Please fill in all required shipping address fields');
+      return;
+    }
+
+    setShippingQuoteLoading(true);
+    setShippingQuoteResults([]);
+
+    try {
+      // Parse items from textarea (format: VCPN:quantity)
+      const items = shippingQuoteItems
+        .split(/[\n,]+/)
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .map(line => {
+          const parts = line.split(':');
+          if (parts.length !== 2) {
+            throw new Error(`Invalid item format: ${line}. Use format: VCPN:quantity`);
+          }
+          return {
+            vcpn: parts[0].trim(),
+            quantity: parseInt(parts[1].trim())
+          };
+        });
+
+      if (items.length === 0) {
+        alert('Please enter valid items');
+        return;
+      }
+
+      if (items.length > 50) {
+        alert('Maximum 50 items allowed per request');
+        return;
+      }
+
+      const result = await shippingQuoteService.getShippingQuotes({
+        items,
+        shippingAddress
+      });
+      
+      if (result.success) {
+        setShippingQuoteResults(result.shippingOptions);
+        console.log('Shipping quote successful:', result);
+      } else {
+        console.error('Shipping quote failed:', result.message);
+        alert(`Shipping quote failed: ${result.message}`);
+      }
+
+      // Refresh status to update rate limiting info
+      refreshShippingQuoteStatus();
+
+    } catch (error) {
+      console.error('Shipping quote error:', error);
+      alert(`Shipping quote error: ${error.message}`);
+    } finally {
+      setShippingQuoteLoading(false);
+    }
+  };
+
+  // Clear shipping quote rate limit (for testing)
+  const handleClearShippingRateLimit = () => {
+    shippingQuoteService.clearRateLimit();
+    refreshShippingQuoteStatus();
   };
 
   // Safe formatting functions
@@ -547,7 +641,7 @@ const AdminSettings = () => {
       </div>
 
       {/* Rate Limit Alert */}
-      {syncStatus?.isRateLimited && (
+      {(syncStatus?.isRateLimited || priceCheckStatus?.isRateLimited || shippingQuoteStatus?.isRateLimited) && (
         <Alert className="border-orange-200 bg-orange-50">
           <AlertTriangle className="h-4 w-4 text-orange-600" />
           <AlertDescription className="text-orange-800">
@@ -555,13 +649,28 @@ const AdminSettings = () => {
               <div>
                 <strong>API Rate Limited</strong>
                 <br />
-                Rate limited on GetInventoryFull. Rate limit exceeded
-                <br />
-                <strong>Time remaining:</strong> {syncStatus.rateLimitTimeRemaining ? 
-                  `${Math.floor(syncStatus.rateLimitTimeRemaining / 3600)}h ${Math.floor((syncStatus.rateLimitTimeRemaining % 3600) / 60)}m` : 
-                  'Calculating...'}
-                <br />
-                <strong>Retry available at:</strong> {safeFormatDate(syncStatus.rateLimitRetryAfter)}
+                {syncStatus?.isRateLimited && (
+                  <>
+                    Inventory Sync: Rate limited on GetInventoryFull
+                    <br />
+                    <strong>Time remaining:</strong> {syncStatus.rateLimitTimeRemaining ? 
+                      `${Math.floor(syncStatus.rateLimitTimeRemaining / 3600)}h ${Math.floor((syncStatus.rateLimitTimeRemaining % 3600) / 60)}m` : 
+                      'Calculating...'}
+                    <br />
+                  </>
+                )}
+                {priceCheckStatus?.isRateLimited && (
+                  <>
+                    Price Check: {priceCheckStatus.rateLimitMessage}
+                    <br />
+                  </>
+                )}
+                {shippingQuoteStatus?.isRateLimited && (
+                  <>
+                    Shipping Quote: {shippingQuoteStatus.rateLimitMessage}
+                    <br />
+                  </>
+                )}
               </div>
               <Badge variant="destructive">Rate Limited</Badge>
             </div>
@@ -577,7 +686,7 @@ const AdminSettings = () => {
             Environment Control
           </CardTitle>
           <CardDescription>
-            Control which environment the inventory sync system uses for API calls
+            Control which environment the system uses for API calls
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -630,7 +739,7 @@ const AdminSettings = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sync className="h-5 w-5" />
+            <RotateCcw className="h-5 w-5" />
             Delta Sync Settings
           </CardTitle>
           <CardDescription>
@@ -688,7 +797,7 @@ const AdminSettings = () => {
         </CardContent>
       </Card>
 
-      {/* NEW: Price Check Settings */}
+      {/* Price Check Settings */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -741,11 +850,8 @@ const AdminSettings = () => {
               value={priceCheckVcpns}
               onChange={(e) => setPriceCheckVcpns(e.target.value)}
               className="mt-1"
-              rows={4}
+              rows={3}
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Enter up to 12 VCPNs. Separate multiple VCPNs with commas, spaces, or new lines.
-            </p>
           </div>
 
           {/* Price Check Button */}
@@ -779,7 +885,7 @@ const AdminSettings = () => {
           {priceCheckResults.length > 0 && (
             <div>
               <Label className="text-sm font-medium">Price Check Results</Label>
-              <div className="mt-2 space-y-2">
+              <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
                 {priceCheckResults.map((result, index) => (
                   <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
@@ -808,21 +914,185 @@ const AdminSettings = () => {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
 
-          {/* Price Check History */}
-          {debugMode && priceCheckStatus?.checkHistory?.length > 0 && (
+      {/* Shipping Quote Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Truck className="h-5 w-5" />
+            Shipping Quote Integration
+          </CardTitle>
+          <CardDescription>
+            Get shipping quotes for multiple parts across warehouses (1 quote per 5 minutes)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Shipping Quote Status */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium">Shipping Quote Status</Label>
+              <div className="flex items-center gap-2 mt-1">
+                {shippingQuoteStatus?.isRateLimited ? (
+                  <>
+                    <Badge variant="destructive">Rate Limited</Badge>
+                    <Timer className="h-4 w-4 text-orange-500" />
+                    <span className="text-sm text-muted-foreground">
+                      {shippingQuoteStatus.rateLimitMessage}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      Available
+                    </Badge>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <span className="text-sm text-muted-foreground">Ready for shipping quote</span>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            <div>
+              <Label className="text-sm font-medium">Last Shipping Quote</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                {safeFormatRelativeTime(shippingQuoteStatus?.lastQuoteTime)}
+              </p>
+            </div>
+          </div>
+
+          {/* Items Input */}
+          <div>
+            <Label className="text-sm font-medium">Items to Ship (max 50)</Label>
+            <Textarea
+              placeholder="Enter items in format VCPN:quantity, one per line&#10;Example:&#10;VCPN-001:2&#10;VCPN-002:1&#10;VCPN-003:5"
+              value={shippingQuoteItems}
+              onChange={(e) => setShippingQuoteItems(e.target.value)}
+              className="mt-1"
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Enter up to 50 items. Format: VCPN:quantity (one per line)
+            </p>
+          </div>
+
+          {/* Shipping Address */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium">Address</Label>
+              <Input
+                placeholder="123 Main Street"
+                value={shippingAddress.address1}
+                onChange={(e) => setShippingAddress({...shippingAddress, address1: e.target.value})}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">City</Label>
+              <Input
+                placeholder="Los Angeles"
+                value={shippingAddress.city}
+                onChange={(e) => setShippingAddress({...shippingAddress, city: e.target.value})}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">State</Label>
+              <Input
+                placeholder="CA"
+                value={shippingAddress.state}
+                onChange={(e) => setShippingAddress({...shippingAddress, state: e.target.value})}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">ZIP Code</Label>
+              <Input
+                placeholder="90210"
+                value={shippingAddress.zipCode}
+                onChange={(e) => setShippingAddress({...shippingAddress, zipCode: e.target.value})}
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          {/* Shipping Quote Button */}
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleShippingQuote}
+              disabled={shippingQuoteLoading || shippingQuoteStatus?.isRateLimited || !shippingQuoteItems.trim() || !shippingAddress.address1}
+              className="flex items-center gap-2"
+            >
+              {shippingQuoteLoading ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Truck className="h-4 w-4" />
+              )}
+              {shippingQuoteLoading ? 'Getting Quotes...' : 'Get Shipping Quotes'}
+            </Button>
+            
+            {debugMode && !shippingQuoteStatus?.isRateLimited && (
+              <Button
+                variant="outline"
+                onClick={handleClearShippingRateLimit}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Clear Rate Limit
+              </Button>
+            )}
+          </div>
+
+          {/* Shipping Quote Results */}
+          {shippingQuoteResults.length > 0 && (
+            <div>
+              <Label className="text-sm font-medium">Shipping Options</Label>
+              <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                {shippingQuoteResults.map((option, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <p className="font-medium">{option.carrierName} - {option.serviceName}</p>
+                      <div className="text-sm text-muted-foreground">
+                        <span>{option.estimatedDeliveryDays} days delivery</span>
+                        <span> | From: {option.warehouseName}</span>
+                        {option.trackingAvailable && <span> | Tracking available</span>}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                        ${option.cost}
+                      </Badge>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {option.estimatedDeliveryDate ? 
+                          new Date(option.estimatedDeliveryDate).toLocaleDateString() : 
+                          'Est. delivery'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Shipping Quote History */}
+          {debugMode && shippingQuoteStatus?.quoteHistory?.length > 0 && (
             <div>
               <Label className="text-sm font-medium flex items-center gap-2">
                 <History className="h-4 w-4" />
-                Recent Price Checks
+                Recent Shipping Quotes
               </Label>
               <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                {priceCheckStatus.checkHistory.map((item, index) => (
+                {shippingQuoteStatus.quoteHistory.map((item, index) => (
                   <div key={item.id} className="flex items-center justify-between p-2 border rounded text-sm">
                     <div>
                       <p className="font-medium">{safeFormatRelativeTime(item.timestamp)}</p>
                       <p className="text-muted-foreground">
-                        {item.vcpns.length} VCPNs • {item.success ? `${item.resultCount} results` : 'Failed'}
+                        {item.itemCount} items • {item.success ? `${item.optionCount} options` : 'Failed'}
+                        {item.shippingAddress && (
+                          <span> • {item.shippingAddress.city}, {item.shippingAddress.state}</span>
+                        )}
                       </p>
                     </div>
                     <Badge variant={item.success ? "default" : "destructive"} className="text-xs">
@@ -848,7 +1118,7 @@ const AdminSettings = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-4 gap-6">
             <div>
               <Label className="text-sm font-medium">Keystone API</Label>
               <div className="flex items-center gap-2 mt-1">
@@ -890,6 +1160,26 @@ const AdminSettings = () => {
                 )}
               </div>
             </div>
+
+            <div>
+              <Label className="text-sm font-medium">Shipping Quote API</Label>
+              <div className="flex items-center gap-2 mt-1">
+                {shippingQuoteStatus?.isRateLimited ? (
+                  <>
+                    <Badge variant="destructive">Rate Limited</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      ({shippingQuoteService.formatTimeRemaining(shippingQuoteService.getTimeUntilNextQuote())} remaining)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      Available
+                    </Badge>
+                  </>
+                )}
+              </div>
+            </div>
             
             <div>
               <Label className="text-sm font-medium">Supabase Database</Label>
@@ -900,29 +1190,6 @@ const AdminSettings = () => {
               </div>
             </div>
           </div>
-
-          {(syncStatus?.isRateLimited || priceCheckStatus?.isRateLimited) && (
-            <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-              <h4 className="font-medium text-orange-800">Rate Limit Details</h4>
-              <div className="mt-2 space-y-1 text-sm text-orange-700">
-                {syncStatus?.isRateLimited && (
-                  <>
-                    <p><strong>Inventory Sync:</strong> Rate limited on GetInventoryFull</p>
-                    <p><strong>Retry Available:</strong> {safeFormatDate(syncStatus.rateLimitRetryAfter)}</p>
-                    <p><strong>Time Remaining:</strong> {syncStatus.rateLimitTimeRemaining ? 
-                      `${Math.floor(syncStatus.rateLimitTimeRemaining / 3600)}h ${Math.floor((syncStatus.rateLimitTimeRemaining % 3600) / 60)}m` : 
-                      'Calculating...'}</p>
-                  </>
-                )}
-                {priceCheckStatus?.isRateLimited && (
-                  <>
-                    <p><strong>Price Check:</strong> {priceCheckStatus.rateLimitMessage}</p>
-                    <p><strong>Next Check Available:</strong> {safeFormatDate(priceCheckStatus.nextAllowedTime)}</p>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -981,7 +1248,7 @@ const AdminSettings = () => {
                 <div>
                   <Label className="text-sm font-medium">Last Delta Sync</Label>
                   <div className="flex items-center gap-2 mt-1">
-                    <Sync className="h-4 w-4 text-blue-500" />
+                    <RotateCcw className="h-4 w-4 text-blue-500" />
                     <span className="text-sm">{safeFormatRelativeTime(syncStatus?.lastDeltaSyncTime)}</span>
                   </div>
                 </div>
@@ -1044,7 +1311,7 @@ const AdminSettings = () => {
             Quick Actions
           </CardTitle>
           <CardDescription>
-            Test and manage inventory synchronization operations
+            Test and manage system operations
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1070,7 +1337,7 @@ const AdminSettings = () => {
                       className="w-full justify-start"
                       variant="outline"
                     >
-                      <Sync className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                      <RotateCcw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                       {syncStatus?.isRateLimited ? 'Test Delta Sync (Rate Limited)' : 'Test Delta Sync'}
                     </Button>
                     
@@ -1151,16 +1418,28 @@ const AdminSettings = () => {
               </div>
               
               <div>
-                <Label className="text-sm font-medium">Sync Status Details</Label>
-                <div className="mt-2 space-y-1 text-xs font-mono bg-gray-50 p-3 rounded max-h-40 overflow-y-auto">
-                  <pre>{JSON.stringify(syncStatus, null, 2)}</pre>
-                </div>
-              </div>
+                <Label className="text-sm font-medium">Service Status Details</Label>
+                <div className="mt-2 space-y-2">
+                  <div>
+                    <p className="text-sm font-medium">Inventory Sync Status</p>
+                    <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
+                      <pre>{JSON.stringify(syncStatus, null, 2)}</pre>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <p className="text-sm font-medium">Price Check Status</p>
+                    <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
+                      <pre>{JSON.stringify(priceCheckStatus, null, 2)}</pre>
+                    </div>
+                  </div>
 
-              <div>
-                <Label className="text-sm font-medium">Price Check Status Details</Label>
-                <div className="mt-2 space-y-1 text-xs font-mono bg-gray-50 p-3 rounded max-h-40 overflow-y-auto">
-                  <pre>{JSON.stringify(priceCheckStatus, null, 2)}</pre>
+                  <div>
+                    <p className="text-sm font-medium">Shipping Quote Status</p>
+                    <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
+                      <pre>{JSON.stringify(shippingQuoteStatus, null, 2)}</pre>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
