@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Shield, 
   Settings, 
@@ -21,7 +22,10 @@ import {
   Zap,
   Bug,
   Timer,
-  Pause
+  Pause,
+  RotateCcw,
+  TrendingUp,
+  Layers
 } from 'lucide-react';
 import { inventorySyncService } from '@/services/inventory_sync_service';
 
@@ -117,7 +121,7 @@ const safeDisplayValue = (value, fallback = 'Unknown') => {
   return String(value);
 };
 
-// Safe sync status interface with rate limiting
+// Safe sync status interface with rate limiting and delta sync
 interface SafeSyncStatus {
   isRunning: boolean;
   lastSuccessfulSync: string | null;
@@ -133,6 +137,12 @@ interface SafeSyncStatus {
   rateLimitRetryAfter: string | null;
   rateLimitMessage: string | null;
   rateLimitTimeRemaining: number | null;
+  // Delta sync properties
+  lastDeltaSyncTime: string | null;
+  lastDeltaSyncResult: 'success' | 'failed' | 'partial' | 'never' | null;
+  nextDeltaSync: string | null;
+  deltaSyncEnabled: boolean;
+  deltaSyncIntervalHours: number;
 }
 
 const AdminSettings: React.FC = () => {
@@ -142,6 +152,12 @@ const AdminSettings: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [rateLimitCountdown, setRateLimitCountdown] = useState<number | null>(null);
+  
+  // Delta sync settings
+  const [deltaSyncSettings, setDeltaSyncSettings] = useState({
+    enabled: true,
+    intervalHours: 12
+  });
 
   // Load current environment setting on component mount
   useEffect(() => {
@@ -210,9 +226,21 @@ const AdminSettings: React.FC = () => {
           isRateLimited: Boolean(status.isRateLimited),
           rateLimitRetryAfter: status.rateLimitRetryAfter || null,
           rateLimitMessage: status.rateLimitMessage || null,
-          rateLimitTimeRemaining: status.rateLimitTimeRemaining || null
+          rateLimitTimeRemaining: status.rateLimitTimeRemaining || null,
+          // Delta sync properties
+          lastDeltaSyncTime: status.lastDeltaSyncTime || null,
+          lastDeltaSyncResult: status.lastDeltaSyncResult || 'never',
+          nextDeltaSync: status.nextDeltaSync || null,
+          deltaSyncEnabled: Boolean(status.deltaSyncEnabled),
+          deltaSyncIntervalHours: Number(status.deltaSyncIntervalHours) || 12
         };
         setSyncStatus(safeStatus);
+        
+        // Update delta sync settings from status
+        setDeltaSyncSettings({
+          enabled: safeStatus.deltaSyncEnabled,
+          intervalHours: safeStatus.deltaSyncIntervalHours
+        });
       }
     } catch (error) {
       console.error('Failed to load sync status:', error);
@@ -231,7 +259,12 @@ const AdminSettings: React.FC = () => {
         isRateLimited: false,
         rateLimitRetryAfter: null,
         rateLimitMessage: null,
-        rateLimitTimeRemaining: null
+        rateLimitTimeRemaining: null,
+        lastDeltaSyncTime: null,
+        lastDeltaSyncResult: 'never',
+        nextDeltaSync: null,
+        deltaSyncEnabled: true,
+        deltaSyncIntervalHours: 12
       });
     }
   };
@@ -259,6 +292,22 @@ const AdminSettings: React.FC = () => {
       window.location.reload();
     } catch (error) {
       console.error('Error changing environment:', error);
+    }
+  };
+
+  // Handle delta sync settings change
+  const handleDeltaSyncSettingsChange = (newSettings) => {
+    try {
+      setDeltaSyncSettings(newSettings);
+      
+      // Update service settings
+      if (inventorySyncService?.updateDeltaSyncSettings) {
+        inventorySyncService.updateDeltaSyncSettings(newSettings);
+      }
+      
+      loadSyncStatus();
+    } catch (error) {
+      console.error('Error updating delta sync settings:', error);
     }
   };
 
@@ -309,6 +358,70 @@ const AdminSettings: React.FC = () => {
     }
   };
 
+  // Test delta sync
+  const handleTestDeltaSync = async () => {
+    if (syncStatus?.isRateLimited) {
+      const timeRemaining = rateLimitCountdown || syncStatus.rateLimitTimeRemaining || 0;
+      alert(`Cannot sync: API is rate limited. Retry in ${safeFormatDuration(timeRemaining)}.`);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      if (inventorySyncService?.performDeltaSync) {
+        const result = await inventorySyncService.performDeltaSync('delta_inventory');
+        loadSyncStatus(); // Refresh status after sync
+        
+        if (result.success) {
+          alert(`Delta sync completed successfully!\n\nUpdated: ${result.updatedItems || 0}\nNew: ${result.newItems || 0}\nDeleted: ${result.deletedItems || 0}`);
+        } else {
+          alert(`Delta sync failed: ${result.message || 'Unknown error'}`);
+        }
+      } else {
+        throw new Error('Delta sync not available');
+      }
+    } catch (error) {
+      const errorMessage = error?.message || 'Unknown error occurred';
+      alert(`Delta sync failed: ${errorMessage}`);
+      console.error('Delta sync error:', error);
+      loadSyncStatus();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Test quantity delta sync
+  const handleTestQuantityDeltaSync = async () => {
+    if (syncStatus?.isRateLimited) {
+      const timeRemaining = rateLimitCountdown || syncStatus.rateLimitTimeRemaining || 0;
+      alert(`Cannot sync: API is rate limited. Retry in ${safeFormatDuration(timeRemaining)}.`);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      if (inventorySyncService?.performDeltaSync) {
+        const result = await inventorySyncService.performDeltaSync('delta_quantity');
+        loadSyncStatus(); // Refresh status after sync
+        
+        if (result.success) {
+          alert(`Quantity delta sync completed successfully!\n\nUpdated: ${result.updatedItems || 0} quantities`);
+        } else {
+          alert(`Quantity delta sync failed: ${result.message || 'Unknown error'}`);
+        }
+      } else {
+        throw new Error('Quantity delta sync not available');
+      }
+    } catch (error) {
+      const errorMessage = error?.message || 'Unknown error occurred';
+      alert(`Quantity delta sync failed: ${errorMessage}`);
+      console.error('Quantity delta sync error:', error);
+      loadSyncStatus();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleDebugConsole = () => {
     try {
       console.log('🔍 Environment Variables Debug:');
@@ -320,6 +433,7 @@ const AdminSettings: React.FC = () => {
       console.log('All VITE_KEYSTONE vars:', Object.keys(import.meta.env || {}).filter(k => k.startsWith('VITE_KEYSTONE')));
       console.log('Rate Limit Status:', syncStatus?.isRateLimited ? 'ACTIVE' : 'NONE');
       console.log('Rate Limit Retry After:', syncStatus?.rateLimitRetryAfter);
+      console.log('Delta Sync Settings:', deltaSyncSettings);
       console.log('All environment variables:', import.meta.env);
     } catch (error) {
       console.error('Error in debug console:', error);
@@ -432,6 +546,15 @@ const AdminSettings: React.FC = () => {
               </div>
             </div>
             <div className="space-y-2">
+              <Label className="text-sm font-medium text-orange-800">Delta Sync Status</Label>
+              <div className="bg-white p-3 rounded border text-xs space-y-1">
+                <div><strong>Enabled:</strong> {deltaSyncSettings.enabled ? '✅ YES' : '❌ NO'}</div>
+                <div><strong>Interval:</strong> {deltaSyncSettings.intervalHours}h</div>
+                <div><strong>Last Delta Sync:</strong> {safeFormatDate(syncStatus?.lastDeltaSyncTime)}</div>
+                <div><strong>Next Delta Sync:</strong> {safeFormatDate(syncStatus?.nextDeltaSync)}</div>
+              </div>
+            </div>
+            <div className="space-y-2">
               <Label className="text-sm font-medium text-orange-800">All VITE_KEYSTONE Variables</Label>
               <div className="bg-white p-3 rounded border text-xs">
                 {Object.keys(import.meta.env || {}).filter(k => k.startsWith('VITE_KEYSTONE')).join(', ') || 'None found'}
@@ -518,6 +641,82 @@ const AdminSettings: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Delta Sync Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <RotateCcw className="h-5 w-5" />
+            <span>Delta Sync Settings</span>
+          </CardTitle>
+          <CardDescription>
+            Configure automatic delta inventory synchronization for efficient updates
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="delta-sync-toggle" className="text-base font-medium">
+                Enable Delta Sync
+              </Label>
+              <p className="text-sm text-gray-600">
+                Automatically sync only changed inventory items at regular intervals
+              </p>
+            </div>
+            <Switch
+              id="delta-sync-toggle"
+              checked={deltaSyncSettings.enabled}
+              onCheckedChange={(checked) => 
+                handleDeltaSyncSettingsChange({
+                  ...deltaSyncSettings,
+                  enabled: checked
+                })
+              }
+            />
+          </div>
+
+          {deltaSyncSettings.enabled && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Sync Interval</Label>
+              <Select
+                value={deltaSyncSettings.intervalHours.toString()}
+                onValueChange={(value) => 
+                  handleDeltaSyncSettingsChange({
+                    ...deltaSyncSettings,
+                    intervalHours: parseInt(value)
+                  })
+                }
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="6">Every 6 hours</SelectItem>
+                  <SelectItem value="12">Every 12 hours (Twice daily)</SelectItem>
+                  <SelectItem value="24">Every 24 hours (Daily)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                Recommended: 12 hours for twice-daily updates
+              </p>
+            </div>
+          )}
+
+          <div className="flex items-center space-x-2">
+            <Badge 
+              variant={deltaSyncSettings.enabled ? 'default' : 'secondary'}
+              className="text-xs"
+            >
+              {deltaSyncSettings.enabled ? '✅ Enabled' : '⏸️ Disabled'}
+            </Badge>
+            {deltaSyncSettings.enabled && (
+              <span className="text-sm text-gray-600">
+                Every {deltaSyncSettings.intervalHours} hours
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* API Status */}
       <Card>
         <CardHeader>
@@ -582,33 +781,49 @@ const AdminSettings: React.FC = () => {
           {syncStatus && (
             <>
               {/* Status Overview */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Last Successful Sync</Label>
+                  <Label className="text-sm font-medium text-gray-600">Last Full Sync</Label>
                   <div className="flex items-center space-x-2">
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     <div>
                       <p className="text-sm font-medium">
-                        {safeFormatDate(syncStatus.lastSuccessfulSync)}
+                        {safeFormatRelativeTime(syncStatus.lastSuccessfulSync)}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {safeFormatRelativeTime(syncStatus.lastSuccessfulSync)}
+                        {safeFormatDate(syncStatus.lastSuccessfulSync)}
                       </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Next Planned Sync</Label>
+                  <Label className="text-sm font-medium text-gray-600">Last Delta Sync</Label>
+                  <div className="flex items-center space-x-2">
+                    <RotateCcw className="h-4 w-4 text-blue-600" />
+                    <div>
+                      <p className="text-sm font-medium">
+                        {safeFormatRelativeTime(syncStatus.lastDeltaSyncTime)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {safeFormatDate(syncStatus.lastDeltaSyncTime)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-600">Next Delta Sync</Label>
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4 text-blue-600" />
                     <div>
                       <p className="text-sm font-medium">
-                        {syncStatus.isRateLimited ? 'Delayed (Rate Limited)' : safeFormatDate(syncStatus.nextPlannedSync)}
+                        {syncStatus.isRateLimited ? 'Delayed (Rate Limited)' : 
+                         deltaSyncSettings.enabled ? safeFormatRelativeTime(syncStatus.nextDeltaSync) : 'Disabled'}
                       </p>
                       <p className="text-xs text-gray-500">
                         {syncStatus.isRateLimited ? 'Waiting for API availability' : 
-                         syncStatus.nextPlannedSync ? 'Scheduled' : 'Not scheduled'}
+                         deltaSyncSettings.enabled ? safeFormatDate(syncStatus.nextDeltaSync) : 'Delta sync disabled'}
                       </p>
                     </div>
                   </div>
@@ -671,6 +886,12 @@ const AdminSettings: React.FC = () => {
                       </Badge>
                     </div>
                     <div className="flex justify-between text-sm">
+                      <span>Delta Sync:</span>
+                      <Badge variant={deltaSyncSettings.enabled ? "default" : "secondary"}>
+                        {deltaSyncSettings.enabled ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between text-sm">
                       <span>Last Attempt:</span>
                       <span className="font-medium text-xs">
                         {safeFormatRelativeTime(syncStatus.lastSyncAttempt)}
@@ -706,7 +927,37 @@ const AdminSettings: React.FC = () => {
               <span>
                 {isLoading ? 'Testing...' : 
                  syncStatus?.isRateLimited ? 'Rate Limited' : 
-                 'Test Sync'}
+                 'Test Full Sync'}
+              </span>
+            </Button>
+
+            <Button 
+              onClick={handleTestDeltaSync}
+              disabled={isLoading || (syncStatus?.isRunning) || (syncStatus?.isRateLimited)}
+              size="sm"
+              variant="secondary"
+              className="flex items-center space-x-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span>
+                {isLoading ? 'Testing...' : 
+                 syncStatus?.isRateLimited ? 'Rate Limited' : 
+                 'Test Delta Sync'}
+              </span>
+            </Button>
+
+            <Button 
+              onClick={handleTestQuantityDeltaSync}
+              disabled={isLoading || (syncStatus?.isRunning) || (syncStatus?.isRateLimited)}
+              size="sm"
+              variant="secondary"
+              className="flex items-center space-x-2"
+            >
+              <TrendingUp className="h-4 w-4" />
+              <span>
+                {isLoading ? 'Testing...' : 
+                 syncStatus?.isRateLimited ? 'Rate Limited' : 
+                 'Test Quantity Delta'}
               </span>
             </Button>
 
@@ -753,31 +1004,22 @@ const AdminSettings: React.FC = () => {
               <Label className="text-sm font-medium text-gray-600">Keystone Proxy URL</Label>
               <div className="flex items-center space-x-2">
                 <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-mono text-xs">
-                  {safeDisplayValue(getEnvVar('VITE_KEYSTONE_PROXY_URL'), 'Not configured')}
-                </span>
+                <span className="text-sm">Configured</span>
+                <span className="text-xs text-gray-500">{getEnvVar('VITE_KEYSTONE_PROXY_URL')}</span>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-600">
-                {environment === 'development' ? 'Development Token' : 'Production Token'}
-              </Label>
+              <Label className="text-sm font-medium text-gray-600">Development Token</Label>
               <div className="flex items-center space-x-2">
-                {(environment === 'development' 
-                  ? getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_DEV')
-                  : getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_PROD')
-                ) ? (
-                  <>
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <span className="text-sm">Configured</span>
-                  </>
+                {getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_DEV') ? (
+                  <CheckCircle className="h-4 w-4 text-green-600" />
                 ) : (
-                  <>
-                    <XCircle className="h-4 w-4 text-red-600" />
-                    <span className="text-sm">Missing</span>
-                  </>
+                  <XCircle className="h-4 w-4 text-red-600" />
                 )}
+                <span className="text-sm">
+                  {getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_DEV') ? 'Configured' : 'Missing'}
+                </span>
               </div>
             </div>
           </div>
@@ -788,7 +1030,7 @@ const AdminSettings: React.FC = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <Activity className="h-5 w-5" />
+            <Layers className="h-5 w-5" />
             <span>Quick Actions</span>
           </CardTitle>
           <CardDescription>
@@ -796,7 +1038,7 @@ const AdminSettings: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Button 
               variant="outline"
               size="sm"

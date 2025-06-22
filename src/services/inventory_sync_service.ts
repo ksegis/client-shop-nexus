@@ -23,6 +23,12 @@ export interface InventorySyncStatus {
   rateLimitRetryAfter: string | null;
   rateLimitMessage: string | null;
   rateLimitTimeRemaining: number | null;
+  // Delta sync specific
+  lastDeltaSyncTime: string | null;
+  lastDeltaSyncResult: string;
+  nextDeltaSync: string | null;
+  deltaSyncEnabled: boolean;
+  deltaSyncIntervalHours: number;
 }
 
 export interface SyncLogEntry {
@@ -30,6 +36,16 @@ export interface SyncLogEntry {
   level: 'info' | 'warning' | 'error';
   message: string;
   details?: any;
+}
+
+export interface DeltaSyncResult {
+  success: boolean;
+  message: string;
+  updatedItems: number;
+  newItems: number;
+  deletedItems: number;
+  errors: string[];
+  syncType: 'delta_inventory' | 'delta_quantity';
 }
 
 export class InventorySyncService {
@@ -55,9 +71,15 @@ export class InventorySyncService {
     this.isRateLimited = false;
     this.rateLimitRetryAfter = null;
     this.rateLimitMessage = null;
+
+    // Delta sync properties
+    this.lastDeltaSyncTime = null;
+    this.lastDeltaSyncResult = 'never';
+    this.deltaSyncEnabled = true; // Enable by default
+    this.deltaSyncIntervalHours = 12; // Twice daily (every 12 hours)
   }
 
-  // ADDED: Initialize method that the application expects
+  // Initialize method that the application expects
   async initialize() {
     if (this.isInitialized) {
       console.log('📋 InventorySyncService already initialized');
@@ -78,6 +100,11 @@ export class InventorySyncService {
         const timeRemaining = this.getRateLimitTimeRemaining();
         console.log(`⏰ Service initialized with active rate limit. Retry in ${this.formatDuration(timeRemaining)}`);
       }
+
+      // Check if delta sync should run
+      if (this.shouldRunDeltaSync()) {
+        console.log('🔄 Delta sync is due to run');
+      }
       
       this.isInitialized = true;
       console.log('✅ InventorySyncService initialized successfully');
@@ -88,7 +115,7 @@ export class InventorySyncService {
     }
   }
 
-  // ADDED: Verify that required environment variables are present
+  // Verify that required environment variables are present
   private verifyEnvironmentVariables() {
     const requiredVars = [
       'VITE_SUPABASE_URL',
@@ -252,7 +279,607 @@ export class InventorySyncService {
     return null;
   }
 
-  // Get inventory data from Keystone API with rate limit handling
+  // NEW: Get inventory updates from Keystone API (Delta Sync)
+  async getInventoryUpdatesFromKeystone(lastSyncTime = null) {
+    const environment = this.getCurrentEnvironment();
+    
+    // Check if currently rate limited
+    if (this.isCurrentlyRateLimited()) {
+      const timeRemaining = this.getRateLimitTimeRemaining();
+      const message = `API is rate limited. Retry in ${this.formatDuration(timeRemaining)}.`;
+      console.log(`⏰ ${message}`);
+      
+      return { 
+        isRateLimited: true, 
+        message,
+        timeRemaining,
+        data: environment === 'development' ? this.getMockDeltaData() : []
+      };
+    }
+    
+    const apiToken = this.getApiToken();
+    const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
+    
+    if (!apiToken || !proxyUrl) {
+      const missingVars = [];
+      if (!apiToken) missingVars.push(`VITE_KEYSTONE_SECURITY_TOKEN_${environment.toUpperCase()}`);
+      if (!proxyUrl) missingVars.push('VITE_KEYSTONE_PROXY_URL');
+      
+      console.error('❌ Missing required environment variables:', missingVars.join(', '));
+      
+      if (environment === 'production') {
+        throw new Error(`Missing required environment variables for Keystone API: ${missingVars.join(', ')}`);
+      }
+      
+      console.log('🔄 Falling back to mock delta data in development mode');
+      return this.getMockDeltaData();
+    }
+
+    try {
+      const endpoint = '/inventory/updates';
+      const fullUrl = `${proxyUrl}${endpoint}`;
+      
+      console.log(`🔄 Making delta sync request to: ${fullUrl}`);
+      console.log(`🕐 Last sync time: ${lastSyncTime || 'Never'}`);
+      
+      const requestBody = {
+        lastSyncTime: lastSyncTime || null,
+        includeQuantityOnly: false // Get full updates, not just quantities
+      };
+
+      const response = await fetch(fullUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiToken}`,
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ HTTP ${response.status}: ${errorText}`);
+        
+        // Handle rate limiting specifically
+        if (response.status === 429) {
+          const rateLimitInfo = this.parseRateLimitError(errorText);
+          if (rateLimitInfo) {
+            this.setRateLimit(
+              rateLimitInfo.retryAfterSeconds, 
+              `Rate limited on ${rateLimitInfo.function}. ${rateLimitInfo.message}`
+            );
+            
+            const message = `Rate limited. Retry in ${this.formatDuration(rateLimitInfo.retryAfterSeconds)}.`;
+            console.log(`⏰ ${message}`);
+            
+            return { 
+              isRateLimited: true, 
+              message,
+              timeRemaining: rateLimitInfo.retryAfterSeconds,
+              data: environment === 'development' ? this.getMockDeltaData() : []
+            };
+          }
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      // Clear any existing rate limit on successful response
+      if (this.isRateLimited) {
+        console.log('✅ Rate limit cleared - Delta sync API call successful');
+        this.clearRateLimit();
+      }
+
+      const data = await response.json();
+      console.log(`✅ Successfully fetched ${data.length || 0} updated items from Keystone API`);
+      
+      return data;
+      
+    } catch (error) {
+      console.error('❌ Failed to get inventory updates from Keystone:', error);
+      
+      if (environment === 'production') {
+        throw error;
+      }
+      
+      console.log('🔄 Falling back to mock delta data due to API error');
+      return this.getMockDeltaData();
+    }
+  }
+
+  // NEW: Get quantity-only updates from Keystone API
+  async getInventoryQuantityUpdatesFromKeystone(lastSyncTime = null) {
+    const environment = this.getCurrentEnvironment();
+    
+    // Check if currently rate limited
+    if (this.isCurrentlyRateLimited()) {
+      const timeRemaining = this.getRateLimitTimeRemaining();
+      const message = `API is rate limited. Retry in ${this.formatDuration(timeRemaining)}.`;
+      console.log(`⏰ ${message}`);
+      
+      return { 
+        isRateLimited: true, 
+        message,
+        timeRemaining,
+        data: environment === 'development' ? this.getMockQuantityData() : []
+      };
+    }
+    
+    const apiToken = this.getApiToken();
+    const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
+    
+    if (!apiToken || !proxyUrl) {
+      if (environment === 'production') {
+        throw new Error('Missing required environment variables for Keystone API');
+      }
+      
+      console.log('🔄 Falling back to mock quantity data in development mode');
+      return this.getMockQuantityData();
+    }
+
+    try {
+      const endpoint = '/inventory/quantity-updates';
+      const fullUrl = `${proxyUrl}${endpoint}`;
+      
+      console.log(`🔄 Making quantity delta sync request to: ${fullUrl}`);
+      console.log(`🕐 Last sync time: ${lastSyncTime || 'Never'}`);
+      
+      const requestBody = {
+        lastSyncTime: lastSyncTime || null
+      };
+
+      const response = await fetch(fullUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiToken}`,
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ HTTP ${response.status}: ${errorText}`);
+        
+        if (response.status === 429) {
+          const rateLimitInfo = this.parseRateLimitError(errorText);
+          if (rateLimitInfo) {
+            this.setRateLimit(rateLimitInfo.retryAfterSeconds, rateLimitInfo.message);
+            
+            return { 
+              isRateLimited: true, 
+              message: `Rate limited. Retry in ${this.formatDuration(rateLimitInfo.retryAfterSeconds)}.`,
+              timeRemaining: rateLimitInfo.retryAfterSeconds,
+              data: environment === 'development' ? this.getMockQuantityData() : []
+            };
+          }
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      if (this.isRateLimited) {
+        console.log('✅ Rate limit cleared - Quantity delta sync API call successful');
+        this.clearRateLimit();
+      }
+
+      const data = await response.json();
+      console.log(`✅ Successfully fetched ${data.length || 0} quantity updates from Keystone API`);
+      
+      return data;
+      
+    } catch (error) {
+      console.error('❌ Failed to get quantity updates from Keystone:', error);
+      
+      if (environment === 'production') {
+        throw error;
+      }
+      
+      console.log('🔄 Falling back to mock quantity data due to API error');
+      return this.getMockQuantityData();
+    }
+  }
+
+  // NEW: Perform delta inventory sync
+  async performDeltaSync(syncType = 'delta_inventory') {
+    if (this.isRunning) {
+      throw new Error('Sync is already running');
+    }
+
+    // Check if rate limited before starting
+    if (this.isCurrentlyRateLimited()) {
+      const timeRemaining = this.getRateLimitTimeRemaining();
+      const message = `Cannot sync: API is rate limited. Retry in ${this.formatDuration(timeRemaining)}.`;
+      throw new Error(message);
+    }
+
+    this.isRunning = true;
+    this.isCancelled = false;
+    this.progress = 0;
+    this.syncedItems = 0;
+    this.errors = [];
+
+    const syncStartTime = new Date().toISOString();
+    console.log(`🔄 Starting delta sync (${syncType}) at ${syncStartTime}`);
+
+    try {
+      // Log sync start to database
+      const syncLogId = await this.logSyncStart(syncType);
+
+      // Get last delta sync time from database
+      const lastDeltaSyncTime = await this.getLastDeltaSyncTime(syncType);
+      console.log(`📅 Last delta sync: ${lastDeltaSyncTime || 'Never'}`);
+
+      // Get updates from Keystone
+      let updatesResponse;
+      if (syncType === 'delta_quantity') {
+        updatesResponse = await this.getInventoryQuantityUpdatesFromKeystone(lastDeltaSyncTime);
+      } else {
+        updatesResponse = await this.getInventoryUpdatesFromKeystone(lastDeltaSyncTime);
+      }
+
+      // Check if response indicates rate limiting
+      if (updatesResponse && updatesResponse.isRateLimited) {
+        console.log(`⏰ Delta sync stopped due to rate limiting: ${updatesResponse.message}`);
+        await this.logSyncComplete(syncLogId, 'failed', 0, 0, 0, updatesResponse.message);
+        
+        return {
+          success: false,
+          message: updatesResponse.message,
+          updatedItems: 0,
+          newItems: 0,
+          deletedItems: 0,
+          errors: [updatesResponse.message],
+          syncType,
+          isRateLimited: true,
+          timeRemaining: updatesResponse.timeRemaining
+        };
+      }
+
+      // Use the actual updates data
+      const updatesData = updatesResponse.data || updatesResponse;
+      
+      if (!updatesData || updatesData.length === 0) {
+        console.log('✅ No inventory updates found - system is up to date');
+        await this.logSyncComplete(syncLogId, 'success', 0, 0, 0, 'No updates found');
+        
+        // Update last delta sync time even if no updates
+        this.lastDeltaSyncTime = syncStartTime;
+        this.lastDeltaSyncResult = 'success';
+        this.saveSyncStatus();
+        
+        return {
+          success: true,
+          message: 'No updates found - inventory is up to date',
+          updatedItems: 0,
+          newItems: 0,
+          deletedItems: 0,
+          errors: [],
+          syncType
+        };
+      }
+
+      console.log(`📦 Processing ${updatesData.length} inventory updates`);
+      this.progress = 0.3; // 30% progress after getting data
+
+      // Process updates
+      const result = await this.processDeltaUpdates(updatesData, syncType);
+      this.progress = 0.9; // 90% progress after processing
+
+      // Log completion
+      await this.logSyncComplete(
+        syncLogId, 
+        result.errors.length === 0 ? 'success' : 'partial',
+        result.updatedItems + result.newItems,
+        result.updatedItems,
+        result.newItems,
+        result.errors.length > 0 ? `${result.errors.length} errors occurred` : null
+      );
+
+      // Update status
+      this.lastDeltaSyncTime = syncStartTime;
+      this.lastDeltaSyncResult = result.errors.length === 0 ? 'success' : 'partial';
+      this.saveSyncStatus();
+      this.progress = 1; // 100% complete
+
+      console.log(`✅ Delta sync completed: ${result.updatedItems} updated, ${result.newItems} new, ${result.errors.length} errors`);
+      
+      return result;
+
+    } catch (error) {
+      console.error('❌ Delta sync failed:', error);
+      this.lastDeltaSyncResult = 'failed';
+      this.saveSyncStatus();
+      
+      return {
+        success: false,
+        message: `Delta sync failed: ${error.message}`,
+        updatedItems: 0,
+        newItems: 0,
+        deletedItems: 0,
+        errors: [error.message],
+        syncType
+      };
+    } finally {
+      this.isRunning = false;
+      this.progress = 0;
+    }
+  }
+
+  // NEW: Process delta updates
+  async processDeltaUpdates(updatesData, syncType) {
+    let updatedItems = 0;
+    let newItems = 0;
+    let deletedItems = 0;
+    const errors = [];
+
+    for (const update of updatesData) {
+      try {
+        if (update.action === 'DELETE' || update.status === 'DELETED') {
+          // Handle deleted items
+          const result = await this.handleDeletedItem(update);
+          if (result.success) {
+            deletedItems++;
+          } else {
+            errors.push(`Delete failed for ${update.sku || update.vcpn}: ${result.error}`);
+          }
+        } else if (update.action === 'INSERT' || update.isNew) {
+          // Handle new items
+          const result = await this.handleNewItem(update);
+          if (result.success) {
+            newItems++;
+          } else {
+            errors.push(`Insert failed for ${update.sku || update.vcpn}: ${result.error}`);
+          }
+        } else {
+          // Handle updated items
+          const result = await this.handleUpdatedItem(update, syncType);
+          if (result.success) {
+            updatedItems++;
+          } else {
+            errors.push(`Update failed for ${update.sku || update.vcpn}: ${result.error}`);
+          }
+        }
+      } catch (error) {
+        errors.push(`Processing failed for ${update.sku || update.vcpn}: ${error.message}`);
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      message: errors.length === 0 
+        ? `Successfully processed ${updatedItems + newItems + deletedItems} items`
+        : `Processed items with ${errors.length} errors`,
+      updatedItems,
+      newItems,
+      deletedItems,
+      errors,
+      syncType
+    };
+  }
+
+  // NEW: Handle deleted item
+  async handleDeletedItem(item) {
+    try {
+      const { error } = await supabase
+        .from('inventory')
+        .update({
+          keystone_sync_status: 'deleted',
+          updated_at: new Date().toISOString()
+        })
+        .eq('keystone_vcpn', item.vcpn || item.sku);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // NEW: Handle new item
+  async handleNewItem(item) {
+    try {
+      const transformedItem = this.transformKeystoneData([item])[0];
+      
+      const { error } = await supabase
+        .from('inventory')
+        .insert(transformedItem);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // NEW: Handle updated item
+  async handleUpdatedItem(item, syncType) {
+    try {
+      let updateData;
+      
+      if (syncType === 'delta_quantity') {
+        // Only update quantity for quantity-only sync
+        updateData = {
+          quantity: parseInt(item.quantity || item.stock || 0),
+          keystone_last_sync: new Date().toISOString(),
+          keystone_sync_status: 'synced',
+          updated_at: new Date().toISOString()
+        };
+      } else {
+        // Full update for regular delta sync
+        updateData = this.transformKeystoneData([item])[0];
+      }
+
+      const { error } = await supabase
+        .from('inventory')
+        .update(updateData)
+        .eq('keystone_vcpn', item.vcpn || item.sku);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // NEW: Get last delta sync time from database
+  async getLastDeltaSyncTime(syncType) {
+    try {
+      const { data, error } = await supabase
+        .from('keystone_sync_logs')
+        .select('completed_at')
+        .eq('sync_type', syncType)
+        .eq('status', 'success')
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error getting last delta sync time:', error);
+        return null;
+      }
+
+      return data?.completed_at || null;
+    } catch (error) {
+      console.error('Error getting last delta sync time:', error);
+      return null;
+    }
+  }
+
+  // NEW: Log sync start to database
+  async logSyncStart(syncType) {
+    try {
+      const { data, error } = await supabase
+        .from('keystone_sync_logs')
+        .insert({
+          sync_type: syncType,
+          status: 'running',
+          keystone_endpoint: syncType === 'delta_quantity' ? '/inventory/quantity-updates' : '/inventory/updates'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error logging sync start:', error);
+        return null;
+      }
+
+      return data.id;
+    } catch (error) {
+      console.error('Error logging sync start:', error);
+      return null;
+    }
+  }
+
+  // NEW: Log sync completion to database
+  async logSyncComplete(syncLogId, status, partsProcessed, partsUpdated, partsAdded, errorMessage = null) {
+    if (!syncLogId) return;
+
+    try {
+      const { error } = await supabase
+        .from('keystone_sync_logs')
+        .update({
+          completed_at: new Date().toISOString(),
+          status,
+          parts_processed: partsProcessed,
+          parts_updated: partsUpdated,
+          parts_added: partsAdded,
+          error_message: errorMessage
+        })
+        .eq('id', syncLogId);
+
+      if (error) {
+        console.error('Error logging sync completion:', error);
+      }
+    } catch (error) {
+      console.error('Error logging sync completion:', error);
+    }
+  }
+
+  // NEW: Check if delta sync should run
+  shouldRunDeltaSync() {
+    if (!this.deltaSyncEnabled || this.isRunning || this.isCurrentlyRateLimited()) {
+      return false;
+    }
+    
+    const nextDeltaSync = this.getNextDeltaSync();
+    if (!nextDeltaSync) {
+      return true; // Never run before, should run now
+    }
+    
+    try {
+      return new Date() >= new Date(nextDeltaSync);
+    } catch (error) {
+      console.error('Error checking delta sync schedule:', error);
+      return false;
+    }
+  }
+
+  // NEW: Get next delta sync time
+  getNextDeltaSync() {
+    if (!this.deltaSyncEnabled || !this.lastDeltaSyncTime) {
+      return null;
+    }
+    
+    try {
+      const lastSync = new Date(this.lastDeltaSyncTime);
+      const nextSync = new Date(lastSync.getTime() + (this.deltaSyncIntervalHours * 60 * 60 * 1000));
+      return nextSync.toISOString();
+    } catch (error) {
+      console.error('Error calculating next delta sync:', error);
+      return null;
+    }
+  }
+
+  // NEW: Get mock delta data for development
+  getMockDeltaData() {
+    console.log('🧪 Generating mock delta inventory data');
+    
+    const mockUpdates = [];
+    const updateTypes = ['UPDATE', 'INSERT'];
+    
+    for (let i = 1; i <= 5; i++) {
+      mockUpdates.push({
+        vcpn: `VCPN-DELTA-${String(i).padStart(3, '0')}`,
+        sku: `DELTA-${String(i).padStart(4, '0')}`,
+        description: `Updated Part ${i}`,
+        price: (Math.random() * 100 + 50).toFixed(2),
+        quantity: Math.floor(Math.random() * 50) + 10,
+        action: updateTypes[Math.floor(Math.random() * updateTypes.length)],
+        lastModified: new Date().toISOString()
+      });
+    }
+    
+    return mockUpdates;
+  }
+
+  // NEW: Get mock quantity data for development
+  getMockQuantityData() {
+    console.log('🧪 Generating mock quantity update data');
+    
+    const mockQuantities = [];
+    
+    for (let i = 1; i <= 3; i++) {
+      mockQuantities.push({
+        vcpn: `VCPN-QTY-${String(i).padStart(3, '0')}`,
+        quantity: Math.floor(Math.random() * 100) + 1,
+        lastModified: new Date().toISOString()
+      });
+    }
+    
+    return mockQuantities;
+  }
+
+  // Get inventory data from Keystone API with rate limit handling (EXISTING - UNCHANGED)
   async getInventoryFromKeystone(limit = 1000) {
     const environment = this.getCurrentEnvironment();
     
@@ -370,7 +997,7 @@ export class InventorySyncService {
     }
   }
 
-  // Transform Keystone data to Supabase format
+  // Transform Keystone data to Supabase format (EXISTING - UNCHANGED)
   transformKeystoneData(keystoneItems) {
     return keystoneItems.map(item => ({
       sku: item.sku || item.partNumber || `UNKNOWN-${Date.now()}`,
@@ -384,7 +1011,7 @@ export class InventorySyncService {
     }));
   }
 
-  // Upsert items to Supabase with multiple fallback strategies
+  // Upsert items to Supabase with multiple fallback strategies (EXISTING - UNCHANGED)
   async upsertItemsToSupabase(items) {
     const transformedItems = this.transformKeystoneData(items);
     
@@ -489,7 +1116,7 @@ export class InventorySyncService {
     return { data: results, error: null };
   }
 
-  // Perform full sync with rate limit awareness - FIXED VERSION
+  // Perform full sync with rate limit awareness - FIXED VERSION (EXISTING - UNCHANGED)
   async performFullSync(limit = 1000) {
     if (this.isRunning) {
       throw new Error('Sync is already running');
@@ -648,7 +1275,7 @@ export class InventorySyncService {
     }
   }
 
-  // Get mock inventory data for development/testing
+  // Get mock inventory data for development/testing (EXISTING - UNCHANGED)
   getMockInventoryData(limit = 50) {
     console.log(`🧪 Generating ${limit} mock inventory items`);
     
@@ -673,7 +1300,7 @@ export class InventorySyncService {
     return mockItems;
   }
 
-  // Update sync status in localStorage
+  // Update sync status in localStorage (EXISTING - UNCHANGED)
   updateSyncStatus(status, message = '') {
     const statusData = {
       status,
@@ -689,7 +1316,7 @@ export class InventorySyncService {
     localStorage.setItem('inventory_sync_status', JSON.stringify(statusData));
   }
 
-  // Save comprehensive sync status including rate limit info
+  // Save comprehensive sync status including rate limit info (ENHANCED)
   saveSyncStatus() {
     const statusData = {
       lastSyncTime: this.lastSyncTime,
@@ -702,13 +1329,19 @@ export class InventorySyncService {
       nextPlannedSync: this.getNextPlannedSync(),
       isRateLimited: this.isRateLimited,
       rateLimitRetryAfter: this.rateLimitRetryAfter,
-      rateLimitMessage: this.rateLimitMessage
+      rateLimitMessage: this.rateLimitMessage,
+      // Delta sync status
+      lastDeltaSyncTime: this.lastDeltaSyncTime,
+      lastDeltaSyncResult: this.lastDeltaSyncResult,
+      deltaSyncEnabled: this.deltaSyncEnabled,
+      deltaSyncIntervalHours: this.deltaSyncIntervalHours,
+      nextDeltaSync: this.getNextDeltaSync()
     };
     
     localStorage.setItem('inventory_sync_comprehensive_status', JSON.stringify(statusData));
   }
 
-  // Load sync status from localStorage including rate limit info
+  // Load sync status from localStorage including rate limit info (ENHANCED)
   loadSyncStatus() {
     try {
       const statusData = localStorage.getItem('inventory_sync_comprehensive_status');
@@ -724,13 +1357,18 @@ export class InventorySyncService {
         this.isRateLimited = parsed.isRateLimited || false;
         this.rateLimitRetryAfter = parsed.rateLimitRetryAfter || null;
         this.rateLimitMessage = parsed.rateLimitMessage || null;
+        // Delta sync properties
+        this.lastDeltaSyncTime = parsed.lastDeltaSyncTime || null;
+        this.lastDeltaSyncResult = parsed.lastDeltaSyncResult || 'never';
+        this.deltaSyncEnabled = parsed.deltaSyncEnabled !== undefined ? parsed.deltaSyncEnabled : true;
+        this.deltaSyncIntervalHours = parsed.deltaSyncIntervalHours || 12;
       }
     } catch (error) {
       console.error('Error loading sync status:', error);
     }
   }
 
-  // Get next planned sync time
+  // Get next planned sync time (EXISTING - UNCHANGED)
   getNextPlannedSync() {
     if (!this.enableAutoSync || !this.lastSyncTime) {
       return null;
@@ -746,7 +1384,7 @@ export class InventorySyncService {
     }
   }
 
-  // Get current sync status including rate limit information
+  // Get current sync status including rate limit information (ENHANCED)
   getSyncStatus() {
     return {
       isRunning: this.isRunning || false,
@@ -764,11 +1402,17 @@ export class InventorySyncService {
       isRateLimited: this.isCurrentlyRateLimited(),
       rateLimitRetryAfter: this.rateLimitRetryAfter,
       rateLimitMessage: this.rateLimitMessage,
-      rateLimitTimeRemaining: this.getRateLimitTimeRemaining()
+      rateLimitTimeRemaining: this.getRateLimitTimeRemaining(),
+      // Delta sync status
+      lastDeltaSyncTime: this.lastDeltaSyncTime || null,
+      lastDeltaSyncResult: this.lastDeltaSyncResult || 'never',
+      nextDeltaSync: this.getNextDeltaSync(),
+      deltaSyncEnabled: this.deltaSyncEnabled || false,
+      deltaSyncIntervalHours: this.deltaSyncIntervalHours || 12
     };
   }
 
-  // Check if scheduled sync should run
+  // Check if scheduled sync should run (EXISTING - UNCHANGED)
   shouldRunScheduledSync() {
     if (!this.enableAutoSync || this.isRunning || this.isCurrentlyRateLimited()) {
       return false;
@@ -787,7 +1431,7 @@ export class InventorySyncService {
     }
   }
 
-  // Cancel running sync
+  // Cancel running sync (EXISTING - UNCHANGED)
   cancelSync() {
     if (this.isRunning) {
       this.isCancelled = true;
@@ -797,7 +1441,7 @@ export class InventorySyncService {
     return false;
   }
 
-  // Get inventory from Supabase database
+  // Get inventory from Supabase database (EXISTING - UNCHANGED)
   async getInventoryFromSupabase(limit = 1000, offset = 0) {
     try {
       const { data, error } = await supabase
@@ -817,7 +1461,7 @@ export class InventorySyncService {
     }
   }
 
-  // Update single part
+  // Update single part (EXISTING - UNCHANGED)
   async updateSinglePart(sku) {
     try {
       console.log(`🔄 Updating single part: ${sku}`);
