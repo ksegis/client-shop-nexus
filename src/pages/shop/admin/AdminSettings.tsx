@@ -295,19 +295,53 @@ const AdminSettings: React.FC = () => {
     }
   };
 
-  // Handle delta sync settings change
+  // Handle delta sync settings change - FIXED VERSION
   const handleDeltaSyncSettingsChange = (newSettings) => {
     try {
+      console.log('🔄 Updating delta sync settings:', newSettings);
       setDeltaSyncSettings(newSettings);
       
-      // Update service settings
+      // Try to update service settings if method exists
       if (inventorySyncService?.updateDeltaSyncSettings) {
-        inventorySyncService.updateDeltaSyncSettings(newSettings);
+        const success = inventorySyncService.updateDeltaSyncSettings(newSettings);
+        if (success) {
+          console.log('✅ Service settings updated successfully');
+        } else {
+          console.warn('⚠️ Service settings update failed');
+        }
+      } else {
+        console.warn('⚠️ updateDeltaSyncSettings method not available on service');
+        
+        // Fallback: Save settings to localStorage directly
+        try {
+          const currentStatus = JSON.parse(localStorage.getItem('inventory_sync_status') || '{}');
+          currentStatus.deltaSyncEnabled = newSettings.enabled;
+          currentStatus.deltaSyncIntervalHours = newSettings.intervalHours;
+          
+          // Calculate next delta sync time if enabled
+          if (newSettings.enabled) {
+            const now = new Date();
+            const nextSync = new Date(now.getTime() + (newSettings.intervalHours * 60 * 60 * 1000));
+            currentStatus.nextDeltaSync = nextSync.toISOString();
+          } else {
+            currentStatus.nextDeltaSync = null;
+          }
+          
+          localStorage.setItem('inventory_sync_status', JSON.stringify(currentStatus));
+          console.log('✅ Settings saved to localStorage as fallback');
+        } catch (fallbackError) {
+          console.error('❌ Fallback save failed:', fallbackError);
+        }
       }
       
-      loadSyncStatus();
+      // Refresh status to show updated settings
+      setTimeout(() => {
+        loadSyncStatus();
+      }, 100);
+      
     } catch (error) {
-      console.error('Error updating delta sync settings:', error);
+      console.error('❌ Error updating delta sync settings:', error);
+      alert('Failed to update delta sync settings. Please try again.');
     }
   };
 
@@ -358,7 +392,7 @@ const AdminSettings: React.FC = () => {
     }
   };
 
-  // Test delta sync
+  // Test delta sync - FIXED VERSION
   const handleTestDeltaSync = async () => {
     if (syncStatus?.isRateLimited) {
       const timeRemaining = rateLimitCountdown || syncStatus.rateLimitTimeRemaining || 0;
@@ -378,7 +412,9 @@ const AdminSettings: React.FC = () => {
           alert(`Delta sync failed: ${result.message || 'Unknown error'}`);
         }
       } else {
-        throw new Error('Delta sync not available');
+        // Fallback for missing method
+        console.warn('⚠️ performDeltaSync method not available');
+        alert('Delta sync functionality is not yet available. Please update the inventory sync service.');
       }
     } catch (error) {
       const errorMessage = error?.message || 'Unknown error occurred';
@@ -390,7 +426,7 @@ const AdminSettings: React.FC = () => {
     }
   };
 
-  // Test quantity delta sync
+  // Test quantity delta sync - FIXED VERSION
   const handleTestQuantityDeltaSync = async () => {
     if (syncStatus?.isRateLimited) {
       const timeRemaining = rateLimitCountdown || syncStatus.rateLimitTimeRemaining || 0;
@@ -410,7 +446,9 @@ const AdminSettings: React.FC = () => {
           alert(`Quantity delta sync failed: ${result.message || 'Unknown error'}`);
         }
       } else {
-        throw new Error('Quantity delta sync not available');
+        // Fallback for missing method
+        console.warn('⚠️ performDeltaSync method not available');
+        alert('Quantity delta sync functionality is not yet available. Please update the inventory sync service.');
       }
     } catch (error) {
       const errorMessage = error?.message || 'Unknown error occurred';
@@ -766,206 +804,212 @@ const AdminSettings: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Sync Status Dashboard */}
+      {/* Inventory Sync Status */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <Activity className="h-5 w-5" />
+            <TrendingUp className="h-5 w-5" />
             <span>Inventory Sync Status</span>
           </CardTitle>
           <CardDescription>
             Monitor the status and health of your inventory synchronization
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {syncStatus && (
-            <>
-              {/* Status Overview */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Last Full Sync</Label>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <div>
-                      <p className="text-sm font-medium">
-                        {safeFormatRelativeTime(syncStatus.lastSuccessfulSync)}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {safeFormatDate(syncStatus.lastSuccessfulSync)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-600">Last Successful Sync</Label>
+              <div className="flex items-center space-x-2">
+                <Calendar className="h-4 w-4 text-gray-400" />
+                <span className="text-sm">
+                  {syncStatus?.lastSuccessfulSync ? safeFormatRelativeTime(syncStatus.lastSuccessfulSync) : 'Never'}
+                </span>
+              </div>
+              {syncStatus?.lastSuccessfulSync && (
+                <p className="text-xs text-gray-500">
+                  {safeFormatDate(syncStatus.lastSuccessfulSync)}
+                </p>
+              )}
+            </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Last Delta Sync</Label>
-                  <div className="flex items-center space-x-2">
-                    <RotateCcw className="h-4 w-4 text-blue-600" />
-                    <div>
-                      <p className="text-sm font-medium">
-                        {safeFormatRelativeTime(syncStatus.lastDeltaSyncTime)}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {safeFormatDate(syncStatus.lastDeltaSyncTime)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-600">Next Planned Sync</Label>
+              <div className="flex items-center space-x-2">
+                <Clock className="h-4 w-4 text-gray-400" />
+                <span className="text-sm">
+                  {syncStatus?.isRateLimited ? 'Delayed (Rate Limited)' : 
+                   syncStatus?.nextPlannedSync ? safeFormatRelativeTime(syncStatus.nextPlannedSync) : 'Not scheduled'}
+                </span>
+              </div>
+              {syncStatus?.nextPlannedSync && !syncStatus?.isRateLimited && (
+                <p className="text-xs text-gray-500">
+                  {safeFormatDate(syncStatus.nextPlannedSync)}
+                </p>
+              )}
+            </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Next Delta Sync</Label>
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="h-4 w-4 text-blue-600" />
-                    <div>
-                      <p className="text-sm font-medium">
-                        {syncStatus.isRateLimited ? 'Delayed (Rate Limited)' : 
-                         deltaSyncSettings.enabled ? safeFormatRelativeTime(syncStatus.nextDeltaSync) : 'Disabled'}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {syncStatus.isRateLimited ? 'Waiting for API availability' : 
-                         deltaSyncSettings.enabled ? safeFormatDate(syncStatus.nextDeltaSync) : 'Delta sync disabled'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-600">Last Sync Result</Label>
+              <div className="flex items-center space-x-2">
+                {getSyncStatusBadge(syncStatus?.lastSyncResult)}
+              </div>
+              {syncStatus?.failureReason && (
+                <p className="text-xs text-red-600">
+                  {syncStatus.failureReason}
+                </p>
+              )}
+            </div>
+          </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-600">Last Sync Result</Label>
-                  <div className="flex items-center space-x-2">
-                    {getSyncStatusBadge(syncStatus.lastSyncResult)}
-                  </div>
-                  {syncStatus.failureReason && (
-                    <p className="text-xs text-red-600 mt-1">
-                      {safeDisplayValue(syncStatus.failureReason, 'Unknown error')}
-                    </p>
-                  )}
+          {/* Delta Sync Status */}
+          <Separator />
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-600">Delta Sync Status</Label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <RotateCcw className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm font-medium">Last Delta Sync</span>
                 </div>
+                <p className="text-sm text-gray-600">
+                  {syncStatus?.lastDeltaSyncTime ? safeFormatRelativeTime(syncStatus.lastDeltaSyncTime) : 'Never'}
+                </p>
+                {syncStatus?.lastDeltaSyncTime && (
+                  <p className="text-xs text-gray-500">
+                    {safeFormatDate(syncStatus.lastDeltaSyncTime)}
+                  </p>
+                )}
               </div>
 
-              <Separator />
-
-              {/* Detailed Status */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-gray-600">Sync Statistics</Label>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Total Items:</span>
-                      <span className="font-medium">{safeFormatNumber(syncStatus.totalItems)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Synced Items:</span>
-                      <span className="font-medium">{safeFormatNumber(syncStatus.syncedItems)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Errors:</span>
-                      <span className={`font-medium ${(syncStatus.errors?.length || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {safeFormatNumber(syncStatus.errors?.length || 0)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Progress:</span>
-                      <span className="font-medium">{safeFormatPercentage(syncStatus.progress)}</span>
-                    </div>
-                  </div>
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <Timer className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm font-medium">Next Delta Sync</span>
                 </div>
+                <p className="text-sm text-gray-600">
+                  {syncStatus?.isRateLimited ? 'Waiting for API availability' :
+                   deltaSyncSettings.enabled ? 
+                     (syncStatus?.nextDeltaSync ? safeFormatRelativeTime(syncStatus.nextDeltaSync) : 'Calculating...') : 
+                     'Disabled'}
+                </p>
+              </div>
 
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium text-gray-600">System Status</Label>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Sync Running:</span>
-                      <Badge variant={syncStatus.isRunning ? "default" : "secondary"}>
-                        {syncStatus.isRunning ? 'Active' : 'Idle'}
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>API Status:</span>
-                      <Badge variant={syncStatus.isRateLimited ? "destructive" : "default"}>
-                        {syncStatus.isRateLimited ? 'Rate Limited' : 'Available'}
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Delta Sync:</span>
-                      <Badge variant={deltaSyncSettings.enabled ? "default" : "secondary"}>
-                        {deltaSyncSettings.enabled ? 'Enabled' : 'Disabled'}
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Last Attempt:</span>
-                      <span className="font-medium text-xs">
-                        {safeFormatRelativeTime(syncStatus.lastSyncAttempt)}
-                      </span>
-                    </div>
-                  </div>
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <Activity className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm font-medium">Delta Sync Result</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {getSyncStatusBadge(syncStatus?.lastDeltaSyncResult)}
                 </div>
               </div>
-            </>
-          )}
+            </div>
+          </div>
 
           <Separator />
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium text-gray-600">Total Items</Label>
+              <p className="text-2xl font-bold">{safeFormatNumber(syncStatus?.totalItems)}</p>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-sm font-medium text-gray-600">Synced Items</Label>
+              <p className="text-2xl font-bold">{safeFormatNumber(syncStatus?.syncedItems)}</p>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-sm font-medium text-gray-600">Errors</Label>
+              <p className="text-2xl font-bold text-red-600">{safeFormatNumber(syncStatus?.errors?.length)}</p>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-sm font-medium text-gray-600">Progress</Label>
+              <p className="text-2xl font-bold">{safeFormatPercentage(syncStatus?.progress)}</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium text-gray-600">System Status</Label>
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1">
+                  <span className="text-sm font-medium">Sync Running:</span>
+                  <Badge variant={syncStatus?.isRunning ? 'default' : 'secondary'} className="text-xs">
+                    {syncStatus?.isRunning ? 'Active' : 'Idle'}
+                  </Badge>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <span className="text-sm font-medium">API Status:</span>
+                  <Badge variant={syncStatus?.isRateLimited ? 'destructive' : 'default'} className="text-xs">
+                    {syncStatus?.isRateLimited ? 'Rate Limited' : 'Available'}
+                  </Badge>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <span className="text-sm font-medium">Last Attempt:</span>
+                  <span className="text-xs text-gray-500">
+                    {syncStatus?.lastSyncAttempt ? safeFormatRelativeTime(syncStatus.lastSyncAttempt) : 'Never'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
             <Button 
-              onClick={loadSyncStatus}
-              variant="outline"
+              variant="outline" 
               size="sm"
+              onClick={loadSyncStatus}
               className="flex items-center space-x-2"
             >
               <RefreshCw className="h-4 w-4" />
               <span>Refresh Status</span>
             </Button>
-            
+
             <Button 
-              onClick={handleTestSync}
-              disabled={isLoading || (syncStatus?.isRunning) || (syncStatus?.isRateLimited)}
+              variant={syncStatus?.isRateLimited ? 'secondary' : 'default'}
               size="sm"
+              onClick={handleTestSync}
+              disabled={isLoading || syncStatus?.isRunning}
               className="flex items-center space-x-2"
             >
               <Database className="h-4 w-4" />
-              <span>
-                {isLoading ? 'Testing...' : 
-                 syncStatus?.isRateLimited ? 'Rate Limited' : 
-                 'Test Full Sync'}
-              </span>
+              <span>{syncStatus?.isRateLimited ? 'Rate Limited' : 'Test Sync'}</span>
             </Button>
 
             <Button 
-              onClick={handleTestDeltaSync}
-              disabled={isLoading || (syncStatus?.isRunning) || (syncStatus?.isRateLimited)}
+              variant={syncStatus?.isRateLimited ? 'secondary' : 'outline'}
               size="sm"
-              variant="secondary"
+              onClick={handleTestDeltaSync}
+              disabled={isLoading || syncStatus?.isRunning}
               className="flex items-center space-x-2"
             >
               <RotateCcw className="h-4 w-4" />
-              <span>
-                {isLoading ? 'Testing...' : 
-                 syncStatus?.isRateLimited ? 'Rate Limited' : 
-                 'Test Delta Sync'}
-              </span>
+              <span>{syncStatus?.isRateLimited ? 'Rate Limited' : 'Test Delta Sync'}</span>
             </Button>
 
             <Button 
-              onClick={handleTestQuantityDeltaSync}
-              disabled={isLoading || (syncStatus?.isRunning) || (syncStatus?.isRateLimited)}
+              variant={syncStatus?.isRateLimited ? 'secondary' : 'outline'}
               size="sm"
-              variant="secondary"
+              onClick={handleTestQuantityDeltaSync}
+              disabled={isLoading || syncStatus?.isRunning}
               className="flex items-center space-x-2"
             >
               <TrendingUp className="h-4 w-4" />
-              <span>
-                {isLoading ? 'Testing...' : 
-                 syncStatus?.isRateLimited ? 'Rate Limited' : 
-                 'Test Quantity Delta'}
-              </span>
+              <span>{syncStatus?.isRateLimited ? 'Rate Limited' : 'Test Quantity Delta'}</span>
             </Button>
 
             {syncStatus?.isRateLimited && rateLimitCountdown && (
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                disabled
+                className="flex items-center space-x-2"
+              >
                 <Timer className="h-4 w-4" />
                 <span>Retry in {safeFormatDuration(rateLimitCountdown)}</span>
-              </div>
+              </Button>
             )}
           </div>
         </CardContent>
@@ -1004,8 +1048,7 @@ const AdminSettings: React.FC = () => {
               <Label className="text-sm font-medium text-gray-600">Keystone Proxy URL</Label>
               <div className="flex items-center space-x-2">
                 <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="text-sm">Configured</span>
-                <span className="text-xs text-gray-500">{getEnvVar('VITE_KEYSTONE_PROXY_URL')}</span>
+                <span className="text-sm">{getEnvVar('VITE_KEYSTONE_PROXY_URL') || 'Not configured'}</span>
               </div>
             </div>
 
@@ -1018,7 +1061,7 @@ const AdminSettings: React.FC = () => {
                   <XCircle className="h-4 w-4 text-red-600" />
                 )}
                 <span className="text-sm">
-                  {getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_DEV') ? 'Configured' : 'Missing'}
+                  {getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_DEV') ? 'Configured' : 'Not configured'}
                 </span>
               </div>
             </div>
@@ -1038,22 +1081,22 @@ const AdminSettings: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="flex flex-wrap gap-2">
             <Button 
-              variant="outline"
+              variant="outline" 
               size="sm"
+              onClick={() => window.open('/shop/inventory', '_blank')}
               className="flex items-center space-x-2"
-              onClick={() => window.location.href = '/shop/parts-inventory/inventory-sync'}
             >
               <RefreshCw className="h-4 w-4" />
               <span>Inventory Sync</span>
             </Button>
-            
+
             <Button 
-              variant="outline"
+              variant="outline" 
               size="sm"
+              onClick={() => window.open('/shop/parts', '_blank')}
               className="flex items-center space-x-2"
-              onClick={() => window.location.href = '/shop/parts-inventory'}
             >
               <Database className="h-4 w-4" />
               <span>View Inventory</span>
