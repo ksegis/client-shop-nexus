@@ -40,7 +40,7 @@ interface SyncStatus {
   deltaSyncIntervalHours: number;
 }
 
-class InventorySyncService {
+export class InventorySyncService {
   private isRunning: boolean = false;
   private isCancelled: boolean = false;
   private progress: number = 0;
@@ -1289,6 +1289,7 @@ class InventorySyncService {
   }
 }
 
-// Export singleton instance
+// Export both the class and singleton instance
+export { InventorySyncService };
 export const inventorySyncService = new InventorySyncService();
 
