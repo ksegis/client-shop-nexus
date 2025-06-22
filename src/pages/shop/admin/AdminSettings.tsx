@@ -22,7 +22,80 @@ import {
 } from 'lucide-react';
 import { inventorySyncService } from '@/services/inventory_sync_service';
 
-interface SyncStatus {
+// Safe formatting utilities (inline to avoid import issues)
+const safeFormatDate = (dateValue, options = {}) => {
+  if (!dateValue) return 'Never';
+  try {
+    const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    const defaultOptions = {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      ...options
+    };
+    return date.toLocaleString(undefined, defaultOptions);
+  } catch (error) {
+    console.warn('Error formatting date:', error);
+    return 'Format Error';
+  }
+};
+
+const safeFormatRelativeTime = (dateValue) => {
+  if (!dateValue) return 'Never';
+  try {
+    const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMinutes < 1) return 'Just now';
+    else if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} ago`;
+    else if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    else if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    else return safeFormatDate(date, { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch (error) {
+    console.warn('Error formatting relative time:', error);
+    return 'Format Error';
+  }
+};
+
+const safeFormatNumber = (value, options = {}) => {
+  if (value === null || value === undefined || value === '') return '0';
+  try {
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return '0';
+    return num.toLocaleString(undefined, options);
+  } catch (error) {
+    console.warn('Error formatting number:', error);
+    return '0';
+  }
+};
+
+const safeFormatPercentage = (value) => {
+  if (value === null || value === undefined || value === '') return '0%';
+  try {
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return '0%';
+    return `${Math.round(num * 100)}%`;
+  } catch (error) {
+    console.warn('Error formatting percentage:', error);
+    return '0%';
+  }
+};
+
+const safeDisplayValue = (value, fallback = 'Unknown') => {
+  if (value === null || value === undefined || value === '') return fallback;
+  return String(value);
+};
+
+// Safe sync status interface
+interface SafeSyncStatus {
   isRunning: boolean;
   lastSuccessfulSync: string | null;
   nextPlannedSync: string | null;
@@ -31,104 +104,97 @@ interface SyncStatus {
   errors: string[];
   progress: number;
   lastSyncAttempt: string | null;
-  lastSyncResult: 'success' | 'failed' | 'partial' | null;
+  lastSyncResult: 'success' | 'failed' | 'partial' | 'never' | null;
   failureReason: string | null;
 }
 
 const AdminSettings: React.FC = () => {
   const [environment, setEnvironment] = useState<'development' | 'production'>('development');
   const [lastChanged, setLastChanged] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SafeSyncStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
 
   // Load current environment setting on component mount
   useEffect(() => {
-    const savedEnvironment = localStorage.getItem('admin_environment') as 'development' | 'production';
-    if (savedEnvironment) {
-      setEnvironment(savedEnvironment);
-    }
+    try {
+      const savedEnvironment = localStorage.getItem('admin_environment') as 'development' | 'production';
+      if (savedEnvironment) {
+        setEnvironment(savedEnvironment);
+      }
 
-    const savedTimestamp = localStorage.getItem('admin_environment_changed');
-    if (savedTimestamp) {
-      setLastChanged(savedTimestamp);
-    }
+      const savedTimestamp = localStorage.getItem('admin_environment_changed');
+      if (savedTimestamp) {
+        setLastChanged(savedTimestamp);
+      }
 
-    // Load sync status
-    loadSyncStatus();
+      // Load sync status
+      loadSyncStatus();
+    } catch (error) {
+      console.error('Error loading admin settings:', error);
+    }
   }, []);
 
   const loadSyncStatus = () => {
     try {
-      const status = inventorySyncService.getSyncStatus();
-      setSyncStatus(status);
+      const status = inventorySyncService?.getSyncStatus?.();
+      if (status) {
+        // Safely map the status to our interface
+        const safeStatus: SafeSyncStatus = {
+          isRunning: Boolean(status.isRunning),
+          lastSuccessfulSync: status.lastSyncTime || null,
+          nextPlannedSync: status.nextPlannedSync || null,
+          totalItems: Number(status.totalBatches) * 50 || 0, // Estimate
+          syncedItems: Number(status.syncedItems) || 0,
+          errors: Array.isArray(status.errors) ? status.errors : [],
+          progress: Number(status.progress) || 0,
+          lastSyncAttempt: status.lastSyncTime || null,
+          lastSyncResult: status.lastSyncResult || 'never',
+          failureReason: status.lastSyncError || null
+        };
+        setSyncStatus(safeStatus);
+      }
     } catch (error) {
       console.error('Failed to load sync status:', error);
+      // Set safe default status
+      setSyncStatus({
+        isRunning: false,
+        lastSuccessfulSync: null,
+        nextPlannedSync: null,
+        totalItems: 0,
+        syncedItems: 0,
+        errors: [],
+        progress: 0,
+        lastSyncAttempt: null,
+        lastSyncResult: 'never',
+        failureReason: null
+      });
     }
   };
 
   const handleEnvironmentChange = (newEnvironment: 'development' | 'production') => {
-    const timestamp = new Date().toISOString();
-    
-    // Save to localStorage
-    localStorage.setItem('admin_environment', newEnvironment);
-    localStorage.setItem('admin_environment_changed', timestamp);
-    
-    // Update state
-    setEnvironment(newEnvironment);
-    setLastChanged(timestamp);
-    
-    // Debug logging
-    console.log('🔄 Environment Change Debug:');
-    console.log('- New Environment:', newEnvironment);
-    console.log('- DEV Token Available:', !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV);
-    console.log('- PROD Token Available:', !!import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD);
-    console.log('- DEV Token Value:', import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV ? 'SET' : 'UNDEFINED');
-    console.log('- PROD Token Value:', import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD ? 'SET' : 'UNDEFINED');
-    
-    // Show confirmation and reload page to ensure all services pick up the new setting
-    alert(`Environment switched to ${newEnvironment.toUpperCase()}. Page will reload to apply changes.`);
-    window.location.reload();
-  };
-
-  const formatDateTime = (dateString: string | null): string => {
-    if (!dateString) return 'Never';
-    
     try {
-      const date = new Date(dateString);
-      return date.toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
-    } catch {
-      return 'Invalid date';
-    }
-  };
-
-  const getRelativeTime = (dateString: string | null): string => {
-    if (!dateString) return 'Never';
-    
-    try {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-      const diffDays = Math.floor(diffHours / 24);
+      const timestamp = new Date().toISOString();
       
-      if (diffDays > 0) {
-        return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-      } else if (diffHours > 0) {
-        return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-      } else {
-        const diffMinutes = Math.floor(diffMs / (1000 * 60));
-        return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
-      }
-    } catch {
-      return 'Unknown';
+      // Save to localStorage
+      localStorage.setItem('admin_environment', newEnvironment);
+      localStorage.setItem('admin_environment_changed', timestamp);
+      
+      // Update state
+      setEnvironment(newEnvironment);
+      setLastChanged(timestamp);
+      
+      // Debug logging
+      console.log('🔄 Environment Change Debug:');
+      console.log('- New Environment:', newEnvironment);
+      console.log('- DEV Token Available:', !!(import.meta.env?.VITE_KEYSTONE_SECURITY_TOKEN_DEV));
+      console.log('- PROD Token Available:', !!(import.meta.env?.VITE_KEYSTONE_SECURITY_TOKEN_PROD));
+      
+      // Show confirmation and reload page to ensure all services pick up the new setting
+      alert(`Environment switched to ${newEnvironment.toUpperCase()}. Page will reload to apply changes.`);
+      window.location.reload();
+    } catch (error) {
+      console.error('Error changing environment:', error);
     }
   };
 
@@ -141,32 +207,52 @@ const AdminSettings: React.FC = () => {
       case 'partial':
         return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800"><AlertTriangle className="w-3 h-3 mr-1" />Partial</Badge>;
       default:
-        return <Badge variant="outline"><Clock className="w-3 h-3 mr-1" />Unknown</Badge>;
+        return <Badge variant="outline"><Clock className="w-3 h-3 mr-1" />Never</Badge>;
     }
   };
 
   const handleTestSync = async () => {
     setIsLoading(true);
     try {
-      await inventorySyncService.performFullSync(10); // Test with small batch
-      loadSyncStatus(); // Refresh status after sync
-      alert('Test sync completed successfully!');
+      if (inventorySyncService?.performFullSync) {
+        await inventorySyncService.performFullSync(10); // Test with small batch
+        loadSyncStatus(); // Refresh status after sync
+        alert('Test sync completed successfully!');
+      } else {
+        throw new Error('Inventory sync service not available');
+      }
     } catch (error) {
-      alert(`Test sync failed: ${error.message}`);
+      const errorMessage = error?.message || 'Unknown error occurred';
+      alert(`Test sync failed: ${errorMessage}`);
+      console.error('Test sync error:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDebugConsole = () => {
-    console.log('🔍 Environment Variables Debug:');
-    console.log('Current Environment State:', environment);
-    console.log('localStorage admin_environment:', localStorage.getItem('admin_environment'));
-    console.log('VITE_KEYSTONE_SECURITY_TOKEN_DEV:', import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV ? 'SET' : 'UNDEFINED');
-    console.log('VITE_KEYSTONE_SECURITY_TOKEN_PROD:', import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD ? 'SET' : 'UNDEFINED');
-    console.log('VITE_KEYSTONE_PROXY_URL:', import.meta.env.VITE_KEYSTONE_PROXY_URL || 'UNDEFINED');
-    console.log('All VITE_KEYSTONE vars:', Object.keys(import.meta.env).filter(k => k.startsWith('VITE_KEYSTONE')));
-    console.log('All environment variables:', import.meta.env);
+    try {
+      console.log('🔍 Environment Variables Debug:');
+      console.log('Current Environment State:', environment);
+      console.log('localStorage admin_environment:', localStorage.getItem('admin_environment'));
+      console.log('VITE_KEYSTONE_SECURITY_TOKEN_DEV:', import.meta.env?.VITE_KEYSTONE_SECURITY_TOKEN_DEV ? 'SET' : 'UNDEFINED');
+      console.log('VITE_KEYSTONE_SECURITY_TOKEN_PROD:', import.meta.env?.VITE_KEYSTONE_SECURITY_TOKEN_PROD ? 'SET' : 'UNDEFINED');
+      console.log('VITE_KEYSTONE_PROXY_URL:', import.meta.env?.VITE_KEYSTONE_PROXY_URL || 'UNDEFINED');
+      console.log('All VITE_KEYSTONE vars:', Object.keys(import.meta.env || {}).filter(k => k.startsWith('VITE_KEYSTONE')));
+      console.log('All environment variables:', import.meta.env);
+    } catch (error) {
+      console.error('Error in debug console:', error);
+    }
+  };
+
+  // Safe environment variable checks
+  const getEnvVar = (key: string) => {
+    try {
+      return import.meta.env?.[key] || null;
+    } catch (error) {
+      console.warn(`Error accessing environment variable ${key}:`, error);
+      return null;
+    }
   };
 
   return (
@@ -204,24 +290,24 @@ const AdminSettings: React.FC = () => {
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-orange-800">Environment State</Label>
                 <div className="bg-white p-3 rounded border text-xs space-y-1">
-                  <div><strong>Current:</strong> {environment}</div>
-                  <div><strong>localStorage:</strong> {localStorage.getItem('admin_environment') || 'null'}</div>
-                  <div><strong>Last Changed:</strong> {lastChanged || 'Never'}</div>
+                  <div><strong>Current:</strong> {safeDisplayValue(environment)}</div>
+                  <div><strong>localStorage:</strong> {safeDisplayValue(localStorage.getItem('admin_environment'), 'null')}</div>
+                  <div><strong>Last Changed:</strong> {safeFormatDate(lastChanged)}</div>
                 </div>
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-orange-800">Environment Variables</Label>
                 <div className="bg-white p-3 rounded border text-xs space-y-1">
-                  <div><strong>DEV Token:</strong> {import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV ? '✅ SET' : '❌ UNDEFINED'}</div>
-                  <div><strong>PROD Token:</strong> {import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD ? '✅ SET' : '❌ UNDEFINED'}</div>
-                  <div><strong>Proxy URL:</strong> {import.meta.env.VITE_KEYSTONE_PROXY_URL ? '✅ SET' : '❌ UNDEFINED'}</div>
+                  <div><strong>DEV Token:</strong> {getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_DEV') ? '✅ SET' : '❌ UNDEFINED'}</div>
+                  <div><strong>PROD Token:</strong> {getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_PROD') ? '✅ SET' : '❌ UNDEFINED'}</div>
+                  <div><strong>Proxy URL:</strong> {getEnvVar('VITE_KEYSTONE_PROXY_URL') ? '✅ SET' : '❌ UNDEFINED'}</div>
                 </div>
               </div>
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium text-orange-800">All VITE_KEYSTONE Variables</Label>
               <div className="bg-white p-3 rounded border text-xs">
-                {Object.keys(import.meta.env).filter(k => k.startsWith('VITE_KEYSTONE')).join(', ') || 'None found'}
+                {Object.keys(import.meta.env || {}).filter(k => k.startsWith('VITE_KEYSTONE')).join(', ') || 'None found'}
               </div>
             </div>
             <Button 
@@ -299,7 +385,7 @@ const AdminSettings: React.FC = () => {
 
           {lastChanged && (
             <p className="text-xs text-gray-500">
-              Last changed: {formatDateTime(lastChanged)}
+              Last changed: {safeFormatDate(lastChanged)}
             </p>
           )}
         </CardContent>
@@ -327,10 +413,10 @@ const AdminSettings: React.FC = () => {
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     <div>
                       <p className="text-sm font-medium">
-                        {formatDateTime(syncStatus.lastSuccessfulSync)}
+                        {safeFormatDate(syncStatus.lastSuccessfulSync)}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {getRelativeTime(syncStatus.lastSuccessfulSync)}
+                        {safeFormatRelativeTime(syncStatus.lastSuccessfulSync)}
                       </p>
                     </div>
                   </div>
@@ -342,7 +428,7 @@ const AdminSettings: React.FC = () => {
                     <Calendar className="h-4 w-4 text-blue-600" />
                     <div>
                       <p className="text-sm font-medium">
-                        {formatDateTime(syncStatus.nextPlannedSync)}
+                        {safeFormatDate(syncStatus.nextPlannedSync)}
                       </p>
                       <p className="text-xs text-gray-500">
                         {syncStatus.nextPlannedSync ? 'Scheduled' : 'Not scheduled'}
@@ -358,7 +444,7 @@ const AdminSettings: React.FC = () => {
                   </div>
                   {syncStatus.failureReason && (
                     <p className="text-xs text-red-600 mt-1">
-                      {syncStatus.failureReason}
+                      {safeDisplayValue(syncStatus.failureReason, 'Unknown error')}
                     </p>
                   )}
                 </div>
@@ -373,21 +459,21 @@ const AdminSettings: React.FC = () => {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span>Total Items:</span>
-                      <span className="font-medium">{syncStatus.totalItems.toLocaleString()}</span>
+                      <span className="font-medium">{safeFormatNumber(syncStatus.totalItems)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Synced Items:</span>
-                      <span className="font-medium">{syncStatus.syncedItems.toLocaleString()}</span>
+                      <span className="font-medium">{safeFormatNumber(syncStatus.syncedItems)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Errors:</span>
-                      <span className={`font-medium ${syncStatus.errors.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {syncStatus.errors.length}
+                      <span className={`font-medium ${(syncStatus.errors?.length || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {safeFormatNumber(syncStatus.errors?.length || 0)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Progress:</span>
-                      <span className="font-medium">{syncStatus.progress.toFixed(1)}%</span>
+                      <span className="font-medium">{safeFormatPercentage(syncStatus.progress)}</span>
                     </div>
                   </div>
                 </div>
@@ -395,47 +481,31 @@ const AdminSettings: React.FC = () => {
                 <div className="space-y-3">
                   <Label className="text-sm font-medium text-gray-600">System Status</Label>
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex justify-between text-sm">
                       <span>Sync Running:</span>
-                      <Badge variant={syncStatus.isRunning ? 'default' : 'outline'}>
+                      <Badge variant={syncStatus.isRunning ? "default" : "secondary"}>
                         {syncStatus.isRunning ? 'Active' : 'Idle'}
                       </Badge>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Last Attempt:</span>
                       <span className="font-medium text-xs">
-                        {getRelativeTime(syncStatus.lastSyncAttempt)}
+                        {safeFormatRelativeTime(syncStatus.lastSyncAttempt)}
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
-
-              {/* Error Details */}
-              {syncStatus.errors.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium text-red-600">Recent Errors</Label>
-                    <div className="bg-red-50 border border-red-200 rounded-md p-3 max-h-32 overflow-y-auto">
-                      {syncStatus.errors.slice(-5).map((error, index) => (
-                        <p key={index} className="text-xs text-red-700 mb-1">
-                          • {error}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
             </>
           )}
 
-          {/* Actions */}
           <Separator />
-          <div className="flex items-center space-x-3">
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap gap-3">
             <Button 
-              onClick={loadSyncStatus} 
-              variant="outline" 
+              onClick={loadSyncStatus}
+              variant="outline"
               size="sm"
               className="flex items-center space-x-2"
             >
@@ -444,10 +514,9 @@ const AdminSettings: React.FC = () => {
             </Button>
             
             <Button 
-              onClick={handleTestSync} 
-              variant="outline" 
+              onClick={handleTestSync}
+              disabled={isLoading || (syncStatus?.isRunning)}
               size="sm"
-              disabled={isLoading || (syncStatus?.isRunning ?? false)}
               className="flex items-center space-x-2"
             >
               <Database className="h-4 w-4" />
@@ -457,7 +526,7 @@ const AdminSettings: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* API Configuration Display */}
+      {/* API Configuration */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
@@ -469,63 +538,53 @@ const AdminSettings: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <Label className="text-xs font-medium text-gray-600">Supabase URL</Label>
-              <p className="font-mono text-xs bg-gray-100 p-2 rounded">
-                {import.meta.env.VITE_SUPABASE_URL ? '✅ Configured' : '❌ Missing'}
-              </p>
-              {showDebug && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Value: {import.meta.env.VITE_SUPABASE_URL ? 'SET' : 'undefined'}
-                </p>
-              )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-600">Supabase URL</Label>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span className="text-sm">Configured</span>
+              </div>
             </div>
-            <div>
-              <Label className="text-xs font-medium text-gray-600">Supabase Token</Label>
-              <p className="font-mono text-xs bg-gray-100 p-2 rounded">
-                {import.meta.env.VITE_SUPABASE_ANON_TOKEN ? '✅ Configured' : '❌ Missing'}
-              </p>
-              {showDebug && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Value: {import.meta.env.VITE_SUPABASE_ANON_TOKEN ? 'SET' : 'undefined'}
-                </p>
-              )}
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-600">Supabase Token</Label>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span className="text-sm">Configured</span>
+              </div>
             </div>
-            <div>
-              <Label className="text-xs font-medium text-gray-600">Keystone Proxy URL</Label>
-              <p className="font-mono text-xs bg-gray-100 p-2 rounded">
-                {import.meta.env.VITE_KEYSTONE_PROXY_URL || '❌ Missing'}
-              </p>
-              {showDebug && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Value: {import.meta.env.VITE_KEYSTONE_PROXY_URL || 'undefined'}
-                </p>
-              )}
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-600">Keystone Proxy URL</Label>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-mono text-xs">
+                  {safeDisplayValue(getEnvVar('VITE_KEYSTONE_PROXY_URL'), 'Not configured')}
+                </span>
+              </div>
             </div>
-            <div>
-              <Label className="text-xs font-medium text-gray-600">
-                {environment === 'production' ? 'Production' : 'Development'} Token
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-600">
+                {environment === 'development' ? 'Development Token' : 'Production Token'}
               </Label>
-              <p className="font-mono text-xs bg-gray-100 p-2 rounded">
-                {environment === 'production' 
-                  ? (import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD ? '✅ Configured' : '❌ Missing')
-                  : (import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV ? '✅ Configured' : '❌ Missing')
-                }
-              </p>
-              {showDebug && (
-                <>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Variable: VITE_KEYSTONE_SECURITY_TOKEN_{environment === 'production' ? 'PROD' : 'DEV'}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Value: {environment === 'production' 
-                      ? (import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD ? 'SET' : 'undefined')
-                      : (import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV ? 'SET' : 'undefined')
-                    }
-                  </p>
-                </>
-              )}
+              <div className="flex items-center space-x-2">
+                {(environment === 'development' 
+                  ? getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_DEV')
+                  : getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_PROD')
+                ) ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span className="text-sm">Configured</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-4 w-4 text-red-600" />
+                    <span className="text-sm">Missing</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </CardContent>
@@ -534,7 +593,10 @@ const AdminSettings: React.FC = () => {
       {/* Quick Actions */}
       <Card>
         <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
+          <CardTitle className="flex items-center space-x-2">
+            <Activity className="h-5 w-5" />
+            <span>Quick Actions</span>
+          </CardTitle>
           <CardDescription>
             Common administrative tasks and navigation
           </CardDescription>
@@ -542,20 +604,20 @@ const AdminSettings: React.FC = () => {
         <CardContent>
           <div className="flex flex-wrap gap-3">
             <Button 
-              variant="outline" 
+              variant="outline"
               size="sm"
-              onClick={() => window.location.href = '/shop/admin/inventory-sync'}
               className="flex items-center space-x-2"
+              onClick={() => window.location.href = '/shop/parts-inventory/inventory-sync'}
             >
               <RefreshCw className="h-4 w-4" />
               <span>Inventory Sync</span>
             </Button>
             
             <Button 
-              variant="outline" 
+              variant="outline"
               size="sm"
-              onClick={() => window.location.href = '/shop/parts'}
               className="flex items-center space-x-2"
+              onClick={() => window.location.href = '/shop/parts-inventory'}
             >
               <Database className="h-4 w-4" />
               <span>View Inventory</span>
