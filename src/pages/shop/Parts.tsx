@@ -21,7 +21,7 @@ import ProductPriceCheck from '@/components/product_price_check_component';
 
 // Import enhanced cart system with shipping
 import { useCart } from '@/lib/minimal_cart_context';
-import { AddToCartButton, CartWidget } from '@/components/enhanced_cart_components_with_shipping';
+import { AddToCartButton, CartWidget } from '@/components/minimal_cart_components';
 
 // Simplified interface for inventory parts
 interface InventoryPart {
