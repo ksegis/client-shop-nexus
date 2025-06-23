@@ -14,7 +14,7 @@ import {
   Minus
 } from 'lucide-react';
 
-// Fixed Price Check Service with correct API endpoint
+// Fixed Price Check Service with correct environment detection
 class FixedPriceCheckService {
   private static readonly RATE_LIMIT_HOURS = 1; // 1 hour between checks
   private static readonly MAX_VCPNS_PER_REQUEST = 12;
@@ -151,50 +151,37 @@ class FixedPriceCheckService {
       const now = new Date();
       
       if (now >= nextTime) {
-        // Rate limit has expired
         this.isRateLimited = false;
         this.nextAllowedTime = null;
         this.rateLimitMessage = null;
+        console.log('✅ Rate limit expired, price checking is now allowed');
       } else {
-        // Still rate limited
         this.isRateLimited = true;
-        const timeRemaining = this.getTimeUntilNextCheck();
-        this.rateLimitMessage = `Next check allowed in ${this.formatTimeRemaining(timeRemaining)}.`;
+        const remainingMs = nextTime.getTime() - now.getTime();
+        const remainingSeconds = Math.ceil(remainingMs / 1000);
+        this.rateLimitMessage = `Rate limited. Next check allowed in ${this.formatTimeRemaining(remainingSeconds)}`;
       }
     } catch (error) {
       console.error('Error updating rate limit status:', error);
-      // Reset on error
       this.isRateLimited = false;
       this.nextAllowedTime = null;
       this.rateLimitMessage = null;
     }
-
+    
     this.saveStatus();
   }
 
   /**
-   * Set rate limit after a successful check
-   */
-  private setRateLimit(): void {
-    const now = new Date();
-    this.lastCheckTime = now.toISOString();
-    this.isRateLimited = true;
-    
-    const nextAllowed = new Date(now.getTime() + (FixedPriceCheckService.RATE_LIMIT_HOURS * 60 * 60 * 1000));
-    this.nextAllowedTime = nextAllowed.toISOString();
-    
-    const timeRemaining = this.getTimeUntilNextCheck();
-    this.rateLimitMessage = `Price check completed. Next check allowed in ${this.formatTimeRemaining(timeRemaining)}.`;
-    
-    console.log(`⏰ Price check rate limit set. Next check allowed at: ${nextAllowed.toLocaleString()}`);
-    this.saveStatus();
-  }
-
-  /**
-   * Get current environment
+   * FIXED: Get current environment from localStorage (same as cart shipping)
    */
   private getCurrentEnvironment(): string {
-    return import.meta.env.VITE_ENVIRONMENT || 'development';
+    try {
+      const saved = localStorage.getItem('admin_environment');
+      return saved || 'development';
+    } catch (error) {
+      console.error('Error loading environment from localStorage:', error);
+      return 'development';
+    }
   }
 
   /**
@@ -214,7 +201,7 @@ class FixedPriceCheckService {
    * Generate mock price data for development
    */
   private generateMockPriceData(vcpns: string[]): any[] {
-    console.log('🧪 Generating mock price data for development');
+    console.log('🧪 Generating mock price data for development mode');
     
     return vcpns.map(vcpn => ({
       vcpn,
@@ -231,16 +218,20 @@ class FixedPriceCheckService {
    */
   private async callPricingApi(vcpns: string[]): Promise<any[]> {
     const environment = this.getCurrentEnvironment();
+    
+    // FIXED: Always use mock data in development mode
+    if (environment === 'development') {
+      console.log('🧪 Development mode detected - using mock price data');
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      return this.generateMockPriceData(vcpns);
+    }
+
+    // Production mode - try real API
     const apiToken = this.getApiToken();
     const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
 
     if (!apiToken || !proxyUrl) {
-      if (environment === 'production') {
-        throw new Error('Missing required environment variables for Keystone API');
-      }
-      
-      console.log('🔄 Falling back to mock price data in development mode');
-      return this.generateMockPriceData(vcpns);
+      throw new Error('Missing required environment variables for Keystone API');
     }
 
     try {
@@ -278,13 +269,7 @@ class FixedPriceCheckService {
       
     } catch (error) {
       console.error('❌ Failed to get prices from Keystone:', error);
-      
-      if (environment === 'production') {
-        throw error;
-      }
-      
-      console.log('🔄 Falling back to mock price data due to API error');
-      return this.generateMockPriceData(vcpns);
+      throw error;
     }
   }
 
@@ -298,106 +283,123 @@ class FixedPriceCheckService {
       vcpns: vcpns,
       success: success,
       resultCount: resultCount,
-      errorMessage: errorMessage
+      errorMessage: errorMessage || null,
+      environment: this.getCurrentEnvironment()
     };
 
-    this.checkHistory.push(historyItem);
+    this.checkHistory.unshift(historyItem);
     
     // Keep only last 50 items
     if (this.checkHistory.length > 50) {
-      this.checkHistory = this.checkHistory.slice(-50);
+      this.checkHistory = this.checkHistory.slice(0, 50);
     }
-
+    
     this.saveStatus();
   }
 
   /**
-   * Main price check method
+   * Set rate limit after successful check
    */
-  async checkPrices(request: { vcpns: string[] }): Promise<any> {
-    console.log('🔍 Starting price check for VCPNs:', request.vcpns);
+  private setRateLimit(): void {
+    const now = new Date();
+    const nextAllowed = new Date(now.getTime() + (FixedPriceCheckService.RATE_LIMIT_HOURS * 60 * 60 * 1000));
+    
+    this.isRateLimited = true;
+    this.lastCheckTime = now.toISOString();
+    this.nextAllowedTime = nextAllowed.toISOString();
+    this.totalChecksToday += 1;
+    
+    const remainingSeconds = Math.ceil((nextAllowed.getTime() - now.getTime()) / 1000);
+    this.rateLimitMessage = `Rate limited. Next check allowed in ${this.formatTimeRemaining(remainingSeconds)}`;
+    
+    console.log(`⏰ Rate limit set. Next check allowed at: ${nextAllowed.toLocaleString()}`);
+    this.saveStatus();
+  }
 
+  /**
+   * Clear rate limit (for admin/debug purposes)
+   */
+  clearRateLimit(): void {
+    this.isRateLimited = false;
+    this.nextAllowedTime = null;
+    this.rateLimitMessage = null;
+    this.saveStatus();
+    console.log('✅ Rate limit cleared manually');
+  }
+
+  /**
+   * Main method to check prices for VCPNs
+   */
+  async checkPrices(params: { vcpns: string[] }): Promise<any> {
+    const { vcpns } = params;
+    
     // Validate input
-    if (!request.vcpns || request.vcpns.length === 0) {
-      throw new Error('At least one VCPN is required');
+    if (!vcpns || vcpns.length === 0) {
+      return {
+        success: false,
+        message: 'No VCPNs provided for price check',
+        results: []
+      };
     }
 
-    if (request.vcpns.length > FixedPriceCheckService.MAX_VCPNS_PER_REQUEST) {
-      throw new Error(`Maximum ${FixedPriceCheckService.MAX_VCPNS_PER_REQUEST} VCPNs allowed per request`);
+    if (vcpns.length > FixedPriceCheckService.MAX_VCPNS_PER_REQUEST) {
+      return {
+        success: false,
+        message: `Too many VCPNs. Maximum ${FixedPriceCheckService.MAX_VCPNS_PER_REQUEST} allowed per request.`,
+        results: []
+      };
     }
 
     // Check rate limiting
     this.updateRateLimitStatus();
     if (this.isRateLimited) {
       const timeRemaining = this.getTimeUntilNextCheck();
-      const message = `Price check rate limited. Next check allowed in ${this.formatTimeRemaining(timeRemaining)}.`;
-      
-      console.log('⏰ Price check blocked due to rate limiting');
       return {
         success: false,
-        message: message,
-        results: [],
-        requestId: Date.now().toString(),
-        timestamp: new Date().toISOString(),
-        isRateLimited: true,
-        nextAllowedTime: this.nextAllowedTime,
-        rateLimitMessage: message
+        message: `Rate limited. Please wait ${this.formatTimeRemaining(timeRemaining)} before next check.`,
+        results: []
       };
     }
 
     try {
-      // Call the API
-      const results = await this.callPricingApi(request.vcpns);
+      console.log(`🔄 Starting price check for ${vcpns.length} VCPNs in ${this.getCurrentEnvironment()} mode`);
       
-      // Set rate limit after successful check
-      this.setRateLimit();
-      this.totalChecksToday++;
+      const results = await this.callPricingApi(vcpns);
       
-      // Add to history (simplified - no database logging)
-      this.addToHistory(request.vcpns, true, results.length);
+      // Set rate limit after successful check (only in production)
+      if (this.getCurrentEnvironment() === 'production') {
+        this.setRateLimit();
+      }
       
-      console.log(`✅ Price check completed successfully for ${results.length} items`);
+      // Add to history
+      this.addToHistory(vcpns, true, results.length);
+      
+      console.log(`✅ Price check completed successfully. Retrieved ${results.length} results.`);
       
       return {
         success: true,
         message: `Successfully retrieved prices for ${results.length} items`,
-        results: results,
-        requestId: Date.now().toString(),
-        timestamp: new Date().toISOString(),
-        isRateLimited: false,
-        nextAllowedTime: this.nextAllowedTime,
-        rateLimitMessage: this.rateLimitMessage
+        results: results.map(item => ({
+          vcpn: item.vcpn,
+          cost: item.cost,
+          listPrice: item.listPrice,
+          availability: item.availability,
+          error: null
+        }))
       };
-
+      
     } catch (error) {
       console.error('❌ Price check failed:', error);
       
-      // Add to history (simplified - no database logging)
-      this.addToHistory(request.vcpns, false, 0, error instanceof Error ? error.message : 'Unknown error');
+      // Add failed attempt to history
+      this.addToHistory(vcpns, false, 0, error.message);
       
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Unknown error occurred',
-        results: [],
-        requestId: Date.now().toString(),
-        timestamp: new Date().toISOString(),
-        isRateLimited: false,
-        nextAllowedTime: this.nextAllowedTime,
-        rateLimitMessage: this.rateLimitMessage
+        message: error.message || 'Failed to check prices',
+        results: []
       };
     }
-  }
-
-  /**
-   * Clear rate limit (for debugging)
-   */
-  clearRateLimit(): void {
-    console.log('🔄 Clearing price check rate limit');
-    this.isRateLimited = false;
-    this.lastCheckTime = null;
-    this.nextAllowedTime = null;
-    this.rateLimitMessage = null;
-    this.saveStatus();
   }
 }
 
@@ -498,103 +500,89 @@ const ProductPriceCheck: React.FC<ProductPriceCheckProps> = ({
         setPriceResult(null);
       }
 
-      // Update rate limit status
+      // Update rate limit status after check
       checkRateLimitStatus();
 
-    } catch (error) {
-      console.error('Price check error:', error);
-      setError('Unable to check current pricing. Please try again later.');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMessage);
       setPriceResult(null);
+      checkRateLimitStatus();
     } finally {
       setIsLoading(false);
     }
   };
 
-  const formatPrice = (price: number) => {
+  // Helper functions
+  const formatPrice = (price: number): string => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      currency: 'USD'
     }).format(price);
   };
 
-  const formatRelativeTime = (date: Date) => {
+  const formatRelativeTime = (date: Date): string => {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffMins = Math.floor(diffMs / 60000);
     
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
     
     const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
     
     const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-  };
-
-  const getPriceComparison = () => {
-    if (!priceResult || !showComparison || !priceResult.listPrice) return null;
-
-    const currentPrice = priceResult.cost;
-    const originalPrice = priceResult.listPrice;
-    const savings = originalPrice - currentPrice;
-    const savingsPercent = Math.round((savings / originalPrice) * 100);
-
-    if (savings > 0) {
-      return {
-        type: 'savings',
-        amount: savings,
-        percent: savingsPercent,
-        icon: TrendingDown,
-        color: 'text-green-600',
-        bgColor: 'bg-green-50',
-        borderColor: 'border-green-200'
-      };
-    } else if (savings < 0) {
-      return {
-        type: 'increase',
-        amount: Math.abs(savings),
-        percent: Math.abs(savingsPercent),
-        icon: TrendingUp,
-        color: 'text-red-600',
-        bgColor: 'bg-red-50',
-        borderColor: 'border-red-200'
-      };
-    } else {
-      return {
-        type: 'same',
-        amount: 0,
-        percent: 0,
-        icon: Minus,
-        color: 'text-gray-600',
-        bgColor: 'bg-gray-50',
-        borderColor: 'border-gray-200'
-      };
-    }
+    return `${diffDays}d ago`;
   };
 
   const getAvailabilityBadge = (availability: string) => {
-    const availabilityMap: { [key: string]: { variant: string; className: string } } = {
-      'In Stock': { variant: 'default', className: 'bg-green-100 text-green-800 border-green-200' },
-      'Limited Stock': { variant: 'secondary', className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-      'Limited': { variant: 'secondary', className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-      'Out of Stock': { variant: 'destructive', className: 'bg-red-100 text-red-800 border-red-200' },
-      'Backordered': { variant: 'secondary', className: 'bg-blue-100 text-blue-800 border-blue-200' },
-      'Backorder': { variant: 'secondary', className: 'bg-blue-100 text-blue-800 border-blue-200' },
-      'Discontinued': { variant: 'outline', className: 'bg-gray-100 text-gray-800 border-gray-200' }
+    const variants: Record<string, { variant: any; className: string }> = {
+      'In Stock': { variant: 'default', className: 'bg-green-100 text-green-800 border-green-300' },
+      'Limited': { variant: 'secondary', className: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
+      'Backorder': { variant: 'outline', className: 'bg-red-100 text-red-800 border-red-300' }
     };
-
-    const config = availabilityMap[availability] || availabilityMap['In Stock'];
+    
+    const config = variants[availability] || variants['In Stock'];
+    
     return (
-      <Badge variant={config.variant as any} className={config.className}>
+      <Badge variant={config.variant} className={config.className}>
         {availability}
       </Badge>
     );
   };
 
-  const priceComparison = getPriceComparison();
+  // Calculate price comparison
+  const priceComparison = priceResult && priceResult.listPrice && showComparison ? (() => {
+    const current = priceResult.cost;
+    const list = priceResult.listPrice;
+    const diff = list - current;
+    const percent = Math.round((diff / list) * 100);
+    
+    if (Math.abs(diff) < 0.01) {
+      return { type: 'same' };
+    } else if (diff > 0) {
+      return {
+        type: 'savings',
+        amount: diff,
+        percent: percent,
+        icon: TrendingDown,
+        color: 'text-green-600',
+        bgColor: 'bg-green-50',
+        borderColor: 'border-green-200'
+      };
+    } else {
+      return {
+        type: 'increase',
+        amount: Math.abs(diff),
+        percent: Math.abs(percent),
+        icon: TrendingUp,
+        color: 'text-red-600',
+        bgColor: 'bg-red-50',
+        borderColor: 'border-red-200'
+      };
+    }
+  })() : null;
 
   return (
     <Card className={`w-full ${className}`}>
