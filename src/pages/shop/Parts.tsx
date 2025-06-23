@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, Truck, MapPin, Clock, Shield, Edit, CheckCircle, Timer } from "lucide-react";
+import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, Truck, MapPin, Clock, Shield, Edit, CheckCircle, Timer, User, CreditCard, FileText } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Import the ProductPriceCheck component
 import ProductPriceCheck from '@/components/product_price_check_component';
@@ -22,6 +23,10 @@ import ProductPriceCheck from '@/components/product_price_check_component';
 // Import enhanced cart system with shipping
 import { useCart } from '@/lib/minimal_cart_context';
 import { AddToCartButton, CartWidget } from '@/components/minimal_cart_components';
+
+// Import existing services
+import { ShippingQuoteService } from '@/lib/shipping_quote_service';
+import { DropshipOrderService } from '@/lib/dropship_order_service';
 
 // Simplified interface for inventory parts
 interface InventoryPart {
@@ -51,6 +56,34 @@ interface InventoryPart {
   warranty?: string;
   list_price?: number;
   discount_percentage?: number;
+}
+
+// Customer interface for special orders
+interface Customer {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  company?: string;
+}
+
+// Shipping address interface
+interface ShippingAddress {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+}
+
+// Shipping option interface
+interface ShippingOption {
+  id: string;
+  carrier: string;
+  service: string;
+  cost: number;
+  estimatedDays: number;
+  deliveryDate: string;
 }
 
 // Loading wrapper component
@@ -110,6 +143,587 @@ const PricingDisplay = ({ part, className = "" }) => {
   );
 };
 
+// Special Orders Component
+const SpecialOrdersTab = () => {
+  const { items, clearCart, total } = useCart();
+  const { toast } = useToast();
+  
+  // State for checkout process
+  const [currentStep, setCurrentStep] = useState(1);
+  const [customer, setCustomer] = useState<Customer>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    company: ''
+  });
+  const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'US'
+  });
+  const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
+  const [selectedShipping, setSelectedShipping] = useState<string>('');
+  const [isLoadingShipping, setIsLoadingShipping] = useState(false);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [orderComplete, setOrderComplete] = useState(false);
+  const [orderResult, setOrderResult] = useState<any>(null);
+
+  // Load shipping quotes
+  const loadShippingQuotes = async () => {
+    if (!shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode) {
+      toast({
+        title: "Address Required",
+        description: "Please fill in all shipping address fields to get quotes.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoadingShipping(true);
+    try {
+      const quotes = await ShippingQuoteService.getShippingQuotes(
+        items.map(item => ({
+          vcpn: item.id,
+          quantity: item.quantity
+        })),
+        shippingAddress
+      );
+
+      if (quotes && quotes.length > 0) {
+        setShippingOptions(quotes);
+        toast({
+          title: "Shipping Quotes Loaded",
+          description: `Found ${quotes.length} shipping options.`
+        });
+      } else {
+        toast({
+          title: "No Shipping Options",
+          description: "No shipping options available for this address.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error loading shipping quotes:', error);
+      toast({
+        title: "Shipping Error",
+        description: "Failed to load shipping quotes. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingShipping(false);
+    }
+  };
+
+  // Place order
+  const placeOrder = async () => {
+    if (!selectedShipping) {
+      toast({
+        title: "Shipping Required",
+        description: "Please select a shipping option.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsPlacingOrder(true);
+    try {
+      const selectedOption = shippingOptions.find(opt => opt.id === selectedShipping);
+      
+      const orderData = {
+        customer,
+        shippingAddress,
+        items: items.map(item => `${item.id}:${item.quantity}`).join(','),
+        shippingMethod: selectedOption?.service || 'Standard',
+        specialInstructions: `Cart order - ${items.length} items, Total: $${total.toFixed(2)}`
+      };
+
+      const result = await DropshipOrderService.placeOrder(orderData);
+      
+      if (result.success) {
+        setOrderResult(result);
+        setOrderComplete(true);
+        clearCart();
+        toast({
+          title: "Order Placed Successfully!",
+          description: `Order ${result.orderReference} has been submitted.`
+        });
+      } else {
+        throw new Error(result.error || 'Order placement failed');
+      }
+    } catch (error) {
+      console.error('Error placing order:', error);
+      toast({
+        title: "Order Failed",
+        description: error.message || "Failed to place order. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsPlacingOrder(false);
+    }
+  };
+
+  // Reset checkout process
+  const resetCheckout = () => {
+    setCurrentStep(1);
+    setOrderComplete(false);
+    setOrderResult(null);
+    setSelectedShipping('');
+    setShippingOptions([]);
+  };
+
+  // Calculate totals
+  const subtotal = total;
+  const selectedShippingOption = shippingOptions.find(opt => opt.id === selectedShipping);
+  const shippingCost = selectedShippingOption?.cost || 0;
+  const tax = (subtotal + shippingCost) * 0.08; // 8% tax
+  const grandTotal = subtotal + shippingCost + tax;
+
+  if (orderComplete && orderResult) {
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <Card>
+          <CardHeader className="text-center">
+            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+            <CardTitle className="text-2xl text-green-600">Order Placed Successfully!</CardTitle>
+            <CardDescription>Your special order has been submitted and is being processed.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="font-semibold mb-2">Order Details</h3>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span>Order Reference:</span>
+                  <span className="font-mono">{orderResult.orderReference}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Tracking Number:</span>
+                  <span className="font-mono">{orderResult.trackingNumber || 'Will be provided when shipped'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total Amount:</span>
+                  <span className="font-semibold">${grandTotal.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="text-center space-y-2">
+              <p className="text-sm text-muted-foreground">
+                You will receive email updates about your order status.
+              </p>
+              <Button onClick={resetCheckout} className="w-full">
+                Place Another Order
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto p-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Special Orders</h1>
+        <p className="text-muted-foreground">Complete your cart checkout and place a special order</p>
+      </div>
+
+      {items.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-12">
+            <ShoppingCart className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Your cart is empty</h3>
+            <p className="text-muted-foreground mb-4">Add items to your cart from the Parts tab to place a special order.</p>
+            <Button onClick={() => {
+              // Switch to parts tab
+              const url = new URL(window.location);
+              url.searchParams.set('tab', 'parts');
+              window.history.pushState({}, '', url);
+              window.location.reload();
+            }}>
+              Browse Parts
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main checkout flow */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Checkout Process
+                </CardTitle>
+                <div className="flex items-center gap-2 mt-4">
+                  {[1, 2, 3, 4].map((step) => (
+                    <React.Fragment key={step}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                        currentStep >= step ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+                      }`}>
+                        {step}
+                      </div>
+                      {step < 4 && (
+                        <div className={`flex-1 h-1 ${
+                          currentStep > step ? 'bg-blue-600' : 'bg-gray-200'
+                        }`} />
+                      )}
+                    </React.Fragment>
+                  ))}
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground mt-2">
+                  <span>Cart Review</span>
+                  <span>Customer Info</span>
+                  <span>Shipping</span>
+                  <span>Place Order</span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Step 1: Cart Review */}
+                {currentStep === 1 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Review Your Cart</h3>
+                    <div className="space-y-2">
+                      {items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <div className="font-medium">{item.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {item.id} • Qty: {item.quantity}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-semibold">${(item.price * item.quantity).toFixed(2)}</div>
+                            <div className="text-sm text-muted-foreground">${item.price} each</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-between items-center pt-4 border-t">
+                      <span className="text-lg font-semibold">Subtotal:</span>
+                      <span className="text-lg font-semibold">${subtotal.toFixed(2)}</span>
+                    </div>
+                    <Button onClick={() => setCurrentStep(2)} className="w-full">
+                      Continue to Customer Information
+                    </Button>
+                  </div>
+                )}
+
+                {/* Step 2: Customer Information */}
+                {currentStep === 2 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Customer Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="firstName">First Name *</Label>
+                        <Input
+                          id="firstName"
+                          value={customer.firstName}
+                          onChange={(e) => setCustomer(prev => ({ ...prev, firstName: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="lastName">Last Name *</Label>
+                        <Input
+                          id="lastName"
+                          value={customer.lastName}
+                          onChange={(e) => setCustomer(prev => ({ ...prev, lastName: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={customer.email}
+                          onChange={(e) => setCustomer(prev => ({ ...prev, email: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="phone">Phone *</Label>
+                        <Input
+                          id="phone"
+                          value={customer.phone}
+                          onChange={(e) => setCustomer(prev => ({ ...prev, phone: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label htmlFor="company">Company (Optional)</Label>
+                        <Input
+                          id="company"
+                          value={customer.company}
+                          onChange={(e) => setCustomer(prev => ({ ...prev, company: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => setCurrentStep(1)}>
+                        Back
+                      </Button>
+                      <Button 
+                        onClick={() => setCurrentStep(3)}
+                        disabled={!customer.firstName || !customer.lastName || !customer.email || !customer.phone}
+                        className="flex-1"
+                      >
+                        Continue to Shipping
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3: Shipping */}
+                {currentStep === 3 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Shipping Information</h3>
+                    
+                    {/* Shipping Address */}
+                    <div className="space-y-4">
+                      <h4 className="font-medium">Shipping Address</h4>
+                      <div className="grid grid-cols-1 gap-4">
+                        <div>
+                          <Label htmlFor="street">Street Address *</Label>
+                          <Input
+                            id="street"
+                            value={shippingAddress.street}
+                            onChange={(e) => setShippingAddress(prev => ({ ...prev, street: e.target.value }))}
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="city">City *</Label>
+                            <Input
+                              id="city"
+                              value={shippingAddress.city}
+                              onChange={(e) => setShippingAddress(prev => ({ ...prev, city: e.target.value }))}
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="state">State *</Label>
+                            <Input
+                              id="state"
+                              value={shippingAddress.state}
+                              onChange={(e) => setShippingAddress(prev => ({ ...prev, state: e.target.value }))}
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="zipCode">ZIP Code *</Label>
+                            <Input
+                              id="zipCode"
+                              value={shippingAddress.zipCode}
+                              onChange={(e) => setShippingAddress(prev => ({ ...prev, zipCode: e.target.value }))}
+                              required
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="country">Country</Label>
+                            <Select value={shippingAddress.country} onValueChange={(value) => setShippingAddress(prev => ({ ...prev, country: value }))}>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="US">United States</SelectItem>
+                                <SelectItem value="CA">Canada</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Get Shipping Quotes */}
+                    <div className="space-y-4">
+                      <Button 
+                        onClick={loadShippingQuotes}
+                        disabled={isLoadingShipping || !shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode}
+                        className="w-full"
+                      >
+                        {isLoadingShipping ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Loading Shipping Options...
+                          </>
+                        ) : (
+                          <>
+                            <Truck className="h-4 w-4 mr-2" />
+                            Get Shipping Quotes
+                          </>
+                        )}
+                      </Button>
+
+                      {/* Shipping Options */}
+                      {shippingOptions.length > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="font-medium">Select Shipping Method</h4>
+                          {shippingOptions.map((option) => (
+                            <div key={option.id} className="border rounded-lg p-3">
+                              <label className="flex items-center space-x-3 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="shipping"
+                                  value={option.id}
+                                  checked={selectedShipping === option.id}
+                                  onChange={(e) => setSelectedShipping(e.target.value)}
+                                  className="text-blue-600"
+                                />
+                                <div className="flex-1">
+                                  <div className="flex justify-between items-center">
+                                    <div>
+                                      <div className="font-medium">{option.carrier} {option.service}</div>
+                                      <div className="text-sm text-muted-foreground">
+                                        Estimated delivery: {option.deliveryDate} ({option.estimatedDays} business days)
+                                      </div>
+                                    </div>
+                                    <div className="text-lg font-semibold">${option.cost.toFixed(2)}</div>
+                                  </div>
+                                </div>
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                        Back
+                      </Button>
+                      <Button 
+                        onClick={() => setCurrentStep(4)}
+                        disabled={!selectedShipping}
+                        className="flex-1"
+                      >
+                        Review Order
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 4: Review and Place Order */}
+                {currentStep === 4 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Review Your Order</h3>
+                    
+                    {/* Order Summary */}
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h4 className="font-medium mb-2">Customer Information</h4>
+                        <div className="text-sm space-y-1">
+                          <div>{customer.firstName} {customer.lastName}</div>
+                          <div>{customer.email}</div>
+                          <div>{customer.phone}</div>
+                          {customer.company && <div>{customer.company}</div>}
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h4 className="font-medium mb-2">Shipping Address</h4>
+                        <div className="text-sm">
+                          <div>{shippingAddress.street}</div>
+                          <div>{shippingAddress.city}, {shippingAddress.state} {shippingAddress.zipCode}</div>
+                          <div>{shippingAddress.country}</div>
+                        </div>
+                      </div>
+
+                      {selectedShippingOption && (
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="font-medium mb-2">Shipping Method</h4>
+                          <div className="text-sm">
+                            <div>{selectedShippingOption.carrier} {selectedShippingOption.service}</div>
+                            <div>Estimated delivery: {selectedShippingOption.deliveryDate}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => setCurrentStep(3)}>
+                        Back
+                      </Button>
+                      <Button 
+                        onClick={placeOrder}
+                        disabled={isPlacingOrder}
+                        className="flex-1"
+                      >
+                        {isPlacingOrder ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Placing Order...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Place Order
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Order Summary Sidebar */}
+          <div className="lg:col-span-1">
+            <Card className="sticky top-6">
+              <CardHeader>
+                <CardTitle>Order Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Subtotal ({items.length} items)</span>
+                    <span>${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Shipping</span>
+                    <span>${shippingCost.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Tax (8%)</span>
+                    <span>${tax.toFixed(2)}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-lg font-semibold">
+                    <span>Total</span>
+                    <span>${grandTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Cart Items Summary */}
+                <div className="space-y-2">
+                  <h4 className="font-medium">Items in Cart</h4>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {items.map((item) => (
+                      <div key={item.id} className="flex justify-between text-sm">
+                        <span className="truncate">{item.name} (×{item.quantity})</span>
+                        <span>${(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Main Parts component
 const Parts = () => {
   // State management
@@ -132,6 +746,20 @@ const Parts = () => {
 
   const { toast } = useToast();
   const { itemCount, total } = useCart(); // Use enhanced cart system
+
+  // Get current tab from URL
+  const [currentTab, setCurrentTab] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('tab') || 'parts';
+  });
+
+  // Update URL when tab changes
+  const handleTabChange = (tab: string) => {
+    setCurrentTab(tab);
+    const url = new URL(window.location);
+    url.searchParams.set('tab', tab);
+    window.history.pushState({}, '', url);
+  };
 
   // Cache management
   const CACHE_KEY = 'parts_inventory_cache';
@@ -707,204 +1335,238 @@ const Parts = () => {
   }
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="container mx-auto p-6 space-y-6">
       {/* Header with Cart Widget */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Parts & Inventory</h1>
           <p className="text-muted-foreground">
-            Database • {parts.length} of {parts.length} parts
+            Manage your parts inventory and place special orders
           </p>
         </div>
-        
-        <div className="flex items-center gap-4">
-          {/* Cart Widget with Shipping */}
-          <CartWidget />
-          
-          <Button onClick={fetchParts} variant="outline">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-        </div>
+        <CartWidget />
       </div>
 
-      {/* Search & Filter */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Search & Filter
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Search */}
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Input
-                placeholder="Search parts by name, SKU, VCPN, or description..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full"
-              />
-            </div>
-          </div>
+      {/* Tab Navigation */}
+      <Tabs value={currentTab} onValueChange={handleTabChange}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="parts" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Parts Catalog
+          </TabsTrigger>
+          <TabsTrigger value="special-orders" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Special Orders
+            {itemCount > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {itemCount}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-          {/* Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Category */}
-            <div>
-              <Label>Category</Label>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map(category => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Sort */}
-            <div>
-              <Label>Sort By</Label>
-              <Select value={`${sortBy}-${sortOrder}`} onValueChange={(value) => {
-                const [field, order] = value.split('-');
-                setSortBy(field);
-                setSortOrder(order as 'asc' | 'desc');
-              }}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="name-asc">Name A-Z</SelectItem>
-                  <SelectItem value="name-desc">Name Z-A</SelectItem>
-                  <SelectItem value="price-asc">Price Low-High</SelectItem>
-                  <SelectItem value="price-desc">Price High-Low</SelectItem>
-                  <SelectItem value="quantity-desc">Stock High-Low</SelectItem>
-                  <SelectItem value="quantity-asc">Stock Low-High</SelectItem>
-                  <SelectItem value="updated-desc">Recently Updated</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* View Mode */}
-            <div>
-              <Label>View</Label>
-              <div className="flex gap-1 mt-1">
-                <Button
-                  variant={viewMode === 'grid' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setViewMode('grid')}
-                  className="flex-1"
-                >
-                  <Grid className="h-4 w-4 mr-1" />
-                  Grid
-                </Button>
-                <Button
-                  variant={viewMode === 'list' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setViewMode('list')}
-                  className="flex-1"
-                >
-                  <List className="h-4 w-4 mr-1" />
-                  List
-                </Button>
-              </div>
-            </div>
-
-            {/* Items per page */}
-            <div>
-              <Label>Items per page</Label>
-              <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(Number(value))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="12">12</SelectItem>
-                  <SelectItem value="24">24</SelectItem>
-                  <SelectItem value="48">48</SelectItem>
-                  <SelectItem value="96">96</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Price Range */}
-          <div>
-            <Label>Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
-            <Slider
-              value={priceRange}
-              onValueChange={setPriceRange}
-              max={1000}
-              step={10}
-              className="mt-2"
-            />
-          </div>
-
-          {/* Stock Filter */}
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="stock-filter"
-              checked={showInStockOnly}
-              onCheckedChange={setShowInStockOnly}
-            />
-            <Label htmlFor="stock-filter">Show in-stock items only</Label>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Results */}
-      <LoadingWrapper isLoading={loading} message="Loading parts inventory...">
-        {filteredParts.length === 0 ? (
+        {/* Parts Tab Content */}
+        <TabsContent value="parts" className="space-y-6">
+          {/* Search & Filter */}
           <Card>
-            <CardContent className="text-center py-8">
-              <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No parts found</h3>
-              <p className="text-muted-foreground">
-                Try adjusting your search criteria or filters
-              </p>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Search className="h-5 w-5" />
+                Search & Filter
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Search */}
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <Input
+                    placeholder="Search parts by name, SKU, VCPN, or description..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Category */}
+                <div>
+                  <Label>Category</Label>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories.map(category => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Sort */}
+                <div>
+                  <Label>Sort By</Label>
+                  <Select value={`${sortBy}-${sortOrder}`} onValueChange={(value) => {
+                    const [field, order] = value.split('-');
+                    setSortBy(field);
+                    setSortOrder(order as 'asc' | 'desc');
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="name-asc">Name A-Z</SelectItem>
+                      <SelectItem value="name-desc">Name Z-A</SelectItem>
+                      <SelectItem value="price-asc">Price Low-High</SelectItem>
+                      <SelectItem value="price-desc">Price High-Low</SelectItem>
+                      <SelectItem value="quantity-desc">Stock High-Low</SelectItem>
+                      <SelectItem value="quantity-asc">Stock Low-High</SelectItem>
+                      <SelectItem value="updated-desc">Recently Updated</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* View Mode */}
+                <div>
+                  <Label>View</Label>
+                  <div className="flex gap-1 mt-1">
+                    <Button
+                      variant={viewMode === 'grid' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setViewMode('grid')}
+                      className="flex-1"
+                    >
+                      <Grid className="h-4 w-4 mr-1" />
+                      Grid
+                    </Button>
+                    <Button
+                      variant={viewMode === 'list' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setViewMode('list')}
+                      className="flex-1"
+                    >
+                      <List className="h-4 w-4 mr-1" />
+                      List
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Items per page */}
+                <div>
+                  <Label>Items per page</Label>
+                  <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(Number(value))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="12">12</SelectItem>
+                      <SelectItem value="24">24</SelectItem>
+                      <SelectItem value="48">48</SelectItem>
+                      <SelectItem value="96">96</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Price Range */}
+              <div>
+                <Label>Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
+                <Slider
+                  value={priceRange}
+                  onValueChange={setPriceRange}
+                  max={1000}
+                  step={10}
+                  className="mt-2"
+                />
+              </div>
+
+              {/* Stock Filter */}
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="stock-filter"
+                  checked={showInStockOnly}
+                  onCheckedChange={setShowInStockOnly}
+                />
+                <Label htmlFor="stock-filter">Show in-stock items only</Label>
+              </div>
             </CardContent>
           </Card>
-        ) : (
-          <>
-            {/* Grid View */}
-            {viewMode === 'grid' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6">
-                {currentParts.map(renderPartCard)}
-              </div>
-            )}
 
-            {/* List View */}
-            {viewMode === 'list' && (
-              <Card className="mb-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12"></TableHead>
-                      <TableHead>Part</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Stock</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {currentParts.map(renderPartRow)}
-                  </TableBody>
-                </Table>
+          {/* Results Summary */}
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredParts.length)} of {filteredParts.length} parts
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchParts}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+
+          {/* Parts Display */}
+          <LoadingWrapper isLoading={loading} message="Loading parts inventory...">
+            {filteredParts.length === 0 ? (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No parts found</h3>
+                  <p className="text-muted-foreground">
+                    Try adjusting your search criteria or filters
+                  </p>
+                </CardContent>
               </Card>
-            )}
+            ) : (
+              <>
+                {/* Grid View */}
+                {viewMode === 'grid' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {currentParts.map(renderPartCard)}
+                  </div>
+                )}
 
-            {/* Pagination */}
-            {renderPagination()}
-          </>
-        )}
-      </LoadingWrapper>
+                {/* List View */}
+                {viewMode === 'list' && (
+                  <Card>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12"></TableHead>
+                          <TableHead>Part</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Price</TableHead>
+                          <TableHead>Stock</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {currentParts.map(renderPartRow)}
+                      </TableBody>
+                    </Table>
+                  </Card>
+                )}
+
+                {/* Pagination */}
+                {renderPagination()}
+              </>
+            )}
+          </LoadingWrapper>
+        </TabsContent>
+
+        {/* Special Orders Tab Content */}
+        <TabsContent value="special-orders">
+          <SpecialOrdersTab />
+        </TabsContent>
+      </Tabs>
 
       {/* Part Detail Dialog */}
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
