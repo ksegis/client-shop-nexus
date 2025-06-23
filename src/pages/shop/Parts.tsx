@@ -19,9 +19,9 @@ import { Textarea } from "@/components/ui/textarea";
 // Import the ProductPriceCheck component
 import ProductPriceCheck from '@/components/product_price_check_component';
 
-// Import minimal cart system
+// Import enhanced cart system with shipping
 import { useCart } from '@/lib/minimal_cart_context';
-import { AddToCartButton, CartWidget } from '@/components/minimal_cart_components';
+import { AddToCartButton, CartWidget } from '@/components/enhanced_cart_components_with_shipping';
 
 // Simplified interface for inventory parts
 interface InventoryPart {
@@ -131,7 +131,7 @@ const Parts = () => {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   const { toast } = useToast();
-  const { itemCount, total } = useCart(); // Use minimal cart system
+  const { itemCount, total } = useCart(); // Use enhanced cart system
 
   // Cache management
   const CACHE_KEY = 'parts_inventory_cache';
@@ -482,10 +482,25 @@ const Parts = () => {
         </CardHeader>
 
         <CardContent className="space-y-3">
-          {/* Part Image Placeholder */}
-          <div className="w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center">
-            <Package className="h-8 w-8 text-gray-400" />
+          {/* Product Image Placeholder */}
+          <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
+            <Package className="h-12 w-12 text-gray-400" />
           </div>
+
+          {/* Stock Status */}
+          <div className="flex items-center gap-2">
+            <Badge variant={isInStock ? (isLowStock ? "destructive" : "secondary") : "outline"}>
+              {isInStock ? `${part.quantity} in stock` : 'Out of stock'}
+            </Badge>
+            {isLowStock && isInStock && (
+              <Badge variant="outline" className="text-orange-600">
+                Low Stock
+              </Badge>
+            )}
+          </div>
+
+          {/* Pricing */}
+          <PricingDisplay part={part} />
 
           {/* Description */}
           {part.description && (
@@ -494,38 +509,10 @@ const Parts = () => {
             </p>
           )}
 
-          {/* Pricing */}
-          <PricingDisplay part={part} />
-
-          {/* Stock Status */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Badge variant={isInStock ? "default" : "destructive"}>
-                {isInStock ? `${part.quantity} in stock` : 'Out of stock'}
-              </Badge>
-              {isLowStock && isInStock && (
-                <Badge variant="outline" className="text-orange-600 border-orange-600">
-                  Low Stock
-                </Badge>
-              )}
-            </div>
-          </div>
-
-          {/* Keystone Sync Status */}
-          {part.keystone_vcpn && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <CheckCircle className="h-3 w-3 text-green-500" />
-              <span>Keystone Synced</span>
-              {part.keystone_last_sync && (
-                <span>• {new Date(part.keystone_last_sync).toLocaleDateString()}</span>
-              )}
-            </div>
-          )}
-
           {/* Actions */}
           <div className="flex gap-2">
             <AddToCartButton
-              vcpn={part.keystone_vcpn || part.sku || ''}
+              vcpn={part.keystone_vcpn || part.sku || part.id}
               name={part.name}
               price={part.price}
               sku={part.sku}
@@ -534,24 +521,13 @@ const Parts = () => {
               maxQuantity={part.quantity}
               weight={part.weight}
               className="flex-1"
-              onSuccess={() => {
-                toast({
-                  title: "Added to Cart",
-                  description: `${part.name} has been added to your cart.`,
-                });
-              }}
-              onError={(error) => {
-                toast({
-                  title: "Error",
-                  description: error,
-                  variant: "destructive",
-                });
-              }}
+              size="sm"
             />
             <Button
               variant="outline"
               size="sm"
               onClick={() => viewPartDetails(part)}
+              className="px-3"
             >
               <Eye className="h-4 w-4" />
             </Button>
@@ -559,45 +535,62 @@ const Parts = () => {
         </CardContent>
       </Card>
     );
-  }, [favorites, toggleFavorite, viewPartDetails, toast]);
+  }, [favorites, toggleFavorite, viewPartDetails]);
 
   // Render part row for list view
   const renderPartRow = useCallback((part: InventoryPart) => {
     const isInStock = part.quantity > 0;
     const isFavorite = favorites.has(part.id);
+    const isLowStock = part.quantity <= (part.reorder_level || 0);
 
     return (
-      <TableRow key={part.id} className="group">
+      <TableRow key={part.id} className="group hover:bg-muted/50">
+        <TableCell className="w-12">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => toggleFavorite(part.id)}
+            className="h-8 w-8 p-0"
+          >
+            <Heart className={`h-4 w-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+          </Button>
+        </TableCell>
+        
         <TableCell>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
               <Package className="h-5 w-5 text-gray-400" />
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-medium group-hover:text-blue-600 transition-colors">
-                {part.name}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {part.sku} {part.keystone_vcpn && `• ${part.keystone_vcpn}`}
-              </div>
+            <div>
+              <div className="font-medium">{part.name}</div>
+              <div className="text-sm text-muted-foreground">{part.sku}</div>
             </div>
           </div>
         </TableCell>
-        <TableCell>
-          <Badge variant="outline">{part.category}</Badge>
-        </TableCell>
+        
+        <TableCell>{part.category}</TableCell>
+        
         <TableCell>
           <PricingDisplay part={part} />
         </TableCell>
+        
         <TableCell>
-          <Badge variant={isInStock ? "default" : "destructive"}>
-            {part.quantity}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={isInStock ? (isLowStock ? "destructive" : "secondary") : "outline"}>
+              {part.quantity}
+            </Badge>
+            {isLowStock && isInStock && (
+              <Badge variant="outline" className="text-orange-600 text-xs">
+                Low
+              </Badge>
+            )}
+          </div>
         </TableCell>
+        
         <TableCell>
           <div className="flex items-center gap-2">
             <AddToCartButton
-              vcpn={part.keystone_vcpn || part.sku || ''}
+              vcpn={part.keystone_vcpn || part.sku || part.id}
               name={part.name}
               price={part.price}
               sku={part.sku}
@@ -606,31 +599,12 @@ const Parts = () => {
               maxQuantity={part.quantity}
               weight={part.weight}
               size="sm"
-              onSuccess={() => {
-                toast({
-                  title: "Added to Cart",
-                  description: `${part.name} has been added to your cart.`,
-                });
-              }}
-              onError={(error) => {
-                toast({
-                  title: "Error",
-                  description: error,
-                  variant: "destructive",
-                });
-              }}
             />
             <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => toggleFavorite(part.id)}
-            >
-              <Heart className={`h-4 w-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-            </Button>
-            <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => viewPartDetails(part)}
+              className="px-3"
             >
               <Eye className="h-4 w-4" />
             </Button>
@@ -638,29 +612,34 @@ const Parts = () => {
         </TableCell>
       </TableRow>
     );
-  }, [favorites, toggleFavorite, viewPartDetails, toast]);
+  }, [favorites, toggleFavorite, viewPartDetails]);
 
-  // Pagination component
-  const Pagination = () => {
-    const getPageNumbers = () => {
-      const pages = [];
-      const maxVisible = 5;
-      
-      if (totalPages <= maxVisible) {
-        for (let i = 1; i <= totalPages; i++) {
-          pages.push(i);
-        }
-      } else {
-        const start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
-        const end = Math.min(totalPages, start + maxVisible - 1);
-        
-        for (let i = start; i <= end; i++) {
-          pages.push(i);
-        }
-      }
-      
-      return pages;
-    };
+  // Render pagination
+  const renderPagination = useCallback(() => {
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <Button
+          key={i}
+          variant={currentPage === i ? "default" : "outline"}
+          size="sm"
+          onClick={() => setCurrentPage(i)}
+          className="w-10"
+        >
+          {i}
+        </Button>
+      );
+    }
 
     return (
       <div className="flex items-center justify-between">
@@ -678,17 +657,25 @@ const Parts = () => {
             Previous
           </Button>
           
-          {getPageNumbers().map(page => (
-            <Button
-              key={page}
-              variant={currentPage === page ? "default" : "outline"}
-              size="sm"
-              onClick={() => setCurrentPage(page)}
-              className="w-8"
-            >
-              {page}
-            </Button>
-          ))}
+          {startPage > 1 && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(1)} className="w-10">
+                1
+              </Button>
+              {startPage > 2 && <span className="text-muted-foreground">...</span>}
+            </>
+          )}
+          
+          {pages}
+          
+          {endPage < totalPages && (
+            <>
+              {endPage < totalPages - 1 && <span className="text-muted-foreground">...</span>}
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(totalPages)} className="w-10">
+                {totalPages}
+              </Button>
+            </>
+          )}
           
           <Button
             variant="outline"
@@ -701,28 +688,37 @@ const Parts = () => {
         </div>
       </div>
     );
-  };
+  }, [currentPage, totalPages, startIndex, endIndex, filteredParts.length]);
+
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button onClick={fetchParts} className="mt-4">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Try Again
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-6">
       {/* Header with Cart Widget */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold">Parts & Inventory</h1>
           <p className="text-muted-foreground">
             Database • {parts.length} of {parts.length} parts
           </p>
         </div>
+        
         <div className="flex items-center gap-4">
-          {/* Cart Status */}
-          {itemCount > 0 && (
-            <Badge variant="secondary" className="text-sm">
-              <ShoppingCart className="h-3 w-3 mr-1" />
-              {itemCount} items • ${total.toFixed(2)}
-            </Badge>
-          )}
-          
-          {/* Cart Widget */}
+          {/* Cart Widget with Shipping */}
           <CartWidget />
           
           <Button onClick={fetchParts} variant="outline">
@@ -732,17 +728,8 @@ const Parts = () => {
         </div>
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Filters and Search */}
-      <Card>
+      {/* Search & Filter */}
+      <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
@@ -762,11 +749,11 @@ const Parts = () => {
             </div>
           </div>
 
-          {/* Filters Row */}
+          {/* Filters */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Category */}
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
+            <div>
+              <Label>Category</Label>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger>
                   <SelectValue />
@@ -783,36 +770,32 @@ const Parts = () => {
             </div>
 
             {/* Sort */}
-            <div className="space-y-2">
-              <Label htmlFor="sort">Sort By</Label>
-              <div className="flex gap-2">
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="name">Name</SelectItem>
-                    <SelectItem value="price">Price</SelectItem>
-                    <SelectItem value="quantity">Quantity</SelectItem>
-                    <SelectItem value="category">Category</SelectItem>
-                    <SelectItem value="updated">Updated</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                  className="px-3"
-                >
-                  {sortOrder === 'asc' ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                </Button>
-              </div>
+            <div>
+              <Label>Sort By</Label>
+              <Select value={`${sortBy}-${sortOrder}`} onValueChange={(value) => {
+                const [field, order] = value.split('-');
+                setSortBy(field);
+                setSortOrder(order as 'asc' | 'desc');
+              }}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name-asc">Name A-Z</SelectItem>
+                  <SelectItem value="name-desc">Name Z-A</SelectItem>
+                  <SelectItem value="price-asc">Price Low-High</SelectItem>
+                  <SelectItem value="price-desc">Price High-Low</SelectItem>
+                  <SelectItem value="quantity-desc">Stock High-Low</SelectItem>
+                  <SelectItem value="quantity-asc">Stock Low-High</SelectItem>
+                  <SelectItem value="updated-desc">Recently Updated</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* View Mode */}
-            <div className="space-y-2">
+            <div>
               <Label>View</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-1 mt-1">
                 <Button
                   variant={viewMode === 'grid' ? 'default' : 'outline'}
                   size="sm"
@@ -833,35 +816,12 @@ const Parts = () => {
                 </Button>
               </div>
             </div>
-          </div>
 
-          {/* Price Range */}
-          <div className="space-y-2 mb-4">
-            <Label>Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
-            <Slider
-              value={priceRange}
-              onValueChange={setPriceRange}
-              max={1000}
-              step={10}
-              className="w-full"
-            />
-          </div>
-
-          {/* Additional Filters */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="in-stock"
-                checked={showInStockOnly}
-                onCheckedChange={setShowInStockOnly}
-              />
-              <Label htmlFor="in-stock">Show in-stock items only</Label>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Label htmlFor="items-per-page" className="text-sm">Items per page:</Label>
-              <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(parseInt(value))}>
-                <SelectTrigger className="w-20">
+            {/* Items per page */}
+            <div>
+              <Label>Items per page</Label>
+              <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(Number(value))}>
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -873,32 +833,59 @@ const Parts = () => {
               </Select>
             </div>
           </div>
+
+          {/* Price Range */}
+          <div>
+            <Label>Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
+            <Slider
+              value={priceRange}
+              onValueChange={setPriceRange}
+              max={1000}
+              step={10}
+              className="mt-2"
+            />
+          </div>
+
+          {/* Stock Filter */}
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="stock-filter"
+              checked={showInStockOnly}
+              onCheckedChange={setShowInStockOnly}
+            />
+            <Label htmlFor="stock-filter">Show in-stock items only</Label>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Parts Display */}
-      <LoadingWrapper isLoading={loading}>
+      {/* Results */}
+      <LoadingWrapper isLoading={loading} message="Loading parts inventory...">
         {filteredParts.length === 0 ? (
           <Card>
-            <CardContent className="p-12 text-center">
-              <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <CardContent className="text-center py-8">
+              <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
               <h3 className="text-lg font-semibold mb-2">No parts found</h3>
               <p className="text-muted-foreground">
-                Try adjusting your search criteria or filters.
+                Try adjusting your search criteria or filters
               </p>
             </CardContent>
           </Card>
         ) : (
           <>
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {/* Grid View */}
+            {viewMode === 'grid' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6">
                 {currentParts.map(renderPartCard)}
               </div>
-            ) : (
-              <Card>
+            )}
+
+            {/* List View */}
+            {viewMode === 'list' && (
+              <Card className="mb-6">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12"></TableHead>
                       <TableHead>Part</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Price</TableHead>
@@ -914,13 +901,7 @@ const Parts = () => {
             )}
 
             {/* Pagination */}
-            {totalPages > 1 && (
-              <Card>
-                <CardContent className="p-4">
-                  <Pagination />
-                </CardContent>
-              </Card>
-            )}
+            {renderPagination()}
           </>
         )}
       </LoadingWrapper>
@@ -931,111 +912,70 @@ const Parts = () => {
           <DialogHeader>
             <DialogTitle>{selectedPart?.name}</DialogTitle>
             <DialogDescription>
-              Part details and specifications
+              {selectedPart?.sku} • {selectedPart?.category}
             </DialogDescription>
           </DialogHeader>
           
           {selectedPart && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-sm font-medium">Description</Label>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {selectedPart.description || 'No description available'}
-                    </p>
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Product Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="font-medium">SKU:</span> {selectedPart.sku}</div>
+                    <div><span className="font-medium">VCPN:</span> {selectedPart.keystone_vcpn}</div>
+                    <div><span className="font-medium">Brand:</span> {selectedPart.brand}</div>
+                    <div><span className="font-medium">Category:</span> {selectedPart.category}</div>
+                    <div><span className="font-medium">Supplier:</span> {selectedPart.supplier}</div>
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-sm font-medium">SKU</Label>
-                      <p className="text-sm mt-1">{selectedPart.sku}</p>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium">Category</Label>
-                      <p className="text-sm mt-1">{selectedPart.category}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-sm font-medium">Supplier</Label>
-                      <p className="text-sm mt-1">{selectedPart.supplier}</p>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium">Brand</Label>
-                      <p className="text-sm mt-1">{selectedPart.brand || 'N/A'}</p>
-                    </div>
-                  </div>
-
-                  {selectedPart.keystone_vcpn && (
-                    <div>
-                      <Label className="text-sm font-medium">Keystone VCPN</Label>
-                      <p className="text-sm mt-1">{selectedPart.keystone_vcpn}</p>
-                    </div>
-                  )}
                 </div>
-
-                <div className="space-y-4">
-                  <PricingDisplay part={selectedPart} />
-                  
-                  <div>
-                    <Label className="text-sm font-medium">Stock Information</Label>
-                    <div className="mt-2 space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Current Stock:</span>
-                        <Badge variant={selectedPart.quantity > 0 ? "default" : "destructive"}>
-                          {selectedPart.quantity}
-                        </Badge>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Reorder Level:</span>
-                        <span>{selectedPart.reorder_level || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Location:</span>
-                        <span>{selectedPart.location || 'N/A'}</span>
-                      </div>
-                    </div>
+                
+                <div>
+                  <h4 className="font-semibold mb-2">Inventory</h4>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="font-medium">Quantity:</span> {selectedPart.quantity}</div>
+                    <div><span className="font-medium">Reorder Level:</span> {selectedPart.reorder_level}</div>
+                    <div><span className="font-medium">Location:</span> {selectedPart.location}</div>
+                    <div><span className="font-medium">Warehouse:</span> {selectedPart.warehouse}</div>
                   </div>
+                </div>
+              </div>
 
+              {/* Pricing */}
+              <div>
+                <h4 className="font-semibold mb-2">Pricing</h4>
+                <PricingDisplay part={selectedPart} />
+              </div>
+
+              {/* Description */}
+              {selectedPart.description && (
+                <div>
+                  <h4 className="font-semibold mb-2">Description</h4>
+                  <p className="text-sm text-muted-foreground">{selectedPart.description}</p>
+                </div>
+              )}
+
+              {/* Specifications */}
+              <div>
+                <h4 className="font-semibold mb-2">Specifications</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  {selectedPart.weight && (
+                    <div><span className="font-medium">Weight:</span> {selectedPart.weight} lbs</div>
+                  )}
                   {selectedPart.dimensions && (
-                    <div>
-                      <Label className="text-sm font-medium">Specifications</Label>
-                      <div className="mt-2 space-y-1 text-sm">
-                        <div className="flex justify-between">
-                          <span>Dimensions:</span>
-                          <span>{selectedPart.dimensions}</span>
-                        </div>
-                        {selectedPart.weight && (
-                          <div className="flex justify-between">
-                            <span>Weight:</span>
-                            <span>{selectedPart.weight} lbs</span>
-                          </div>
-                        )}
-                        {selectedPart.warranty && (
-                          <div className="flex justify-between">
-                            <span>Warranty:</span>
-                            <span>{selectedPart.warranty}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    <div><span className="font-medium">Dimensions:</span> {selectedPart.dimensions}</div>
+                  )}
+                  {selectedPart.warranty && (
+                    <div><span className="font-medium">Warranty:</span> {selectedPart.warranty}</div>
                   )}
                 </div>
               </div>
 
-              {/* Price Check Integration */}
-              {selectedPart.keystone_vcpn && (
-                <div className="border-t pt-4">
-                  <Label className="text-sm font-medium mb-2 block">Real-Time Price Check</Label>
-                  <ProductPriceCheck vcpn={selectedPart.keystone_vcpn} />
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 pt-4 border-t">
+              {/* Actions */}
+              <div className="flex gap-2">
                 <AddToCartButton
-                  vcpn={selectedPart.keystone_vcpn || selectedPart.sku || ''}
+                  vcpn={selectedPart.keystone_vcpn || selectedPart.sku || selectedPart.id}
                   name={selectedPart.name}
                   price={selectedPart.price}
                   sku={selectedPart.sku}
@@ -1044,25 +984,13 @@ const Parts = () => {
                   maxQuantity={selectedPart.quantity}
                   weight={selectedPart.weight}
                   className="flex-1"
-                  onSuccess={() => {
-                    toast({
-                      title: "Added to Cart",
-                      description: `${selectedPart.name} has been added to your cart.`,
-                    });
-                  }}
-                  onError={(error) => {
-                    toast({
-                      title: "Error",
-                      description: error,
-                      variant: "destructive",
-                    });
-                  }}
                 />
                 <Button
                   variant="outline"
                   onClick={() => toggleFavorite(selectedPart.id)}
                 >
-                  <Heart className={`h-4 w-4 ${favorites.has(selectedPart.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                  <Heart className={`h-4 w-4 mr-2 ${favorites.has(selectedPart.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                  {favorites.has(selectedPart.id) ? 'Remove from Favorites' : 'Add to Favorites'}
                 </Button>
               </div>
             </div>
