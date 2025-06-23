@@ -338,6 +338,13 @@ class ShippingQuoteService {
     const apiToken = this.getApiToken();
     const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
 
+    // --- DEBUGGING LOGS START ---
+    console.log('🔍 Debug - Environment:', environment);
+    console.log('🔍 Debug - API Token:', apiToken ? 'Present' : 'Missing');
+    console.log('🔍 Debug - Proxy URL:', proxyUrl);
+    console.log('🔍 Debug - Full URL (expected):', `${proxyUrl}/shipping/options/multiple`);
+    // --- DEBUGGING LOGS END ---
+
     if (!apiToken || !proxyUrl) {
       if (environment === 'production') {
         throw new Error('Missing required environment variables for Keystone API');
@@ -413,7 +420,7 @@ class ShippingQuoteService {
       const { data, error } = await supabase
         .from('keystone_api_logs')
         .insert({
-          endpoint: '/shipping/quote-multiple-parts-per-warehouse',
+          endpoint: '/shipping/options/multiple',
           method: 'POST',
           request_data: {
             itemCount: request.items.length,
