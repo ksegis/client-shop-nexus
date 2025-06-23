@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, Truck, MapPin, Clock, Shield, Edit } from "lucide-react";
+import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, Truck, MapPin, Clock, Shield, Edit, CheckCircle, Timer } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,534 +101,306 @@ interface ShippingQuoteResponse {
   shippingOptions: ShippingOption[];
   totalItems: number;
   totalWeight?: number;
-  estimatedPackages: number;
-  isRateLimited?: boolean;
-  nextAllowedTime?: string;
-  rateLimitMessage?: string;
+  estimatedDimensions?: {
+    length: number;
+    width: number;
+    height: number;
+    unit: string;
+  };
 }
 
-// Enhanced Shipping Quote Service
-class EnhancedShippingQuoteService {
-  private static readonly RATE_LIMIT_MINUTES = 5; // 5 minutes between quotes
-  private static readonly MAX_ITEMS_PER_REQUEST = 50;
-  private static readonly STORAGE_KEY = 'shipping_quote_status';
-  
-  private isRateLimited: boolean = false;
-  private lastQuoteTime: string | null = null;
-  private nextAllowedTime: string | null = null;
-
-  constructor() {
-    this.loadRateLimitStatus();
-  }
-
-  private loadRateLimitStatus(): void {
-    try {
-      const stored = localStorage.getItem(EnhancedShippingQuoteService.STORAGE_KEY);
-      if (stored) {
-        const status = JSON.parse(stored);
-        this.lastQuoteTime = status.lastQuoteTime;
-        this.checkRateLimit();
-      }
-    } catch (error) {
-      console.error('Error loading shipping quote rate limit status:', error);
-    }
-  }
-
-  private saveRateLimitStatus(): void {
-    try {
-      const status = {
-        lastQuoteTime: this.lastQuoteTime,
-        nextAllowedTime: this.nextAllowedTime,
-        isRateLimited: this.isRateLimited
-      };
-      localStorage.setItem(EnhancedShippingQuoteService.STORAGE_KEY, JSON.stringify(status));
-    } catch (error) {
-      console.error('Error saving shipping quote rate limit status:', error);
-    }
-  }
-
-  private checkRateLimit(): void {
-    if (!this.lastQuoteTime) {
-      this.isRateLimited = false;
-      this.nextAllowedTime = null;
-      return;
-    }
-
-    const lastQuote = new Date(this.lastQuoteTime);
-    const now = new Date();
-    const timeDiff = now.getTime() - lastQuote.getTime();
-    const minutesDiff = timeDiff / (1000 * 60);
-
-    if (minutesDiff < EnhancedShippingQuoteService.RATE_LIMIT_MINUTES) {
-      this.isRateLimited = true;
-      const nextAllowed = new Date(lastQuote.getTime() + (EnhancedShippingQuoteService.RATE_LIMIT_MINUTES * 60 * 1000));
-      this.nextAllowedTime = nextAllowed.toISOString();
-    } else {
-      this.isRateLimited = false;
-      this.nextAllowedTime = null;
-    }
-  }
-
-  public getRateLimitStatus(): { isRateLimited: boolean; nextAllowedTime: string | null; remainingTime: string | null } {
-    this.checkRateLimit();
-    
-    let remainingTime = null;
-    if (this.isRateLimited && this.nextAllowedTime) {
-      const now = new Date();
-      const nextAllowed = new Date(this.nextAllowedTime);
-      const timeDiff = nextAllowed.getTime() - now.getTime();
-      
-      if (timeDiff > 0) {
-        const minutes = Math.floor(timeDiff / (1000 * 60));
-        const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
-        remainingTime = `${minutes}m ${seconds}s`;
-      }
-    }
-
-    return {
-      isRateLimited: this.isRateLimited,
-      nextAllowedTime: this.nextAllowedTime,
-      remainingTime
-    };
-  }
-
-  public async getShippingQuotes(cartItems: CartItem[], shippingAddress: ShippingAddress): Promise<ShippingQuoteResponse> {
-    // Check rate limiting
-    this.checkRateLimit();
-    if (this.isRateLimited) {
-      const status = this.getRateLimitStatus();
-      return {
-        success: false,
-        message: `Rate limited. Next quote allowed in ${status.remainingTime}`,
-        requestId: '',
-        timestamp: new Date().toISOString(),
-        shippingOptions: [],
-        totalItems: 0,
-        estimatedPackages: 0,
-        isRateLimited: true,
-        nextAllowedTime: this.nextAllowedTime,
-        rateLimitMessage: `Please wait ${status.remainingTime} before requesting another shipping quote.`
-      };
-    }
-
-    try {
-      // Convert cart items to shipping quote format
-      const items = cartItems.map(item => ({
-        vcpn: item.vcpn || item.sku || item.id,
-        quantity: item.quantity,
-        weight: item.weight || 1.0 // Default weight if not specified
-      }));
-
-      // For development mode, return mock data
-      const isDevelopment = import.meta.env.DEV || !import.meta.env.VITE_KEYSTONE_PROXY_URL;
-      
-      if (isDevelopment) {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Update rate limiting
-        this.lastQuoteTime = new Date().toISOString();
-        this.checkRateLimit();
-        this.saveRateLimitStatus();
-
-        // Generate mock shipping options
-        const mockOptions: ShippingOption[] = [
-          {
-            carrierId: 'ups',
-            carrierName: 'UPS',
-            serviceCode: 'ground',
-            serviceName: 'Ground',
-            cost: 15.99,
-            currency: 'USD',
-            estimatedDeliveryDays: 3,
-            estimatedDeliveryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            trackingAvailable: true,
-            insuranceAvailable: true,
-            signatureRequired: false,
-            warehouseId: 'main',
-            warehouseName: 'Main Warehouse',
-            warehouseLocation: 'Los Angeles, CA'
-          },
-          {
-            carrierId: 'fedex',
-            carrierName: 'FedEx',
-            serviceCode: 'express',
-            serviceName: 'Express',
-            cost: 28.50,
-            currency: 'USD',
-            estimatedDeliveryDays: 2,
-            estimatedDeliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            trackingAvailable: true,
-            insuranceAvailable: true,
-            signatureRequired: false,
-            warehouseId: 'east',
-            warehouseName: 'East Coast Hub',
-            warehouseLocation: 'Atlanta, GA'
-          },
-          {
-            carrierId: 'usps',
-            carrierName: 'USPS',
-            serviceCode: 'priority',
-            serviceName: 'Priority Mail',
-            cost: 12.75,
-            currency: 'USD',
-            estimatedDeliveryDays: 2,
-            estimatedDeliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            trackingAvailable: true,
-            insuranceAvailable: false,
-            signatureRequired: false,
-            warehouseId: 'main',
-            warehouseName: 'Main Warehouse',
-            warehouseLocation: 'Los Angeles, CA'
-          },
-          {
-            carrierId: 'ups',
-            carrierName: 'UPS',
-            serviceCode: 'overnight',
-            serviceName: 'Next Day Air',
-            cost: 45.99,
-            currency: 'USD',
-            estimatedDeliveryDays: 1,
-            estimatedDeliveryDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            trackingAvailable: true,
-            insuranceAvailable: true,
-            signatureRequired: true,
-            warehouseId: 'main',
-            warehouseName: 'Main Warehouse',
-            warehouseLocation: 'Los Angeles, CA'
-          }
-        ];
-
-        return {
-          success: true,
-          message: 'Shipping quotes retrieved successfully (mock data)',
-          requestId: `mock-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          shippingOptions: mockOptions,
-          totalItems: cartItems.reduce((sum, item) => sum + item.quantity, 0),
-          totalWeight: cartItems.reduce((sum, item) => sum + (item.weight || 1.0) * item.quantity, 0),
-          estimatedPackages: Math.ceil(cartItems.length / 5) // Estimate 5 items per package
-        };
-      }
-
-      // Production API call would go here
-      // For now, return mock data even in production
-      return {
-        success: false,
-        message: 'Production shipping quotes not yet implemented',
-        requestId: '',
-        timestamp: new Date().toISOString(),
-        shippingOptions: [],
-        totalItems: 0,
-        estimatedPackages: 0
-      };
-
-    } catch (error) {
-      console.error('Error getting shipping quotes:', error);
-      return {
-        success: false,
-        message: `Error getting shipping quotes: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        requestId: '',
-        timestamp: new Date().toISOString(),
-        shippingOptions: [],
-        totalItems: 0,
-        estimatedPackages: 0
-      };
-    }
-  }
-
-  public clearRateLimit(): void {
-    this.isRateLimited = false;
-    this.lastQuoteTime = null;
-    this.nextAllowedTime = null;
-    localStorage.removeItem(EnhancedShippingQuoteService.STORAGE_KEY);
-  }
-}
-
-// Enhanced pricing display component with ProductPriceCheck integration
-const PricingDisplay: React.FC<{
-  part: InventoryPart;
-}> = ({ part }) => {
-  // If part has a VCPN, use the ProductPriceCheck component
-  if (part.keystone_vcpn) {
-    return (
-      <ProductPriceCheck
-        vcpn={part.keystone_vcpn}
-        listPrice={part.list_price || part.price}
-        productName={part.name}
-        showComparison={true}
-        autoCheck={false}
-        className="border-0 shadow-none p-0"
-      />
-    );
-  }
-  
-  // Fallback for parts without VCPN - use original pricing display
-  const discountPercentage = part.list_price && part.price 
-    ? Math.round(((part.list_price - part.price) / part.list_price) * 100)
-    : 0;
-
-  return (
-    <div className="space-y-2">
-      {/* Main price display */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <span className="text-2xl font-bold text-green-600">
-            ${part.price?.toFixed(2) || '0.00'}
-          </span>
-          {part.list_price && part.list_price > part.price && (
-            <span className="text-sm text-gray-500 line-through">
-              ${part.list_price.toFixed(2)}
-            </span>
-          )}
-          {discountPercentage > 0 && (
-            <Badge variant="destructive" className="text-xs">
-              -{discountPercentage}%
-            </Badge>
-          )}
-        </div>
-      </div>
-
-      {/* Additional pricing info */}
-      {(part.core_charge || part.cost) && (
-        <div className="flex space-x-4 text-sm text-gray-600">
-          {part.core_charge && part.core_charge > 0 && (
-            <span>Core: ${part.core_charge.toFixed(2)}</span>
-          )}
-          {part.cost && (
-            <span>Cost: ${part.cost.toFixed(2)}</span>
-          )}
-        </div>
-      )}
-
-      {/* Pricing status indicator */}
-      <div className="flex items-center space-x-2 text-xs">
-        <DollarSign className="h-3 w-3 text-gray-400" />
-        <span className="text-gray-500">
-          {part.keystone_vcpn ? 'Live pricing available' : 'Standard pricing'}
-        </span>
-      </div>
-    </div>
-  );
-};
-
-// Simple loading wrapper component
-const LoadingWrapper: React.FC<{ 
-  isLoading: boolean; 
-  hasData: boolean; 
-  children: React.ReactNode;
-  loadingMessage?: string;
-}> = ({ isLoading, hasData, children, loadingMessage = "Loading..." }) => {
-  if (isLoading && !hasData) {
-    return (
-      <Card>
-        <CardContent className="p-12 text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-500" />
-          <p className="text-gray-600">{loadingMessage}</p>
-        </CardContent>
-      </Card>
-    );
-  }
-  return <>{children}</>;
-};
-
-// Enhanced Cart Drawer Component with Shipping Quotes
-const EnhancedCartDrawer: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  cart: { [key: string]: number };
-  parts: InventoryPart[];
-  onUpdateQuantity: (partId: string, quantity: number) => void;
-  onRemoveItem: (partId: string) => void;
-  onClearCart: () => void;
-}> = ({ isOpen, onClose, cart, parts, onUpdateQuantity, onRemoveItem, onClearCart }) => {
-  const { toast } = useToast();
-  
-  // State for shipping functionality
-  const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
+// Enhanced Cart Drawer Component with Fixed Development Mode and Persistence
+const EnhancedCartDrawer = ({ 
+  isOpen, 
+  onClose, 
+  cart, 
+  parts, 
+  onUpdateQuantity, 
+  onRemoveItem, 
+  onClearCart 
+}) => {
+  // Shipping address state
+  const [shippingAddress, setShippingAddress] = useState({
     address1: '',
     city: '',
     state: '',
     zipCode: '',
     country: 'US'
   });
-  const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
-  const [selectedShippingOption, setSelectedShippingOption] = useState<ShippingOption | null>(null);
-  const [isGettingQuotes, setIsGettingQuotes] = useState(false);
-  const [showShippingForm, setShowShippingForm] = useState(false);
-  const [shippingQuoteService] = useState(() => new EnhancedShippingQuoteService());
-  const [rateLimitStatus, setRateLimitStatus] = useState(shippingQuoteService.getRateLimitStatus());
 
-  // Convert cart object to cart items with part details
-  const cartItems: CartItem[] = Object.entries(cart).map(([partId, quantity]) => {
-    const part = parts.find(p => p.id === partId);
-    return {
-      id: partId,
-      name: part?.name || 'Unknown Part',
-      price: part?.price || 0,
-      quantity,
-      sku: part?.sku || part?.keystone_vcpn,
-      category: part?.category,
-      inStock: (part?.quantity || 0) > 0,
-      maxQuantity: part?.quantity || 0,
-      vcpn: part?.keystone_vcpn,
-      weight: part?.weight || 1.0
-    };
-  }).filter(item => item.quantity > 0);
+  // Shipping quotes state
+  const [shippingQuotes, setShippingQuotes] = useState([]);
+  const [selectedShipping, setSelectedShipping] = useState(null);
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [shippingError, setShippingError] = useState(null);
+  const [lastQuoteTime, setLastQuoteTime] = useState(null);
 
-  // Calculate totals
-  const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-  const tax = subtotal * 0.08; // 8% tax rate
-  const shippingCost = selectedShippingOption ? selectedShippingOption.cost : (subtotal > 100 ? 0 : 15);
-  const total = subtotal + tax + shippingCost;
-  const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
+  // Environment detection
+  const [environment, setEnvironment] = useState('development');
 
-  // Update rate limit status periodically
+  // Load saved data on mount
   useEffect(() => {
-    const interval = setInterval(() => {
-      setRateLimitStatus(shippingQuoteService.getRateLimitStatus());
-    }, 1000);
+    loadSavedShippingAddress();
+    loadEnvironment();
+    loadLastQuoteTime();
+  }, []);
 
-    return () => clearInterval(interval);
-  }, [shippingQuoteService]);
-
-  // Prevent body scroll when drawer is open
+  // Save shipping address when it changes
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen]);
+    saveShippingAddress();
+  }, [shippingAddress]);
 
-  // Handle quantity updates
-  const handleQuantityChange = (partId: string, newQuantity: number) => {
-    const item = cartItems.find(item => item.id === partId);
-    if (!item) return;
-
-    if (newQuantity <= 0) {
-      onRemoveItem(partId);
-      toast({
-        title: "Item Removed",
-        description: `${item.name} removed from cart`,
-        variant: "default",
-      });
-    } else if (newQuantity > item.maxQuantity) {
-      toast({
-        title: "Stock Limit",
-        description: `Only ${item.maxQuantity} available in stock`,
-        variant: "destructive",
-      });
-    } else {
-      onUpdateQuantity(partId, newQuantity);
-    }
-  };
-
-  // Handle shipping address changes
-  const handleAddressChange = (field: keyof ShippingAddress, value: string) => {
-    setShippingAddress(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // Get shipping quotes
-  const handleGetShippingQuotes = async () => {
-    if (!shippingAddress.address1 || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode) {
-      toast({
-        title: "Address Required",
-        description: "Please fill in all required address fields",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (cartItems.length === 0) {
-      toast({
-        title: "Empty Cart",
-        description: "Add items to cart before getting shipping quotes",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsGettingQuotes(true);
+  const loadEnvironment = () => {
     try {
-      const response = await shippingQuoteService.getShippingQuotes(cartItems, shippingAddress);
-      
-      if (response.success) {
-        setShippingOptions(response.shippingOptions);
-        setSelectedShippingOption(null); // Reset selection
-        toast({
-          title: "Shipping Quotes Retrieved",
-          description: `Found ${response.shippingOptions.length} shipping options`,
-          variant: "default",
-        });
-      } else {
-        if (response.isRateLimited) {
-          toast({
-            title: "Rate Limited",
-            description: response.rateLimitMessage || "Please wait before requesting another quote",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Quote Error",
-            description: response.message,
-            variant: "destructive",
-          });
-        }
+      const saved = localStorage.getItem('admin_environment');
+      setEnvironment(saved || 'development');
+    } catch (error) {
+      console.error('Error loading environment:', error);
+      setEnvironment('development');
+    }
+  };
+
+  const loadSavedShippingAddress = () => {
+    try {
+      const saved = localStorage.getItem('cart_shipping_address');
+      if (saved) {
+        const address = JSON.parse(saved);
+        setShippingAddress(address);
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to get shipping quotes",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGettingQuotes(false);
-      setRateLimitStatus(shippingQuoteService.getRateLimitStatus());
+      console.error('Error loading shipping address:', error);
     }
   };
 
-  // Select shipping option
-  const handleSelectShippingOption = (option: ShippingOption) => {
-    setSelectedShippingOption(option);
-    toast({
-      title: "Shipping Selected",
-      description: `${option.carrierName} ${option.serviceName} - $${option.cost.toFixed(2)}`,
-      variant: "default",
-    });
+  const saveShippingAddress = () => {
+    try {
+      localStorage.setItem('cart_shipping_address', JSON.stringify(shippingAddress));
+    } catch (error) {
+      console.error('Error saving shipping address:', error);
+    }
   };
 
+  const loadLastQuoteTime = () => {
+    try {
+      const saved = localStorage.getItem('cart_last_quote_time');
+      if (saved) {
+        setLastQuoteTime(parseInt(saved));
+      }
+    } catch (error) {
+      console.error('Error loading last quote time:', error);
+    }
+  };
+
+  const saveLastQuoteTime = (time) => {
+    try {
+      localStorage.setItem('cart_last_quote_time', time.toString());
+      setLastQuoteTime(time);
+    } catch (error) {
+      console.error('Error saving last quote time:', error);
+    }
+  };
+
+  // Check if we can get shipping quotes (rate limiting)
+  const canGetShippingQuotes = () => {
+    if (!lastQuoteTime) return true;
+    
+    const now = new Date().getTime();
+    const timeSinceLastQuote = now - lastQuoteTime;
+    const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+    
+    return timeSinceLastQuote >= fiveMinutes;
+  };
+
+  const getTimeUntilNextQuote = () => {
+    if (!lastQuoteTime) return 0;
+    
+    const now = new Date().getTime();
+    const timeSinceLastQuote = now - lastQuoteTime;
+    const fiveMinutes = 5 * 60 * 1000;
+    const timeRemaining = fiveMinutes - timeSinceLastQuote;
+    
+    return Math.max(0, Math.ceil(timeRemaining / 1000));
+  };
+
+  // Generate mock shipping quotes for development
+  const generateMockShippingQuotes = () => {
+    const mockQuotes = [
+      {
+        id: 'ups_ground',
+        carrierId: 'ups',
+        carrierName: 'UPS',
+        serviceCode: 'ground',
+        serviceName: 'Ground',
+        cost: 12.99,
+        currency: 'USD',
+        estimatedDeliveryDays: 3,
+        estimatedDeliveryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        warehouseId: 'sac_01',
+        warehouseName: 'Sacramento Warehouse',
+        warehouseLocation: 'Sacramento, CA',
+        trackingAvailable: true,
+        insuranceAvailable: true,
+        signatureRequired: false
+      },
+      {
+        id: 'fedex_ground',
+        carrierId: 'fedex',
+        carrierName: 'FedEx',
+        serviceCode: 'ground',
+        serviceName: 'Ground',
+        cost: 13.49,
+        currency: 'USD',
+        estimatedDeliveryDays: 3,
+        estimatedDeliveryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        warehouseId: 'sac_01',
+        warehouseName: 'Sacramento Warehouse',
+        warehouseLocation: 'Sacramento, CA',
+        trackingAvailable: true,
+        insuranceAvailable: true,
+        signatureRequired: false
+      },
+      {
+        id: 'ups_2day',
+        carrierId: 'ups',
+        carrierName: 'UPS',
+        serviceCode: '2day',
+        serviceName: '2nd Day Air',
+        cost: 24.99,
+        currency: 'USD',
+        estimatedDeliveryDays: 2,
+        estimatedDeliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        warehouseId: 'sac_01',
+        warehouseName: 'Sacramento Warehouse',
+        warehouseLocation: 'Sacramento, CA',
+        trackingAvailable: true,
+        insuranceAvailable: true,
+        signatureRequired: false
+      },
+      {
+        id: 'fedex_overnight',
+        carrierId: 'fedex',
+        carrierName: 'FedEx',
+        serviceCode: 'overnight',
+        serviceName: 'Priority Overnight',
+        cost: 39.99,
+        currency: 'USD',
+        estimatedDeliveryDays: 1,
+        estimatedDeliveryDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+        warehouseId: 'sac_01',
+        warehouseName: 'Sacramento Warehouse',
+        warehouseLocation: 'Sacramento, CA',
+        trackingAvailable: true,
+        insuranceAvailable: true,
+        signatureRequired: true
+      },
+      {
+        id: 'usps_priority',
+        carrierId: 'usps',
+        carrierName: 'USPS',
+        serviceCode: 'priority',
+        serviceName: 'Priority Mail',
+        cost: 8.99,
+        currency: 'USD',
+        estimatedDeliveryDays: 2,
+        estimatedDeliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        warehouseId: 'sac_01',
+        warehouseName: 'Sacramento Warehouse',
+        warehouseLocation: 'Sacramento, CA',
+        trackingAvailable: true,
+        insuranceAvailable: false,
+        signatureRequired: false
+      }
+    ];
+
+    return mockQuotes;
+  };
+
+  // Handle getting shipping quotes
+  const handleGetShippingQuotes = async () => {
+    // Validate address
+    if (!shippingAddress.address1 || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode) {
+      setShippingError('Please fill in all required address fields');
+      return;
+    }
+
+    // Check rate limiting
+    if (!canGetShippingQuotes()) {
+      const timeRemaining = getTimeUntilNextQuote();
+      setShippingError(`Rate limited. Please wait ${Math.ceil(timeRemaining / 60)} more minutes.`);
+      return;
+    }
+
+    setShippingLoading(true);
+    setShippingError(null);
+    setShippingQuotes([]);
+    setSelectedShipping(null);
+
+    try {
+      if (environment === 'development') {
+        // Use mock data in development
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API delay
+        const mockQuotes = generateMockShippingQuotes();
+        setShippingQuotes(mockQuotes);
+        saveLastQuoteTime(new Date().getTime());
+        
+        // Auto-select the cheapest option
+        const cheapest = mockQuotes.reduce((prev, current) => 
+          prev.cost < current.cost ? prev : current
+        );
+        setSelectedShipping(cheapest);
+      } else {
+        // Production mode - show not implemented error
+        setShippingError('Production shipping quotes not yet implemented. Please use development mode for testing.');
+      }
+    } catch (error) {
+      console.error('Shipping quote error:', error);
+      setShippingError('Failed to get shipping quotes. Please try again.');
+    } finally {
+      setShippingLoading(false);
+    }
+  };
+
+  // Calculate cart totals
+  const calculateTotals = () => {
+    const subtotal = cart.reduce((total, item) => {
+      const part = parts.find(p => p.id === item.id);
+      return total + (part?.price || 0) * item.quantity;
+    }, 0);
+
+    const tax = subtotal * 0.08; // 8% tax
+    const shippingCost = selectedShipping ? selectedShipping.cost : 0;
+    const total = subtotal + tax + shippingCost;
+
+    return {
+      subtotal: subtotal.toFixed(2),
+      tax: tax.toFixed(2),
+      shipping: shippingCost.toFixed(2),
+      total: total.toFixed(2)
+    };
+  };
+
+  const totals = calculateTotals();
+
   // Check if address is complete
-  const isAddressComplete = shippingAddress.address1 && shippingAddress.city && shippingAddress.state && shippingAddress.zipCode;
+  const isAddressComplete = shippingAddress.address1 && 
+                           shippingAddress.city && 
+                           shippingAddress.state && 
+                           shippingAddress.zipCode;
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-        onClick={onClose}
-      />
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} />
       
-      {/* Drawer */}
-      <div className="ml-auto relative bg-white w-full max-w-md h-full shadow-xl">
-        <div className="flex flex-col h-full">
+      <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl">
+        <div className="flex h-full flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b">
-            <div className="flex items-center space-x-2">
+          <div className="flex items-center justify-between border-b p-4">
+            <div className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5" />
               <h2 className="text-lg font-semibold">Shopping Cart</h2>
-              {totalItems > 0 && (
-                <Badge variant="secondary">{totalItems} items</Badge>
-              )}
+              <Badge variant="secondary">{cart.length} items</Badge>
             </div>
             <Button variant="ghost" size="sm" onClick={onClose}>
               <X className="h-4 w-4" />
@@ -636,535 +408,626 @@ const EnhancedCartDrawer: React.FC<{
           </div>
 
           {/* Content */}
-          <div className="flex-1 flex flex-col">
-            {/* Cart Items */}
-            <ScrollArea className="flex-1 p-4">
-              {cartItems.length === 0 ? (
-                <div className="text-center py-8">
-                  <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-500">Your cart is empty</p>
-                  <Button variant="outline" onClick={onClose} className="mt-4">
-                    Continue Shopping
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {cartItems.map((item) => (
-                    <Card key={item.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start space-x-3">
-                          {/* Placeholder for item image */}
-                          <div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center">
-                            <Package className="h-6 w-6 text-gray-400" />
-                          </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-sm truncate">{item.name}</h3>
-                            {item.sku && (
-                              <p className="text-xs text-gray-500">SKU: {item.sku}</p>
-                            )}
-                            {item.category && (
-                              <p className="text-xs text-gray-500">{item.category}</p>
-                            )}
-                            
-                            <div className="flex items-center justify-between mt-2">
-                              <span className="font-semibold text-green-600">
-                                ${item.price.toFixed(2)}
-                              </span>
-                              
-                              {/* Quantity controls */}
-                              <div className="flex items-center space-x-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Minus className="h-3 w-3" />
-                                </Button>
-                                
-                                <span className="w-8 text-center text-sm font-medium">
-                                  {item.quantity}
-                                </span>
-                                
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
-                                  disabled={item.quantity >= item.maxQuantity}
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                                
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => onRemoveItem(item.id)}
-                                  className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                            
-                            {/* Stock status */}
-                            <div className="mt-1">
-                              {item.inStock ? (
-                                <span className="text-xs text-green-600">
-                                  {item.maxQuantity} in stock
-                                </span>
-                              ) : (
-                                <span className="text-xs text-red-600">Out of stock</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {cart.length === 0 ? (
+              <div className="text-center py-8">
+                <ShoppingCart className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-500">Your cart is empty</p>
+              </div>
+            ) : (
+              <>
+                {/* Cart Items */}
+                <div className="space-y-3">
+                  {cart.map((item) => {
+                    const part = parts.find(p => p.id === item.id);
+                    if (!part) return null;
 
-                  {/* Shipping Address Section */}
-                  {cartItems.length > 0 && (
-                    <Card className="mt-6">
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <MapPin className="h-4 w-4" />
-                            <CardTitle className="text-sm">Shipping Address</CardTitle>
-                          </div>
+                    return (
+                      <div key={item.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                          <Package className="h-6 w-6 text-gray-400" />
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-sm truncate">{part.name}</h3>
+                          <p className="text-xs text-gray-500">{part.sku}</p>
+                          <p className="text-sm font-semibold text-green-600">${part.price}</p>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onUpdateQuantity(item.id, Math.max(0, item.quantity - 1))}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          
+                          <span className="w-8 text-center text-sm">{item.quantity}</span>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                          
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setShowShippingForm(!showShippingForm)}
+                            onClick={() => onRemoveItem(item.id)}
+                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
                           >
-                            <Edit className="h-3 w-3" />
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
-                      </CardHeader>
-                      
-                      {showShippingForm && (
-                        <CardContent className="space-y-3">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <Label htmlFor="address1" className="text-xs">Address *</Label>
-                              <Input
-                                id="address1"
-                                placeholder="123 Main St"
-                                value={shippingAddress.address1}
-                                onChange={(e) => handleAddressChange('address1', e.target.value)}
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="address2" className="text-xs">Apt/Suite</Label>
-                              <Input
-                                id="address2"
-                                placeholder="Apt 1"
-                                value={shippingAddress.address2 || ''}
-                                onChange={(e) => handleAddressChange('address2', e.target.value)}
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <Label htmlFor="city" className="text-xs">City *</Label>
-                              <Input
-                                id="city"
-                                placeholder="Los Angeles"
-                                value={shippingAddress.city}
-                                onChange={(e) => handleAddressChange('city', e.target.value)}
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="state" className="text-xs">State *</Label>
-                              <Input
-                                id="state"
-                                placeholder="CA"
-                                value={shippingAddress.state}
-                                onChange={(e) => handleAddressChange('state', e.target.value)}
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <Label htmlFor="zipCode" className="text-xs">ZIP Code *</Label>
-                              <Input
-                                id="zipCode"
-                                placeholder="90210"
-                                value={shippingAddress.zipCode}
-                                onChange={(e) => handleAddressChange('zipCode', e.target.value)}
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="country" className="text-xs">Country</Label>
-                              <Select value={shippingAddress.country} onValueChange={(value) => handleAddressChange('country', value)}>
-                                <SelectTrigger className="h-8 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="US">United States</SelectItem>
-                                  <SelectItem value="CA">Canada</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
-                          {/* Get Shipping Quotes Button */}
-                          <div className="pt-2">
-                            <Button
-                              onClick={handleGetShippingQuotes}
-                              disabled={!isAddressComplete || isGettingQuotes || rateLimitStatus.isRateLimited}
-                              className="w-full h-8 text-xs"
-                              size="sm"
-                            >
-                              {isGettingQuotes ? (
-                                <>
-                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                  Getting Quotes...
-                                </>
-                              ) : rateLimitStatus.isRateLimited ? (
-                                <>
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  Rate Limited ({rateLimitStatus.remainingTime})
-                                </>
-                              ) : (
-                                <>
-                                  <Truck className="h-3 w-3 mr-1" />
-                                  Get Shipping Quotes
-                                </>
-                              )}
-                            </Button>
-                            
-                            {rateLimitStatus.isRateLimited && (
-                              <p className="text-xs text-orange-600 mt-1 text-center">
-                                Next quote allowed in {rateLimitStatus.remainingTime}
-                              </p>
-                            )}
-                          </div>
-                        </CardContent>
-                      )}
-                    </Card>
+                <Separator />
+
+                {/* Shipping Address */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    <Label className="text-sm font-medium">Shipping Address</Label>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="col-span-2">
+                      <Input
+                        placeholder="Address *"
+                        value={shippingAddress.address1}
+                        onChange={(e) => setShippingAddress({...shippingAddress, address1: e.target.value})}
+                        className="text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        placeholder="City *"
+                        value={shippingAddress.city}
+                        onChange={(e) => setShippingAddress({...shippingAddress, city: e.target.value})}
+                        className="text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        placeholder="State *"
+                        value={shippingAddress.state}
+                        onChange={(e) => setShippingAddress({...shippingAddress, state: e.target.value})}
+                        className="text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        placeholder="ZIP Code *"
+                        value={shippingAddress.zipCode}
+                        onChange={(e) => setShippingAddress({...shippingAddress, zipCode: e.target.value})}
+                        className="text-sm"
+                      />
+                    </div>
+                    <div>
+                      <select
+                        value={shippingAddress.country}
+                        onChange={(e) => setShippingAddress({...shippingAddress, country: e.target.value})}
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                      >
+                        <option value="US">United States</option>
+                        <option value="CA">Canada</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Get Shipping Quotes Button */}
+                  <Button
+                    onClick={handleGetShippingQuotes}
+                    disabled={shippingLoading || !isAddressComplete || !canGetShippingQuotes()}
+                    className="w-full"
+                  >
+                    {shippingLoading ? (
+                      <>
+                        <Clock className="h-4 w-4 mr-2 animate-spin" />
+                        Getting Quotes...
+                      </>
+                    ) : (
+                      <>
+                        <Truck className="h-4 w-4 mr-2" />
+                        Get Shipping Quotes
+                      </>
+                    )}
+                  </Button>
+
+                  {/* Rate Limit Warning */}
+                  {!canGetShippingQuotes() && (
+                    <Alert className="border-orange-200 bg-orange-50">
+                      <Timer className="h-4 w-4 text-orange-600" />
+                      <AlertDescription className="text-orange-800 text-sm">
+                        Rate limited. Next quote available in {Math.ceil(getTimeUntilNextQuote() / 60)} minutes.
+                      </AlertDescription>
+                    </Alert>
                   )}
 
-                  {/* Shipping Options */}
-                  {shippingOptions.length > 0 && (
-                    <Card className="mt-4">
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center space-x-2">
-                          <Truck className="h-4 w-4" />
-                          <CardTitle className="text-sm">Shipping Options</CardTitle>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        {shippingOptions.map((option, index) => (
-                          <div
-                            key={index}
-                            className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                              selectedShippingOption === option
-                                ? 'border-blue-500 bg-blue-50'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                            onClick={() => handleSelectShippingOption(option)}
-                          >
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-2">
-                                  <span className="font-medium text-sm">
-                                    {option.carrierName} - {option.serviceName}
-                                  </span>
-                                  {option.trackingAvailable && (
-                                    <Badge variant="outline" className="text-xs">
-                                      <Package className="h-2 w-2 mr-1" />
-                                      Tracking
-                                    </Badge>
-                                  )}
-                                  {option.signatureRequired && (
-                                    <Badge variant="outline" className="text-xs">
-                                      <Shield className="h-2 w-2 mr-1" />
-                                      Signature
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-xs text-gray-600 mt-1">
-                                  {option.estimatedDeliveryDays} days delivery • From: {option.warehouseLocation}
-                                </p>
-                                {option.estimatedDeliveryDate && (
-                                  <p className="text-xs text-gray-500">
-                                    Est. delivery: {new Date(option.estimatedDeliveryDate).toLocaleDateString()}
-                                  </p>
+                  {/* Environment Notice */}
+                  {environment === 'development' && (
+                    <Alert className="border-blue-200 bg-blue-50">
+                      <AlertCircle className="h-4 w-4 text-blue-600" />
+                      <AlertDescription className="text-blue-800 text-sm">
+                        Development mode: Using mock shipping data
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Shipping Error */}
+                  {shippingError && (
+                    <Alert className="border-red-200 bg-red-50">
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-red-800 text-sm">
+                        {shippingError}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+
+                {/* Shipping Options */}
+                {shippingQuotes.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Truck className="h-4 w-4" />
+                      <Label className="text-sm font-medium">Shipping Options</Label>
+                    </div>
+                    
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {shippingQuotes.map((quote) => (
+                        <div
+                          key={quote.id}
+                          className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                            selectedShipping?.id === quote.id 
+                              ? 'border-blue-500 bg-blue-50' 
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                          onClick={() => setSelectedShipping(quote)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-sm">{quote.carrierName} - {quote.serviceName}</p>
+                                {selectedShipping?.id === quote.id && (
+                                  <CheckCircle className="h-4 w-4 text-blue-500" />
                                 )}
                               </div>
-                              <div className="text-right">
-                                <span className="font-semibold text-sm">
-                                  ${option.cost.toFixed(2)}
-                                </span>
+                              <div className="text-xs text-gray-500 mt-1">
+                                <span>{quote.estimatedDeliveryDays} days delivery</span>
+                                <span> • From: {quote.warehouseName}</span>
+                                {quote.trackingAvailable && <span> • Tracking available</span>}
+                                {quote.signatureRequired && <span> • Signature required</span>}
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-              )}
-            </ScrollArea>
-
-            {/* Footer with totals and checkout */}
-            {cartItems.length > 0 && (
-              <div className="border-t p-4 space-y-4">
-                {/* Price breakdown */}
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Subtotal:</span>
-                    <span>${subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Tax:</span>
-                    <span>${tax.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Shipping:</span>
-                    <span>
-                      {selectedShippingOption ? (
-                        <div className="text-right">
-                          <div>${selectedShippingOption.cost.toFixed(2)}</div>
-                          <div className="text-xs text-gray-500">
-                            {selectedShippingOption.carrierName} {selectedShippingOption.serviceName}
+                            <div className="text-right">
+                              <Badge variant="outline" className="text-sm">
+                                ${quote.cost}
+                              </Badge>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {new Date(quote.estimatedDeliveryDate).toLocaleDateString()}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      ) : shippingCost === 0 ? (
-                        'FREE'
-                      ) : (
-                        `$${shippingCost.toFixed(2)}`
-                      )}
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <Separator />
+
+                {/* Order Summary */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Subtotal:</span>
+                    <span>${totals.subtotal}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Tax:</span>
+                    <span>${totals.tax}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Shipping:</span>
+                    <span>
+                      {selectedShipping ? `$${totals.shipping}` : 'TBD'}
                     </span>
                   </div>
-                  {!selectedShippingOption && shippingCost === 0 && (
-                    <p className="text-xs text-green-600">🎉 Free shipping on orders over $100!</p>
+                  {selectedShipping && (
+                    <div className="text-xs text-gray-500">
+                      {selectedShipping.carrierName} - {selectedShipping.serviceName}
+                    </div>
                   )}
                   <Separator />
-                  <div className="flex justify-between font-semibold text-lg">
+                  <div className="flex justify-between font-semibold">
                     <span>Total:</span>
-                    <span>${total.toFixed(2)}</span>
+                    <span>${totals.total}</span>
                   </div>
                 </div>
-
-                {/* Action buttons */}
-                <div className="space-y-2">
-                  <Button className="w-full" size="lg">
-                    <ArrowRight className="h-4 w-4 mr-2" />
-                    Proceed to Checkout
-                  </Button>
-                  
-                  <div className="flex space-x-2">
-                    <Button variant="outline" onClick={onClose} className="flex-1">
-                      Continue Shopping
-                    </Button>
-                    <Button variant="ghost" onClick={onClearCart} className="flex-1">
-                      Clear Cart
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              </>
             )}
           </div>
+
+          {/* Footer */}
+          {cart.length > 0 && (
+            <div className="border-t p-4 space-y-2">
+              <Button 
+                className="w-full" 
+                size="lg"
+                disabled={!selectedShipping}
+              >
+                Proceed to Checkout
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={onClearCart}
+              >
+                Clear Cart
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-// Main Parts component - complete version with all existing functionality
-const PartsPage: React.FC = () => {
+// Loading wrapper component
+const LoadingWrapper = ({ isLoading, children, message = "Loading..." }) => {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm text-muted-foreground">{message}</span>
+        </div>
+      </div>
+    );
+  }
+  return children;
+};
+
+// Pricing display component with ProductPriceCheck integration
+const PricingDisplay = ({ part, className = "" }) => {
+  const [showPriceCheck, setShowPriceCheck] = useState(false);
+
+  return (
+    <div className={`space-y-1 ${className}`}>
+      <div className="flex items-center gap-2">
+        <span className="text-lg font-bold text-green-600">${part.price}</span>
+        {part.keystone_vcpn && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowPriceCheck(!showPriceCheck)}
+            className="h-6 px-2 text-xs"
+          >
+            <DollarSign className="h-3 w-3 mr-1" />
+            Check Price
+          </Button>
+        )}
+      </div>
+      
+      {part.cost && (
+        <div className="text-xs text-muted-foreground">
+          Cost: ${part.cost} | Margin: {((part.price - part.cost) / part.cost * 100).toFixed(1)}%
+        </div>
+      )}
+      
+      {part.list_price && part.list_price > part.price && (
+        <div className="text-xs text-muted-foreground line-through">
+          List: ${part.list_price}
+        </div>
+      )}
+
+      {showPriceCheck && part.keystone_vcpn && (
+        <div className="mt-2 p-2 border rounded-lg bg-gray-50">
+          <ProductPriceCheck vcpn={part.keystone_vcpn} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Main Parts component
+const Parts = () => {
   // State management
   const [parts, setParts] = useState<InventoryPart[]>([]);
   const [filteredParts, setFilteredParts] = useState<InventoryPart[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
-  const [sortBy, setSortBy] = useState<string>('name');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [priceRange, setPriceRange] = useState([0, 1000]);
+  const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showInStockOnly, setShowInStockOnly] = useState(false);
-  const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
-  const [isPartDialogOpen, setIsPartDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(12);
-  
-  // Cart state
-  const [cart, setCart] = useState<{ [key: string]: number }>({});
+  const [itemsPerPage, setItemsPerPage] = useState(12);
+  const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  
+
   const { toast } = useToast();
 
-  // Simplified data loading - you can replace this with your actual data source
-  const loadInventoryData = useCallback(async () => {
+  // Cache management
+  const CACHE_KEY = 'parts_inventory_cache';
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+  // Load cached data
+  const loadFromCache = useCallback(() => {
     try {
-      setIsLoading(true);
-      
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        const now = Date.now();
+        if (now - timestamp < CACHE_DURATION) {
+          return data;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading from cache:', error);
+    }
+    return null;
+  }, []);
+
+  // Save to cache
+  const saveToCache = useCallback((data: InventoryPart[]) => {
+    try {
+      const cacheData = {
+        data,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+    } catch (error) {
+      console.error('Error saving to cache:', error);
+    }
+  }, []);
+
+  // Load favorites from localStorage
+  const loadFavorites = useCallback(() => {
+    try {
+      const saved = localStorage.getItem('parts_favorites');
+      if (saved) {
+        setFavorites(new Set(JSON.parse(saved)));
+      }
+    } catch (error) {
+      console.error('Error loading favorites:', error);
+    }
+  }, []);
+
+  // Save favorites to localStorage
+  const saveFavorites = useCallback((newFavorites: Set<string>) => {
+    try {
+      localStorage.setItem('parts_favorites', JSON.stringify([...newFavorites]));
+    } catch (error) {
+      console.error('Error saving favorites:', error);
+    }
+  }, []);
+
+  // Load cart from localStorage
+  const loadCart = useCallback(() => {
+    try {
+      const saved = localStorage.getItem('parts_cart');
+      if (saved) {
+        setCart(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Error loading cart:', error);
+    }
+  }, []);
+
+  // Save cart to localStorage
+  const saveCart = useCallback((newCart: CartItem[]) => {
+    try {
+      localStorage.setItem('parts_cart', JSON.stringify(newCart));
+    } catch (error) {
+      console.error('Error saving cart:', error);
+    }
+  }, []);
+
+  // Mock data for development
+  const getMockData = useCallback((): InventoryPart[] => {
+    return [
+      {
+        id: '1',
+        name: 'LED Light Bar 20"',
+        description: 'High-performance LED light bar with flood and spot beam pattern',
+        sku: 'KS-82015',
+        quantity: 15,
+        price: 149.95,
+        cost: 89.97,
+        category: 'Lighting',
+        supplier: 'Keystone Automotive',
+        reorder_level: 5,
+        created_at: '2024-01-15T10:00:00Z',
+        updated_at: '2024-01-20T14:30:00Z',
+        keystone_vcpn: 'KS-82015',
+        keystone_synced: true,
+        keystone_last_sync: '2024-01-20T14:30:00Z',
+        warehouse: 'Main',
+        location: 'A1-B2',
+        brand: 'ProLight',
+        weight: 3.2,
+        dimensions: '20" x 3" x 4"',
+        warranty: '2 years',
+        list_price: 199.95,
+        discount_percentage: 25
+      },
+      {
+        id: '2',
+        name: 'Black Led Bull Bar Toyota',
+        description: 'Heavy-duty black LED bull bar designed for Toyota trucks',
+        sku: 'B-74060',
+        quantity: 8,
+        price: 299.95,
+        cost: 179.97,
+        category: 'Protection',
+        supplier: 'Keystone Automotive',
+        reorder_level: 3,
+        created_at: '2024-01-10T09:00:00Z',
+        updated_at: '2024-01-18T16:45:00Z',
+        keystone_vcpn: 'B-74060',
+        keystone_synced: true,
+        keystone_last_sync: '2024-01-18T16:45:00Z',
+        warehouse: 'Main',
+        location: 'C3-D4',
+        brand: 'BullGuard',
+        weight: 45.0,
+        dimensions: '72" x 8" x 6"',
+        warranty: '3 years',
+        list_price: 399.95,
+        discount_percentage: 25
+      },
+      {
+        id: '3',
+        name: 'Dual Battery Tray Kit',
+        description: 'Complete dual battery tray system with mounting hardware',
+        sku: 'KS-89567',
+        quantity: 12,
+        price: 89.95,
+        cost: 53.97,
+        category: 'Electrical',
+        supplier: 'Keystone Automotive',
+        reorder_level: 4,
+        created_at: '2024-01-12T11:30:00Z',
+        updated_at: '2024-01-19T13:15:00Z',
+        keystone_vcpn: 'KS-89567',
+        keystone_synced: true,
+        keystone_last_sync: '2024-01-19T13:15:00Z',
+        warehouse: 'Main',
+        location: 'E5-F6',
+        brand: 'PowerMax',
+        weight: 8.5,
+        dimensions: '14" x 10" x 4"',
+        warranty: '1 year',
+        list_price: 119.95,
+        discount_percentage: 25
+      },
+      {
+        id: '4',
+        name: 'Grill Guard Mid-Size',
+        description: 'Mid-size grill guard with integrated light mounting points',
+        sku: 'KS-88923',
+        quantity: 6,
+        price: 199.95,
+        cost: 119.97,
+        category: 'Protection',
+        supplier: 'Keystone Automotive',
+        reorder_level: 2,
+        created_at: '2024-01-08T14:20:00Z',
+        updated_at: '2024-01-17T10:30:00Z',
+        keystone_vcpn: 'KS-88923',
+        keystone_synced: true,
+        keystone_last_sync: '2024-01-17T10:30:00Z',
+        warehouse: 'Main',
+        location: 'G7-H8',
+        brand: 'GuardPro',
+        weight: 28.0,
+        dimensions: '48" x 6" x 4"',
+        warranty: '2 years',
+        list_price: 249.95,
+        discount_percentage: 20
+      }
+    ];
+  }, []);
+
+  // Fetch parts data
+  const fetchParts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
       // Try to load from cache first
-      const cachedData = localStorage.getItem('inventory_cache');
+      const cachedData = loadFromCache();
       if (cachedData) {
-        console.log('📦 Loading from cache...');
-        const parsedData = JSON.parse(cachedData);
-        setParts(parsedData);
-        setIsLoading(false);
+        setParts(cachedData);
+        setLoading(false);
         return;
       }
 
-      // If no cache, you can add your actual data loading logic here
-      // For now, we'll use mock data to prevent errors
-      console.log('📊 Loading inventory data...');
-      
-      // Mock data for demonstration - replace with your actual data loading
-      const mockParts: InventoryPart[] = [
-        {
-          id: '1',
-          name: 'Sample Part 1',
-          description: 'This is a sample part for testing',
-          sku: 'SAMPLE-001',
-          quantity: 10,
-          price: 25.99,
-          category: 'Electronics',
-          keystone_vcpn: 'TEST-001',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          list_price: 29.99,
-          weight: 2.5
-        },
-        {
-          id: '2',
-          name: 'Sample Part 2',
-          description: 'Another sample part',
-          sku: 'SAMPLE-002',
-          quantity: 5,
-          price: 15.50,
-          category: 'Hardware',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          weight: 1.2
-        },
-        {
-          id: '3',
-          name: 'Premium Component',
-          description: 'High-quality premium component with Keystone integration',
-          sku: 'PREM-003',
-          quantity: 8,
-          price: 45.99,
-          category: 'Electronics',
-          keystone_vcpn: 'TEST-003',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          list_price: 52.99,
-          weight: 3.1
-        }
-      ];
+      // For now, use mock data
+      // In production, this would be an API call
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      const mockData = getMockData();
+      setParts(mockData);
+      saveToCache(mockData);
 
-      setParts(mockParts);
+    } catch (err) {
+      console.error('Error fetching parts:', err);
+      setError('Failed to load parts inventory. Please try again.');
       
-      // Cache the data
-      localStorage.setItem('inventory_cache', JSON.stringify(mockParts));
-      localStorage.setItem('inventory_cache_timestamp', new Date().toISOString());
-
-    } catch (error) {
-      console.error('❌ Failed to load inventory data:', error);
-      toast({
-        title: "Data Loading Error",
-        description: "Failed to load inventory data. Please refresh the page.",
-        variant: "destructive",
-      });
+      // Fallback to mock data
+      const mockData = getMockData();
+      setParts(mockData);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  }, [toast]);
+  }, [loadFromCache, saveToCache, getMockData]);
 
-  // Initial data load
+  // Initialize component
   useEffect(() => {
-    loadInventoryData();
-  }, [loadInventoryData]);
+    fetchParts();
+    loadFavorites();
+    loadCart();
+  }, [fetchParts, loadFavorites, loadCart]);
 
-  // Cart functions
-  const addToCart = (partId: string, quantity: number = 1) => {
-    console.log('🛒 Adding to cart:', partId, 'quantity:', quantity);
-    
-    setCart(prev => {
-      const newCart = {
-        ...prev,
-        [partId]: (prev[partId] || 0) + quantity
-      };
-      console.log('🛒 Updated cart state:', newCart);
-      return newCart;
-    });
-    
-    const part = parts.find(p => p.id === partId);
-    if (part) {
-      toast({
-        title: "Added to Cart",
-        description: `${part.name} added to cart`,
-        variant: "default",
-      });
-    }
-  };
+  // Save cart whenever it changes
+  useEffect(() => {
+    saveCart(cart);
+  }, [cart, saveCart]);
 
-  const updateCartQuantity = (partId: string, quantity: number) => {
-    setCart(prev => ({
-      ...prev,
-      [partId]: quantity
-    }));
-  };
-
-  const removeFromCart = (partId: string) => {
-    setCart(prev => {
-      const newCart = { ...prev };
-      delete newCart[partId];
-      return newCart;
-    });
-  };
-
-  const clearCart = () => {
-    setCart({});
-    toast({
-      title: "Cart Cleared",
-      description: "All items removed from cart",
-      variant: "default",
-    });
-  };
-
-  // Calculate cart totals
-  const cartItemCount = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
-  const cartTotalValue = Object.entries(cart).reduce((total, [partId, quantity]) => {
-    const part = parts.find(p => p.id === partId);
-    return total + (part?.price || 0) * quantity;
-  }, 0);
+  // Get unique categories
+  const categories = useMemo(() => {
+    const cats = [...new Set(parts.map(part => part.category).filter(Boolean))];
+    return cats.sort();
+  }, [parts]);
 
   // Filter and sort parts
   useEffect(() => {
-    let filtered = parts.filter(part => {
-      const matchesSearch = part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           part.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           part.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           part.keystone_vcpn?.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesCategory = selectedCategory === 'all' || part.category === selectedCategory;
-      const matchesPrice = part.price >= priceRange[0] && part.price <= priceRange[1];
-      const matchesStock = !showInStockOnly || part.quantity > 0;
-      
-      return matchesSearch && matchesCategory && matchesPrice && matchesStock;
-    });
+    let filtered = [...parts];
 
-    // Sort parts
+    // Apply search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(part =>
+        part.name.toLowerCase().includes(term) ||
+        part.description?.toLowerCase().includes(term) ||
+        part.sku?.toLowerCase().includes(term) ||
+        part.keystone_vcpn?.toLowerCase().includes(term)
+      );
+    }
+
+    // Apply category filter
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(part => part.category === selectedCategory);
+    }
+
+    // Apply price range filter
+    filtered = filtered.filter(part => 
+      part.price >= priceRange[0] && part.price <= priceRange[1]
+    );
+
+    // Apply stock filter
+    if (showInStockOnly) {
+      filtered = filtered.filter(part => part.quantity > 0);
+    }
+
+    // Apply sorting
     filtered.sort((a, b) => {
       let aValue: any, bValue: any;
-      
+
       switch (sortBy) {
         case 'name':
           aValue = a.name.toLowerCase();
@@ -1190,7 +1053,7 @@ const PartsPage: React.FC = () => {
           aValue = a.name.toLowerCase();
           bValue = b.name.toLowerCase();
       }
-      
+
       if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
       return 0;
@@ -1200,397 +1063,579 @@ const PartsPage: React.FC = () => {
     setCurrentPage(1); // Reset to first page when filters change
   }, [parts, searchTerm, selectedCategory, priceRange, showInStockOnly, sortBy, sortOrder]);
 
-  // Get unique categories
-  const categories = Array.from(new Set(parts.map(part => part.category).filter(Boolean)));
-
   // Pagination
   const totalPages = Math.ceil(filteredParts.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentParts = filteredParts.slice(startIndex, endIndex);
 
-  // Handle part detail view
-  const handlePartClick = (part: InventoryPart) => {
-    setSelectedPart(part);
-    setIsPartDialogOpen(true);
+  // Pagination component
+  const Pagination = () => {
+    const maxVisiblePages = 5;
+    const startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    return (
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            Showing {startIndex + 1}-{Math.min(endIndex, filteredParts.length)} of {filteredParts.length} parts
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </Button>
+          
+          {Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map(page => (
+            <Button
+              key={page}
+              variant={page === currentPage ? "default" : "outline"}
+              size="sm"
+              onClick={() => setCurrentPage(page)}
+            >
+              {page}
+            </Button>
+          ))}
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+    );
   };
 
+  // Toggle favorite
+  const toggleFavorite = useCallback((partId: string) => {
+    setFavorites(prev => {
+      const newFavorites = new Set(prev);
+      if (newFavorites.has(partId)) {
+        newFavorites.delete(partId);
+      } else {
+        newFavorites.add(partId);
+      }
+      saveFavorites(newFavorites);
+      return newFavorites;
+    });
+  }, [saveFavorites]);
+
+  // Cart management
+  const addToCart = useCallback((part: InventoryPart, quantity: number = 1) => {
+    if (part.quantity <= 0) {
+      toast({
+        title: "Out of Stock",
+        description: "This item is currently out of stock.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCart(prev => {
+      const existingItem = prev.find(item => item.id === part.id);
+      
+      if (existingItem) {
+        const newQuantity = existingItem.quantity + quantity;
+        if (newQuantity > part.quantity) {
+          toast({
+            title: "Insufficient Stock",
+            description: `Only ${part.quantity} items available.`,
+            variant: "destructive",
+          });
+          return prev;
+        }
+        
+        return prev.map(item =>
+          item.id === part.id
+            ? { ...item, quantity: newQuantity }
+            : item
+        );
+      } else {
+        if (quantity > part.quantity) {
+          toast({
+            title: "Insufficient Stock",
+            description: `Only ${part.quantity} items available.`,
+            variant: "destructive",
+          });
+          return prev;
+        }
+        
+        const cartItem: CartItem = {
+          id: part.id,
+          name: part.name,
+          price: part.price,
+          quantity,
+          sku: part.sku,
+          category: part.category,
+          inStock: part.quantity > 0,
+          maxQuantity: part.quantity,
+          vcpn: part.keystone_vcpn,
+          weight: part.weight
+        };
+        
+        return [...prev, cartItem];
+      }
+    });
+
+    toast({
+      title: "Added to Cart",
+      description: `${part.name} has been added to your cart.`,
+    });
+  }, [toast]);
+
+  const updateCartQuantity = useCallback((partId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      removeFromCart(partId);
+      return;
+    }
+
+    const part = parts.find(p => p.id === partId);
+    if (part && newQuantity > part.quantity) {
+      toast({
+        title: "Insufficient Stock",
+        description: `Only ${part.quantity} items available.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCart(prev =>
+      prev.map(item =>
+        item.id === partId
+          ? { ...item, quantity: newQuantity }
+          : item
+      )
+    );
+  }, [parts, toast]);
+
+  const removeFromCart = useCallback((partId: string) => {
+    setCart(prev => prev.filter(item => item.id !== partId));
+    toast({
+      title: "Removed from Cart",
+      description: "Item has been removed from your cart.",
+    });
+  }, [toast]);
+
+  const clearCart = useCallback(() => {
+    setCart([]);
+    toast({
+      title: "Cart Cleared",
+      description: "All items have been removed from your cart.",
+    });
+  }, [toast]);
+
+  // Get cart total
+  const cartTotal = useMemo(() => {
+    return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+  }, [cart]);
+
+  // Part detail dialog
+  const openPartDetail = useCallback((part: InventoryPart) => {
+    setSelectedPart(part);
+    setIsDetailDialogOpen(true);
+  }, []);
+
+  // Render part card
+  const renderPartCard = useCallback((part: InventoryPart) => {
+    const isFavorite = favorites.has(part.id);
+    const cartItem = cart.find(item => item.id === part.id);
+    const inCart = !!cartItem;
+    const cartQuantity = cartItem?.quantity || 0;
+
+    return (
+      <Card key={part.id} className="group hover:shadow-lg transition-shadow duration-200">
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex-1">
+              <h3 className="font-semibold text-sm mb-1 line-clamp-2">{part.name}</h3>
+              <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                {part.description}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleFavorite(part.id)}
+              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <Heart className={`h-4 w-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+            </Button>
+          </div>
+
+          <div className="space-y-2 mb-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">SKU: {part.sku}</span>
+              {part.keystone_vcpn && (
+                <Badge variant="outline" className="text-xs">
+                  VCPN: {part.keystone_vcpn}
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Category: {part.category}</span>
+              <Badge variant={part.quantity > 0 ? "default" : "destructive"} className="text-xs">
+                {part.quantity > 0 ? `${part.quantity} in stock` : 'Out of stock'}
+              </Badge>
+            </div>
+          </div>
+
+          <PricingDisplay part={part} className="mb-3" />
+
+          <div className="flex items-center gap-2">
+            {inCart ? (
+              <div className="flex items-center gap-2 flex-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateCartQuantity(part.id, cartQuantity - 1)}
+                  className="h-8 w-8 p-0"
+                >
+                  <Minus className="h-3 w-3" />
+                </Button>
+                <span className="text-sm font-medium w-8 text-center">{cartQuantity}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateCartQuantity(part.id, cartQuantity + 1)}
+                  disabled={cartQuantity >= part.quantity}
+                  className="h-8 w-8 p-0"
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                onClick={() => addToCart(part)}
+                disabled={part.quantity <= 0}
+                className="flex-1"
+                size="sm"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add to Cart
+              </Button>
+            )}
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openPartDetail(part)}
+              className="h-8 w-8 p-0"
+            >
+              <Eye className="h-3 w-3" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }, [favorites, cart, toggleFavorite, updateCartQuantity, addToCart, openPartDetail]);
+
+  // Render part row (list view)
+  const renderPartRow = useCallback((part: InventoryPart) => {
+    const isFavorite = favorites.has(part.id);
+    const cartItem = cart.find(item => item.id === part.id);
+    const inCart = !!cartItem;
+    const cartQuantity = cartItem?.quantity || 0;
+
+    return (
+      <TableRow key={part.id} className="group">
+        <TableCell>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleFavorite(part.id)}
+              className="h-6 w-6 p-0"
+            >
+              <Heart className={`h-3 w-3 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+            </Button>
+            <div>
+              <div className="font-medium text-sm">{part.name}</div>
+              <div className="text-xs text-muted-foreground">{part.sku}</div>
+            </div>
+          </div>
+        </TableCell>
+        <TableCell className="text-sm">{part.category}</TableCell>
+        <TableCell>
+          <PricingDisplay part={part} />
+        </TableCell>
+        <TableCell>
+          <Badge variant={part.quantity > 0 ? "default" : "destructive"} className="text-xs">
+            {part.quantity > 0 ? `${part.quantity} in stock` : 'Out of stock'}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center gap-2">
+            {inCart ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateCartQuantity(part.id, cartQuantity - 1)}
+                  className="h-6 w-6 p-0"
+                >
+                  <Minus className="h-3 w-3" />
+                </Button>
+                <span className="text-sm w-6 text-center">{cartQuantity}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateCartQuantity(part.id, cartQuantity + 1)}
+                  disabled={cartQuantity >= part.quantity}
+                  className="h-6 w-6 p-0"
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                onClick={() => addToCart(part)}
+                disabled={part.quantity <= 0}
+                size="sm"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add
+              </Button>
+            )}
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openPartDetail(part)}
+              className="h-6 w-6 p-0"
+            >
+              <Eye className="h-3 w-3" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  }, [favorites, cart, toggleFavorite, updateCartQuantity, addToCart, openPartDetail]);
+
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6">
+        <LoadingWrapper isLoading={true} message="Loading parts inventory..." />
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Parts Inventory</h1>
-          <p className="text-gray-600">
-            {isLoading ? 'Loading parts inventory...' : 
-             `Database • ${filteredParts.length} of ${parts.length} parts`}
+          <h1 className="text-3xl font-bold">Parts Inventory</h1>
+          <p className="text-muted-foreground">
+            Database • {filteredParts.length} of {parts.length} parts
           </p>
         </div>
         
-        {/* Cart Button */}
-        <div className="mt-4 md:mt-0">
-          <Button 
-            onClick={() => {
-              console.log('🛒 Cart clicked. Current cart:', cart);
-              console.log('🛒 Total items:', cartItemCount);
-              console.log('🛒 Total value:', cartTotalValue);
-              setIsCartOpen(true);
-            }}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsCartOpen(true)}
             className="relative"
-            size="lg"
           >
-            <ShoppingCart className="h-5 w-5 mr-2" />
-            Cart ({cartItemCount})
-            {cartItemCount > 0 && (
-              <>
-                <Badge 
-                  variant="secondary" 
-                  className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0 flex items-center justify-center text-xs"
-                >
-                  {cartItemCount}
-                </Badge>
-                <span className="ml-2 text-green-200">
-                  ${cartTotalValue.toFixed(2)}
-                </span>
-              </>
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Cart ({cart.length})
+            {cart.length > 0 && (
+              <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                {cart.length}
+              </Badge>
             )}
+          </Button>
+          
+          <Button onClick={fetchParts} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
           </Button>
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <Card className="mb-6">
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Filters and Search */}
+      <Card>
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Search parts..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+            <div className="space-y-2">
+              <Label htmlFor="search">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="search"
+                  placeholder="Search parts..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
             </div>
 
             {/* Category Filter */}
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map(category => (
-                  <SelectItem key={category} value={category!}>
-                    {category}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {categories.map(category => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Sort */}
-            <Select value={`${sortBy}-${sortOrder}`} onValueChange={(value) => {
-              const [field, order] = value.split('-');
-              setSortBy(field);
-              setSortOrder(order as 'asc' | 'desc');
-            }}>
-              <SelectTrigger>
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name-asc">Name A-Z</SelectItem>
-                <SelectItem value="name-desc">Name Z-A</SelectItem>
-                <SelectItem value="price-asc">Price Low-High</SelectItem>
-                <SelectItem value="price-desc">Price High-Low</SelectItem>
-                <SelectItem value="quantity-desc">Stock High-Low</SelectItem>
-                <SelectItem value="updated-desc">Recently Updated</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="space-y-2">
+              <Label htmlFor="sort">Sort By</Label>
+              <div className="flex gap-2">
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name">Name</SelectItem>
+                    <SelectItem value="price">Price</SelectItem>
+                    <SelectItem value="quantity">Quantity</SelectItem>
+                    <SelectItem value="category">Category</SelectItem>
+                    <SelectItem value="updated">Updated</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                  className="px-3"
+                >
+                  {sortOrder === 'asc' ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
 
             {/* View Mode */}
-            <div className="flex items-center space-x-2">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-              >
-                <Grid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-              >
-                <List className="h-4 w-4" />
-              </Button>
+            <div className="space-y-2">
+              <Label>View</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                  className="flex-1"
+                >
+                  <Grid className="h-4 w-4 mr-1" />
+                  Grid
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                  className="flex-1"
+                >
+                  <List className="h-4 w-4 mr-1" />
+                  List
+                </Button>
+              </div>
             </div>
           </div>
 
           {/* Price Range */}
-          <div className="mb-4">
-            <Label className="text-sm font-medium mb-2 block">
-              Price Range: ${priceRange[0]} - ${priceRange[1]}
-            </Label>
+          <div className="space-y-2 mb-4">
+            <Label>Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
             <Slider
               value={priceRange}
-              onValueChange={(value) => setPriceRange(value as [number, number])}
+              onValueChange={setPriceRange}
               max={1000}
-              min={0}
               step={10}
               className="w-full"
             />
           </div>
 
-          {/* Stock Filter */}
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="in-stock-only"
-              checked={showInStockOnly}
-              onCheckedChange={setShowInStockOnly}
-            />
-            <Label htmlFor="in-stock-only">Show in-stock items only</Label>
+          {/* Additional Filters */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="in-stock"
+                checked={showInStockOnly}
+                onCheckedChange={setShowInStockOnly}
+              />
+              <Label htmlFor="in-stock">Show in-stock items only</Label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Label htmlFor="items-per-page" className="text-sm">Items per page:</Label>
+              <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(parseInt(value))}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="12">12</SelectItem>
+                  <SelectItem value="24">24</SelectItem>
+                  <SelectItem value="48">48</SelectItem>
+                  <SelectItem value="96">96</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Parts Display */}
-      <LoadingWrapper 
-        isLoading={isLoading} 
-        hasData={parts.length > 0}
-        loadingMessage="Loading parts inventory..."
-      >
+      <LoadingWrapper isLoading={loading}>
         {filteredParts.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
-              <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No parts found</h3>
-              <p className="text-gray-600 mb-4">
+              <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No parts found</h3>
+              <p className="text-muted-foreground">
                 Try adjusting your search criteria or filters.
               </p>
-              <Button 
-                onClick={() => {
-                  setSearchTerm('');
-                  setSelectedCategory('all');
-                  setPriceRange([0, 1000]);
-                  setShowInStockOnly(false);
-                }}
-                variant="outline"
-              >
-                Clear Filters
-              </Button>
             </CardContent>
           </Card>
         ) : (
           <>
-            {/* Parts Grid/List */}
             {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-                {currentParts.map((part) => (
-                  <Card key={part.id} className="hover:shadow-lg transition-shadow cursor-pointer">
-                    <CardContent className="p-4">
-                      {/* Part Image Placeholder */}
-                      <div className="w-full h-48 bg-gray-200 rounded-md mb-4 flex items-center justify-center">
-                        <Package className="h-12 w-12 text-gray-400" />
-                      </div>
-
-                      {/* Part Info */}
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between">
-                          <h3 
-                            className="font-semibold text-sm line-clamp-2 cursor-pointer hover:text-blue-600"
-                            onClick={() => handlePartClick(part)}
-                          >
-                            {part.name}
-                          </h3>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              const newFavorites = new Set(favorites);
-                              if (newFavorites.has(part.id)) {
-                                newFavorites.delete(part.id);
-                              } else {
-                                newFavorites.add(part.id);
-                              }
-                              setFavorites(newFavorites);
-                            }}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Heart 
-                              className={`h-4 w-4 ${
-                                favorites.has(part.id) 
-                                  ? 'fill-red-500 text-red-500' 
-                                  : 'text-gray-400'
-                              }`} 
-                            />
-                          </Button>
-                        </div>
-
-                        {/* SKU and Category */}
-                        <div className="flex flex-wrap gap-1">
-                          {part.sku && (
-                            <Badge variant="outline" className="text-xs">
-                              {part.sku}
-                            </Badge>
-                          )}
-                          {part.category && (
-                            <Badge variant="secondary" className="text-xs">
-                              {part.category}
-                            </Badge>
-                          )}
-                        </div>
-
-                        {/* INTEGRATED PRODUCTPRICECHECK COMPONENT */}
-                        <PricingDisplay part={part} />
-
-                        {/* Stock Status */}
-                        <div className="flex items-center justify-between text-sm">
-                          <span className={`font-medium ${
-                            part.quantity > 0 ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {part.quantity > 0 ? `${part.quantity} in stock` : 'Out of stock'}
-                          </span>
-                          {part.reorder_level && part.quantity <= part.reorder_level && (
-                            <Badge variant="destructive" className="text-xs">
-                              Low Stock
-                            </Badge>
-                          )}
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex space-x-2 pt-2">
-                          <Button
-                            onClick={() => addToCart(part.id)}
-                            disabled={part.quantity === 0}
-                            className="flex-1"
-                            size="sm"
-                          >
-                            <Plus className="h-4 w-4 mr-1" />
-                            Add
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePartClick(part)}
-                            className="px-3"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {currentParts.map(renderPartCard)}
               </div>
             ) : (
-              <Card className="mb-8">
+              <Card>
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Part</TableHead>
                       <TableHead>Category</TableHead>
-                      <TableHead>Pricing</TableHead>
+                      <TableHead>Price</TableHead>
                       <TableHead>Stock</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {currentParts.map((part) => (
-                      <TableRow key={part.id}>
-                        <TableCell>
-                          <div className="flex items-center space-x-3">
-                            <div className="w-12 h-12 bg-gray-200 rounded-md flex items-center justify-center">
-                              <Package className="h-6 w-6 text-gray-400" />
-                            </div>
-                            <div>
-                              <h3 
-                                className="font-medium cursor-pointer hover:text-blue-600"
-                                onClick={() => handlePartClick(part)}
-                              >
-                                {part.name}
-                              </h3>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {part.sku && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {part.sku}
-                                  </Badge>
-                                )}
-                                {part.keystone_vcpn && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {part.keystone_vcpn}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {part.category && (
-                            <Badge variant="secondary">
-                              {part.category}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {/* INTEGRATED PRODUCTPRICECHECK COMPONENT */}
-                          <PricingDisplay part={part} />
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <span className={`font-medium ${
-                              part.quantity > 0 ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {part.quantity > 0 ? `${part.quantity} in stock` : 'Out of stock'}
-                            </span>
-                            {part.reorder_level && part.quantity <= part.reorder_level && (
-                              <Badge variant="destructive" className="text-xs">
-                                Low Stock
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            <Button
-                              onClick={() => addToCart(part.id)}
-                              disabled={part.quantity === 0}
-                              size="sm"
-                            >
-                              <Plus className="h-4 w-4 mr-1" />
-                              Add
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handlePartClick(part)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                const newFavorites = new Set(favorites);
-                                if (newFavorites.has(part.id)) {
-                                  newFavorites.delete(part.id);
-                                } else {
-                                  newFavorites.add(part.id);
-                                }
-                                setFavorites(newFavorites);
-                              }}
-                            >
-                              <Heart 
-                                className={`h-4 w-4 ${
-                                  favorites.has(part.id) 
-                                    ? 'fill-red-500 text-red-500' 
-                                    : 'text-gray-400'
-                                }`} 
-                              />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {currentParts.map(renderPartRow)}
                   </TableBody>
                 </Table>
               </Card>
@@ -1598,38 +1643,19 @@ const PartsPage: React.FC = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-700">
-                  Showing {startIndex + 1} to {Math.min(endIndex, filteredParts.length)} of {filteredParts.length} results
-                </p>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-sm">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
+              <Card>
+                <CardContent className="p-4">
+                  <Pagination />
+                </CardContent>
+              </Card>
             )}
           </>
         )}
       </LoadingWrapper>
 
       {/* Part Detail Dialog */}
-      <Dialog open={isPartDialogOpen} onOpenChange={setIsPartDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{selectedPart?.name}</DialogTitle>
             <DialogDescription>
@@ -1639,118 +1665,106 @@ const PartsPage: React.FC = () => {
           
           {selectedPart && (
             <div className="space-y-6">
-              {/* Part Image */}
-              <div className="w-full h-64 bg-gray-200 rounded-md flex items-center justify-center">
-                <Package className="h-16 w-16 text-gray-400" />
-              </div>
-
-              {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-gray-500">SKU</Label>
-                  <p className="text-sm">{selectedPart.sku || 'N/A'}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-500">Category</Label>
-                  <p className="text-sm">{selectedPart.category || 'N/A'}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-500">Supplier</Label>
-                  <p className="text-sm">{selectedPart.supplier || 'N/A'}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-500">Brand</Label>
-                  <p className="text-sm">{selectedPart.brand || 'N/A'}</p>
-                </div>
-              </div>
-
-              {/* INTEGRATED PRODUCTPRICECHECK COMPONENT IN DIALOG */}
-              <div>
-                <Label className="text-sm font-medium text-gray-500 mb-2 block">Live Pricing Information</Label>
-                <PricingDisplay part={selectedPart} />
-              </div>
-
-              {/* Description */}
-              {selectedPart.description && (
-                <div>
-                  <Label className="text-sm font-medium text-gray-500">Description</Label>
-                  <p className="text-sm mt-1">{selectedPart.description}</p>
-                </div>
-              )}
-
-              {/* Stock Information */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-gray-500">Current Stock</Label>
-                  <p className={`text-sm font-medium ${
-                    selectedPart.quantity > 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {selectedPart.quantity} units
-                  </p>
-                </div>
-                {selectedPart.reorder_level && (
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-4">
                   <div>
-                    <Label className="text-sm font-medium text-gray-500">Reorder Level</Label>
-                    <p className="text-sm">{selectedPart.reorder_level} units</p>
+                    <Label className="text-sm font-medium">Description</Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {selectedPart.description || 'No description available'}
+                    </p>
                   </div>
-                )}
-              </div>
-
-              {/* Additional Details */}
-              {(selectedPart.weight || selectedPart.dimensions || selectedPart.warranty) && (
-                <div className="grid grid-cols-2 gap-4">
-                  {selectedPart.weight && (
+                  
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-sm font-medium text-gray-500">Weight</Label>
-                      <p className="text-sm">{selectedPart.weight} lbs</p>
+                      <Label className="text-sm font-medium">SKU</Label>
+                      <p className="text-sm mt-1">{selectedPart.sku}</p>
                     </div>
-                  )}
-                  {selectedPart.dimensions && (
                     <div>
-                      <Label className="text-sm font-medium text-gray-500">Dimensions</Label>
-                      <p className="text-sm">{selectedPart.dimensions}</p>
+                      <Label className="text-sm font-medium">Category</Label>
+                      <p className="text-sm mt-1">{selectedPart.category}</p>
                     </div>
-                  )}
-                  {selectedPart.warranty && (
-                    <div>
-                      <Label className="text-sm font-medium text-gray-500">Warranty</Label>
-                      <p className="text-sm">{selectedPart.warranty}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Sync Information */}
-              <div className="border-t pt-4">
-                <Label className="text-sm font-medium text-gray-500 mb-2 block">Sync Information</Label>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Last Updated:</span>
-                    <p>{new Date(selectedPart.updated_at).toLocaleString()}</p>
                   </div>
-                  {selectedPart.keystone_last_sync && (
+
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <span className="text-gray-500">Last Keystone Sync:</span>
-                      <p>{new Date(selectedPart.keystone_last_sync).toLocaleString()}</p>
+                      <Label className="text-sm font-medium">Supplier</Label>
+                      <p className="text-sm mt-1">{selectedPart.supplier}</p>
                     </div>
-                  )}
+                    <div>
+                      <Label className="text-sm font-medium">Brand</Label>
+                      <p className="text-sm mt-1">{selectedPart.brand || 'N/A'}</p>
+                    </div>
+                  </div>
+
                   {selectedPart.keystone_vcpn && (
                     <div>
-                      <span className="text-gray-500">Keystone VCPN:</span>
-                      <p>{selectedPart.keystone_vcpn}</p>
+                      <Label className="text-sm font-medium">Keystone VCPN</Label>
+                      <p className="text-sm mt-1">{selectedPart.keystone_vcpn}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <PricingDisplay part={selectedPart} />
+                  
+                  <div>
+                    <Label className="text-sm font-medium">Stock Information</Label>
+                    <div className="mt-2 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Current Stock:</span>
+                        <Badge variant={selectedPart.quantity > 0 ? "default" : "destructive"}>
+                          {selectedPart.quantity}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Reorder Level:</span>
+                        <span>{selectedPart.reorder_level || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Location:</span>
+                        <span>{selectedPart.location || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedPart.dimensions && (
+                    <div>
+                      <Label className="text-sm font-medium">Specifications</Label>
+                      <div className="mt-2 space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span>Dimensions:</span>
+                          <span>{selectedPart.dimensions}</span>
+                        </div>
+                        {selectedPart.weight && (
+                          <div className="flex justify-between">
+                            <span>Weight:</span>
+                            <span>{selectedPart.weight} lbs</span>
+                          </div>
+                        )}
+                        {selectedPart.warranty && (
+                          <div className="flex justify-between">
+                            <span>Warranty:</span>
+                            <span>{selectedPart.warranty}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex space-x-4 pt-4">
+              {/* Price Check Integration */}
+              {selectedPart.keystone_vcpn && (
+                <div className="border-t pt-4">
+                  <Label className="text-sm font-medium mb-2 block">Real-Time Price Check</Label>
+                  <ProductPriceCheck vcpn={selectedPart.keystone_vcpn} />
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-4 border-t">
                 <Button
-                  onClick={() => {
-                    addToCart(selectedPart.id);
-                    setIsPartDialogOpen(false);
-                  }}
-                  disabled={selectedPart.quantity === 0}
+                  onClick={() => addToCart(selectedPart)}
+                  disabled={selectedPart.quantity <= 0}
                   className="flex-1"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -1758,25 +1772,9 @@ const PartsPage: React.FC = () => {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    const newFavorites = new Set(favorites);
-                    if (newFavorites.has(selectedPart.id)) {
-                      newFavorites.delete(selectedPart.id);
-                    } else {
-                      newFavorites.add(selectedPart.id);
-                    }
-                    setFavorites(newFavorites);
-                  }}
-                  className="flex-1"
+                  onClick={() => toggleFavorite(selectedPart.id)}
                 >
-                  <Heart 
-                    className={`h-4 w-4 mr-2 ${
-                      favorites.has(selectedPart.id) 
-                        ? 'fill-red-500 text-red-500' 
-                        : 'text-gray-400'
-                    }`} 
-                  />
-                  {favorites.has(selectedPart.id) ? 'Remove from Favorites' : 'Add to Favorites'}
+                  <Heart className={`h-4 w-4 ${favorites.has(selectedPart.id) ? 'fill-red-500 text-red-500' : ''}`} />
                 </Button>
               </div>
             </div>
@@ -1784,7 +1782,7 @@ const PartsPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Enhanced Cart Drawer with Shipping Quotes */}
+      {/* Enhanced Cart Drawer */}
       <EnhancedCartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -1798,5 +1796,5 @@ const PartsPage: React.FC = () => {
   );
 };
 
-export default PartsPage;
+export default Parts;
 
