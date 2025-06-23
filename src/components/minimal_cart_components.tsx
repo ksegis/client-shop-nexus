@@ -1,5 +1,3 @@
-'use client';
-
 // Minimal Cart Components - Leverages Existing UI Components
 // Reusable components that integrate with existing design system
 
@@ -21,7 +19,7 @@ import {
   Package,
   ArrowRight
 } from 'lucide-react';
-import { useCart, CartItem } from './minimal_cart_context';
+import { useCart, CartItem } from '@/lib/minimal_cart_context';
 import { useToast } from "@/hooks/use-toast";
 
 // Cart Widget - Shows in header/navigation
@@ -54,360 +52,302 @@ export function CartWidget() {
             Shopping Cart ({itemCount} items)
           </SheetTitle>
         </SheetHeader>
-        <div className="mt-6">
-          <CartDrawer onClose={() => setIsOpen(false)} />
+        
+        <div className="mt-6 space-y-4">
+          {items.length === 0 ? (
+            <div className="text-center py-8">
+              <Package className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+              <p className="text-gray-500">Your cart is empty</p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {items.map((item) => (
+                  <CartItemCard key={item.vcpn} item={item} />
+                ))}
+              </div>
+              
+              <Separator />
+              
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Subtotal:</span>
+                  <span>${total.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <span>Total:</span>
+                  <span>${total.toFixed(2)}</span>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Button className="w-full" size="lg">
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  Proceed to Checkout
+                </Button>
+                <Button variant="outline" className="w-full" onClick={() => setIsOpen(false)}>
+                  Continue Shopping
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-// Add to Cart Button - Reusable for any page
+// Cart Item Card - Individual item in cart
+function CartItemCard({ item }: { item: CartItem }) {
+  const { updateQuantity, removeItem } = useCart();
+
+  return (
+    <div className="flex items-center gap-3 p-3 border rounded-lg">
+      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+        <Package className="h-6 w-6 text-gray-400" />
+      </div>
+      
+      <div className="flex-1 min-w-0">
+        <h3 className="font-medium text-sm truncate">{item.name}</h3>
+        <p className="text-xs text-gray-500">{item.sku}</p>
+        <p className="text-sm font-semibold text-green-600">${item.price.toFixed(2)}</p>
+      </div>
+      
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => updateQuantity(item.vcpn, Math.max(0, item.quantity - 1))}
+          className="h-8 w-8 p-0"
+        >
+          <Minus className="h-3 w-3" />
+        </Button>
+        
+        <span className="w-8 text-center text-sm">{item.quantity}</span>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => updateQuantity(item.vcpn, item.quantity + 1)}
+          className="h-8 w-8 p-0"
+        >
+          <Plus className="h-3 w-3" />
+        </Button>
+        
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => removeItem(item.vcpn)}
+          className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Add to Cart Button - Reusable button for any page
 interface AddToCartButtonProps {
   vcpn: string;
   name: string;
   price: number;
-  quantity?: number;
   sku?: string;
   category?: string;
   inStock?: boolean;
   maxQuantity?: number;
   weight?: number;
-  variant?: 'default' | 'outline' | 'secondary';
-  size?: 'sm' | 'default' | 'lg';
   className?: string;
+  size?: 'sm' | 'default' | 'lg';
   onSuccess?: () => void;
   onError?: (error: string) => void;
 }
 
-export function AddToCartButton({ 
+export function AddToCartButton({
   vcpn,
   name,
   price,
-  quantity = 1,
   sku,
   category,
   inStock = true,
   maxQuantity = 999,
   weight,
-  variant = 'default',
-  size = 'default',
   className = '',
+  size = 'default',
   onSuccess,
   onError
 }: AddToCartButtonProps) {
-  const { addItem, hasItem } = useCart();
+  const { addItem } = useCart();
   const { toast } = useToast();
-  const [isAdding, setIsAdding] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleAddToCart = async () => {
-    if (!vcpn || !inStock) {
-      onError?.('Item not available');
+    if (!inStock) {
+      const error = 'Item is out of stock';
+      onError?.(error);
       return;
     }
 
-    setIsAdding(true);
+    setIsLoading(true);
+    
     try {
-      addItem({
+      const cartItem: CartItem = {
+        vcpn,
         name,
         price,
-        quantity,
+        quantity: 1,
         sku,
         category,
         inStock,
         maxQuantity,
-        vcpn,
         weight
-      });
-      
-      toast({
-        title: "Added to Cart",
-        description: `${name} has been added to your cart.`,
-      });
-      
+      };
+
+      addItem(cartItem);
       onSuccess?.();
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to add item';
-      onError?.(errorMessage);
       
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
+    } catch (error) {
+      const errorMessage = 'Failed to add item to cart';
+      onError?.(errorMessage);
     } finally {
-      setIsAdding(false);
+      setIsLoading(false);
     }
   };
 
-  const isInCart = hasItem(vcpn);
-
   return (
     <Button
-      variant={isInCart ? 'outline' : variant}
+      onClick={handleAddToCart}
+      disabled={!inStock || isLoading}
       size={size}
       className={className}
-      onClick={handleAddToCart}
-      disabled={isAdding || !inStock}
     >
-      {isAdding ? (
+      {isLoading ? (
         <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-      ) : isInCart ? (
-        <Plus className="h-4 w-4 mr-2" />
       ) : (
         <Plus className="h-4 w-4 mr-2" />
       )}
-      {isAdding ? 'Adding...' : isInCart ? 'Add More' : 'Add to Cart'}
+      {inStock ? 'Add to Cart' : 'Out of Stock'}
     </Button>
   );
 }
 
-// Cart Item Component
-interface CartItemComponentProps {
-  item: CartItem;
-  showActions?: boolean;
-}
-
-export function CartItemComponent({ item, showActions = true }: CartItemComponentProps) {
-  const { updateQuantity, removeItem } = useCart();
-
-  const handleQuantityChange = (newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeItem(item.id);
-    } else {
-      updateQuantity(item.id, newQuantity);
-    }
-  };
-
-  return (
-    <div className="border rounded-lg p-4 space-y-3">
-      <div className="flex justify-between items-start">
-        <div className="flex-1 min-w-0">
-          <h4 className="font-medium truncate">{item.name}</h4>
-          <p className="text-sm text-gray-600">{item.vcpn || item.sku}</p>
-          {item.category && (
-            <Badge variant="outline" className="mt-1">{item.category}</Badge>
-          )}
-        </div>
-        {showActions && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => removeItem(item.id)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-
-      {showActions && (
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <Label className="text-xs">Quantity</Label>
-            <div className="flex items-center mt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuantityChange(item.quantity - 1)}
-                disabled={item.quantity <= 1}
-              >
-                <Minus className="h-3 w-3" />
-              </Button>
-              <Input
-                type="number"
-                value={item.quantity}
-                onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
-                className="mx-2 text-center"
-                min="1"
-                max={item.maxQuantity}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuantityChange(item.quantity + 1)}
-                disabled={item.quantity >= item.maxQuantity}
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">Unit Price</Label>
-            <div className="mt-1 p-2 bg-gray-50 rounded text-center">
-              ${item.price.toFixed(2)}
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">Total</Label>
-            <div className="mt-1 p-2 bg-gray-50 rounded text-center font-medium">
-              ${(item.price * item.quantity).toFixed(2)}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Cart Drawer Content
-interface CartDrawerProps {
-  onClose?: () => void;
-}
-
-export function CartDrawer({ onClose }: CartDrawerProps) {
-  const { items, itemCount, subtotal, total, clearCart } = useCart();
-
-  if (items.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-        <h3 className="text-lg font-medium mb-2">Your cart is empty</h3>
-        <p className="text-gray-500 mb-4">Add some items to get started</p>
-        <Button onClick={onClose}>Continue Shopping</Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Cart Items */}
-      <div className="space-y-4 max-h-96 overflow-y-auto">
-        {items.map((item) => (
-          <CartItemComponent key={item.id} item={item} />
-        ))}
-      </div>
-
-      {/* Cart Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Order Summary</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex justify-between">
-            <span>Subtotal ({itemCount} items)</span>
-            <span>${subtotal.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Tax (8%)</span>
-            <span>${(total - subtotal).toFixed(2)}</span>
-          </div>
-          <Separator />
-          <div className="flex justify-between font-bold text-lg">
-            <span>Total</span>
-            <span>${total.toFixed(2)}</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Actions */}
-      <div className="space-y-2">
-        <Button 
-          className="w-full" 
-          size="lg"
-          onClick={() => {
-            // Navigate to existing Special Orders page for checkout
-            window.location.href = '/special-orders';
-          }}
-        >
-          <Package className="h-4 w-4 mr-2" />
-          Proceed to Checkout
-        </Button>
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="outline" onClick={clearCart}>
-            Clear Cart
-          </Button>
-          <Button variant="outline" onClick={onClose}>
-            Continue Shopping
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Quick Add Dialog - For manual item entry
-interface QuickAddDialogProps {
-  trigger: React.ReactNode;
-}
-
-export function QuickAddDialog({ trigger }: QuickAddDialogProps) {
-  const { addItem } = useCart();
-  const { toast } = useToast();
+export function QuickAddDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({
     vcpn: '',
     name: '',
     price: '',
-    quantity: '1'
+    quantity: '1',
+    sku: '',
+    category: ''
   });
-  const [isAdding, setIsAdding] = useState(false);
+  const { addItem } = useCart();
+  const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.vcpn || !formData.name) return;
-
-    setIsAdding(true);
-    try {
-      addItem({
-        vcpn: formData.vcpn,
-        name: formData.name,
-        price: parseFloat(formData.price) || 0,
-        quantity: parseInt(formData.quantity) || 1,
-        inStock: true,
-        maxQuantity: 999
-      });
-      
-      toast({
-        title: "Added to Cart",
-        description: `${formData.name} has been added to your cart.`,
-      });
-      
-      // Reset form and close dialog
-      setFormData({ vcpn: '', name: '', price: '', quantity: '1' });
-      setIsOpen(false);
-    } catch (error) {
+    if (!formData.vcpn || !formData.name || !formData.price) {
       toast({
         title: "Error",
-        description: "Failed to add item to cart",
+        description: "Please fill in all required fields",
         variant: "destructive",
       });
-    } finally {
-      setIsAdding(false);
+      return;
     }
+
+    const cartItem: CartItem = {
+      vcpn: formData.vcpn,
+      name: formData.name,
+      price: parseFloat(formData.price),
+      quantity: parseInt(formData.quantity),
+      sku: formData.sku,
+      category: formData.category,
+      inStock: true,
+      maxQuantity: 999
+    };
+
+    addItem(cartItem);
+    
+    toast({
+      title: "Added to Cart",
+      description: `${formData.name} has been added to your cart.`,
+    });
+
+    // Reset form
+    setFormData({
+      vcpn: '',
+      name: '',
+      price: '',
+      quantity: '1',
+      sku: '',
+      category: ''
+    });
+    
+    setIsOpen(false);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        {trigger}
+        <Button variant="outline">
+          <Plus className="h-4 w-4 mr-2" />
+          Quick Add
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Item to Cart</DialogTitle>
         </DialogHeader>
+        
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="vcpn">VCPN *</Label>
-            <Input
-              id="vcpn"
-              value={formData.vcpn}
-              onChange={(e) => setFormData({ ...formData, vcpn: e.target.value })}
-              placeholder="Enter VCPN"
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="vcpn">VCPN *</Label>
+              <Input
+                id="vcpn"
+                value={formData.vcpn}
+                onChange={(e) => setFormData({...formData, vcpn: e.target.value})}
+                placeholder="Enter VCPN"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="sku">SKU</Label>
+              <Input
+                id="sku"
+                value={formData.sku}
+                onChange={(e) => setFormData({...formData, sku: e.target.value})}
+                placeholder="Enter SKU"
+              />
+            </div>
           </div>
+          
           <div>
-            <Label htmlFor="name">Item Name *</Label>
+            <Label htmlFor="name">Product Name *</Label>
             <Input
               id="name"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Item name"
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="Enter product name"
               required
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="price">Price *</Label>
+              <Input
+                id="price"
+                type="number"
+                step="0.01"
+                value={formData.price}
+                onChange={(e) => setFormData({...formData, price: e.target.value})}
+                placeholder="0.00"
+                required
+              />
+            </div>
             <div>
               <Label htmlFor="quantity">Quantity</Label>
               <Input
@@ -415,29 +355,23 @@ export function QuickAddDialog({ trigger }: QuickAddDialogProps) {
                 type="number"
                 min="1"
                 value={formData.quantity}
-                onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                onChange={(e) => setFormData({...formData, quantity: e.target.value})}
               />
             </div>
             <div>
-              <Label htmlFor="price">Unit Price</Label>
+              <Label htmlFor="category">Category</Label>
               <Input
-                id="price"
-                type="number"
-                step="0.01"
-                value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                placeholder="0.00"
+                id="category"
+                value={formData.category}
+                onChange={(e) => setFormData({...formData, category: e.target.value})}
+                placeholder="Category"
               />
             </div>
           </div>
+          
           <div className="flex gap-2">
-            <Button type="submit" disabled={isAdding || !formData.vcpn || !formData.name} className="flex-1">
-              {isAdding ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4 mr-2" />
-              )}
-              {isAdding ? 'Adding...' : 'Add to Cart'}
+            <Button type="submit" className="flex-1">
+              Add to Cart
             </Button>
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
               Cancel
@@ -446,20 +380,6 @@ export function QuickAddDialog({ trigger }: QuickAddDialogProps) {
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// Cart Status Badge - Shows cart status in header
-export function CartStatusBadge() {
-  const { itemCount, total } = useCart();
-
-  if (itemCount === 0) return null;
-
-  return (
-    <Badge variant="secondary" className="ml-2">
-      <ShoppingCart className="h-3 w-3 mr-1" />
-      {itemCount} items • ${total.toFixed(2)}
-    </Badge>
   );
 }
 
