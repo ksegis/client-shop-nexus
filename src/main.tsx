@@ -1,8 +1,10 @@
-
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.tsx'
 import './index.css'
+
+// Import CartProvider for minimal cart system
+import { CartProvider } from '@/lib/minimal_cart_context'
 
 // Handle hash redirects at the entry point
 if (window.location.hash && window.location.pathname === '/') {
@@ -39,8 +41,11 @@ if (rootElement) {
   } else {
     createRoot(rootElement).render(
       <BrowserRouter>
-        <App />
+        <CartProvider>
+          <App />
+        </CartProvider>
       </BrowserRouter>
     );
   }
 }
+
