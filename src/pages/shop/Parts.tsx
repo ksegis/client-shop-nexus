@@ -24,8 +24,8 @@ import ProductPriceCheck from '@/components/product_price_check_component';
 import { useCart } from '@/lib/minimal_cart_context';
 import { AddToCartButton, CartWidget } from '@/components/minimal_cart_components';
 
-// Import existing services
-import { ShippingQuoteService } from '@/services/shipping_quote_service';
+// Import existing services - FIXED: Import singleton instances instead of classes
+import { shippingQuoteService } from '@/services/shipping_quote_service';
 import { DropshipOrderService } from '@/services/dropship_order_service';
 
 // Simplified interface for inventory parts
@@ -171,7 +171,7 @@ const SpecialOrdersTab = () => {
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderResult, setOrderResult] = useState<any>(null);
 
-  // Load shipping quotes
+  // Load shipping quotes - FIXED: Use singleton instance and correct parameter structure
   const loadShippingQuotes = async () => {
     if (!shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode) {
       toast({
@@ -184,24 +184,41 @@ const SpecialOrdersTab = () => {
 
     setIsLoadingShipping(true);
     try {
-      const quotes = await ShippingQuoteService.getShippingQuotes(
-        items.map(item => ({
+      // FIXED: Use singleton instance and correct parameter structure
+      const response = await shippingQuoteService.getShippingQuotes({
+        items: items.map(item => ({
           vcpn: item.id,
           quantity: item.quantity
         })),
-        shippingAddress
-      );
+        shippingAddress: {
+          address1: shippingAddress.street,
+          city: shippingAddress.city,
+          state: shippingAddress.state,
+          zipCode: shippingAddress.zipCode,
+          country: shippingAddress.country
+        }
+      });
 
-      if (quotes && quotes.length > 0) {
-        setShippingOptions(quotes);
+      if (response.success && response.shippingOptions && response.shippingOptions.length > 0) {
+        // Transform the response to match our ShippingOption interface
+        const transformedOptions = response.shippingOptions.map(option => ({
+          id: `${option.carrierId}_${option.serviceCode}_${option.warehouseId}`,
+          carrier: option.carrierName,
+          service: option.serviceName,
+          cost: option.cost,
+          estimatedDays: option.estimatedDeliveryDays,
+          deliveryDate: option.estimatedDeliveryDate || new Date(Date.now() + option.estimatedDeliveryDays * 24 * 60 * 60 * 1000).toISOString()
+        }));
+
+        setShippingOptions(transformedOptions);
         toast({
           title: "Shipping Quotes Loaded",
-          description: `Found ${quotes.length} shipping options.`
+          description: `Found ${transformedOptions.length} shipping options.`
         });
       } else {
         toast({
           title: "No Shipping Options",
-          description: "No shipping options available for this address.",
+          description: response.message || "No shipping options available for this address.",
           variant: "destructive"
         });
       }
@@ -583,7 +600,7 @@ const SpecialOrdersTab = () => {
                                     <div>
                                       <div className="font-medium">{option.carrier} {option.service}</div>
                                       <div className="text-sm text-muted-foreground">
-                                        Estimated delivery: {option.deliveryDate} ({option.estimatedDays} business days)
+                                        Estimated delivery: {new Date(option.deliveryDate).toLocaleDateString()} ({option.estimatedDays} business days)
                                       </div>
                                     </div>
                                     <div className="text-lg font-semibold">${option.cost.toFixed(2)}</div>
@@ -642,7 +659,7 @@ const SpecialOrdersTab = () => {
                           <h4 className="font-medium mb-2">Shipping Method</h4>
                           <div className="text-sm">
                             <div>{selectedShippingOption.carrier} {selectedShippingOption.service}</div>
-                            <div>Estimated delivery: {selectedShippingOption.deliveryDate}</div>
+                            <div>Estimated delivery: {new Date(selectedShippingOption.deliveryDate).toLocaleDateString()}</div>
                           </div>
                         </div>
                       )}
