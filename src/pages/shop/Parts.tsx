@@ -25,8 +25,8 @@ import { useCart } from '@/lib/minimal_cart_context';
 import { AddToCartButton, CartWidget } from '@/components/minimal_cart_components';
 
 // Import existing services
-import { ShippingQuoteService } from '@/lib/shipping_quote_service';
-import { DropshipOrderService } from '@/lib/dropship_order_service';
+import { ShippingQuoteService } from '@/services/shipping_quote_service';
+import { DropshipOrderService } from '@/services/dropship_order_service';
 
 // Simplified interface for inventory parts
 interface InventoryPart {
