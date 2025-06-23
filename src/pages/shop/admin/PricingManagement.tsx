@@ -68,6 +68,7 @@ interface PriceRecommendation {
   reason: string;
   requiresApproval: boolean;
   warnings: string[];
+  isNegativeMargin?: boolean;
 }
 
 interface PricingSettings {
@@ -155,11 +156,73 @@ const PricingManagement: React.FC = () => {
       const { data, error } = await query;
       if (error) throw error;
       setPricingRecords(data || []);
+      
+      // ✅ NEW: Check for negative margins after loading records
+      checkForNegativeMargins(data || []);
     } catch (error) {
       console.error('Error loading pricing records:', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ✅ NEW: Check for negative margins in existing records
+  const checkForNegativeMargins = (records: PricingRecord[]) => {
+    const negativeMarginRecommendations: { [vcpn: string]: PriceRecommendation } = {};
+    
+    records.forEach(record => {
+      if (record.status === 'active' && record.list_price < record.cost) {
+        const recommendation = generateNegativeMarginRecommendation(record);
+        if (recommendation) {
+          negativeMarginRecommendations[record.keystone_vcpn] = recommendation;
+        }
+      }
+    });
+    
+    if (Object.keys(negativeMarginRecommendations).length > 0) {
+      setPriceRecommendations(prev => ({
+        ...prev,
+        ...negativeMarginRecommendations
+      }));
+    }
+  };
+
+  // ✅ NEW: Generate recommendation for negative margin scenarios
+  const generateNegativeMarginRecommendation = (record: PricingRecord): PriceRecommendation | null => {
+    const currentPrice = record.list_price;
+    const currentCost = record.cost;
+    
+    // Calculate what the markup should be
+    const targetMarkup = Math.max(
+      record.minimum_markup_percentage || pricingSettings.minimumMarkupPercent,
+      pricingSettings.minimumMarkupPercent
+    );
+    
+    // Calculate recommended price with proper markup
+    const recommendedPrice = Math.round((currentCost * (1 + targetMarkup / 100)) * 100) / 100;
+    const priceChange = recommendedPrice - currentPrice;
+    const priceChangePercent = (priceChange / currentPrice) * 100;
+    
+    // Calculate actual current markup (will be negative)
+    const actualCurrentMarkup = ((currentPrice - currentCost) / currentCost) * 100;
+    
+    return {
+      currentPrice,
+      recommendedPrice,
+      supplierCost: currentCost,
+      currentMarkup: actualCurrentMarkup,
+      recommendedMarkup: targetMarkup,
+      priceChange,
+      priceChangePercent,
+      reason: 'CRITICAL: Negative margin detected - selling below cost',
+      requiresApproval: true, // Always require approval for negative margins
+      warnings: [
+        'NEGATIVE MARGIN: Current price is below cost',
+        `Losing $${(currentCost - currentPrice).toFixed(2)} per unit`,
+        'Immediate price correction required'
+      ],
+      isNegativeMargin: true
+    };
   };
 
   // Load inventory parts for selection
@@ -205,6 +268,11 @@ const PricingManagement: React.FC = () => {
     const currentPrice = record.list_price;
     const currentMarkup = record.markup_percentage;
     
+    // ✅ ENHANCED: Check for negative margin first
+    if (currentPrice < record.cost) {
+      return generateNegativeMarginRecommendation(record);
+    }
+    
     // Determine markup to use
     const categoryMarkup = category ? pricingSettings.categoryMarkups[category] : null;
     const targetMarkup = record.minimum_markup_percentage || 
@@ -221,7 +289,28 @@ const PricingManagement: React.FC = () => {
     const priceChange = recommendedPrice - currentPrice;
     const priceChangePercent = (priceChange / currentPrice) * 100;
     
-    // ✅ FIXED: Only generate recommendation if there's a meaningful change
+    // ✅ ENHANCED: Check if new supplier cost would create negative margin
+    if (supplierCost > currentPrice) {
+      // New supplier cost is higher than current price - definitely need recommendation
+      return {
+        currentPrice,
+        recommendedPrice,
+        supplierCost,
+        currentMarkup,
+        recommendedMarkup: finalMarkup,
+        priceChange,
+        priceChangePercent,
+        reason: 'URGENT: New supplier cost exceeds current price - negative margin risk',
+        requiresApproval: true,
+        warnings: [
+          'New supplier cost would create negative margin',
+          'Price increase required to maintain profitability'
+        ],
+        isNegativeMargin: false
+      };
+    }
+    
+    // Only generate recommendation if there's a meaningful change
     const MINIMUM_CHANGE_THRESHOLD = 0.01; // $0.01 minimum change
     if (Math.abs(priceChange) < MINIMUM_CHANGE_THRESHOLD) {
       return null; // No recommendation needed
@@ -264,7 +353,8 @@ const PricingManagement: React.FC = () => {
       priceChangePercent,
       reason,
       requiresApproval,
-      warnings
+      warnings,
+      isNegativeMargin: false
     };
   };
 
@@ -274,8 +364,8 @@ const PricingManagement: React.FC = () => {
       return false;
     }
     
-    if (recommendation.requiresApproval) {
-      // Add to approval queue (for now, just show notification)
+    // Never auto-update negative margins - always require manual approval
+    if (recommendation.isNegativeMargin || recommendation.requiresApproval) {
       alert(`Price change for ${record.part_name} requires approval: ${recommendation.reason}`);
       return false;
     }
@@ -332,7 +422,7 @@ const PricingManagement: React.FC = () => {
       const record = records[0] as PricingRecord;
       const recommendation = calculatePriceRecommendation(record, supplierCost, category);
       
-      // ✅ FIXED: Only store and process if there's an actual recommendation
+      // Only store and process if there's an actual recommendation
       if (!recommendation) {
         return null;
       }
@@ -343,8 +433,8 @@ const PricingManagement: React.FC = () => {
         [vcpn]: recommendation
       }));
       
-      // Process automatic update if enabled
-      if (pricingSettings.autoUpdateEnabled && record.auto_update_enabled) {
+      // Process automatic update if enabled (but not for negative margins)
+      if (pricingSettings.autoUpdateEnabled && record.auto_update_enabled && !recommendation.isNegativeMargin) {
         const updated = await processAutomaticPriceUpdate(record, recommendation);
         if (updated) {
           console.log(`✅ Auto-updated pricing for ${record.part_name}`);
@@ -362,6 +452,17 @@ const PricingManagement: React.FC = () => {
   const applyPriceRecommendation = async (vcpn: string) => {
     const recommendation = priceRecommendations[vcpn];
     if (!recommendation) return;
+
+    // ✅ ENHANCED: Special confirmation for negative margins
+    if (recommendation.isNegativeMargin) {
+      const confirmed = confirm(
+        `CRITICAL: This will fix a negative margin situation.\n\n` +
+        `Current: Selling at $${recommendation.currentPrice.toFixed(2)} (LOSS of $${(recommendation.supplierCost - recommendation.currentPrice).toFixed(2)} per unit)\n` +
+        `New: Selling at $${recommendation.recommendedPrice.toFixed(2)} (${recommendation.recommendedMarkup.toFixed(1)}% markup)\n\n` +
+        `Continue with price correction?`
+      );
+      if (!confirmed) return;
+    }
 
     try {
       const { data: records, error: fetchError } = await supabase
@@ -407,7 +508,12 @@ const PricingManagement: React.FC = () => {
 
       // Refresh records
       await loadPricingRecords(pricingSearchTerm);
-      alert('Price recommendation applied successfully!');
+      
+      if (recommendation.isNegativeMargin) {
+        alert('✅ Negative margin corrected successfully! Pricing is now profitable.');
+      } else {
+        alert('Price recommendation applied successfully!');
+      }
     } catch (error) {
       console.error('Exception applying recommendation:', error);
       alert('Error applying recommendation');
@@ -536,6 +642,7 @@ const PricingManagement: React.FC = () => {
 
   // Get recommendation count
   const recommendationCount = Object.keys(priceRecommendations).length;
+  const negativeMarginCount = Object.values(priceRecommendations).filter(r => r.isNegativeMargin).length;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -651,6 +758,16 @@ const PricingManagement: React.FC = () => {
         </Alert>
       )}
 
+      {/* Critical Negative Margin Alert */}
+      {negativeMarginCount > 0 && (
+        <Alert className="border-red-500 bg-red-50">
+          <AlertTriangle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800">
+            <strong>CRITICAL:</strong> {negativeMarginCount} product{negativeMarginCount > 1 ? 's' : ''} selling below cost (negative margin). Immediate attention required!
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Recommendations Alert */}
       {recommendationCount > 0 && (
         <Alert>
@@ -669,7 +786,7 @@ const PricingManagement: React.FC = () => {
           <TabsTrigger value="recommendations">
             Recommendations
             {recommendationCount > 0 && (
-              <Badge variant="secondary" className="ml-2">
+              <Badge variant={negativeMarginCount > 0 ? "destructive" : "secondary"} className="ml-2">
                 {recommendationCount}
               </Badge>
             )}
@@ -716,14 +833,28 @@ const PricingManagement: React.FC = () => {
                       {pricingRecords.map((record) => {
                         const statusBadge = getStatusBadge(record);
                         const recommendation = priceRecommendations[record.keystone_vcpn];
+                        const hasNegativeMargin = record.list_price < record.cost;
                         
                         return (
-                          <tr key={record.id} className="border-b hover:bg-gray-50">
+                          <tr key={record.id} className={`border-b hover:bg-gray-50 ${hasNegativeMargin ? 'bg-red-50' : ''}`}>
                             <td className="p-2">{record.part_name}</td>
                             <td className="p-2">{record.keystone_vcpn}</td>
                             <td className="p-2">${record.cost.toFixed(2)}</td>
-                            <td className="p-2">${record.list_price.toFixed(2)}</td>
-                            <td className="p-2">{record.markup_percentage.toFixed(1)}%</td>
+                            <td className={`p-2 ${hasNegativeMargin ? 'text-red-600 font-bold' : ''}`}>
+                              ${record.list_price.toFixed(2)}
+                              {hasNegativeMargin && (
+                                <Badge variant="destructive" className="ml-2 text-xs">
+                                  LOSS
+                                </Badge>
+                              )}
+                            </td>
+                            <td className={`p-2 ${hasNegativeMargin ? 'text-red-600 font-bold' : ''}`}>
+                              {hasNegativeMargin ? (
+                                <span>-{(((record.cost - record.list_price) / record.cost) * 100).toFixed(1)}%</span>
+                              ) : (
+                                <span>{record.markup_percentage.toFixed(1)}%</span>
+                              )}
+                            </td>
                             <td className="p-2">
                               {record.auto_update_enabled ? (
                                 <Badge variant="default">Enabled</Badge>
@@ -739,16 +870,21 @@ const PricingManagement: React.FC = () => {
                             <td className="p-2">
                               {recommendation && (
                                 <div className="flex items-center gap-2">
+                                  {recommendation.isNegativeMargin && (
+                                    <Badge variant="destructive" className="text-xs">
+                                      CRITICAL
+                                    </Badge>
+                                  )}
                                   <span className={`text-sm ${recommendation.priceChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {recommendation.priceChange > 0 ? '+' : ''}${recommendation.priceChange.toFixed(2)}
                                   </span>
                                   <Button
                                     size="sm"
-                                    variant="outline"
+                                    variant={recommendation.isNegativeMargin ? "destructive" : "outline"}
                                     disabled={!recommendation || recommendation.priceChange === 0}
                                     onClick={() => applyPriceRecommendation(record.keystone_vcpn)}
                                   >
-                                    Apply
+                                    {recommendation.isNegativeMargin ? 'Fix Now' : 'Apply'}
                                   </Button>
                                 </div>
                               )}
@@ -973,28 +1109,35 @@ const PricingManagement: React.FC = () => {
                 <div className="text-center py-8 text-gray-500">
                   No price recommendations available.
                   <br />
-                  Recommendations will appear when ProductPriceCheck detects cost changes.
+                  Recommendations will appear when ProductPriceCheck detects cost changes or negative margins are found.
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {Object.entries(priceRecommendations).map(([vcpn, recommendation]) => (
-                    <div key={vcpn} className="border rounded-lg p-4">
+                  {Object.entries(priceRecommendations)
+                    .sort(([,a], [,b]) => (b.isNegativeMargin ? 1 : 0) - (a.isNegativeMargin ? 1 : 0))
+                    .map(([vcpn, recommendation]) => (
+                    <div key={vcpn} className={`border rounded-lg p-4 ${recommendation.isNegativeMargin ? 'border-red-500 bg-red-50' : ''}`}>
                       <div className="flex justify-between items-start mb-2">
                         <div>
                           <h4 className="font-medium">VCPN: {vcpn}</h4>
-                          <p className="text-sm text-gray-600">{recommendation.reason}</p>
+                          <p className={`text-sm ${recommendation.isNegativeMargin ? 'text-red-800 font-medium' : 'text-gray-600'}`}>
+                            {recommendation.reason}
+                          </p>
                         </div>
                         <div className="flex gap-2">
-                          {recommendation.requiresApproval && (
+                          {recommendation.isNegativeMargin && (
+                            <Badge variant="destructive">CRITICAL</Badge>
+                          )}
+                          {recommendation.requiresApproval && !recommendation.isNegativeMargin && (
                             <Badge variant="destructive">Requires Approval</Badge>
                           )}
                           <Button
                             size="sm"
                             disabled={!recommendation || recommendation.priceChange === 0}
                             onClick={() => applyPriceRecommendation(vcpn)}
-                            className="bg-green-600 hover:bg-green-700"
+                            className={recommendation.isNegativeMargin ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}
                           >
-                            Apply
+                            {recommendation.isNegativeMargin ? 'Fix Critical Issue' : 'Apply'}
                           </Button>
                         </div>
                       </div>
@@ -1002,11 +1145,13 @@ const PricingManagement: React.FC = () => {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
                           <span className="text-gray-600">Current Price:</span>
-                          <div className="font-medium">${recommendation.currentPrice.toFixed(2)}</div>
+                          <div className={`font-medium ${recommendation.isNegativeMargin ? 'text-red-600' : ''}`}>
+                            ${recommendation.currentPrice.toFixed(2)}
+                          </div>
                         </div>
                         <div>
                           <span className="text-gray-600">Recommended Price:</span>
-                          <div className="font-medium">${recommendation.recommendedPrice.toFixed(2)}</div>
+                          <div className="font-medium text-green-600">${recommendation.recommendedPrice.toFixed(2)}</div>
                         </div>
                         <div>
                           <span className="text-gray-600">Price Change:</span>
@@ -1024,11 +1169,11 @@ const PricingManagement: React.FC = () => {
                       
                       {recommendation.warnings.length > 0 && (
                         <div className="mt-2">
-                          <div className="text-sm text-amber-600">
+                          <div className={`text-sm ${recommendation.isNegativeMargin ? 'text-red-700' : 'text-amber-600'}`}>
                             <AlertTriangle className="w-4 h-4 inline mr-1" />
-                            Warnings:
+                            {recommendation.isNegativeMargin ? 'Critical Issues:' : 'Warnings:'}
                           </div>
-                          <ul className="text-sm text-amber-600 ml-5 list-disc">
+                          <ul className={`text-sm ml-5 list-disc ${recommendation.isNegativeMargin ? 'text-red-700' : 'text-amber-600'}`}>
                             {recommendation.warnings.map((warning, index) => (
                               <li key={index}>{warning}</li>
                             ))}
