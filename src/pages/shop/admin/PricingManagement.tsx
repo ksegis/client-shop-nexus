@@ -301,7 +301,7 @@ const EnhancedPricingManagement: React.FC = () => {
       console.error('Error checking price recommendations:', error);
       return null;
     }
-  }, [supabase, pricingSettings]);
+  }, [pricingSettings]);
 
   // Reset form to initial state
   const resetForm = () => {
