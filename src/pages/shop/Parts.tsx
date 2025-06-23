@@ -452,7 +452,7 @@ const Parts = () => {
     setIsDetailDialogOpen(true);
   }, []);
 
-  // Render part card for grid view
+  // Render part card for grid viewing
   const renderPartCard = useCallback((part: InventoryPart) => {
     const isInStock = part.quantity > 0;
     const isFavorite = favorites.has(part.id);
