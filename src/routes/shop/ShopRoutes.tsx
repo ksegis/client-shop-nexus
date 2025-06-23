@@ -1,4 +1,4 @@
-// Custom Truck Connections Shop Routes - Updated with Special Orders
+// Custom Truck Connections Shop Routes 
 import { Routes, Route, Navigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import Dashboard from "@/pages/shop/Dashboard";
