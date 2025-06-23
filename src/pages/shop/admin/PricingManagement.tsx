@@ -1205,6 +1205,7 @@ const EnhancedPricingManagement: React.FC = () => {
                                     <Button
                                       size="sm"
                                       variant="outline"
+                                      disabled={!recommendation || recommendation.priceChange === 0}
                                       onClick={() => applyPriceRecommendation(record.keystone_vcpn)}
                                     >
                                       Apply
@@ -1306,6 +1307,7 @@ const EnhancedPricingManagement: React.FC = () => {
                               <div className="mt-4 space-x-2">
                                 <Button
                                   size="sm"
+                                  disabled={!recommendation || recommendation.priceChange === 0}
                                   onClick={() => applyPriceRecommendation(vcpn)}
                                   className="bg-green-600 hover:bg-green-700"
                                 >
