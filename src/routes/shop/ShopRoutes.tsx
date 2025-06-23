@@ -8,7 +8,6 @@ import VehicleManagement from "@/pages/shop/VehicleManagement";
 import Estimates from "@/pages/shop/Estimates";
 import Inventory from "@/pages/shop/Inventory";
 import Parts from "@/pages/shop/Parts";
-import SpecialOrders from "@/pages/shop/SpecialOrders";
 import Reports from "@/pages/shop/Reports";
 import ServiceDesk from "@/pages/shop/ServiceDesk";
 import ServiceAppointments from "@/pages/shop/ServiceAppointments";
@@ -207,16 +206,6 @@ const ShopRoutes = () => {
           element={
             <ProtectedRoute>
               <Inventory />
-            </ProtectedRoute>
-          }
-        />
-        
-        {/* Special Orders - NEW ROUTE ADDED */}
-        <Route
-          path="special-orders"
-          element={
-            <ProtectedRoute>
-              <SpecialOrders />
             </ProtectedRoute>
           }
         />
