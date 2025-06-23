@@ -348,7 +348,7 @@ class ShippingQuoteService {
     }
 
     try {
-      const endpoint = '/shipping/quote-multiple-parts-per-warehouse';
+      const endpoint = '/shipping/options/multiple';
       const fullUrl = `${proxyUrl}${endpoint}`;
       
       console.log(`🔄 Making shipping quote request to: ${fullUrl}`);
