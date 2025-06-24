@@ -182,15 +182,9 @@ class ShippingQuoteService {
    * Get Keystone account number
    */
   private getAccountNumber(): string | null {
-    const environment = this.getCurrentEnvironment();
-    
-    if (environment === 'development') {
-      const accountNo = import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER_DEV;
-      return accountNo || null;
-    } else {
-      const accountNo = import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER_PROD;
-      return accountNo || null;
-    }
+    // Directly read the Vercel environment variable
+    const accountNo = import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER;
+    return accountNo || null;
   }
 
   /**
@@ -497,12 +491,12 @@ class ShippingQuoteService {
   }
 
   /**
-   * Call Keystone GetShippingOptionsMultiplePartsPerWarehouse SOAP API
+   * Call Keystone SOAP API for shipping quotes
    */
-  private async callShippingQuoteApi(request: ShippingQuoteRequest): Promise<ShippingOption[]> {
-    const environment = this.getCurrentEnvironment();
+  private async callKeystoneSOAPAPI(request: ShippingQuoteRequest): Promise<ShippingOption[]> {
     const securityKey = this.getApiToken();
     const accountNumber = this.getAccountNumber();
+    const environment = this.getCurrentEnvironment();
 
     // --- DEBUGGING LOGS START ---
     console.log('🔍 Debug - Environment:', environment);
@@ -513,7 +507,7 @@ class ShippingQuoteService {
 
     if (!securityKey || !accountNumber) {
       if (environment === 'production') {
-        throw new Error('Missing required environment variables for Keystone API (security key or account number)');
+        throw new Error('Missing required Keystone API credentials for production environment');
       }
       
       console.log('🔄 Falling back to mock shipping options in development mode');
@@ -521,21 +515,17 @@ class ShippingQuoteService {
     }
 
     try {
-      // Format the part numbers and quantities for Keystone
+      // Format the request data
       const partNumbersQty = this.formatPartNumbersQty(request.items);
       const toZip = request.shippingAddress.zipCode;
-      
-      console.log(`🔄 Making SOAP request to Keystone: ${ShippingQuoteService.KEYSTONE_SOAP_URL}`);
-      console.log(`📦 Getting shipping quotes for ${request.items.length} items to ${request.shippingAddress.city}, ${request.shippingAddress.state}`);
-      console.log(`🔍 Debug - PartNumbersQty: ${partNumbersQty}`);
-      console.log(`🔍 Debug - ToZip: ${toZip}`);
-      
+
       // Create SOAP envelope
       const soapEnvelope = this.createSOAPEnvelope(securityKey, accountNumber, partNumbersQty, toZip);
       
-      console.log('🔍 Debug - SOAP Envelope:', soapEnvelope);
-      
-      // Make SOAP request
+      console.log('🔍 SOAP Envelope:', soapEnvelope);
+
+      // Make the SOAP request
+      console.log('🔄 Making SOAP request to Keystone API...');
       const response = await fetch(ShippingQuoteService.KEYSTONE_SOAP_URL, {
         method: 'POST',
         headers: {
@@ -546,41 +536,58 @@ class ShippingQuoteService {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`❌ HTTP ${response.status}: ${errorText}`);
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const soapResponse = await response.text();
-      console.log('🔍 Debug - SOAP Response:', soapResponse);
-      
+      const responseText = await response.text();
+      console.log('🔍 SOAP Response:', responseText);
+
       // Parse the SOAP response
-      const shippingOptions = this.parseSOAPResponse(soapResponse);
+      const shippingOptions = this.parseSOAPResponse(responseText);
       
       console.log(`✅ Successfully retrieved ${shippingOptions.length} shipping options from Keystone SOAP API`);
       return shippingOptions;
-      
+
     } catch (error) {
-      console.error('❌ Failed to get shipping quotes from Keystone SOAP API:', error);
+      console.error('❌ Error calling Keystone SOAP API:', error);
       
-      if (environment === 'production') {
+      if (environment === 'development') {
+        console.log('🔄 Falling back to mock shipping options due to API error');
+        return this.generateMockShippingOptions(request.items, request.shippingAddress);
+      } else {
         throw error;
       }
-      
-      console.log('🔄 Falling back to mock shipping options due to API error');
-      return this.generateMockShippingOptions(request.items, request.shippingAddress);
     }
+  }
+
+  /**
+   * Add quote to history
+   */
+  private addToHistory(request: ShippingQuoteRequest, optionCount: number, success: boolean, errorMessage?: string): void {
+    const historyItem: ShippingQuoteHistoryItem = {
+      id: `sq_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date().toISOString(),
+      itemCount: request.items.length,
+      optionCount,
+      success,
+      shippingAddress: request.shippingAddress,
+      errorMessage
+    };
+
+    this.quoteHistory.unshift(historyItem);
+    
+    // Keep only last 10 quotes
+    if (this.quoteHistory.length > 10) {
+      this.quoteHistory = this.quoteHistory.slice(0, 10);
+    }
+
+    this.saveStatus();
   }
 
   /**
    * Log shipping quote to database
    */
-  private async logShippingQuote(
-    request: ShippingQuoteRequest,
-    success: boolean, 
-    optionCount: number, 
-    errorMessage?: string
-  ): Promise<string | null> {
+  private async logShippingQuote(request: ShippingQuoteRequest, success: boolean, optionCount: number, errorMessage?: string): Promise<void> {
     try {
       const { data, error } = await supabase
         .from('keystone_api_logs')
@@ -598,55 +605,20 @@ class ShippingQuoteService {
           response_data: success ? { optionCount } : null,
           error_message: errorMessage,
           environment: this.getCurrentEnvironment()
-        })
-        .select()
-        .single();
+        });
 
       if (error) {
         console.error('Error logging shipping quote:', error);
-        return null;
       }
-
-      return data.id;
     } catch (error) {
       console.error('Error logging shipping quote:', error);
-      return null;
     }
   }
 
   /**
-   * Add to quote history
+   * Get shipping quotes for multiple items
    */
-  private addToHistory(
-    request: ShippingQuoteRequest,
-    success: boolean, 
-    optionCount: number, 
-    errorMessage?: string
-  ): void {
-    const historyItem: ShippingQuoteHistoryItem = {
-      id: `sq_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: new Date().toISOString(),
-      itemCount: request.items.length,
-      optionCount,
-      success,
-      shippingAddress: { ...request.shippingAddress },
-      errorMessage
-    };
-
-    this.quoteHistory.unshift(historyItem);
-    
-    // Keep only last 10 items
-    if (this.quoteHistory.length > 10) {
-      this.quoteHistory = this.quoteHistory.slice(0, 10);
-    }
-
-    this.saveStatus();
-  }
-
-  /**
-   * Main method to get shipping quotes
-   */
-  async getShippingQuotes(request: ShippingQuoteRequest): Promise<ShippingQuoteResponse> {
+  public async getShippingQuotes(request: ShippingQuoteRequest): Promise<ShippingQuoteResponse> {
     const requestId = request.requestId || `sq_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const timestamp = new Date().toISOString();
 
@@ -655,150 +627,133 @@ class ShippingQuoteService {
     // Validate request
     const validation = this.validateQuoteRequest(request);
     if (!validation.valid) {
-      const errorResponse: ShippingQuoteResponse = {
+      const errorMessage = validation.message || 'Invalid shipping quote request';
+      await this.logShippingQuote(request, false, 0, errorMessage);
+      return {
         success: false,
-        message: validation.message!,
+        message: errorMessage,
         requestId,
         timestamp,
         shippingOptions: [],
-        totalItems: request.items?.length || 0,
+        totalItems: request.items.length,
         estimatedPackages: 0
       };
-
-      this.addToHistory(request, false, 0, validation.message);
-      return errorResponse;
     }
 
-    // Check rate limiting
+    // Check rate limit
     this.updateRateLimitStatus();
     if (this.isRateLimited) {
-      const timeRemaining = this.getTimeUntilNextQuote();
-      const message = `Shipping quote rate limited. Next quote allowed in ${this.formatTimeRemaining(timeRemaining)}.`;
-      
-      console.log(`⏰ ${message}`);
-      
-      const rateLimitedResponse: ShippingQuoteResponse = {
+      const errorMessage = this.rateLimitMessage || 'Rate limited';
+      return {
         success: false,
-        message,
+        message: errorMessage,
         requestId,
         timestamp,
         shippingOptions: [],
         totalItems: request.items.length,
         estimatedPackages: 0,
         isRateLimited: true,
-        nextAllowedTime: this.nextAllowedTime!,
-        rateLimitMessage: this.rateLimitMessage!
+        nextAllowedTime: this.nextAllowedTime,
+        rateLimitMessage: this.rateLimitMessage
       };
-
-      this.addToHistory(request, false, 0, message);
-      return rateLimitedResponse;
     }
 
     try {
+      console.log(`📦 Getting shipping quotes for ${request.items.length} items to ${request.shippingAddress.city}, ${request.shippingAddress.state}`);
+
       // Call Keystone SOAP API
-      const shippingOptions = await this.callShippingQuoteApi(request);
-      
-      // Set rate limit after successful call
+      const shippingOptions = await this.callKeystoneSOAPAPI(request);
+
+      // Set rate limit after successful quote
       this.setRateLimit();
-      
-      // Update daily counter
-      this.totalQuotesToday++;
-      
-      // Calculate totals
-      const totalWeight = request.items.reduce((sum, item) => sum + ((item.weight || 1) * item.quantity), 0);
-      const estimatedPackages = Math.ceil(request.items.length / 10); // Estimate 10 items per package
-      
+
+      // Add to history
+      this.addToHistory(request, shippingOptions.length, true);
+
       // Log to database
       await this.logShippingQuote(request, true, shippingOptions.length);
-      
-      // Add to history
-      this.addToHistory(request, true, shippingOptions.length);
-      
-      const successResponse: ShippingQuoteResponse = {
+
+      console.log(`✅ Shipping quote completed: ${shippingOptions.length} options retrieved`);
+
+      return {
         success: true,
-        message: `Successfully retrieved ${shippingOptions.length} shipping options`,
+        message: `Found ${shippingOptions.length} shipping options`,
         requestId,
         timestamp,
         shippingOptions,
         totalItems: request.items.length,
-        totalWeight,
-        estimatedPackages
+        estimatedPackages: Math.ceil(request.items.length / 10), // Estimate 10 items per package
+        isRateLimited: this.isRateLimited,
+        nextAllowedTime: this.nextAllowedTime,
+        rateLimitMessage: this.rateLimitMessage
       };
 
-      console.log(`✅ Shipping quote completed: ${shippingOptions.length} options retrieved`);
-      return successResponse;
-
     } catch (error) {
-      console.error('❌ Shipping quote failed:', error);
+      console.error('❌ Failed to get shipping quotes from Keystone:', error);
       
-      // Log error to database
-      await this.logShippingQuote(request, false, 0, error.message);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       
       // Add to history
-      this.addToHistory(request, false, 0, error.message);
-      
-      const errorResponse: ShippingQuoteResponse = {
+      this.addToHistory(request, 0, false, errorMessage);
+
+      // Log to database
+      await this.logShippingQuote(request, false, 0, errorMessage);
+
+      return {
         success: false,
-        message: `Shipping quote failed: ${error.message}`,
+        message: errorMessage,
         requestId,
         timestamp,
         shippingOptions: [],
         totalItems: request.items.length,
         estimatedPackages: 0
       };
-
-      return errorResponse;
     }
   }
 
   /**
-   * Get current shipping quote status
+   * Get shipping quote by history ID
    */
-  getStatus(): ShippingQuoteStatus {
-    this.updateRateLimitStatus();
+  public getQuoteFromHistory(historyId: string): ShippingQuoteResponse | null {
+    const historyItem = this.quoteHistory.find(item => item.id === historyId);
     
-    return {
-      isRateLimited: this.isRateLimited,
-      lastQuoteTime: this.lastQuoteTime,
-      nextAllowedTime: this.nextAllowedTime,
-      rateLimitMessage: this.rateLimitMessage,
-      totalQuotesToday: this.totalQuotesToday,
-      remainingQuotes: this.isRateLimited ? 0 : 1,
-      quoteHistory: [...this.quoteHistory]
-    };
+    if (!historyItem) {
+      return null;
+    }
+
+    if (historyItem.success) {
+      // For successful quotes, we would need to store the actual options
+      // For now, return a basic response indicating the quote was found
+      return {
+        success: true,
+        message: `Historical quote found with ${historyItem.optionCount} options`,
+        requestId: historyItem.id,
+        timestamp: historyItem.timestamp,
+        shippingOptions: [], // Would need to store actual options to return them
+        totalItems: historyItem.itemCount,
+        estimatedPackages: Math.ceil(historyItem.itemCount / 10),
+      };
+    } else {
+      return {
+        success: false,
+        message: historyItem.errorMessage || 'Historical quote failed',
+        requestId: historyItem.id,
+        timestamp: historyItem.timestamp,
+        shippingOptions: [],
+        totalItems: historyItem.itemCount,
+        estimatedPackages: 0,
+      };
+    }
   }
 
   /**
-   * Clear rate limit (for testing purposes)
+   * Get warehouses from Supabase
    */
-  clearRateLimit(): void {
-    this.isRateLimited = false;
-    this.lastQuoteTime = null;
-    this.nextAllowedTime = null;
-    this.rateLimitMessage = null;
-    
-    console.log('✅ Shipping quote rate limit cleared');
-    this.saveStatus();
-  }
-
-  /**
-   * Reset daily counters (typically called at midnight)
-   */
-  resetDailyCounters(): void {
-    this.totalQuotesToday = 0;
-    console.log('🔄 Daily shipping quote counters reset');
-    this.saveStatus();
-  }
-
-  /**
-   * Get available warehouses from database
-   */
-  async getAvailableWarehouses(): Promise<any[]> {
+  private async getWarehouses(): Promise<any[]> {
     try {
       const { data, error } = await supabase
-        .from('keystone_warehouses')
+        .from('warehouses')
         .select('*')
-        .eq('is_active', true)
         .order('name');
 
       if (error) {
@@ -855,6 +810,30 @@ class ShippingQuoteService {
     } catch (error) {
       console.warn('Failed to load shipping quote status from localStorage:', error);
     }
+  }
+
+  /**
+   * Get current shipping quote status
+   */
+  public getStatus(): ShippingQuoteStatus {
+    this.updateRateLimitStatus();
+    return {
+      isRateLimited: this.isRateLimited,
+      lastQuoteTime: this.lastQuoteTime,
+      nextAllowedTime: this.nextAllowedTime,
+      rateLimitMessage: this.rateLimitMessage,
+      totalQuotesToday: this.totalQuotesToday,
+      remainingQuotes: this.getRemainingQuotes(),
+      quoteHistory: this.quoteHistory,
+    };
+  }
+
+  /**
+   * Get remaining quotes for the day (mock implementation)
+   */
+  private getRemainingQuotes(): number {
+    // This is a mock implementation. In a real scenario, this would come from the API.
+    return 100 - this.totalQuotesToday; 
   }
 }
 
