@@ -585,6 +585,7 @@ class ShippingQuoteService {
       const { data, error } = await supabase
         .from('keystone_api_logs')
         .insert({
+          method_name: 'GetShippingOptionsMultiplePartsPerWarehouse',
           endpoint: 'GetShippingOptionsMultiplePartsPerWarehouse',
           method: 'SOAP',
           request_data: {
