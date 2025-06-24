@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, Truck, MapPin, Clock, Shield, Edit, CheckCircle, Timer, User, CreditCard, FileText } from "lucide-react";
+import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, Truck, MapPin, Clock, Shield, Edit, CheckCircle, Timer, User, CreditCard, FileText, Star, Zap } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +86,13 @@ interface ShippingOption {
   deliveryDate: string;
 }
 
+// Grouped shipping options interface
+interface GroupedShippingOptions {
+  bestValue: ShippingOption | null;
+  fastest: ShippingOption | null;
+  others: ShippingOption[];
+}
+
 // Loading wrapper component
 const LoadingWrapper = ({ isLoading, children, message = "Loading..." }) => {
   if (isLoading) {
@@ -139,6 +146,158 @@ const PricingDisplay = ({ part, className = "" }) => {
           <ProductPriceCheck vcpn={part.keystone_vcpn} />
         </div>
       )}
+    </div>
+  );
+};
+
+// Enhanced Shipping Options Component with Amazon-style grouping
+const ShippingOptionsDisplay = ({ 
+  shippingOptions, 
+  selectedShipping, 
+  onShippingSelect 
+}: {
+  shippingOptions: ShippingOption[];
+  selectedShipping: string;
+  onShippingSelect: (optionId: string) => void;
+}) => {
+  // Group shipping options by best value and fastest delivery
+  const groupedOptions = useMemo((): GroupedShippingOptions => {
+    if (shippingOptions.length === 0) {
+      return { bestValue: null, fastest: null, others: [] };
+    }
+
+    // Find best value (lowest cost)
+    const bestValue = shippingOptions.reduce((prev, current) => 
+      prev.cost < current.cost ? prev : current
+    );
+
+    // Find fastest delivery (lowest estimated days)
+    const fastest = shippingOptions.reduce((prev, current) => 
+      prev.estimatedDays < current.estimatedDays ? prev : current
+    );
+
+    // Get remaining options (excluding best value and fastest if they're different)
+    const others = shippingOptions.filter(option => 
+      option.id !== bestValue.id && option.id !== fastest.id
+    );
+
+    return { bestValue, fastest, others };
+  }, [shippingOptions]);
+
+  const ShippingOptionCard = ({ 
+    option, 
+    isRecommended = false, 
+    recommendationType = '',
+    icon = null 
+  }: {
+    option: ShippingOption;
+    isRecommended?: boolean;
+    recommendationType?: string;
+    icon?: React.ReactNode;
+  }) => (
+    <div className={`border rounded-lg p-4 transition-all hover:shadow-md ${
+      selectedShipping === option.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+    } ${isRecommended ? 'border-green-500' : ''}`}>
+      <label className="flex items-center space-x-3 cursor-pointer">
+        <input
+          type="radio"
+          name="shipping"
+          value={option.id}
+          checked={selectedShipping === option.id}
+          onChange={(e) => onShippingSelect(e.target.value)}
+          className="text-blue-600"
+        />
+        <div className="flex-1">
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              {isRecommended && (
+                <div className="flex items-center gap-1 mb-1">
+                  {icon}
+                  <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
+                    {recommendationType}
+                  </Badge>
+                </div>
+              )}
+              <div className="font-medium text-lg">{option.carrier} {option.service}</div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Estimated delivery: {new Date(option.deliveryDate).toLocaleDateString()} 
+                <span className="ml-1">({option.estimatedDays} business days)</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xl font-bold">${option.cost.toFixed(2)}</div>
+            </div>
+          </div>
+        </div>
+      </label>
+    </div>
+  );
+
+  if (shippingOptions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-4">
+      <h4 className="font-medium text-lg">Select Shipping Method</h4>
+      
+      {/* Best Value Option */}
+      {groupedOptions.bestValue && (
+        <div>
+          <h5 className="text-sm font-medium text-green-700 mb-2 flex items-center gap-1">
+            <DollarSign className="h-4 w-4" />
+            Best Value
+          </h5>
+          <ShippingOptionCard 
+            option={groupedOptions.bestValue}
+            isRecommended={true}
+            recommendationType="Best Value"
+            icon={<DollarSign className="h-3 w-3 text-green-600" />}
+          />
+        </div>
+      )}
+
+      {/* Fastest Delivery Option (only if different from best value) */}
+      {groupedOptions.fastest && groupedOptions.fastest.id !== groupedOptions.bestValue?.id && (
+        <div>
+          <h5 className="text-sm font-medium text-blue-700 mb-2 flex items-center gap-1">
+            <Zap className="h-4 w-4" />
+            Fastest Delivery
+          </h5>
+          <ShippingOptionCard 
+            option={groupedOptions.fastest}
+            isRecommended={true}
+            recommendationType="Fastest"
+            icon={<Zap className="h-3 w-3 text-blue-600" />}
+          />
+        </div>
+      )}
+
+      {/* Other Options */}
+      {groupedOptions.others.length > 0 && (
+        <div>
+          <h5 className="text-sm font-medium text-gray-700 mb-2">Other Options</h5>
+          <div className="space-y-2">
+            {groupedOptions.others.map((option) => (
+              <ShippingOptionCard key={option.id} option={option} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Summary info */}
+      <div className="text-xs text-muted-foreground bg-gray-50 p-3 rounded-lg">
+        <div className="flex items-center gap-1 mb-1">
+          <Shield className="h-3 w-3" />
+          <span className="font-medium">Shipping Information</span>
+        </div>
+        <ul className="space-y-1 ml-4">
+          <li>• All shipping options include tracking</li>
+          <li>• Delivery times are business days</li>
+          <li>• Insurance available for valuable items</li>
+          <li>• Prices are estimates and may vary</li>
+        </ul>
+      </div>
     </div>
   );
 };
@@ -434,9 +593,9 @@ const SpecialOrdersTab = () => {
                 {currentStep === 2 && (
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold">Customer Information</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="firstName">First Name *</Label>
+                        <Label htmlFor="firstName">First Name</Label>
                         <Input
                           id="firstName"
                           value={customer.firstName}
@@ -445,7 +604,7 @@ const SpecialOrdersTab = () => {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="lastName">Last Name *</Label>
+                        <Label htmlFor="lastName">Last Name</Label>
                         <Input
                           id="lastName"
                           value={customer.lastName}
@@ -454,7 +613,7 @@ const SpecialOrdersTab = () => {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="email">Email *</Label>
+                        <Label htmlFor="email">Email</Label>
                         <Input
                           id="email"
                           type="email"
@@ -464,7 +623,7 @@ const SpecialOrdersTab = () => {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="phone">Phone *</Label>
+                        <Label htmlFor="phone">Phone</Label>
                         <Input
                           id="phone"
                           value={customer.phone}
@@ -472,7 +631,7 @@ const SpecialOrdersTab = () => {
                           required
                         />
                       </div>
-                      <div className="md:col-span-2">
+                      <div className="col-span-2">
                         <Label htmlFor="company">Company (Optional)</Label>
                         <Input
                           id="company"
@@ -496,7 +655,7 @@ const SpecialOrdersTab = () => {
                   </div>
                 )}
 
-                {/* Step 3: Shipping */}
+                {/* Step 3: Shipping Information */}
                 {currentStep === 3 && (
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold">Shipping Information</h3>
@@ -506,7 +665,7 @@ const SpecialOrdersTab = () => {
                       <h4 className="font-medium">Shipping Address</h4>
                       <div className="grid grid-cols-1 gap-4">
                         <div>
-                          <Label htmlFor="street">Street Address *</Label>
+                          <Label htmlFor="street">Street Address</Label>
                           <Input
                             id="street"
                             value={shippingAddress.street}
@@ -516,7 +675,7 @@ const SpecialOrdersTab = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label htmlFor="city">City *</Label>
+                            <Label htmlFor="city">City</Label>
                             <Input
                               id="city"
                               value={shippingAddress.city}
@@ -525,7 +684,7 @@ const SpecialOrdersTab = () => {
                             />
                           </div>
                           <div>
-                            <Label htmlFor="state">State *</Label>
+                            <Label htmlFor="state">State</Label>
                             <Input
                               id="state"
                               value={shippingAddress.state}
@@ -536,7 +695,7 @@ const SpecialOrdersTab = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label htmlFor="zipCode">ZIP Code *</Label>
+                            <Label htmlFor="zipCode">ZIP Code</Label>
                             <Input
                               id="zipCode"
                               value={shippingAddress.zipCode}
@@ -558,10 +717,7 @@ const SpecialOrdersTab = () => {
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Get Shipping Quotes */}
-                    <div className="space-y-4">
                       <Button 
                         onClick={loadShippingQuotes}
                         disabled={isLoadingShipping || !shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode}
@@ -580,36 +736,13 @@ const SpecialOrdersTab = () => {
                         )}
                       </Button>
 
-                      {/* Shipping Options */}
+                      {/* Enhanced Shipping Options Display */}
                       {shippingOptions.length > 0 && (
-                        <div className="space-y-2">
-                          <h4 className="font-medium">Select Shipping Method</h4>
-                          {shippingOptions.map((option) => (
-                            <div key={option.id} className="border rounded-lg p-3">
-                              <label className="flex items-center space-x-3 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name="shipping"
-                                  value={option.id}
-                                  checked={selectedShipping === option.id}
-                                  onChange={(e) => setSelectedShipping(e.target.value)}
-                                  className="text-blue-600"
-                                />
-                                <div className="flex-1">
-                                  <div className="flex justify-between items-center">
-                                    <div>
-                                      <div className="font-medium">{option.carrier} {option.service}</div>
-                                      <div className="text-sm text-muted-foreground">
-                                        Estimated delivery: {new Date(option.deliveryDate).toLocaleDateString()} ({option.estimatedDays} business days)
-                                      </div>
-                                    </div>
-                                    <div className="text-lg font-semibold">${option.cost.toFixed(2)}</div>
-                                  </div>
-                                </div>
-                              </label>
-                            </div>
-                          ))}
-                        </div>
+                        <ShippingOptionsDisplay
+                          shippingOptions={shippingOptions}
+                          selectedShipping={selectedShipping}
+                          onShippingSelect={setSelectedShipping}
+                        />
                       )}
                     </div>
 
@@ -647,22 +780,35 @@ const SpecialOrdersTab = () => {
 
                       <div className="bg-gray-50 p-4 rounded-lg">
                         <h4 className="font-medium mb-2">Shipping Address</h4>
-                        <div className="text-sm">
+                        <div className="text-sm space-y-1">
                           <div>{shippingAddress.street}</div>
                           <div>{shippingAddress.city}, {shippingAddress.state} {shippingAddress.zipCode}</div>
                           <div>{shippingAddress.country}</div>
                         </div>
                       </div>
 
-                      {selectedShippingOption && (
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                          <h4 className="font-medium mb-2">Shipping Method</h4>
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h4 className="font-medium mb-2">Shipping Method</h4>
+                        {selectedShippingOption && (
                           <div className="text-sm">
-                            <div>{selectedShippingOption.carrier} {selectedShippingOption.service}</div>
+                            <div className="font-medium">{selectedShippingOption.carrier} {selectedShippingOption.service}</div>
                             <div>Estimated delivery: {new Date(selectedShippingOption.deliveryDate).toLocaleDateString()}</div>
+                            <div>Cost: ${selectedShippingOption.cost.toFixed(2)}</div>
                           </div>
+                        )}
+                      </div>
+
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h4 className="font-medium mb-2">Order Items</h4>
+                        <div className="space-y-2">
+                          {items.map((item) => (
+                            <div key={item.id} className="flex justify-between text-sm">
+                              <span>{item.name} (Qty: {item.quantity})</span>
+                              <span>${(item.price * item.quantity).toFixed(2)}</span>
+                            </div>
+                          ))}
                         </div>
-                      )}
+                      </div>
                     </div>
 
                     <div className="flex gap-2">
@@ -680,10 +826,7 @@ const SpecialOrdersTab = () => {
                             Placing Order...
                           </>
                         ) : (
-                          <>
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Place Order
-                          </>
+                          `Place Order - $${grandTotal.toFixed(2)}`
                         )}
                       </Button>
                     </div>
@@ -714,24 +857,20 @@ const SpecialOrdersTab = () => {
                     <span>${tax.toFixed(2)}</span>
                   </div>
                   <Separator />
-                  <div className="flex justify-between text-lg font-semibold">
+                  <div className="flex justify-between font-semibold text-lg">
                     <span>Total</span>
                     <span>${grandTotal.toFixed(2)}</span>
                   </div>
                 </div>
 
-                {/* Cart Items Summary */}
-                <div className="space-y-2">
-                  <h4 className="font-medium">Items in Cart</h4>
-                  <div className="space-y-1 max-h-40 overflow-y-auto">
-                    {items.map((item) => (
-                      <div key={item.id} className="flex justify-between text-sm">
-                        <span className="truncate">{item.name} (×{item.quantity})</span>
-                        <span>${(item.price * item.quantity).toFixed(2)}</span>
-                      </div>
-                    ))}
+                {selectedShippingOption && (
+                  <div className="text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Truck className="h-3 w-3" />
+                      <span>Estimated delivery: {new Date(selectedShippingOption.deliveryDate).toLocaleDateString()}</span>
+                    </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -743,327 +882,196 @@ const SpecialOrdersTab = () => {
 
 // Main Parts component
 const Parts = () => {
-  // State management
+  const { toast } = useToast();
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('tab') || 'parts';
+  });
+
+  // Parts state
   const [parts, setParts] = useState<InventoryPart[]>([]);
-  const [filteredParts, setFilteredParts] = useState<InventoryPart[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Filter and search state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [priceRange, setPriceRange] = useState([0, 1000]);
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showInStockOnly, setShowInStockOnly] = useState(false);
+
+  // View state
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [itemsPerPage, setItemsPerPage] = useState(24);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(12);
+
+  // Dialog state
   const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+
+  // Favorites
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
-  const { toast } = useToast();
-  const { itemCount, total } = useCart(); // Use enhanced cart system
-
-  // Get current tab from URL
-  const [currentTab, setCurrentTab] = useState(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('tab') || 'parts';
-  });
-
-  // Update URL when tab changes
-  const handleTabChange = (tab: string) => {
-    setCurrentTab(tab);
-    const url = new URL(window.location);
-    url.searchParams.set('tab', tab);
-    window.history.pushState({}, '', url);
-  };
-
-  // Cache management
-  const CACHE_KEY = 'parts_inventory_cache';
-  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-  // Load cached data
-  const loadFromCache = useCallback(() => {
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        const now = Date.now();
-        if (now - timestamp < CACHE_DURATION) {
-          return data;
-        }
-      }
-    } catch (error) {
-      console.error('Error loading from cache:', error);
-    }
-    return null;
-  }, []);
-
-  // Save to cache
-  const saveToCache = useCallback((data: InventoryPart[]) => {
-    try {
-      const cacheData = {
-        data,
-        timestamp: Date.now()
-      };
-      localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-    } catch (error) {
-      console.error('Error saving to cache:', error);
-    }
-  }, []);
-
-  // Load favorites from localStorage
-  const loadFavorites = useCallback(() => {
-    try {
-      const saved = localStorage.getItem('parts_favorites');
-      if (saved) {
-        setFavorites(new Set(JSON.parse(saved)));
-      }
-    } catch (error) {
-      console.error('Error loading favorites:', error);
-    }
-  }, []);
-
-  // Save favorites to localStorage
-  const saveFavorites = useCallback((newFavorites: Set<string>) => {
-    try {
-      localStorage.setItem('parts_favorites', JSON.stringify([...newFavorites]));
-    } catch (error) {
-      console.error('Error saving favorites:', error);
-    }
-  }, []);
-
   // Mock data for development
-  const getMockData = useCallback((): InventoryPart[] => {
-    return [
-      {
-        id: '1',
-        name: 'LED Light Bar 20"',
-        description: 'High-performance LED light bar with flood and spot beam pattern',
-        sku: 'KS-82015',
-        quantity: 15,
-        price: 149.95,
-        cost: 89.97,
-        category: 'Lighting',
-        supplier: 'Keystone Automotive',
-        reorder_level: 5,
-        created_at: '2024-01-15T10:00:00Z',
-        updated_at: '2024-01-20T14:30:00Z',
-        keystone_vcpn: 'KS-82015',
-        keystone_synced: true,
-        keystone_last_sync: '2024-01-20T14:30:00Z',
-        warehouse: 'Main',
-        location: 'A1-B2',
-        brand: 'ProLight',
-        weight: 3.2,
-        dimensions: '20" x 3" x 4"',
-        warranty: '2 years',
-        list_price: 199.95,
-        discount_percentage: 25
-      },
-      {
-        id: '2',
-        name: 'Black Led Bull Bar Toyota',
-        description: 'Heavy-duty black LED bull bar designed for Toyota trucks',
-        sku: 'B-74060',
-        quantity: 8,
-        price: 299.95,
-        cost: 179.97,
-        category: 'Protection',
-        supplier: 'Keystone Automotive',
-        reorder_level: 3,
-        created_at: '2024-01-10T09:00:00Z',
-        updated_at: '2024-01-18T16:45:00Z',
-        keystone_vcpn: 'B-74060',
-        keystone_synced: true,
-        keystone_last_sync: '2024-01-18T16:45:00Z',
-        warehouse: 'Main',
-        location: 'C3-D4',
-        brand: 'BullGuard',
-        weight: 45.0,
-        dimensions: '72" x 8" x 6"',
-        warranty: '3 years',
-        list_price: 399.95,
-        discount_percentage: 25
-      },
-      {
-        id: '3',
-        name: 'Dual Battery Tray Kit',
-        description: 'Complete dual battery tray system with mounting hardware',
-        sku: 'KS-89567',
-        quantity: 12,
-        price: 89.95,
-        cost: 53.97,
-        category: 'Electrical',
-        supplier: 'Keystone Automotive',
-        reorder_level: 4,
-        created_at: '2024-01-12T11:30:00Z',
-        updated_at: '2024-01-19T13:15:00Z',
-        keystone_vcpn: 'KS-89567',
-        keystone_synced: true,
-        keystone_last_sync: '2024-01-19T13:15:00Z',
-        warehouse: 'Main',
-        location: 'E5-F6',
-        brand: 'PowerMax',
-        weight: 8.5,
-        dimensions: '14" x 10" x 4"',
-        warranty: '1 year',
-        list_price: 119.95,
-        discount_percentage: 25
-      },
-      {
-        id: '4',
-        name: 'Grill Guard Mid-Size',
-        description: 'Mid-size grill guard with integrated light mounting points',
-        sku: 'KS-88923',
-        quantity: 6,
-        price: 199.95,
-        cost: 119.97,
-        category: 'Protection',
-        supplier: 'Keystone Automotive',
-        reorder_level: 2,
-        created_at: '2024-01-08T14:20:00Z',
-        updated_at: '2024-01-17T10:30:00Z',
-        keystone_vcpn: 'KS-88923',
-        keystone_synced: true,
-        keystone_last_sync: '2024-01-17T10:30:00Z',
-        warehouse: 'Main',
-        location: 'G7-H8',
-        brand: 'GuardPro',
-        weight: 28.0,
-        dimensions: '48" x 6" x 4"',
-        warranty: '2 years',
-        list_price: 249.95,
-        discount_percentage: 20
-      },
-      {
-        id: '5',
-        name: 'Truck Bed Liner',
-        description: 'Drop-in truck bed liner for full-size pickups',
-        sku: 'E7623',
-        quantity: 4,
-        price: 190.00,
-        cost: 250.00, // Negative margin example
-        category: 'Protection',
-        supplier: 'Keystone Automotive',
-        reorder_level: 2,
-        created_at: '2024-01-05T12:00:00Z',
-        updated_at: '2024-01-16T09:20:00Z',
-        keystone_vcpn: 'E7623',
-        keystone_synced: true,
-        keystone_last_sync: '2024-01-16T09:20:00Z',
-        warehouse: 'Main',
-        location: 'I9-J10',
-        brand: 'BedGuard',
-        weight: 35.0,
-        dimensions: '96" x 60" x 20"',
-        warranty: '5 years',
-        list_price: 299.95,
-        discount_percentage: 37
-      }
-    ];
-  }, []);
+  const mockParts: InventoryPart[] = [
+    {
+      id: "ABC123",
+      name: "Brake Pad Set - Front",
+      description: "High-performance ceramic brake pads for front wheels",
+      sku: "BP-FRONT-001",
+      quantity: 25,
+      price: 89.99,
+      cost: 45.00,
+      category: "Brakes",
+      supplier: "BrakeTech",
+      reorder_level: 10,
+      created_at: "2024-01-15T10:00:00Z",
+      updated_at: "2024-01-20T14:30:00Z",
+      core_charge: 15.00,
+      keystone_vcpn: "ABC123",
+      keystone_synced: true,
+      keystone_last_sync: "2024-01-20T14:30:00Z",
+      warehouse: "Main",
+      location: "A-15-B",
+      brand: "BrakeTech Pro",
+      weight: 3.2,
+      dimensions: "12x8x2 inches",
+      warranty: "2 years",
+      list_price: 120.00,
+      discount_percentage: 25
+    },
+    {
+      id: "DEF456",
+      name: "LED Light Bar 20\"",
+      description: "High-intensity LED light bar for off-road vehicles",
+      sku: "LED-BAR-20",
+      quantity: 15,
+      price: 149.95,
+      cost: 75.00,
+      category: "Lighting",
+      supplier: "LightMax",
+      reorder_level: 5,
+      created_at: "2024-01-10T09:00:00Z",
+      updated_at: "2024-01-18T16:45:00Z",
+      core_charge: 0,
+      keystone_vcpn: "DEF456",
+      keystone_synced: true,
+      keystone_last_sync: "2024-01-18T16:45:00Z",
+      warehouse: "Main",
+      location: "C-22-A",
+      brand: "LightMax Pro",
+      weight: 2.8,
+      dimensions: "20x3x4 inches",
+      warranty: "3 years",
+      list_price: 199.95,
+      discount_percentage: 25
+    },
+    {
+      id: "GHI789",
+      name: "Oil Filter - Premium",
+      description: "High-efficiency oil filter for extended engine protection",
+      sku: "OF-PREM-001",
+      quantity: 8,
+      price: 24.99,
+      cost: 12.50,
+      category: "Filters",
+      supplier: "FilterPro",
+      reorder_level: 15,
+      created_at: "2024-01-12T11:00:00Z",
+      updated_at: "2024-01-19T09:15:00Z",
+      core_charge: 0,
+      keystone_vcpn: "GHI789",
+      keystone_synced: true,
+      keystone_last_sync: "2024-01-19T09:15:00Z",
+      warehouse: "Main",
+      location: "B-08-C",
+      brand: "FilterPro Elite",
+      weight: 1.2,
+      dimensions: "4x4x6 inches",
+      warranty: "1 year",
+      list_price: 34.99,
+      discount_percentage: 29
+    }
+  ];
 
   // Fetch parts data
   const fetchParts = useCallback(async () => {
     setLoading(true);
     setError(null);
-
     try {
-      // Try to load from cache first
-      const cachedData = loadFromCache();
-      if (cachedData) {
-        setParts(cachedData);
-        setLoading(false);
-        return;
-      }
-
-      // For now, use mock data
-      // In production, replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
-      const mockData = getMockData();
-      setParts(mockData);
-      saveToCache(mockData);
-      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setParts(mockParts);
     } catch (err) {
+      setError('Failed to load parts inventory');
       console.error('Error fetching parts:', err);
-      setError('Failed to load parts inventory. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [loadFromCache, getMockData, saveToCache]);
+  }, []);
 
-  // Initialize data
+  // Load parts on mount
   useEffect(() => {
     fetchParts();
-    loadFavorites();
-  }, [fetchParts, loadFavorites]);
+  }, [fetchParts]);
+
+  // Update URL when tab changes
+  useEffect(() => {
+    const url = new URL(window.location);
+    url.searchParams.set('tab', activeTab);
+    window.history.pushState({}, '', url);
+  }, [activeTab]);
+
+  // Get unique categories
+  const categories = useMemo(() => {
+    const cats = Array.from(new Set(parts.map(part => part.category).filter(Boolean)));
+    return cats.sort();
+  }, [parts]);
 
   // Filter and sort parts
-  const processedParts = useMemo(() => {
+  const filteredParts = useMemo(() => {
     let filtered = parts.filter(part => {
-      // Search filter
-      const searchMatch = !searchTerm || 
-        part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        part.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        part.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        part.keystone_vcpn?.toLowerCase().includes(searchTerm.toLowerCase());
-
-      // Category filter
-      const categoryMatch = selectedCategory === 'all' || part.category === selectedCategory;
-
-      // Price range filter
-      const priceMatch = part.price >= priceRange[0] && part.price <= priceRange[1];
-
-      // Stock filter
-      const stockMatch = !showInStockOnly || part.quantity > 0;
-
-      return searchMatch && categoryMatch && priceMatch && stockMatch;
+      const matchesSearch = part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           part.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           part.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           part.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesCategory = selectedCategory === 'all' || part.category === selectedCategory;
+      const matchesPrice = part.price >= priceRange[0] && part.price <= priceRange[1];
+      const matchesStock = !showInStockOnly || part.quantity > 0;
+      
+      return matchesSearch && matchesCategory && matchesPrice && matchesStock;
     });
 
-    // Sort
+    // Sort parts
     filtered.sort((a, b) => {
-      let aValue: any, bValue: any;
-
+      let comparison = 0;
+      
       switch (sortBy) {
         case 'name':
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
+          comparison = a.name.localeCompare(b.name);
           break;
         case 'price':
-          aValue = a.price;
-          bValue = b.price;
+          comparison = a.price - b.price;
           break;
         case 'quantity':
-          aValue = a.quantity;
-          bValue = b.quantity;
-          break;
-        case 'category':
-          aValue = a.category?.toLowerCase() || '';
-          bValue = b.category?.toLowerCase() || '';
+          comparison = a.quantity - b.quantity;
           break;
         case 'updated':
-          aValue = new Date(a.updated_at).getTime();
-          bValue = new Date(b.updated_at).getTime();
+          comparison = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
           break;
         default:
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
+          comparison = 0;
       }
-
-      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
     });
 
     return filtered;
-  }, [parts, searchTerm, selectedCategory, priceRange, showInStockOnly, sortBy, sortOrder]);
-
-  // Update filtered parts when processed parts change
-  useEffect(() => {
-    setFilteredParts(processedParts);
-    setCurrentPage(1); // Reset to first page when filters change
-  }, [processedParts]);
+  }, [parts, searchTerm, selectedCategory, priceRange, sortBy, sortOrder, showInStockOnly]);
 
   // Pagination
   const totalPages = Math.ceil(filteredParts.length / itemsPerPage);
@@ -1071,14 +1079,13 @@ const Parts = () => {
   const endIndex = startIndex + itemsPerPage;
   const currentParts = filteredParts.slice(startIndex, endIndex);
 
-  // Get unique categories
-  const categories = useMemo(() => {
-    const cats = [...new Set(parts.map(part => part.category).filter(Boolean))];
-    return cats.sort();
-  }, [parts]);
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedCategory, priceRange, sortBy, sortOrder, showInStockOnly, itemsPerPage]);
 
   // Toggle favorite
-  const toggleFavorite = useCallback((partId: string) => {
+  const toggleFavorite = (partId: string) => {
     setFavorites(prev => {
       const newFavorites = new Set(prev);
       if (newFavorites.has(partId)) {
@@ -1086,161 +1093,133 @@ const Parts = () => {
       } else {
         newFavorites.add(partId);
       }
-      saveFavorites(newFavorites);
       return newFavorites;
     });
-  }, [saveFavorites]);
+  };
 
-  // Handle part detail view
-  const viewPartDetails = useCallback((part: InventoryPart) => {
+  // Open part detail
+  const openPartDetail = (part: InventoryPart) => {
     setSelectedPart(part);
     setIsDetailDialogOpen(true);
-  }, []);
+  };
 
-  // Render part card for grid viewing
-  const renderPartCard = useCallback((part: InventoryPart) => {
-    const isInStock = part.quantity > 0;
+  // Render part card
+  const renderPartCard = (part: InventoryPart) => {
+    const isLowStock = part.quantity <= (part.reorder_level || 10);
     const isFavorite = favorites.has(part.id);
-    const isLowStock = part.quantity <= (part.reorder_level || 0);
 
     return (
       <Card key={part.id} className="group hover:shadow-lg transition-shadow">
-        <CardHeader className="pb-2">
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <CardTitle className="text-base line-clamp-2 group-hover:text-blue-600 transition-colors">
-                {part.name}
-              </CardTitle>
-              <CardDescription className="text-sm mt-1">
-                {part.sku} • {part.category}
-              </CardDescription>
+        <CardContent className="p-4">
+          <div className="flex justify-between items-start mb-2">
+            <div className="flex-1">
+              <h3 className="font-semibold text-lg mb-1">{part.name}</h3>
+              <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{part.description}</p>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <Badge variant="secondary" className="text-xs">{part.id}</Badge>
+                {part.category && <Badge variant="outline" className="text-xs">{part.category}</Badge>}
+                {isLowStock && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
+                {part.keystone_synced && <Badge variant="default" className="text-xs bg-blue-100 text-blue-800">Synced</Badge>}
+              </div>
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => toggleFavorite(part.id)}
-              className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <Heart className={`h-4 w-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
             </Button>
           </div>
-        </CardHeader>
 
-        <CardContent className="space-y-3">
-          {/* Product Image Placeholder */}
-          <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
-            <Package className="h-12 w-12 text-gray-400" />
-          </div>
+          <div className="space-y-2">
+            <PricingDisplay part={part} />
+            
+            <div className="flex items-center justify-between text-sm">
+              <span className={`flex items-center gap-1 ${isLowStock ? 'text-red-600' : 'text-green-600'}`}>
+                <Package className="h-3 w-3" />
+                {part.quantity} in stock
+              </span>
+              {part.warehouse && (
+                <span className="text-muted-foreground text-xs">{part.warehouse}</span>
+              )}
+            </div>
 
-          {/* Stock Status */}
-          <div className="flex items-center gap-2">
-            <Badge variant={isInStock ? (isLowStock ? "destructive" : "secondary") : "outline"}>
-              {isInStock ? `${part.quantity} in stock` : 'Out of stock'}
-            </Badge>
-            {isLowStock && isInStock && (
-              <Badge variant="outline" className="text-orange-600">
-                Low Stock
-              </Badge>
-            )}
-          </div>
-
-          {/* Pricing */}
-          <PricingDisplay part={part} />
-
-          {/* Description */}
-          {part.description && (
-            <p className="text-sm text-muted-foreground line-clamp-2">
-              {part.description}
-            </p>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-2">
-            <AddToCartButton
-              vcpn={part.keystone_vcpn || part.sku || part.id}
-              name={part.name}
-              price={part.price}
-              sku={part.sku}
-              category={part.category}
-              inStock={isInStock}
-              maxQuantity={part.quantity}
-              weight={part.weight}
-              className="flex-1"
-              size="sm"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => viewPartDetails(part)}
-              className="px-3"
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
+            <div className="flex gap-2 pt-2">
+              <AddToCartButton 
+                vcpn={part.keystone_vcpn || part.sku || part.id}
+                name={part.name}
+                price={part.price}
+                sku={part.sku}
+                category={part.category}
+                inStock={part.quantity > 0}
+                maxQuantity={part.quantity}
+                weight={part.weight}
+                className="flex-1"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openPartDetail(part)}
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
     );
-  }, [favorites, toggleFavorite, viewPartDetails]);
+  };
 
   // Render part row for list view
-  const renderPartRow = useCallback((part: InventoryPart) => {
-    const isInStock = part.quantity > 0;
+  const renderPartRow = (part: InventoryPart) => {
+    const isLowStock = part.quantity <= (part.reorder_level || 10);
     const isFavorite = favorites.has(part.id);
-    const isLowStock = part.quantity <= (part.reorder_level || 0);
 
     return (
-      <TableRow key={part.id} className="group hover:bg-muted/50">
+      <TableRow key={part.id} className="group">
         <TableCell className="w-12">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => toggleFavorite(part.id)}
-            className="h-8 w-8 p-0"
+            className="opacity-0 group-hover:opacity-100 transition-opacity"
           >
             <Heart className={`h-4 w-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
           </Button>
         </TableCell>
-        
         <TableCell>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
-              <Package className="h-5 w-5 text-gray-400" />
-            </div>
-            <div>
-              <div className="font-medium">{part.name}</div>
-              <div className="text-sm text-muted-foreground">{part.sku}</div>
+          <div className="space-y-1">
+            <div className="font-medium">{part.name}</div>
+            <div className="text-sm text-muted-foreground">{part.id}</div>
+            <div className="flex gap-1 flex-wrap">
+              {part.category && <Badge variant="outline" className="text-xs">{part.category}</Badge>}
+              {isLowStock && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
+              {part.keystone_synced && <Badge variant="default" className="text-xs bg-blue-100 text-blue-800">Synced</Badge>}
             </div>
           </div>
         </TableCell>
-        
-        <TableCell>{part.category}</TableCell>
-        
+        <TableCell>
+          {part.category && <Badge variant="outline">{part.category}</Badge>}
+        </TableCell>
         <TableCell>
           <PricingDisplay part={part} />
         </TableCell>
-        
         <TableCell>
-          <div className="flex items-center gap-2">
-            <Badge variant={isInStock ? (isLowStock ? "destructive" : "secondary") : "outline"}>
-              {part.quantity}
-            </Badge>
-            {isLowStock && isInStock && (
-              <Badge variant="outline" className="text-orange-600 text-xs">
-                Low
-              </Badge>
-            )}
-          </div>
+          <span className={`flex items-center gap-1 ${isLowStock ? 'text-red-600' : 'text-green-600'}`}>
+            <Package className="h-3 w-3" />
+            {part.quantity}
+          </span>
         </TableCell>
-        
         <TableCell>
-          <div className="flex items-center gap-2">
-            <AddToCartButton
+          <div className="flex gap-2">
+            <AddToCartButton 
               vcpn={part.keystone_vcpn || part.sku || part.id}
               name={part.name}
               price={part.price}
               sku={part.sku}
               category={part.category}
-              inStock={isInStock}
+              inStock={part.quantity > 0}
               maxQuantity={part.quantity}
               weight={part.weight}
               size="sm"
@@ -1248,8 +1227,7 @@ const Parts = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => viewPartDetails(part)}
-              className="px-3"
+              onClick={() => openPartDetail(part)}
             >
               <Eye className="h-4 w-4" />
             </Button>
@@ -1257,10 +1235,10 @@ const Parts = () => {
         </TableCell>
       </TableRow>
     );
-  }, [favorites, toggleFavorite, viewPartDetails]);
+  };
 
   // Render pagination
-  const renderPagination = useCallback(() => {
+  const renderPagination = () => {
     if (totalPages <= 1) return null;
 
     const pages = [];
@@ -1273,67 +1251,58 @@ const Parts = () => {
     }
 
     for (let i = startPage; i <= endPage; i++) {
-      pages.push(
-        <Button
-          key={i}
-          variant={currentPage === i ? "default" : "outline"}
-          size="sm"
-          onClick={() => setCurrentPage(i)}
-          className="w-10"
-        >
-          {i}
-        </Button>
-      );
+      pages.push(i);
     }
 
     return (
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          Showing {startIndex + 1}-{Math.min(endIndex, filteredParts.length)} of {filteredParts.length} parts
-        </div>
+      <div className="flex items-center justify-center space-x-2 mt-6">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage(1)}
+          disabled={currentPage === 1}
+        >
+          First
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage(currentPage - 1)}
+          disabled={currentPage === 1}
+        >
+          Previous
+        </Button>
         
-        <div className="flex items-center gap-2">
+        {pages.map(page => (
           <Button
-            variant="outline"
+            key={page}
+            variant={currentPage === page ? "default" : "outline"}
             size="sm"
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(page)}
           >
-            Previous
+            {page}
           </Button>
-          
-          {startPage > 1 && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(1)} className="w-10">
-                1
-              </Button>
-              {startPage > 2 && <span className="text-muted-foreground">...</span>}
-            </>
-          )}
-          
-          {pages}
-          
-          {endPage < totalPages && (
-            <>
-              {endPage < totalPages - 1 && <span className="text-muted-foreground">...</span>}
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(totalPages)} className="w-10">
-                {totalPages}
-              </Button>
-            </>
-          )}
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            disabled={currentPage === totalPages}
-          >
-            Next
-          </Button>
-        </div>
+        ))}
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage(currentPage + 1)}
+          disabled={currentPage === totalPages}
+        >
+          Next
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage(totalPages)}
+          disabled={currentPage === totalPages}
+        >
+          Last
+        </Button>
       </div>
     );
-  }, [currentPage, totalPages, startIndex, endIndex, filteredParts.length]);
+  };
 
   if (error) {
     return (
@@ -1343,61 +1312,44 @@ const Parts = () => {
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-        <Button onClick={fetchParts} className="mt-4">
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Try Again
-        </Button>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header with Cart Widget */}
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto p-6">
+      <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">Parts & Inventory</h1>
-          <p className="text-muted-foreground">
-            Manage your parts inventory and place special orders
-          </p>
+          <p className="text-muted-foreground">Manage your parts inventory and place special orders</p>
         </div>
         <CartWidget />
       </div>
 
-      {/* Tab Navigation */}
-      <Tabs value={currentTab} onValueChange={handleTabChange}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="parts" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Parts Catalog
-          </TabsTrigger>
-          <TabsTrigger value="special-orders" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
+          <TabsTrigger value="parts">Parts Catalog</TabsTrigger>
+          <TabsTrigger value="special-orders" className="relative">
             Special Orders
-            {itemCount > 0 && (
-              <Badge variant="secondary" className="ml-1">
-                {itemCount}
-              </Badge>
-            )}
+            <CartWidget showBadgeOnly={true} className="ml-2" />
           </TabsTrigger>
         </TabsList>
 
-        {/* Parts Tab Content */}
+        {/* Parts Catalog Tab */}
         <TabsContent value="parts" className="space-y-6">
-          {/* Search & Filter */}
+          {/* Search and Filters */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="h-5 w-5" />
-                Search & Filter
-              </CardTitle>
+              <CardTitle>Search & Filters</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Search */}
-              <div className="flex gap-4">
-                <div className="flex-1">
+              <div>
+                <Label>Search Parts</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search parts by name, SKU, VCPN, or description..."
+                    placeholder="Search by name, ID, SKU, or description..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full"
