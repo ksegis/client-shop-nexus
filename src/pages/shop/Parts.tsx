@@ -160,6 +160,9 @@ const ShippingOptionsDisplay = ({
   selectedShipping: string;
   onShippingSelect: (optionId: string) => void;
 }) => {
+  // State for collapsible "Other Options" section
+  const [showOtherOptions, setShowOtherOptions] = useState(false);
+
   // Group shipping options by best value and fastest delivery
   const groupedOptions = useMemo((): GroupedShippingOptions => {
     if (shippingOptions.length === 0) {
@@ -273,15 +276,29 @@ const ShippingOptionsDisplay = ({
         </div>
       )}
 
-      {/* Other Options */}
+      {/* Other Options - Collapsible */}
       {groupedOptions.others.length > 0 && (
         <div>
-          <h5 className="text-sm font-medium text-gray-700 mb-2">Other Options</h5>
-          <div className="space-y-2">
-            {groupedOptions.others.map((option) => (
-              <ShippingOptionCard key={option.id} option={option} />
-            ))}
-          </div>
+          <Button
+            variant="ghost"
+            onClick={() => setShowOtherOptions(!showOtherOptions)}
+            className="h-auto p-0 text-sm font-medium text-gray-700 hover:text-gray-900 mb-2 flex items-center gap-2"
+          >
+            {showOtherOptions ? (
+              <ArrowRight className="h-4 w-4 rotate-90 transition-transform" />
+            ) : (
+              <ArrowRight className="h-4 w-4 transition-transform" />
+            )}
+            Other Options ({groupedOptions.others.length})
+          </Button>
+          
+          {showOtherOptions && (
+            <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+              {groupedOptions.others.map((option) => (
+                <ShippingOptionCard key={option.id} option={option} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
