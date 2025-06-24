@@ -14,18 +14,27 @@ import {
   Calendar,
   Receipt,
   Users,
-  Wrench
+  Wrench,
+  ShoppingCart,
+  Truck,
+  DollarSign,
+  TrendingUp,
+  Eye,
+  ExternalLink
 } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useInventoryData } from '@/hooks/useInventoryData';
+import { useOrdersData } from '@/hooks/useOrdersData';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useState } from 'react';
 import AppointmentsOverview from '@/components/shop/dashboard/AppointmentsOverview';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 
-// Quick Actions Component
+// Quick Actions Component with Orders
 const QuickActionsSection = () => {
   const navigate = useNavigate();
 
@@ -36,6 +45,13 @@ const QuickActionsSection = () => {
       icon: Plus,
       color: 'bg-blue-500 hover:bg-blue-600',
       action: () => navigate('/shop/work-orders/new')
+    },
+    {
+      title: 'Special Order',
+      description: 'Place a special order',
+      icon: ShoppingCart,
+      color: 'bg-emerald-500 hover:bg-emerald-600',
+      action: () => navigate('/shop/parts?tab=special-orders')
     },
     {
       title: 'Customer Lookup',
@@ -64,13 +80,6 @@ const QuickActionsSection = () => {
       icon: Receipt,
       color: 'bg-red-500 hover:bg-red-600',
       action: () => navigate('/shop/invoices/new')
-    },
-    {
-      title: 'View Reports',
-      description: 'Access analytics',
-      icon: TrendingDown,
-      color: 'bg-indigo-500 hover:bg-indigo-600',
-      action: () => navigate('/shop/reports')
     }
   ];
 
@@ -109,9 +118,20 @@ const QuickActionsSection = () => {
   );
 };
 
-// Today's Priority Tasks Component
+// Today's Priority Tasks Component with Orders
 const TodaysPriorities = () => {
+  const { getOrdersRequiringAttention } = useOrdersData();
+  const ordersRequiringAttention = getOrdersRequiringAttention();
+
   const priorities = [
+    {
+      title: 'Pending Orders',
+      count: ordersRequiringAttention.length,
+      icon: ShoppingCart,
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-50',
+      action: '/shop/orders?status=pending'
+    },
     {
       title: 'Pending Approvals',
       count: 3,
@@ -135,14 +155,6 @@ const TodaysPriorities = () => {
       color: 'text-red-600',
       bgColor: 'bg-red-50',
       action: '/shop/inventory?filter=low-stock'
-    },
-    {
-      title: 'Follow-up Calls',
-      count: 5,
-      icon: Users,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      action: '/shop/customers?filter=follow-up'
     }
   ];
 
@@ -152,7 +164,7 @@ const TodaysPriorities = () => {
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">Today's Priorities</h2>
       
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         {priorities.map((priority, index) => {
           const IconComponent = priority.icon;
           return (
@@ -185,9 +197,202 @@ const TodaysPriorities = () => {
   );
 };
 
+// Recent Orders Component
+const RecentOrdersSection = () => {
+  const { recentOrders, loading } = useOrdersData();
+  const [selectedOrderDialog, setSelectedOrderDialog] = useState<boolean>(false);
+  const navigate = useNavigate();
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'processing': return 'bg-blue-100 text-blue-800';
+      case 'shipped': return 'bg-purple-100 text-purple-800';
+      case 'delivered': return 'bg-green-100 text-green-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending': return Clock;
+      case 'processing': return Package;
+      case 'shipped': return Truck;
+      case 'delivered': return CheckCircle;
+      case 'cancelled': return XCircle;
+      default: return Clock;
+    }
+  };
+
+  const handleOrderClick = (orderId: string) => {
+    navigate(`/shop/orders/${orderId}`);
+    setSelectedOrderDialog(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Recent Orders</h2>
+        <Card>
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                    <div>
+                      <Skeleton className="h-4 w-32 mb-1" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-6 w-16" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Recent Orders</h2>
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => setSelectedOrderDialog(true)}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          View All
+        </Button>
+      </div>
+      
+      <Card>
+        <CardContent className="p-6">
+          {recentOrders.length > 0 ? (
+            <div className="space-y-4">
+              {recentOrders.slice(0, 5).map((order) => {
+                const StatusIcon = getStatusIcon(order.status);
+                return (
+                  <div 
+                    key={order.id}
+                    className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => handleOrderClick(order.id)}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 rounded-full bg-gray-100">
+                        <StatusIcon className="h-4 w-4 text-gray-600" />
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm">{order.orderReference}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {order.customerName} • {order.itemCount} items
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(order.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <Badge className={`text-xs ${getStatusColor(order.status)}`}>
+                        {order.status}
+                      </Badge>
+                      <div className="text-sm font-medium mt-1">
+                        ${order.totalAmount.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {recentOrders.length > 5 && (
+                <div className="text-center pt-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setSelectedOrderDialog(true)}
+                  >
+                    View {recentOrders.length - 5} more orders
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <div className="text-sm">No recent orders</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Orders will appear here once placed
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* All Orders Dialog */}
+      <Dialog open={selectedOrderDialog} onOpenChange={setSelectedOrderDialog}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>All Recent Orders</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-96">
+            <div className="space-y-2">
+              {recentOrders.map((order) => {
+                const StatusIcon = getStatusIcon(order.status);
+                return (
+                  <div 
+                    key={order.id}
+                    className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => handleOrderClick(order.id)}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 rounded-full bg-gray-100">
+                        <StatusIcon className="h-4 w-4 text-gray-600" />
+                      </div>
+                      <div>
+                        <div className="font-medium">{order.orderReference}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {order.customerName} ({order.customerEmail})
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {order.itemCount} items • {new Date(order.createdAt).toLocaleDateString()}
+                        </div>
+                        {order.trackingNumber && (
+                          <div className="text-xs text-blue-600">
+                            Tracking: {order.trackingNumber}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <Badge className={`text-xs ${getStatusColor(order.status)}`}>
+                        {order.status}
+                      </Badge>
+                      <div className="font-medium mt-1">
+                        ${order.totalAmount.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {order.shippingMethod}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
 const Dashboard = () => {
   const { estimates, workOrders, inventory, customerCount, loading, error } = useDashboardData();
   const { inventoryItems } = useInventoryData();
+  const { summary: ordersSummary, loading: ordersLoading } = useOrdersData();
   const [selectedInventoryCard, setSelectedInventoryCard] = useState<string | null>(null);
   const [selectedEstimatesDialog, setSelectedEstimatesDialog] = useState<boolean>(false);
   const [selectedWorkOrdersDialog, setSelectedWorkOrdersDialog] = useState<boolean>(false);
@@ -199,10 +404,14 @@ const Dashboard = () => {
     pendingApproval: Clock,
     approved: CheckCircle,
     rejected: XCircle,
+    totalOrders: ShoppingCart,
+    pendingOrders: Clock,
+    shippedOrders: Truck,
+    totalRevenue: DollarSign,
   };
 
   // Loading placeholders
-  if (loading) {
+  if (loading || ordersLoading) {
     return (
       <div className="space-y-6">
         <div>
@@ -231,7 +440,7 @@ const Dashboard = () => {
 
         {/* Metrics Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <Card key={i}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -266,6 +475,10 @@ const Dashboard = () => {
     pendingApproval: '-5%',
     approved: '+18%',
     rejected: '+2%',
+    totalOrders: '+25%',
+    pendingOrders: '+8%',
+    shippedOrders: '+15%',
+    totalRevenue: '+32%',
   };
 
   const changeType = {
@@ -273,6 +486,10 @@ const Dashboard = () => {
     pendingApproval: 'positive',
     approved: 'positive',
     rejected: 'negative',
+    totalOrders: 'positive',
+    pendingOrders: 'neutral',
+    shippedOrders: 'positive',
+    totalRevenue: 'positive',
   };
 
   // Process inventory items for cards
@@ -343,10 +560,11 @@ const Dashboard = () => {
       {/* Today's Priorities */}
       <TodaysPriorities />
 
-      {/* Metrics Cards */}
+      {/* Enhanced Metrics Cards with Orders */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Key Metrics</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {/* Estimates Metrics */}
           {[
             { id: 'totalEstimates', name: 'Total Estimates', value: estimates.count },
             { id: 'pendingApproval', name: 'Pending Approval', value: estimates.pending },
@@ -373,7 +591,40 @@ const Dashboard = () => {
             );
           })}
         </div>
+
+        {/* Orders Metrics Row */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[
+            { id: 'totalOrders', name: 'Total Orders', value: ordersSummary.total },
+            { id: 'pendingOrders', name: 'Pending Orders', value: ordersSummary.pending },
+            { id: 'shippedOrders', name: 'Shipped Orders', value: ordersSummary.shipped },
+            { id: 'totalRevenue', name: 'Orders Revenue', value: `$${ordersSummary.totalRevenue.toFixed(0)}` }
+          ].map((metric) => {
+            const IconComponent = metricIcons[metric.id as keyof typeof metricIcons] || ShoppingCart;
+            return (
+              <Card key={metric.id} className="hover:shadow-md transition-shadow border-emerald-200">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">{metric.name}</CardTitle>
+                  <IconComponent className="h-4 w-4 text-emerald-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-emerald-600">{metric.value}</div>
+                  <p className={`text-xs ${
+                    changeType[metric.id as keyof typeof changeType] === 'positive' ? 
+                    'text-green-500' : changeType[metric.id as keyof typeof changeType] === 'negative' ?
+                    'text-red-500' : 'text-gray-500'}`
+                  }>
+                    {changeData[metric.id as keyof typeof changeData] || "+0%"} from last month
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Recent Orders Section */}
+      <RecentOrdersSection />
 
       {/* Appointments Overview */}
       <div className="space-y-4">
@@ -464,9 +715,9 @@ const Dashboard = () => {
                     {card.count}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {card.id === 'total' ? 'Items in inventory' :
-                     card.id === 'lowStock' ? 'Need attention' :
-                     'Require action'}
+                    {card.id === 'total' ? 'Total inventory items' :
+                     card.id === 'lowStock' ? 'Items need restocking' :
+                     'Items out of stock'}
                   </p>
                 </CardContent>
               </Card>
@@ -475,169 +726,115 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Dialogs remain the same... */}
-      {/* Estimates Details Dialog */}
-      <Dialog open={selectedEstimatesDialog} onOpenChange={setSelectedEstimatesDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Recent Estimates</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {estimates.recent.length > 0 ? (
-              estimates.recent.map((estimate) => (
-                <Card 
-                  key={estimate.id} 
-                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => handleEstimateClick(estimate.id)}
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+      {/* Inventory Detail Dialog */}
+      {selectedInventoryCard && selectedCardData && (
+        <Dialog open={!!selectedInventoryCard} onOpenChange={() => setSelectedInventoryCard(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{selectedCardData.title}</DialogTitle>
+            </DialogHeader>
+            <div className="max-h-96 overflow-y-auto">
+              {selectedCardData.items.length > 0 ? (
+                <div className="space-y-2">
+                  {selectedCardData.items.map((item) => (
+                    <div 
+                      key={item.id}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                      onClick={() => handleItemClick(item.id)}
+                    >
                       <div>
-                        <h4 className="font-medium">Estimate #{estimate.id.substring(0, 8)}</h4>
-                        <p className="text-sm text-gray-500">{estimate.customer_name}</p>
+                        <div className="font-medium">{item.name}</div>
+                        <div className="text-sm text-muted-foreground">{item.sku}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-lg font-semibold">${estimate.total_amount.toFixed(2)}</div>
-                        <Badge variant="outline">Estimate</Badge>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="font-medium">Created:</p>
-                        <p className="text-gray-600">{new Date(estimate.created_at).toLocaleDateString()}</p>
-                      </div>
-                      <div>
-                        <p className="font-medium">Title:</p>
-                        <p className="text-gray-600">{estimate.title}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="text-xs text-blue-600 hover:underline">
-                      Click to view estimate details →
-                    </div>
-                  </div>
-                </Card>
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                No recent estimates found
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Work Orders Details Dialog */}
-      <Dialog open={selectedWorkOrdersDialog} onOpenChange={setSelectedWorkOrdersDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Active Work Orders</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {workOrders.recent.length > 0 ? (
-              workOrders.recent.map((workOrder) => (
-                <Card 
-                  key={workOrder.id} 
-                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => handleWorkOrderClick(workOrder.id)}
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium">WO #{workOrder.id.substring(0, 8)}</h4>
-                        <p className="text-sm text-gray-500">{workOrder.customer_name}</p>
-                      </div>
-                      <div className="text-right">
-                        <Badge variant={workOrder.status === 'in_progress' ? 'default' : 'outline'}>
-                          {workOrder.status === 'in_progress' ? 'In Progress' : workOrder.status}
-                        </Badge>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="font-medium">Created:</p>
-                        <p className="text-gray-600">{new Date(workOrder.created_at).toLocaleDateString()}</p>
-                      </div>
-                      <div>
-                        <p className="font-medium">Title:</p>
-                        <p className="text-gray-600">{workOrder.title}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="text-xs text-blue-600 hover:underline">
-                      Click to view work order details →
-                    </div>
-                  </div>
-                </Card>
-              ))
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                No active work orders found
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Inventory Details Dialog */}
-      <Dialog open={!!selectedInventoryCard} onOpenChange={() => setSelectedInventoryCard(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{selectedCardData?.title}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {selectedCardData?.items && selectedCardData.items.length > 0 ? (
-              selectedCardData.items.map((item) => (
-                <Card 
-                  key={item.id} 
-                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => handleItemClick(item.id)}
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium">{item.part_name}</h4>
-                        <p className="text-sm text-gray-500">SKU: {item.sku}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-lg font-semibold ${
-                          item.quantity === 0 ? 'text-red-600' :
-                          item.quantity <= (item.reorder_level || 10) ? 'text-orange-600' : 'text-green-600'
+                        <div className={`font-medium ${
+                          item.quantity <= (item.reorder_level || 10) ? 'text-red-600' : 'text-green-600'
                         }`}>
                           {item.quantity} units
                         </div>
-                        <Badge variant={
-                          item.quantity === 0 ? 'destructive' :
-                          item.quantity <= (item.reorder_level || 10) ? 'secondary' : 'default'
-                        }>
-                          {item.quantity === 0 ? 'Out of Stock' :
-                           item.quantity <= (item.reorder_level || 10) ? 'Low Stock' : 'In Stock'}
-                        </Badge>
+                        <div className="text-sm text-muted-foreground">${item.price}</div>
                       </div>
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="font-medium">Location:</p>
-                        <p className="text-gray-600">{item.location || 'Not specified'}</p>
-                      </div>
-                      <div>
-                        <p className="font-medium">Reorder Level:</p>
-                        <p className="text-gray-600">{item.reorder_level || 'Not set'}</p>
-                      </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No items in this category
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Estimates Dialog */}
+      <Dialog open={selectedEstimatesDialog} onOpenChange={setSelectedEstimatesDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Recent Estimates</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-96 overflow-y-auto">
+            {estimates.recent.length > 0 ? (
+              <div className="space-y-2">
+                {estimates.recent.map((estimate) => (
+                  <div 
+                    key={estimate.id}
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleEstimateClick(estimate.id)}
+                  >
+                    <div>
+                      <div className="font-medium">Estimate #{estimate.id}</div>
+                      <div className="text-sm text-muted-foreground">{estimate.customer}</div>
                     </div>
-                    
-                    <div className="text-xs text-blue-600 hover:underline">
-                      Click to view item details →
+                    <div className="text-right">
+                      <Badge variant={estimate.status === 'approved' ? 'default' : 'secondary'}>
+                        {estimate.status}
+                      </Badge>
+                      <div className="text-sm text-muted-foreground mt-1">${estimate.amount}</div>
                     </div>
                   </div>
-                </Card>
-              ))
+                ))}
+              </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
-                No items found in this category
+                No recent estimates
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Work Orders Dialog */}
+      <Dialog open={selectedWorkOrdersDialog} onOpenChange={setSelectedWorkOrdersDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Active Work Orders</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-96 overflow-y-auto">
+            {workOrders.recent.length > 0 ? (
+              <div className="space-y-2">
+                {workOrders.recent.map((workOrder) => (
+                  <div 
+                    key={workOrder.id}
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleWorkOrderClick(workOrder.id)}
+                  >
+                    <div>
+                      <div className="font-medium">Work Order #{workOrder.id}</div>
+                      <div className="text-sm text-muted-foreground">{workOrder.customer}</div>
+                    </div>
+                    <div className="text-right">
+                      <Badge variant={workOrder.status === 'completed' ? 'default' : 'secondary'}>
+                        {workOrder.status}
+                      </Badge>
+                      <div className="text-sm text-muted-foreground mt-1">{workOrder.vehicle}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                No active work orders
               </div>
             )}
           </div>
