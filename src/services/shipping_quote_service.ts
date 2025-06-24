@@ -184,6 +184,10 @@ class ShippingQuoteService {
   private getAccountNumber(): string | null {
     // Directly read the Vercel environment variable
     const accountNo = import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER;
+
+    // --- NEW DEBUGGING LINE ---
+    console.log('🔍 Debug - Raw VITE_KEYSTONE_ACCOUNT_NUMBER value:', import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER);
+    
     return accountNo || null;
   }
 
