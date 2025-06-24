@@ -1,11 +1,5 @@
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client (you may need to adjust this based on your setup)
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL || '',
-  process.env.REACT_APP_SUPABASE_ANON_KEY || ''
-);
+import { getSupabaseClient } from '@/lib/supabase'; // Adjust path to match your project structure
 
 // Order interface for dashboard
 interface DashboardOrder {
@@ -58,10 +52,12 @@ export const useOrdersData = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch orders from your orders table
-      // Note: Adjust table name and columns based on your actual database schema
+      // Get Supabase client using your singleton pattern
+      const supabase = getSupabaseClient();
+
+      // Fetch orders from special_orders table
       const { data: ordersData, error: ordersError } = await supabase
-        .from('special_orders') // Adjust table name as needed
+        .from('special_orders')
         .select(`
           id,
           order_reference,
@@ -80,17 +76,17 @@ export const useOrdersData = () => {
         .order('created_at', { ascending: false });
 
       if (ordersError) {
-        throw ordersError;
+        throw new Error(`Failed to fetch orders: ${ordersError.message}`);
       }
 
       // Transform data to match our interface
       const transformedOrders: DashboardOrder[] = (ordersData || []).map(order => ({
         id: order.id,
         orderReference: order.order_reference || `ORD-${order.id}`,
-        customerName: `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim(),
+        customerName: `${order.customer_first_name || ''} ${order.customer_last_name || ''}`.trim() || 'Unknown Customer',
         customerEmail: order.customer_email || '',
         status: order.status || 'pending',
-        totalAmount: order.total_amount || 0,
+        totalAmount: parseFloat(order.total_amount) || 0,
         itemCount: order.item_count || 0,
         createdAt: order.created_at,
         updatedAt: order.updated_at,
@@ -108,10 +104,13 @@ export const useOrdersData = () => {
       const shippedOrders = transformedOrders.filter(o => o.status === 'shipped').length;
       const deliveredOrders = transformedOrders.filter(o => o.status === 'delivered').length;
       const cancelledOrders = transformedOrders.filter(o => o.status === 'cancelled').length;
+      
+      // Calculate revenue (excluding cancelled orders)
       const totalRevenue = transformedOrders
         .filter(o => o.status !== 'cancelled')
         .reduce((sum, order) => sum + order.totalAmount, 0);
-      const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+      
+      const averageOrderValue = totalOrders > 0 ? totalRevenue / (totalOrders - cancelledOrders) : 0;
 
       setSummary({
         total: totalOrders,
@@ -131,85 +130,18 @@ export const useOrdersData = () => {
       console.error('Error fetching orders data:', err);
       setError(err as Error);
       
-      // Fallback to mock data for development
-      const mockOrders: DashboardOrder[] = [
-        {
-          id: '1',
-          orderReference: 'ORD-2024-001',
-          customerName: 'John Smith',
-          customerEmail: 'john.smith@email.com',
-          status: 'pending',
-          totalAmount: 245.99,
-          itemCount: 3,
-          createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          shippingMethod: 'UPS Ground'
-        },
-        {
-          id: '2',
-          orderReference: 'ORD-2024-002',
-          customerName: 'Sarah Johnson',
-          customerEmail: 'sarah.j@email.com',
-          status: 'processing',
-          totalAmount: 189.50,
-          itemCount: 2,
-          createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-          updatedAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-          shippingMethod: 'FedEx Express',
-          trackingNumber: 'FX123456789'
-        },
-        {
-          id: '3',
-          orderReference: 'ORD-2024-003',
-          customerName: 'Mike Davis',
-          customerEmail: 'mike.davis@email.com',
-          status: 'shipped',
-          totalAmount: 567.25,
-          itemCount: 5,
-          createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-          updatedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-          shippingMethod: 'UPS Next Day',
-          trackingNumber: 'UPS987654321',
-          estimatedDelivery: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-        },
-        {
-          id: '4',
-          orderReference: 'ORD-2024-004',
-          customerName: 'Lisa Wilson',
-          customerEmail: 'lisa.wilson@email.com',
-          status: 'delivered',
-          totalAmount: 123.75,
-          itemCount: 1,
-          createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-          updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-          shippingMethod: 'USPS Priority',
-          trackingNumber: 'USPS456789123'
-        },
-        {
-          id: '5',
-          orderReference: 'ORD-2024-005',
-          customerName: 'Robert Brown',
-          customerEmail: 'robert.brown@email.com',
-          status: 'pending',
-          totalAmount: 89.99,
-          itemCount: 1,
-          createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-          updatedAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-          shippingMethod: 'Standard Shipping'
-        }
-      ];
-
-      setOrders(mockOrders);
-      setRecentOrders(mockOrders);
+      // Reset to empty state on error
+      setOrders([]);
+      setRecentOrders([]);
       setSummary({
-        total: 5,
-        pending: 2,
-        processing: 1,
-        shipped: 1,
-        delivered: 1,
+        total: 0,
+        pending: 0,
+        processing: 0,
+        shipped: 0,
+        delivered: 0,
         cancelled: 0,
-        totalRevenue: 1216.48,
-        averageOrderValue: 243.30
+        totalRevenue: 0,
+        averageOrderValue: 0
       });
     } finally {
       setLoading(false);
@@ -236,22 +168,50 @@ export const useOrdersData = () => {
     return orders.filter(order => ['pending', 'processing'].includes(order.status));
   };
 
-  // Get recent orders (last 7 days)
+  // Get recent orders (last N days)
   const getRecentOrdersInPeriod = (days: number = 7) => {
     const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     return orders.filter(order => new Date(order.createdAt) >= cutoffDate);
   };
 
+  // Get orders by date range
+  const getOrdersByDateRange = (startDate: Date, endDate: Date) => {
+    return orders.filter(order => {
+      const orderDate = new Date(order.createdAt);
+      return orderDate >= startDate && orderDate <= endDate;
+    });
+  };
+
+  // Get revenue for a specific period
+  const getRevenueForPeriod = (days: number = 30) => {
+    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    return orders
+      .filter(order => 
+        new Date(order.createdAt) >= cutoffDate && 
+        order.status !== 'cancelled'
+      )
+      .reduce((sum, order) => sum + order.totalAmount, 0);
+  };
+
   return {
+    // Data
     orders,
     summary,
     recentOrders,
     loading,
     error,
+    
+    // Actions
     refreshOrders,
+    
+    // Filters
     getOrdersByStatus,
     getOrdersRequiringAttention,
-    getRecentOrdersInPeriod
+    getRecentOrdersInPeriod,
+    getOrdersByDateRange,
+    
+    // Analytics
+    getRevenueForPeriod
   };
 };
 
