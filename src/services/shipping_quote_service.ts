@@ -94,7 +94,6 @@ class ShippingQuoteService {
   private static readonly RATE_LIMIT_MINUTES = 5; // 5 minutes between quotes
   private static readonly MAX_ITEMS_PER_REQUEST = 50;
   private static readonly STORAGE_KEY = 'shipping_quote_status';
-  private static readonly KEYSTONE_SOAP_URL = 'http://order.ekeystone.com/wselectronicorder/electronicorder.asmx';
   
   private isRateLimited: boolean = false;
   private lastQuoteTime: string | null = null;
@@ -151,7 +150,7 @@ class ShippingQuoteService {
   }
 
   /**
-   * Get current environment setting
+   * Get current environment setting (same as working price check service)
    */
   private getCurrentEnvironment(): 'development' | 'production' {
     try {
@@ -185,7 +184,7 @@ class ShippingQuoteService {
     // Directly read the Vercel environment variable
     const accountNo = import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER;
 
-    // --- NEW DEBUGGING LINE ---
+    // --- DEBUGGING LINE ---
     console.log('🔍 Debug - Raw VITE_KEYSTONE_ACCOUNT_NUMBER value:', import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER);
     
     return accountNo || null;
@@ -345,105 +344,142 @@ class ShippingQuoteService {
   }
 
   /**
-   * Create SOAP envelope for GetShippingOptionsMultiplePartsPerWarehouse
+   * Call Keystone shipping API through DigitalOcean proxy (following working pattern)
    */
-  private createSOAPEnvelope(securityKey: string, accountNumber: string, partNumbersQty: string, toZip: string): string {
-    return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-               xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
-               xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <GetShippingOptionsMultiplePartsPerWarehouse xmlns="http://eKeystone.com">
-      <Key>${securityKey}</Key>
-      <FullAccountNo>${accountNumber}</FullAccountNo>
-      <PartNumbersQty>${partNumbersQty}</PartNumbersQty>
-      <ToZip>${toZip}</ToZip>
-    </GetShippingOptionsMultiplePartsPerWarehouse>
-  </soap:Body>
-</soap:Envelope>`;
-  }
+  private async callKeystoneShippingAPI(request: ShippingQuoteRequest): Promise<ShippingOption[]> {
+    const environment = this.getCurrentEnvironment();
+    const securityKey = this.getApiToken();
+    const accountNumber = this.getAccountNumber();
+    const proxyUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL;
 
-  /**
-   * Format items for Keystone PartNumbersQty parameter
-   */
-  private formatPartNumbersQty(items: ShippingQuoteItem[]): string {
-    return items.map(item => `K,${item.vcpn},${item.quantity}`).join('|');
-  }
+    // --- DEBUGGING LOGS START ---
+    console.log('🔍 Debug - Environment:', environment);
+    console.log('🔍 Debug - Security Key:', securityKey ? 'Present' : 'Missing');
+    console.log('🔍 Debug - Account Number:', accountNumber ? 'Present' : 'Missing');
+    console.log('🔍 Debug - Proxy URL:', proxyUrl);
+    // --- DEBUGGING LOGS END ---
 
-  /**
-   * Parse SOAP response and extract shipping options
-   */
-  private parseSOAPResponse(soapResponse: string): ShippingOption[] {
-    console.log('🔍 Parsing SOAP response from Keystone');
-    
+    // ALWAYS use mock data in development mode (same as working price check service)
+    if (environment === 'development') {
+      console.log('🧪 Development mode detected - using mock shipping data');
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      return this.generateMockShippingOptions(request.items, request.shippingAddress);
+    }
+
+    // Production mode - try real API through proxy
+    if (!securityKey || !accountNumber || !proxyUrl) {
+      throw new Error('Missing required environment variables for Keystone API');
+    }
+
     try {
-      // Parse the XML response
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(soapResponse, 'text/xml');
+      // Use the proxy pattern from working price check service
+      const endpoint = '/shipping/options'; // Shipping endpoint path
+      const fullUrl = `${proxyUrl}${endpoint}`;
       
-      // Check for SOAP faults
-      const faultNode = xmlDoc.querySelector('soap\\:Fault, Fault');
-      if (faultNode) {
-        const faultString = faultNode.querySelector('faultstring')?.textContent || 'Unknown SOAP fault';
-        throw new Error(`SOAP Fault: ${faultString}`);
-      }
+      console.log(`🔄 Making shipping quote request to: ${fullUrl}`);
+      console.log(`📦 Getting shipping quotes for ${request.items.length} items to ${request.shippingAddress.city}, ${request.shippingAddress.state}`);
+      
+      const requestBody = {
+        accountNumber: accountNumber,
+        items: request.items.map(item => ({
+          vcpn: item.vcpn,
+          quantity: item.quantity,
+          warehouseId: item.warehouseId
+        })),
+        shippingAddress: {
+          address1: request.shippingAddress.address1,
+          address2: request.shippingAddress.address2,
+          city: request.shippingAddress.city,
+          state: request.shippingAddress.state,
+          zipCode: request.shippingAddress.zipCode,
+          country: request.shippingAddress.country
+        },
+        includeInsurance: request.includeInsurance || false,
+        includeSignature: request.includeSignature || false,
+        preferredCarriers: request.preferredCarriers
+      };
 
-      // Extract the dataset from the response
-      const resultNode = xmlDoc.querySelector('GetShippingOptionsMultiplePartsPerWarehouseResult');
-      if (!resultNode) {
-        throw new Error('No result found in SOAP response');
-      }
+      console.log('🔍 Request Body:', JSON.stringify(requestBody, null, 2));
 
-      // Parse the dataset tables
-      const options: ShippingOption[] = [];
-      
-      // Look for warehouse-specific tables (Warehouse_[Name]_[Number])
-      const warehouseTables = xmlDoc.querySelectorAll('Table[TableName*="Warehouse_"]');
-      
-      warehouseTables.forEach((table, index) => {
-        const tableName = table.getAttribute('TableName') || '';
-        const warehouseMatch = tableName.match(/Warehouse_(.+)_(\d+)/);
-        
-        if (warehouseMatch) {
-          const warehouseName = warehouseMatch[1];
-          const warehouseId = warehouseMatch[2];
-          
-          // Parse rows in this warehouse table
-          const rows = table.querySelectorAll('Row');
-          rows.forEach(row => {
-            const shipVia = row.querySelector('ShipVia')?.textContent || '';
-            const serviceLevel = row.querySelector('ServiceLevel')?.textContent || '';
-            const description = row.querySelector('Description')?.textContent || '';
-            const totalFreightCharge = parseFloat(row.querySelector('TotalFreightCharge')?.textContent || '0');
-            
-            if (shipVia && serviceLevel) {
-              options.push({
-                carrierId: shipVia,
-                carrierName: this.getCarrierName(shipVia),
-                serviceCode: serviceLevel,
-                serviceName: description || serviceLevel,
-                cost: totalFreightCharge,
-                currency: 'USD',
-                estimatedDeliveryDays: this.getEstimatedDays(serviceLevel),
-                trackingAvailable: true,
-                insuranceAvailable: true,
-                signatureRequired: serviceLevel.includes('overnight') || serviceLevel.includes('express'),
-                warehouseId: warehouseId,
-                warehouseName: warehouseName,
-                warehouseLocation: this.getWarehouseLocation(warehouseId)
-              });
-            }
-          });
-        }
+      const response = await fetch(fullUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${securityKey}`,
+        },
+        body: JSON.stringify(requestBody)
       });
 
-      console.log(`✅ Parsed ${options.length} shipping options from Keystone SOAP response`);
-      return options.sort((a, b) => a.cost - b.cost);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ HTTP ${response.status}: ${errorText}`);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('🔍 API Response:', data);
+
+      // Transform the response to match our ShippingOption interface
+      const shippingOptions = this.transformAPIResponse(data);
       
+      console.log(`✅ Successfully retrieved ${shippingOptions.length} shipping options from Keystone API`);
+      return shippingOptions;
+
     } catch (error) {
-      console.error('❌ Error parsing SOAP response:', error);
-      throw new Error(`Failed to parse SOAP response: ${error.message}`);
+      console.error('❌ Error calling Keystone shipping API:', error);
+      
+      if (environment === 'development') {
+        console.log('🔄 Falling back to mock shipping options due to API error');
+        return this.generateMockShippingOptions(request.items, request.shippingAddress);
+      } else {
+        throw error;
+      }
     }
+  }
+
+  /**
+   * Transform API response to ShippingOption format
+   */
+  private transformAPIResponse(apiResponse: any): ShippingOption[] {
+    try {
+      // Handle different possible response formats
+      const options = apiResponse.shippingOptions || apiResponse.options || apiResponse.data || apiResponse;
+      
+      if (!Array.isArray(options)) {
+        console.warn('API response is not an array, attempting to extract options');
+        return [];
+      }
+
+      return options.map((option: any) => ({
+        carrierId: option.carrierId || option.carrier_id || option.shipVia || 'unknown',
+        carrierName: option.carrierName || option.carrier_name || this.getCarrierName(option.carrierId || option.shipVia) || 'Unknown Carrier',
+        serviceCode: option.serviceCode || option.service_code || option.serviceLevel || 'standard',
+        serviceName: option.serviceName || option.service_name || option.description || 'Standard Service',
+        cost: parseFloat(option.cost || option.totalFreightCharge || option.price || 0),
+        currency: option.currency || 'USD',
+        estimatedDeliveryDays: parseInt(option.estimatedDeliveryDays || option.delivery_days || option.transitDays || 5),
+        estimatedDeliveryDate: option.estimatedDeliveryDate || option.delivery_date || this.calculateDeliveryDate(parseInt(option.estimatedDeliveryDays || 5)),
+        trackingAvailable: option.trackingAvailable !== false,
+        insuranceAvailable: option.insuranceAvailable !== false,
+        signatureRequired: option.signatureRequired === true,
+        warehouseId: option.warehouseId || option.warehouse_id || 'main',
+        warehouseName: option.warehouseName || option.warehouse_name || 'Main Warehouse',
+        warehouseLocation: option.warehouseLocation || option.warehouse_location || this.getWarehouseLocation(option.warehouseId || 'main')
+      })).sort((a, b) => a.cost - b.cost);
+
+    } catch (error) {
+      console.error('❌ Error transforming API response:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Calculate delivery date based on estimated days
+   */
+  private calculateDeliveryDate(days: number): string {
+    const deliveryDate = new Date();
+    deliveryDate.setDate(deliveryDate.getDate() + days);
+    return deliveryDate.toISOString();
   }
 
   /**
@@ -456,7 +492,11 @@ class ShippingQuoteService {
       '6': 'Keystone Truck',
       '7': 'USPS',
       '8': 'UPS Mail Innovations',
-      'L': 'LTL Freight'
+      'L': 'LTL Freight',
+      'ups': 'UPS',
+      'fedex': 'FedEx',
+      'usps': 'USPS',
+      'dhl': 'DHL'
     };
     return carrierMap[shipVia] || `Carrier ${shipVia}`;
   }
@@ -489,79 +529,13 @@ class ShippingQuoteService {
       '45': 'Spokane, Washington',
       '50': 'Flower Mound, Texas',
       '55': 'Dallas-Fort Worth, Texas',
-      '60': 'Brownstown, Michigan'
+      '60': 'Brownstown, Michigan',
+      'main': 'Main Warehouse',
+      'wh001': 'Los Angeles, CA',
+      'wh002': 'Atlanta, GA',
+      'wh003': 'Chicago, IL'
     };
     return warehouseMap[warehouseId] || `Warehouse ${warehouseId}`;
-  }
-
-  /**
-   * Call Keystone SOAP API for shipping quotes
-   */
-  private async callKeystoneSOAPAPI(request: ShippingQuoteRequest): Promise<ShippingOption[]> {
-    const securityKey = this.getApiToken();
-    const accountNumber = this.getAccountNumber();
-    const environment = this.getCurrentEnvironment();
-
-    // --- DEBUGGING LOGS START ---
-    console.log('🔍 Debug - Environment:', environment);
-    console.log('🔍 Debug - Security Key:', securityKey ? 'Present' : 'Missing');
-    console.log('🔍 Debug - Account Number:', accountNumber ? 'Present' : 'Missing');
-    console.log('🔍 Debug - SOAP URL:', ShippingQuoteService.KEYSTONE_SOAP_URL);
-    // --- DEBUGGING LOGS END ---
-
-    if (!securityKey || !accountNumber) {
-      if (environment === 'production') {
-        throw new Error('Missing required Keystone API credentials for production environment');
-      }
-      
-      console.log('🔄 Falling back to mock shipping options in development mode');
-      return this.generateMockShippingOptions(request.items, request.shippingAddress);
-    }
-
-    try {
-      // Format the request data
-      const partNumbersQty = this.formatPartNumbersQty(request.items);
-      const toZip = request.shippingAddress.zipCode;
-
-      // Create SOAP envelope
-      const soapEnvelope = this.createSOAPEnvelope(securityKey, accountNumber, partNumbersQty, toZip);
-      
-      console.log('🔍 SOAP Envelope:', soapEnvelope);
-
-      // Make the SOAP request
-      console.log('🔄 Making SOAP request to Keystone API...');
-      const response = await fetch(ShippingQuoteService.KEYSTONE_SOAP_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/xml; charset=utf-8',
-          'SOAPAction': 'http://eKeystone.com/GetShippingOptionsMultiplePartsPerWarehouse'
-        },
-        body: soapEnvelope
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const responseText = await response.text();
-      console.log('🔍 SOAP Response:', responseText);
-
-      // Parse the SOAP response
-      const shippingOptions = this.parseSOAPResponse(responseText);
-      
-      console.log(`✅ Successfully retrieved ${shippingOptions.length} shipping options from Keystone SOAP API`);
-      return shippingOptions;
-
-    } catch (error) {
-      console.error('❌ Error calling Keystone SOAP API:', error);
-      
-      if (environment === 'development') {
-        console.log('🔄 Falling back to mock shipping options due to API error');
-        return this.generateMockShippingOptions(request.items, request.shippingAddress);
-      } else {
-        throw error;
-      }
-    }
   }
 
   /**
@@ -596,9 +570,9 @@ class ShippingQuoteService {
       const { data, error } = await supabase
         .from('keystone_api_logs')
         .insert({
-          method_name: 'GetShippingOptionsMultiplePartsPerWarehouse',
-          endpoint: 'GetShippingOptionsMultiplePartsPerWarehouse',
-          method: 'SOAP',
+          method_name: 'GetShippingOptions',
+          endpoint: '/shipping/options',
+          method: 'POST',
           request_data: {
             itemCount: request.items.length,
             shippingAddress: request.shippingAddress,
@@ -665,11 +639,13 @@ class ShippingQuoteService {
     try {
       console.log(`📦 Getting shipping quotes for ${request.items.length} items to ${request.shippingAddress.city}, ${request.shippingAddress.state}`);
 
-      // Call Keystone SOAP API
-      const shippingOptions = await this.callKeystoneSOAPAPI(request);
+      // Call Keystone API through proxy
+      const shippingOptions = await this.callKeystoneShippingAPI(request);
 
-      // Set rate limit after successful quote
-      this.setRateLimit();
+      // Set rate limit after successful quote (only in production)
+      if (this.getCurrentEnvironment() === 'production') {
+        this.setRateLimit();
+      }
 
       // Add to history
       this.addToHistory(request, shippingOptions.length, true);
