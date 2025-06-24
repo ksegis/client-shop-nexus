@@ -185,6 +185,7 @@ const CustomerSearchComponent = ({
     onCustomerSelect(customer);
     setSearchQuery(customer.display_name);
     setShowResults(false);
+    setSearchResults([]); // Clear search results after selection
   };
 
   const clearSelection = () => {
@@ -240,8 +241,8 @@ const CustomerSearchComponent = ({
           </div>
         )}
 
-        {/* No Results Message */}
-        {showResults && searchResults.length === 0 && searchQuery.length >= 2 && !isSearching && (
+        {/* No Results Message - FIXED: Only show when no customer is selected */}
+        {showResults && searchResults.length === 0 && searchQuery.length >= 2 && !isSearching && !selectedCustomer && (
           <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-4 text-center text-gray-500">
             <UserPlus className="h-8 w-8 mx-auto mb-2 text-gray-400" />
             <div className="text-sm">No existing customers found</div>
@@ -255,7 +256,7 @@ const CustomerSearchComponent = ({
         <div className="bg-green-50 border border-green-200 rounded-lg p-3">
           <div className="flex items-center gap-2 mb-2">
             <CheckCircle className="h-4 w-4 text-green-600" />
-            <span className="text-sm font-medium text-green-800">Customer Selected</span>
+            <span className="text-sm font-medium text-green-800">Existing Customer Selected</span>
           </div>
           <div className="text-sm space-y-1">
             <div className="font-medium">{selectedCustomer.display_name}</div>
@@ -263,6 +264,9 @@ const CustomerSearchComponent = ({
             {selectedCustomer.phone && (
               <div className="text-gray-600">{selectedCustomer.phone}</div>
             )}
+          </div>
+          <div className="text-xs text-green-600 mt-2">
+            ✓ Customer information will be used for this order
           </div>
         </div>
       )}
@@ -468,25 +472,18 @@ const ShippingOptionsDisplay = ({
       <div className="text-xs text-muted-foreground bg-gray-50 p-3 rounded-lg">
         <div className="flex items-center gap-1 mb-1">
           <Shield className="h-3 w-3" />
-          <span className="font-medium">Shipping Information</span>
+          <span className="font-medium">Shipping Protection</span>
         </div>
-        <ul className="space-y-1 ml-4">
-          <li>• All shipping options include tracking</li>
-          <li>• Delivery times are business days</li>
-          <li>• Insurance available for valuable items</li>
-          <li>• Prices are estimates and may vary</li>
-        </ul>
+        <div>All shipments include tracking and insurance coverage up to $100.</div>
       </div>
     </div>
   );
 };
 
-// Special Orders Component with Customer Lookup
-const SpecialOrdersTab = () => {
-  const { items, clearCart, total } = useCart();
+// Special Orders Component
+const SpecialOrders = () => {
+  const { items, total, clearCart } = useCart();
   const { toast } = useToast();
-  
-  // State for checkout process
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerSearchResult | null>(null);
   const [customer, setCustomer] = useState<Customer>({
@@ -904,7 +901,7 @@ const SpecialOrdersTab = () => {
                       </Button>
                       <Button 
                         onClick={() => setCurrentStep(3)}
-                        disabled={!customer.firstName || !customer.lastName || !customer.email || !customer.phone}
+                        disabled={!customer.firstName || !customer.lastName || !customer.email}
                         className="flex-1"
                       >
                         Continue to Shipping
@@ -913,14 +910,18 @@ const SpecialOrdersTab = () => {
                   </div>
                 )}
 
-                {/* Step 3: Shipping Information */}
+                {/* Step 3: Shipping Address and Options */}
                 {currentStep === 3 && (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     <h3 className="text-lg font-semibold">Shipping Information</h3>
                     
-                    {/* Shipping Address */}
+                    {/* Shipping Address Form */}
                     <div className="space-y-4">
-                      <h4 className="font-medium">Shipping Address</h4>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        <Label className="text-sm font-medium">Shipping Address</Label>
+                      </div>
+                      
                       <div className="grid grid-cols-1 gap-4">
                         <div>
                           <Label htmlFor="street">Street Address</Label>
@@ -931,7 +932,7 @@ const SpecialOrdersTab = () => {
                             required
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                           <div>
                             <Label htmlFor="city">City</Label>
                             <Input
@@ -950,8 +951,6 @@ const SpecialOrdersTab = () => {
                               required
                             />
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label htmlFor="zipCode">ZIP Code</Label>
                             <Input
@@ -961,21 +960,9 @@ const SpecialOrdersTab = () => {
                               required
                             />
                           </div>
-                          <div>
-                            <Label htmlFor="country">Country</Label>
-                            <Select value={shippingAddress.country} onValueChange={(value) => setShippingAddress(prev => ({ ...prev, country: value }))}>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="US">United States</SelectItem>
-                                <SelectItem value="CA">Canada</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
                         </div>
                       </div>
-
+                      
                       <Button 
                         onClick={loadShippingQuotes}
                         disabled={isLoadingShipping || !shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode}
@@ -989,14 +976,16 @@ const SpecialOrdersTab = () => {
                         ) : (
                           <>
                             <Truck className="h-4 w-4 mr-2" />
-                            Get Shipping Quotes
+                            Get Shipping Options
                           </>
                         )}
                       </Button>
+                    </div>
 
-                      {/* Enhanced Shipping Options Display */}
+                    {/* Shipping Options */}
+                    <div className="space-y-4">
                       {shippingOptions.length > 0 && (
-                        <ShippingOptionsDisplay
+                        <ShippingOptionsDisplay 
                           shippingOptions={shippingOptions}
                           selectedShipping={selectedShipping}
                           onShippingSelect={setSelectedShipping}
@@ -1446,7 +1435,7 @@ const Parts = () => {
       keystone_synced: true,
       keystone_last_sync: '2024-01-21T11:30:00Z',
       warehouse: 'Main',
-      location: 'G-14-C',
+      location: 'G-07-C',
       brand: 'SensorTech',
       weight: 0.3,
       dimensions: '3x3x2 inches',
@@ -1457,21 +1446,31 @@ const Parts = () => {
   ];
 
   // Get unique categories
-  const categories = ['all', ...Array.from(new Set(mockParts.map(part => part.category)))];
+  const categories = useMemo(() => {
+    const cats = Array.from(new Set(mockParts.map(part => part.category).filter(Boolean)));
+    return ['all', ...cats.sort()];
+  }, []);
 
   // Filter and sort parts
   const filteredParts = useMemo(() => {
     let filtered = mockParts.filter(part => {
-      const matchesSearch = part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           part.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           part.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           part.id.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesCategory = selectedCategory === 'all' || part.category === selectedCategory;
-      const matchesPrice = part.price >= priceRange[0] && part.price <= priceRange[1];
-      const matchesFavorites = !showFavoritesOnly || favorites.has(part.id);
-      
-      return matchesSearch && matchesCategory && matchesPrice && matchesFavorites;
+      // Search filter
+      const searchMatch = !searchTerm || 
+        part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        part.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        part.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        part.brand?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      // Category filter
+      const categoryMatch = selectedCategory === 'all' || part.category === selectedCategory;
+
+      // Price filter
+      const priceMatch = part.price >= priceRange[0] && part.price <= priceRange[1];
+
+      // Favorites filter
+      const favoritesMatch = !showFavoritesOnly || favorites.has(part.id);
+
+      return searchMatch && categoryMatch && priceMatch && favoritesMatch;
     });
 
     // Sort parts
@@ -1479,6 +1478,10 @@ const Parts = () => {
       let aValue, bValue;
       
       switch (sortBy) {
+        case 'name':
+          aValue = a.name;
+          bValue = b.name;
+          break;
         case 'price':
           aValue = a.price;
           bValue = b.price;
@@ -1496,8 +1499,8 @@ const Parts = () => {
           bValue = new Date(b.updated_at).getTime();
           break;
         default:
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
+          aValue = a.name;
+          bValue = b.name;
       }
       
       if (typeof aValue === 'string') {
@@ -1915,143 +1918,153 @@ const Parts = () => {
 
         {/* Special Orders Tab Content */}
         <TabsContent value="special-orders">
-          <SpecialOrdersTab />
+          <SpecialOrders />
         </TabsContent>
       </Tabs>
 
-      {/* Part Detail Dialog */}
-      {selectedPart && (
-        <Dialog open={!!selectedPart} onOpenChange={() => setSelectedPart(null)}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{selectedPart.name}</DialogTitle>
-              <DialogDescription>{selectedPart.description}</DialogDescription>
-            </DialogHeader>
-            
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-4">
+      {/* Part Details Modal */}
+      <Dialog open={!!selectedPart} onOpenChange={() => setSelectedPart(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedPart?.name}</DialogTitle>
+            <DialogDescription>
+              Detailed part information and specifications
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedPart && (
+            <div className="space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h4 className="font-semibold mb-2">Basic Information</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">SKU:</span>
-                      <span className="font-mono">{selectedPart.sku}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Category:</span>
-                      <span>{selectedPart.category}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Brand:</span>
-                      <span>{selectedPart.brand}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Supplier:</span>
-                      <span>{selectedPart.supplier}</span>
-                    </div>
-                  </div>
+                  <Label className="text-sm font-medium">SKU</Label>
+                  <div className="font-mono text-sm">{selectedPart.sku}</div>
                 </div>
-
                 <div>
-                  <h4 className="font-semibold mb-2">Inventory</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Stock:</span>
-                      <span className={selectedPart.quantity <= selectedPart.reorder_level ? 'text-red-600 font-medium' : ''}>
-                        {selectedPart.quantity} units
-                      </span>
+                  <Label className="text-sm font-medium">Category</Label>
+                  <div className="text-sm">{selectedPart.category}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Brand</Label>
+                  <div className="text-sm">{selectedPart.brand || 'N/A'}</div>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Supplier</Label>
+                  <div className="text-sm">{selectedPart.supplier || 'N/A'}</div>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <Label className="text-sm font-medium">Description</Label>
+                <div className="text-sm text-muted-foreground mt-1">
+                  {selectedPart.description || 'No description available'}
+                </div>
+              </div>
+
+              {/* Pricing and Stock */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium">Pricing</Label>
+                  <PricingDisplay part={selectedPart} className="mt-1" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Stock Information</Label>
+                  <div className="mt-1 space-y-1">
+                    <div className={`text-sm font-medium ${
+                      selectedPart.quantity <= selectedPart.reorder_level ? 'text-red-600' : 'text-green-600'
+                    }`}>
+                      {selectedPart.quantity} units in stock
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Reorder Level:</span>
-                      <span>{selectedPart.reorder_level}</span>
+                    <div className="text-xs text-muted-foreground">
+                      Reorder level: {selectedPart.reorder_level}
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Location:</span>
-                      <span>{selectedPart.warehouse} - {selectedPart.location}</span>
-                    </div>
+                    {selectedPart.warehouse && (
+                      <div className="text-xs text-muted-foreground">
+                        Location: {selectedPart.warehouse} - {selectedPart.location}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-semibold mb-2">Pricing</h4>
-                  <PricingDisplay part={selectedPart} />
-                  {selectedPart.core_charge && (
-                    <div className="text-sm text-muted-foreground mt-2">
-                      Core Charge: ${selectedPart.core_charge}
+              {/* Physical Properties */}
+              {(selectedPart.weight || selectedPart.dimensions || selectedPart.warranty) && (
+                <div className="grid grid-cols-3 gap-4">
+                  {selectedPart.weight && (
+                    <div>
+                      <Label className="text-sm font-medium">Weight</Label>
+                      <div className="text-sm">{selectedPart.weight} lbs</div>
+                    </div>
+                  )}
+                  {selectedPart.dimensions && (
+                    <div>
+                      <Label className="text-sm font-medium">Dimensions</Label>
+                      <div className="text-sm">{selectedPart.dimensions}</div>
+                    </div>
+                  )}
+                  {selectedPart.warranty && (
+                    <div>
+                      <Label className="text-sm font-medium">Warranty</Label>
+                      <div className="text-sm">{selectedPart.warranty}</div>
                     </div>
                   )}
                 </div>
+              )}
 
+              {/* Keystone Integration */}
+              {selectedPart.keystone_vcpn && (
                 <div>
-                  <h4 className="font-semibold mb-2">Physical Details</h4>
-                  <div className="space-y-2 text-sm">
-                    {selectedPart.weight && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Weight:</span>
-                        <span>{selectedPart.weight} lbs</span>
-                      </div>
-                    )}
-                    {selectedPart.dimensions && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Dimensions:</span>
-                        <span>{selectedPart.dimensions}</span>
-                      </div>
-                    )}
-                    {selectedPart.warranty && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Warranty:</span>
-                        <span>{selectedPart.warranty}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold mb-2">Keystone Integration</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">VCPN:</span>
-                      <span className="font-mono">{selectedPart.keystone_vcpn || 'N/A'}</span>
+                  <Label className="text-sm font-medium">Keystone Integration</Label>
+                  <div className="mt-1 space-y-1">
+                    <div className="text-sm">
+                      VCPN: <span className="font-mono">{selectedPart.keystone_vcpn}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Synced:</span>
+                    <div className="flex items-center gap-2">
                       <Badge variant={selectedPart.keystone_synced ? "default" : "secondary"} className="text-xs">
-                        {selectedPart.keystone_synced ? 'Yes' : 'No'}
+                        {selectedPart.keystone_synced ? 'Synced' : 'Not Synced'}
                       </Badge>
+                      {selectedPart.keystone_last_sync && (
+                        <span className="text-xs text-muted-foreground">
+                          Last sync: {new Date(selectedPart.keystone_last_sync).toLocaleDateString()}
+                        </span>
+                      )}
                     </div>
-                    {selectedPart.keystone_last_sync && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Last Sync:</span>
-                        <span>{new Date(selectedPart.keystone_last_sync).toLocaleDateString()}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
+              )}
+
+              {/* Core Charge */}
+              {selectedPart.core_charge && (
+                <div>
+                  <Label className="text-sm font-medium">Core Charge</Label>
+                  <div className="text-sm">${selectedPart.core_charge.toFixed(2)}</div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-4 border-t">
+                <AddToCartButton 
+                  part={{
+                    id: selectedPart.id,
+                    name: selectedPart.name,
+                    price: selectedPart.price,
+                    quantity: selectedPart.quantity
+                  }}
+                  className="flex-1"
+                  disabled={selectedPart.quantity === 0}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => toggleFavorite(selectedPart.id)}
+                >
+                  <Heart className={`h-4 w-4 ${favorites.has(selectedPart.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                </Button>
               </div>
             </div>
-
-            <div className="flex gap-2 pt-4">
-              <AddToCartButton 
-                part={{
-                  id: selectedPart.id,
-                  name: selectedPart.name,
-                  price: selectedPart.price,
-                  quantity: selectedPart.quantity
-                }}
-                className="flex-1"
-              />
-              <Button
-                variant="outline"
-                onClick={() => toggleFavorite(selectedPart.id)}
-              >
-                <Heart className={`h-4 w-4 ${favorites.has(selectedPart.id) ? 'fill-red-500 text-red-500' : ''}`} />
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
