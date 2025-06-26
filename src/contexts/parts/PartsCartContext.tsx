@@ -1,120 +1,292 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useToast } from "@/hooks/use-toast";
+import { kitComponentService, KitComponent } from '@/services/kit_component_service';
 
-import { createContext, useContext, useState, ReactNode } from 'react';
-import { Part } from '@/types/parts';
-import { useToast } from '@/hooks/use-toast';
-
+// Cart item interface with kit support
 export interface CartItem {
-  part: Part;
+  id: string;
+  name: string;
+  price: number;
   quantity: number;
+  maxQuantity?: number;
+  isKit?: boolean;
+  kitComponents?: KitComponent[];
+  kitComponentsLoaded?: boolean;
 }
 
-interface PartsCartContextType {
-  cart: CartItem[];
-  addToCart: (part: Part, quantity: number) => void;
-  removeFromCart: (partId: string) => void;
-  updateQuantity: (partId: string, quantity: number) => void;
+// Cart context interface
+interface CartContextType {
+  items: CartItem[];
+  total: number;
+  itemCount: number;
+  addItem: (item: Omit<CartItem, 'quantity'>, quantity?: number) => Promise<void>;
+  removeItem: (id: string) => void;
+  updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
-  getCartTotal: () => number;
-  getCartItemCount: () => number;
-  isInCart: (partId: string) => boolean;
+  isLoading: boolean;
+  kitExpansionEnabled: boolean;
+  setKitExpansionEnabled: (enabled: boolean) => void;
+  loadKitComponents: (itemId: string) => Promise<void>;
+  getKitPreview: (itemId: string) => KitComponent[] | null;
 }
 
-const PartsCartContext = createContext<PartsCartContextType | undefined>(undefined);
+// Create context
+const CartContext = createContext<CartContextType | undefined>(undefined);
 
-export const PartsCartProvider = ({ children }: { children: ReactNode }) => {
-  const [cart, setCart] = useState<CartItem[]>([]);
+// Cart provider component
+export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [kitExpansionEnabled, setKitExpansionEnabled] = useState(true); // Default to enabled
   const { toast } = useToast();
 
-  const addToCart = (part: Part, quantity: number) => {
-    const existingItem = cart.find(item => item.part.id === part.id);
-    
-    if (existingItem) {
-      // Update quantity if already in cart
-      updateQuantity(part.id, existingItem.quantity + quantity);
-      toast({
-        title: "Cart updated",
-        description: `Updated quantity of ${part.name} in your cart.`,
-      });
-    } else {
-      // Add new item to cart
-      setCart([...cart, { part, quantity }]);
-      toast({
-        title: "Added to cart",
-        description: `${part.name} has been added to your cart.`,
-      });
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    const savedCart = localStorage.getItem('cart');
+    if (savedCart) {
+      try {
+        const parsedCart = JSON.parse(savedCart);
+        setItems(parsedCart);
+      } catch (error) {
+        console.error('Error loading cart from localStorage:', error);
+      }
+    }
+
+    // Load kit expansion setting
+    const savedKitExpansion = localStorage.getItem('kitExpansionEnabled');
+    if (savedKitExpansion !== null) {
+      setKitExpansionEnabled(JSON.parse(savedKitExpansion));
+    }
+  }, []);
+
+  // Save cart to localStorage whenever items change
+  useEffect(() => {
+    localStorage.setItem('cart', JSON.stringify(items));
+  }, [items]);
+
+  // Save kit expansion setting
+  useEffect(() => {
+    localStorage.setItem('kitExpansionEnabled', JSON.stringify(kitExpansionEnabled));
+  }, [kitExpansionEnabled]);
+
+  // Check if an item is a kit
+  const checkIfKit = async (itemId: string): Promise<boolean> => {
+    try {
+      return await kitComponentService.isKit(itemId);
+    } catch (error) {
+      console.error('Error checking if item is kit:', error);
+      return false;
     }
   };
 
-  const removeFromCart = (partId: string) => {
-    const updatedCart = cart.filter(item => item.part.id !== partId);
-    setCart(updatedCart);
-    toast({
-      title: "Removed from cart",
-      description: "Item has been removed from your cart.",
+  // Load kit components for an item
+  const loadKitComponents = async (itemId: string): Promise<void> => {
+    try {
+      setIsLoading(true);
+      const response = await kitComponentService.getKitComponentsWithCache(itemId);
+      
+      if (response.success) {
+        setItems(prevItems => 
+          prevItems.map(item => 
+            item.id === itemId 
+              ? { 
+                  ...item, 
+                  kitComponents: response.components,
+                  kitComponentsLoaded: true 
+                }
+              : item
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error loading kit components:', error);
+      toast({
+        title: "Kit Components Error",
+        description: "Failed to load kit components",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Get kit preview for an item
+  const getKitPreview = (itemId: string): KitComponent[] | null => {
+    const item = items.find(item => item.id === itemId);
+    return item?.kitComponents || null;
+  };
+
+  // Add item to cart with kit detection
+  const addItem = async (newItem: Omit<CartItem, 'quantity'>, quantity: number = 1): Promise<void> => {
+    try {
+      setIsLoading(true);
+
+      // Check if item is a kit
+      const isKit = await checkIfKit(newItem.id);
+      
+      // Load kit components if it's a kit and expansion is enabled
+      let kitComponents: KitComponent[] = [];
+      let kitComponentsLoaded = false;
+      
+      if (isKit && kitExpansionEnabled) {
+        const response = await kitComponentService.getKitComponentsWithCache(newItem.id);
+        if (response.success) {
+          kitComponents = response.components;
+          kitComponentsLoaded = true;
+        }
+      }
+
+      setItems(prevItems => {
+        const existingItemIndex = prevItems.findIndex(item => item.id === newItem.id);
+        
+        if (existingItemIndex >= 0) {
+          // Update existing item
+          const updatedItems = [...prevItems];
+          const existingItem = updatedItems[existingItemIndex];
+          const newQuantity = existingItem.quantity + quantity;
+          
+          // Check max quantity constraint
+          if (newItem.maxQuantity && newQuantity > newItem.maxQuantity) {
+            toast({
+              title: "Quantity Limit Reached",
+              description: `Cannot add more than ${newItem.maxQuantity} of this item`,
+              variant: "destructive"
+            });
+            return prevItems;
+          }
+          
+          updatedItems[existingItemIndex] = {
+            ...existingItem,
+            quantity: newQuantity,
+            isKit,
+            kitComponents: kitComponentsLoaded ? kitComponents : existingItem.kitComponents,
+            kitComponentsLoaded: kitComponentsLoaded || existingItem.kitComponentsLoaded
+          };
+          
+          return updatedItems;
+        } else {
+          // Add new item
+          const cartItem: CartItem = {
+            ...newItem,
+            quantity,
+            isKit,
+            kitComponents: kitComponentsLoaded ? kitComponents : undefined,
+            kitComponentsLoaded
+          };
+          
+          return [...prevItems, cartItem];
+        }
+      });
+
+      // Show success message with kit info
+      const message = isKit 
+        ? `Added ${newItem.name} (Kit with ${kitComponents.length} components) to cart`
+        : `Added ${newItem.name} to cart`;
+        
+      toast({
+        title: "Added to Cart",
+        description: message
+      });
+
+    } catch (error) {
+      console.error('Error adding item to cart:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add item to cart",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Remove item from cart
+  const removeItem = (id: string) => {
+    setItems(prevItems => {
+      const item = prevItems.find(item => item.id === id);
+      const updatedItems = prevItems.filter(item => item.id !== id);
+      
+      if (item) {
+        toast({
+          title: "Removed from Cart",
+          description: `${item.name} removed from cart`
+        });
+      }
+      
+      return updatedItems;
     });
   };
 
-  const updateQuantity = (partId: string, quantity: number) => {
+  // Update item quantity
+  const updateQuantity = (id: string, quantity: number) => {
     if (quantity <= 0) {
-      removeFromCart(partId);
+      removeItem(id);
       return;
     }
 
-    const updatedCart = cart.map(item => 
-      item.part.id === partId 
-        ? { ...item, quantity: Math.min(quantity, item.part.quantity) } 
-        : item
+    setItems(prevItems => 
+      prevItems.map(item => {
+        if (item.id === id) {
+          // Check max quantity constraint
+          if (item.maxQuantity && quantity > item.maxQuantity) {
+            toast({
+              title: "Quantity Limit",
+              description: `Maximum quantity for this item is ${item.maxQuantity}`,
+              variant: "destructive"
+            });
+            return item;
+          }
+          
+          return { ...item, quantity };
+        }
+        return item;
+      })
     );
-    
-    setCart(updatedCart);
   };
 
+  // Clear cart
   const clearCart = () => {
-    setCart([]);
+    setItems([]);
     toast({
-      title: "Cart cleared",
-      description: "All items have been removed from your cart.",
+      title: "Cart Cleared",
+      description: "All items removed from cart"
     });
   };
 
-  const getCartTotal = () => {
-    return cart.reduce((total, item) => {
-      const itemTotal = item.part.price * item.quantity;
-      const coreCharge = item.part.core_charge ? item.part.core_charge * item.quantity : 0;
-      return total + itemTotal + coreCharge;
-    }, 0);
-  };
+  // Calculate totals
+  const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
-  const getCartItemCount = () => {
-    return cart.reduce((count, item) => count + item.quantity, 0);
-  };
-
-  const isInCart = (partId: string) => {
-    return cart.some(item => item.part.id === partId);
+  const value: CartContextType = {
+    items,
+    total,
+    itemCount,
+    addItem,
+    removeItem,
+    updateQuantity,
+    clearCart,
+    isLoading,
+    kitExpansionEnabled,
+    setKitExpansionEnabled,
+    loadKitComponents,
+    getKitPreview
   };
 
   return (
-    <PartsCartContext.Provider
-      value={{
-        cart,
-        addToCart,
-        removeFromCart,
-        updateQuantity,
-        clearCart,
-        getCartTotal,
-        getCartItemCount,
-        isInCart,
-      }}
-    >
+    <CartContext.Provider value={value}>
       {children}
-    </PartsCartContext.Provider>
+    </CartContext.Provider>
   );
 };
 
-export const usePartsCart = () => {
-  const context = useContext(PartsCartContext);
-  if (context === undefined) {
-    throw new Error('usePartsCart must be used within a PartsCartProvider');
+// Hook to use cart context
+export const useCart = (): CartContextType => {
+  const context = useContext(CartContext);
+  if (!context) {
+    throw new Error('useCart must be used within a CartProvider');
   }
   return context;
 };
+
+export default CartProvider;
+

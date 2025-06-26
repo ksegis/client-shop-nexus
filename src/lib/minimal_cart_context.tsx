@@ -1,196 +1,292 @@
-'use client';
-
-// Minimal Cart Context - Leverages Existing APIs
-// Only adds global state management to existing cart functionality
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useToast } from "@/hooks/use-toast";
+import { kitComponentService, KitComponent } from '@/services/kit_component_service';
 
-// Use existing interfaces from your current cart implementation
-interface CartItem {
+// Cart item interface with kit support
+export interface CartItem {
   id: string;
   name: string;
   price: number;
   quantity: number;
-  sku?: string;
-  category?: string;
-  inStock: boolean;
-  maxQuantity: number;
-  vcpn?: string;
-  weight?: number;
+  maxQuantity?: number;
+  isKit?: boolean;
+  kitComponents?: KitComponent[];
+  kitComponentsLoaded?: boolean;
 }
 
-interface CartState {
-  items: CartItem[];
-  isLoading: boolean;
-  error: string | null;
-}
-
+// Cart context interface
 interface CartContextType {
-  // State
   items: CartItem[];
-  itemCount: number;
-  subtotal: number;
   total: number;
-  isLoading: boolean;
-  error: string | null;
-  
-  // Actions
-  addItem: (item: Omit<CartItem, 'id'>) => void;
-  removeItem: (itemId: string) => void;
-  updateQuantity: (itemId: string, quantity: number) => void;
+  itemCount: number;
+  addItem: (item: Omit<CartItem, 'quantity'>, quantity?: number) => Promise<void>;
+  removeItem: (id: string) => void;
+  updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
-  
-  // Utilities
-  getItem: (vcpn: string) => CartItem | undefined;
-  hasItem: (vcpn: string) => boolean;
+  isLoading: boolean;
+  kitExpansionEnabled: boolean;
+  setKitExpansionEnabled: (enabled: boolean) => void;
+  loadKitComponents: (itemId: string) => Promise<void>;
+  getKitPreview: (itemId: string) => KitComponent[] | null;
 }
 
+// Create context
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'shop_cart_items';
-const TAX_RATE = 0.08; // 8% tax rate
-
-export function CartProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<CartState>({
-    items: [],
-    isLoading: false,
-    error: null
-  });
+// Cart provider component
+export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [kitExpansionEnabled, setKitExpansionEnabled] = useState(true); // Default to enabled
+  const { toast } = useToast();
 
   // Load cart from localStorage on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const items = JSON.parse(saved);
-        setState(prev => ({ ...prev, items }));
+    const savedCart = localStorage.getItem('cart');
+    if (savedCart) {
+      try {
+        const parsedCart = JSON.parse(savedCart);
+        setItems(parsedCart);
+      } catch (error) {
+        console.error('Error loading cart from localStorage:', error);
       }
-    } catch (error) {
-      console.error('Error loading cart from localStorage:', error);
+    }
+
+    // Load kit expansion setting
+    const savedKitExpansion = localStorage.getItem('kitExpansionEnabled');
+    if (savedKitExpansion !== null) {
+      setKitExpansionEnabled(JSON.parse(savedKitExpansion));
     }
   }, []);
 
   // Save cart to localStorage whenever items change
   useEffect(() => {
+    localStorage.setItem('cart', JSON.stringify(items));
+  }, [items]);
+
+  // Save kit expansion setting
+  useEffect(() => {
+    localStorage.setItem('kitExpansionEnabled', JSON.stringify(kitExpansionEnabled));
+  }, [kitExpansionEnabled]);
+
+  // Check if an item is a kit
+  const checkIfKit = async (itemId: string): Promise<boolean> => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
+      return await kitComponentService.isKit(itemId);
     } catch (error) {
-      console.error('Error saving cart to localStorage:', error);
+      console.error('Error checking if item is kit:', error);
+      return false;
     }
-  }, [state.items]);
+  };
 
-  // Calculate totals
-  const itemCount = state.items.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = state.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const tax = subtotal * TAX_RATE;
-  const total = subtotal + tax;
-
-  // Add item to cart
-  const addItem = (newItem: Omit<CartItem, 'id'>) => {
-    setState(prev => {
-      const existingItem = prev.items.find(item => item.vcpn === newItem.vcpn);
+  // Load kit components for an item
+  const loadKitComponents = async (itemId: string): Promise<void> => {
+    try {
+      setIsLoading(true);
+      const response = await kitComponentService.getKitComponentsWithCache(itemId);
       
-      if (existingItem) {
-        // Update quantity of existing item
-        return {
-          ...prev,
-          items: prev.items.map(item =>
-            item.vcpn === newItem.vcpn
-              ? { ...item, quantity: Math.min(item.quantity + newItem.quantity, item.maxQuantity) }
+      if (response.success) {
+        setItems(prevItems => 
+          prevItems.map(item => 
+            item.id === itemId 
+              ? { 
+                  ...item, 
+                  kitComponents: response.components,
+                  kitComponentsLoaded: true 
+                }
               : item
           )
-        };
-      } else {
-        // Add new item
-        const item: CartItem = {
-          ...newItem,
-          id: `cart_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        };
-        return {
-          ...prev,
-          items: [...prev.items, item]
-        };
+        );
       }
-    });
+    } catch (error) {
+      console.error('Error loading kit components:', error);
+      toast({
+        title: "Kit Components Error",
+        description: "Failed to load kit components",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Get kit preview for an item
+  const getKitPreview = (itemId: string): KitComponent[] | null => {
+    const item = items.find(item => item.id === itemId);
+    return item?.kitComponents || null;
+  };
+
+  // Add item to cart with kit detection
+  const addItem = async (newItem: Omit<CartItem, 'quantity'>, quantity: number = 1): Promise<void> => {
+    try {
+      setIsLoading(true);
+
+      // Check if item is a kit
+      const isKit = await checkIfKit(newItem.id);
+      
+      // Load kit components if it's a kit and expansion is enabled
+      let kitComponents: KitComponent[] = [];
+      let kitComponentsLoaded = false;
+      
+      if (isKit && kitExpansionEnabled) {
+        const response = await kitComponentService.getKitComponentsWithCache(newItem.id);
+        if (response.success) {
+          kitComponents = response.components;
+          kitComponentsLoaded = true;
+        }
+      }
+
+      setItems(prevItems => {
+        const existingItemIndex = prevItems.findIndex(item => item.id === newItem.id);
+        
+        if (existingItemIndex >= 0) {
+          // Update existing item
+          const updatedItems = [...prevItems];
+          const existingItem = updatedItems[existingItemIndex];
+          const newQuantity = existingItem.quantity + quantity;
+          
+          // Check max quantity constraint
+          if (newItem.maxQuantity && newQuantity > newItem.maxQuantity) {
+            toast({
+              title: "Quantity Limit Reached",
+              description: `Cannot add more than ${newItem.maxQuantity} of this item`,
+              variant: "destructive"
+            });
+            return prevItems;
+          }
+          
+          updatedItems[existingItemIndex] = {
+            ...existingItem,
+            quantity: newQuantity,
+            isKit,
+            kitComponents: kitComponentsLoaded ? kitComponents : existingItem.kitComponents,
+            kitComponentsLoaded: kitComponentsLoaded || existingItem.kitComponentsLoaded
+          };
+          
+          return updatedItems;
+        } else {
+          // Add new item
+          const cartItem: CartItem = {
+            ...newItem,
+            quantity,
+            isKit,
+            kitComponents: kitComponentsLoaded ? kitComponents : undefined,
+            kitComponentsLoaded
+          };
+          
+          return [...prevItems, cartItem];
+        }
+      });
+
+      // Show success message with kit info
+      const message = isKit 
+        ? `Added ${newItem.name} (Kit with ${kitComponents.length} components) to cart`
+        : `Added ${newItem.name} to cart`;
+        
+      toast({
+        title: "Added to Cart",
+        description: message
+      });
+
+    } catch (error) {
+      console.error('Error adding item to cart:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add item to cart",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Remove item from cart
-  const removeItem = (itemId: string) => {
-    setState(prev => ({
-      ...prev,
-      items: prev.items.filter(item => item.id !== itemId)
-    }));
+  const removeItem = (id: string) => {
+    setItems(prevItems => {
+      const item = prevItems.find(item => item.id === id);
+      const updatedItems = prevItems.filter(item => item.id !== id);
+      
+      if (item) {
+        toast({
+          title: "Removed from Cart",
+          description: `${item.name} removed from cart`
+        });
+      }
+      
+      return updatedItems;
+    });
   };
 
   // Update item quantity
-  const updateQuantity = (itemId: string, quantity: number) => {
+  const updateQuantity = (id: string, quantity: number) => {
     if (quantity <= 0) {
-      removeItem(itemId);
+      removeItem(id);
       return;
     }
 
-    setState(prev => ({
-      ...prev,
-      items: prev.items.map(item =>
-        item.id === itemId
-          ? { ...item, quantity: Math.min(quantity, item.maxQuantity) }
-          : item
-      )
-    }));
+    setItems(prevItems => 
+      prevItems.map(item => {
+        if (item.id === id) {
+          // Check max quantity constraint
+          if (item.maxQuantity && quantity > item.maxQuantity) {
+            toast({
+              title: "Quantity Limit",
+              description: `Maximum quantity for this item is ${item.maxQuantity}`,
+              variant: "destructive"
+            });
+            return item;
+          }
+          
+          return { ...item, quantity };
+        }
+        return item;
+      })
+    );
   };
 
-  // Clear entire cart
+  // Clear cart
   const clearCart = () => {
-    setState(prev => ({
-      ...prev,
-      items: []
-    }));
+    setItems([]);
+    toast({
+      title: "Cart Cleared",
+      description: "All items removed from cart"
+    });
   };
 
-  // Get item by VCPN
-  const getItem = (vcpn: string) => {
-    return state.items.find(item => item.vcpn === vcpn);
-  };
+  // Calculate totals
+  const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Check if item exists in cart
-  const hasItem = (vcpn: string) => {
-    return state.items.some(item => item.vcpn === vcpn);
-  };
-
-  const contextValue: CartContextType = {
-    // State
-    items: state.items,
-    itemCount,
-    subtotal,
+  const value: CartContextType = {
+    items,
     total,
-    isLoading: state.isLoading,
-    error: state.error,
-    
-    // Actions
+    itemCount,
     addItem,
     removeItem,
     updateQuantity,
     clearCart,
-    
-    // Utilities
-    getItem,
-    hasItem
+    isLoading,
+    kitExpansionEnabled,
+    setKitExpansionEnabled,
+    loadKitComponents,
+    getKitPreview
   };
 
   return (
-    <CartContext.Provider value={contextValue}>
+    <CartContext.Provider value={value}>
       {children}
     </CartContext.Provider>
   );
-}
+};
 
-export function useCart() {
+// Hook to use cart context
+export const useCart = (): CartContextType => {
   const context = useContext(CartContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useCart must be used within a CartProvider');
   }
   return context;
-}
+};
 
-export type { CartItem, CartContextType };
+export default CartProvider;
 
