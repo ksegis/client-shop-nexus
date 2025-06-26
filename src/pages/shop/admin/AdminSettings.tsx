@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Settings, 
   Database, 
@@ -33,15 +34,20 @@ import {
   Home,
   MapPin,
   Building,
-  Warehouse
+  Warehouse,
+  Box
 } from 'lucide-react';
 import { inventorySyncService } from '@/services/inventory_sync_service';
 import { priceCheckService } from '@/services/price_check_service';
 import { shippingQuoteService } from '@/services/shipping_quote_service';
 import { dropshipOrderService } from '@/services/dropship_order_service';
 import { orderTrackingService } from '@/services/order_tracking_service';
+import KitManagement from './kit_management_admin';
 
 const AdminSettings = () => {
+  // Tab state
+  const [activeTab, setActiveTab] = useState('inventory');
+
   // Existing state variables
   const [debugMode, setDebugMode] = useState(false);
   const [environment, setEnvironment] = useState('development');
@@ -739,1132 +745,288 @@ const AdminSettings = () => {
         </Alert>
       )}
 
-      {/* Environment Control */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Environment Control
-          </CardTitle>
-          <CardDescription>
-            Control which environment the system uses for API calls
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label className="text-sm font-medium">Current Environment</Label>
-            <p className="text-sm text-muted-foreground">
-              {environment === 'development' ? 'Development (Test Data)' : 'Production (Live Data)'}
-            </p>
-            
-            <div className="flex items-center gap-4 mt-2">
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={environment === 'development'}
-                  onCheckedChange={(checked) => handleEnvironmentChange(checked ? 'development' : 'production')}
-                />
-                <Label>Development</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={environment === 'production'}
-                  onCheckedChange={(checked) => handleEnvironmentChange(checked ? 'production' : 'development')}
-                />
-                <Label>Production</Label>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2 mt-2">
-              <Badge 
-                variant="outline" 
-                className={environment === 'development' ? 
-                  "bg-blue-50 text-blue-700 border-blue-200" : 
-                  "bg-red-50 text-red-700 border-red-200"
-                }
-              >
-                {environment === 'development' ? 'DEV' : 'PROD'}
-              </Badge>
-              <span className="text-sm text-muted-foreground">
-                {environment === 'development' ? 'DEVELOPMENT' : 'PRODUCTION'} mode active
-              </span>
-            </div>
-            
-            <p className="text-xs text-muted-foreground mt-1">
-              Last changed: {safeFormatDate(lastRefresh)}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Tabs Navigation */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="inventory" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            Inventory
+          </TabsTrigger>
+          <TabsTrigger value="pricing" className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            Pricing
+          </TabsTrigger>
+          <TabsTrigger value="shipping" className="flex items-center gap-2">
+            <Truck className="h-4 w-4" />
+            Shipping
+          </TabsTrigger>
+          <TabsTrigger value="orders" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Orders
+          </TabsTrigger>
+          <TabsTrigger value="tracking" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Tracking
+          </TabsTrigger>
+          <TabsTrigger value="kits" className="flex items-center gap-2">
+            <Box className="h-4 w-4" />
+            Kits
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Delta Sync Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <RotateCcw className="h-5 w-5" />
-            Delta Sync Settings
-          </CardTitle>
-          <CardDescription>
-            Configure automatic delta inventory synchronization for efficient updates
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-sm font-medium">Enable Delta Sync</Label>
-              <p className="text-sm text-muted-foreground">
-                Automatically sync only changed inventory items at regular intervals
-              </p>
-            </div>
-            <Switch
-              checked={deltaSyncSettings.enabled}
-              onCheckedChange={(checked) => 
-                handleDeltaSyncSettingsChange({ ...deltaSyncSettings, enabled: checked })
-              }
-            />
-          </div>
-          
-          <div>
-            <Label className="text-sm font-medium">Sync Interval</Label>
-            <select
-              value={deltaSyncSettings.intervalHours}
-              onChange={(e) => 
-                handleDeltaSyncSettingsChange({ 
-                  ...deltaSyncSettings, 
-                  intervalHours: parseInt(e.target.value) 
-                })
-              }
-              className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
-            >
-              <option value={6}>Every 6 hours (4x daily)</option>
-              <option value={12}>Every 12 hours (Twice daily)</option>
-              <option value={24}>Every 24 hours (Daily)</option>
-            </select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Recommended: 12 hours for twice-daily updates
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Badge 
-              variant={deltaSyncSettings.enabled ? "default" : "secondary"}
-              className={deltaSyncSettings.enabled ? "bg-green-100 text-green-800 border-green-200" : ""}
-            >
-              {deltaSyncSettings.enabled ? "Enabled" : "Disabled"}
-            </Badge>
-            <span className="text-sm text-muted-foreground">
-              Every {deltaSyncSettings.intervalHours} hours
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Price Check Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5" />
-            Real-Time Price Check
-          </CardTitle>
-          <CardDescription>
-            Check current pricing for VCPNs using Keystone CheckPriceBulk API (1 check per hour)
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Price Check Status */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-sm font-medium">Price Check Status</Label>
-              <div className="flex items-center gap-2 mt-1">
-                {priceCheckStatus?.isRateLimited ? (
-                  <>
-                    <Badge variant="destructive">Rate Limited</Badge>
-                    <Timer className="h-4 w-4 text-orange-500" />
-                    <span className="text-sm text-muted-foreground">
-                      {priceCheckStatus.rateLimitMessage}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                      Available
-                    </Badge>
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="text-sm text-muted-foreground">Ready for price check</span>
-                  </>
-                )}
-              </div>
-            </div>
-            
-            <div>
-              <Label className="text-sm font-medium">Last Price Check</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                {safeFormatRelativeTime(priceCheckStatus?.lastCheckTime)}
-              </p>
-            </div>
-          </div>
-
-          {/* VCPN Input */}
-          <div>
-            <Label className="text-sm font-medium">VCPNs to Check (max 12)</Label>
-            <Textarea
-              placeholder="Enter VCPNs separated by commas, spaces, or new lines&#10;Example:&#10;VCPN-001&#10;VCPN-002, VCPN-003&#10;VCPN-004 VCPN-005"
-              value={priceCheckVcpns}
-              onChange={(e) => setPriceCheckVcpns(e.target.value)}
-              className="mt-1"
-              rows={3}
-            />
-          </div>
-
-          {/* Price Check Button */}
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handlePriceCheck}
-              disabled={priceCheckLoading || priceCheckStatus?.isRateLimited || !priceCheckVcpns.trim()}
-              className="flex items-center gap-2"
-            >
-              {priceCheckLoading ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
-              {priceCheckLoading ? 'Checking Prices...' : 'Check Prices'}
-            </Button>
-            
-            {debugMode && !priceCheckStatus?.isRateLimited && (
-              <Button
-                variant="outline"
-                onClick={handleClearPriceRateLimit}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Clear Rate Limit
-              </Button>
-            )}
-          </div>
-
-          {/* Price Check Results */}
-          {priceCheckResults.length > 0 && (
-            <div>
-              <Label className="text-sm font-medium">Price Check Results</Label>
-              <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                {priceCheckResults.map((result, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">{result.vcpn}</p>
-                      {result.error ? (
-                        <p className="text-sm text-red-600">{result.error}</p>
-                      ) : (
-                        <div className="text-sm text-muted-foreground">
-                          <span>Cost: ${result.cost}</span>
-                          {result.listPrice && <span> | List: ${result.listPrice}</span>}
-                          {result.availability && <span> | {result.availability}</span>}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      {result.error ? (
-                        <Badge variant="destructive">Error</Badge>
-                      ) : (
-                        <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                          ${result.cost}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Shipping Quote Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Truck className="h-5 w-5" />
-            Shipping Quote Integration
-          </CardTitle>
-          <CardDescription>
-            Get shipping quotes for multiple parts across warehouses (1 quote per 5 minutes)
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Shipping Quote Status */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-sm font-medium">Shipping Quote Status</Label>
-              <div className="flex items-center gap-2 mt-1">
-                {shippingQuoteStatus?.isRateLimited ? (
-                  <>
-                    <Badge variant="destructive">Rate Limited</Badge>
-                    <Timer className="h-4 w-4 text-orange-500" />
-                    <span className="text-sm text-muted-foreground">
-                      {shippingQuoteStatus.rateLimitMessage}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                      Available
-                    </Badge>
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="text-sm text-muted-foreground">Ready for shipping quote</span>
-                  </>
-                )}
-              </div>
-            </div>
-            
-            <div>
-              <Label className="text-sm font-medium">Last Shipping Quote</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                {safeFormatRelativeTime(shippingQuoteStatus?.lastQuoteTime)}
-              </p>
-            </div>
-          </div>
-
-          {/* Items Input */}
-          <div>
-            <Label className="text-sm font-medium">Items to Ship (max 50)</Label>
-            <Textarea
-              placeholder="Enter items in format VCPN:quantity, one per line&#10;Example:&#10;VCPN-001:2&#10;VCPN-002:1&#10;VCPN-003:5"
-              value={shippingQuoteItems}
-              onChange={(e) => setShippingQuoteItems(e.target.value)}
-              className="mt-1"
-              rows={4}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Enter up to 50 items. Format: VCPN:quantity (one per line)
-            </p>
-          </div>
-
-          {/* Shipping Address */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-sm font-medium">Address</Label>
-              <Input
-                placeholder="123 Main Street"
-                value={shippingAddress.address1}
-                onChange={(e) => setShippingAddress({...shippingAddress, address1: e.target.value})}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label className="text-sm font-medium">City</Label>
-              <Input
-                placeholder="Los Angeles"
-                value={shippingAddress.city}
-                onChange={(e) => setShippingAddress({...shippingAddress, city: e.target.value})}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label className="text-sm font-medium">State</Label>
-              <Input
-                placeholder="CA"
-                value={shippingAddress.state}
-                onChange={(e) => setShippingAddress({...shippingAddress, state: e.target.value})}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label className="text-sm font-medium">ZIP Code</Label>
-              <Input
-                placeholder="90210"
-                value={shippingAddress.zipCode}
-                onChange={(e) => setShippingAddress({...shippingAddress, zipCode: e.target.value})}
-                className="mt-1"
-              />
-            </div>
-          </div>
-
-          {/* Shipping Quote Button */}
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handleShippingQuote}
-              disabled={shippingQuoteLoading || shippingQuoteStatus?.isRateLimited || !shippingQuoteItems.trim() || !shippingAddress.address1}
-              className="flex items-center gap-2"
-            >
-              {shippingQuoteLoading ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
-              ) : (
-                <Truck className="h-4 w-4" />
-              )}
-              {shippingQuoteLoading ? 'Getting Quotes...' : 'Get Shipping Quotes'}
-            </Button>
-            
-            {debugMode && !shippingQuoteStatus?.isRateLimited && (
-              <Button
-                variant="outline"
-                onClick={handleClearShippingRateLimit}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Clear Rate Limit
-              </Button>
-            )}
-          </div>
-
-          {/* Shipping Quote Results */}
-          {shippingQuoteResults.length > 0 && (
-            <div>
-              <Label className="text-sm font-medium">Shipping Options</Label>
-              <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
-                {shippingQuoteResults.map((option, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">{option.carrierName} - {option.serviceName}</p>
-                      <div className="text-sm text-muted-foreground">
-                        <span>{option.estimatedDeliveryDays} days delivery</span>
-                        <span> | From: {option.warehouseName}</span>
-                        {option.trackingAvailable && <span> | Tracking available</span>}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                        ${option.cost}
-                      </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {option.estimatedDeliveryDate ? 
-                          new Date(option.estimatedDeliveryDate).toLocaleDateString() : 
-                          'Est. delivery'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Dropship Order Placement */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Dropship Order Placement
-          </CardTitle>
-          <CardDescription>
-            Place dropship orders directly with Keystone (1 order per 2 minutes)
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Dropship Order Status */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-sm font-medium">Order Placement Status</Label>
-              <div className="flex items-center gap-2 mt-1">
-                {dropshipOrderStatus?.isRateLimited ? (
-                  <>
-                    <Badge variant="destructive">Rate Limited</Badge>
-                    <Timer className="h-4 w-4 text-orange-500" />
-                    <span className="text-sm text-muted-foreground">
-                      {dropshipOrderStatus.rateLimitMessage}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                      Available
-                    </Badge>
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="text-sm text-muted-foreground">Ready to place order</span>
-                  </>
-                )}
-              </div>
-            </div>
-            
-            <div>
-              <Label className="text-sm font-medium">Last Order Placed</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                {safeFormatRelativeTime(dropshipOrderStatus?.lastOrderTime)}
-              </p>
-            </div>
-          </div>
-
-          {/* Customer Information */}
-          <div>
-            <Label className="text-sm font-medium">Customer Information</Label>
-            <div className="grid grid-cols-2 gap-4 mt-2">
-              <div>
-                <Input
-                  placeholder="First Name *"
-                  value={customerInfo.firstName}
-                  onChange={(e) => setCustomerInfo({...customerInfo, firstName: e.target.value})}
-                />
-              </div>
-              <div>
-                <Input
-                  placeholder="Last Name *"
-                  value={customerInfo.lastName}
-                  onChange={(e) => setCustomerInfo({...customerInfo, lastName: e.target.value})}
-                />
-              </div>
-              <div>
-                <Input
-                  placeholder="Email Address *"
-                  type="email"
-                  value={customerInfo.email}
-                  onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
-                />
-              </div>
-              <div>
-                <Input
-                  placeholder="Phone Number"
-                  value={customerInfo.phone}
-                  onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Order Items */}
-          <div>
-            <Label className="text-sm font-medium">Order Items (max 100)</Label>
-            <Textarea
-              placeholder="Enter items in format VCPN:quantity, one per line&#10;Example:&#10;WIDGET-001:2&#10;GADGET-002:1&#10;DEVICE-003:5"
-              value={dropshipOrderItems}
-              onChange={(e) => setDropshipOrderItems(e.target.value)}
-              className="mt-1"
-              rows={4}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Enter up to 100 items. Format: VCPN:quantity (one per line)
-            </p>
-          </div>
-
-          {/* Shipping Address */}
-          <div>
-            <Label className="text-sm font-medium">Shipping Address</Label>
-            <div className="grid grid-cols-2 gap-4 mt-2">
-              <div>
-                <Input
-                  placeholder="Address *"
-                  value={orderShippingAddress.address1}
-                  onChange={(e) => setOrderShippingAddress({...orderShippingAddress, address1: e.target.value})}
-                />
-              </div>
-              <div>
-                <Input
-                  placeholder="City *"
-                  value={orderShippingAddress.city}
-                  onChange={(e) => setOrderShippingAddress({...orderShippingAddress, city: e.target.value})}
-                />
-              </div>
-              <div>
-                <Input
-                  placeholder="State *"
-                  value={orderShippingAddress.state}
-                  onChange={(e) => setOrderShippingAddress({...orderShippingAddress, state: e.target.value})}
-                />
-              </div>
-              <div>
-                <Input
-                  placeholder="ZIP Code *"
-                  value={orderShippingAddress.zipCode}
-                  onChange={(e) => setOrderShippingAddress({...orderShippingAddress, zipCode: e.target.value})}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Order Details */}
-          <div>
-            <Label className="text-sm font-medium">Order Details</Label>
-            <div className="grid grid-cols-2 gap-4 mt-2">
-              <div>
-                <Label className="text-xs text-muted-foreground">Shipping Method</Label>
-                <select
-                  value={orderDetails.shippingMethod}
-                  onChange={(e) => setOrderDetails({...orderDetails, shippingMethod: e.target.value})}
-                  className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
-                >
-                  <option value="standard">Standard Shipping</option>
-                  <option value="expedited">Expedited Shipping</option>
-                  <option value="overnight">Overnight Shipping</option>
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">PO Number</Label>
-                <Input
-                  placeholder="Purchase Order Number"
-                  value={orderDetails.poNumber}
-                  onChange={(e) => setOrderDetails({...orderDetails, poNumber: e.target.value})}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-            <div className="mt-2">
-              <Label className="text-xs text-muted-foreground">Special Instructions</Label>
-              <Textarea
-                placeholder="Any special delivery instructions..."
-                value={orderDetails.specialInstructions}
-                onChange={(e) => setOrderDetails({...orderDetails, specialInstructions: e.target.value})}
-                className="mt-1"
-                rows={2}
-              />
-            </div>
-          </div>
-
-          {/* Place Order Button */}
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handleDropshipOrder}
-              disabled={dropshipOrderLoading || dropshipOrderStatus?.isRateLimited || !dropshipOrderItems.trim() || !customerInfo.firstName || !customerInfo.lastName || !customerInfo.email || !orderShippingAddress.address1}
-              className="flex items-center gap-2"
-            >
-              {dropshipOrderLoading ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
-              ) : (
-                <Package className="h-4 w-4" />
-              )}
-              {dropshipOrderLoading ? 'Placing Order...' : 'Place Dropship Order'}
-            </Button>
-            
-            {debugMode && !dropshipOrderStatus?.isRateLimited && (
-              <Button
-                variant="outline"
-                onClick={handleClearDropshipRateLimit}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Clear Rate Limit
-              </Button>
-            )}
-          </div>
-
-          {/* Order Results */}
-          {dropshipOrderResults && (
-            <div>
-              <Label className="text-sm font-medium">Order Confirmation</Label>
-              <div className="mt-2 p-4 border rounded-lg bg-green-50 border-green-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <span className="font-medium text-green-800">Order Placed Successfully!</span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p><strong>Order Reference:</strong> {dropshipOrderResults.orderReference}</p>
-                    <p><strong>Keystone Order ID:</strong> {dropshipOrderResults.keystoneOrderId || 'Pending'}</p>
-                    <p><strong>Total Items:</strong> {dropshipOrderResults.totalItems}</p>
-                  </div>
-                  <div>
-                    <p><strong>Total Value:</strong> ${dropshipOrderResults.totalValue?.toFixed(2) || 'Calculating...'}</p>
-                    <p><strong>Est. Shipping:</strong> ${dropshipOrderResults.estimatedShipping?.toFixed(2) || 'TBD'}</p>
-                    <p><strong>Est. Delivery:</strong> {dropshipOrderResults.estimatedDeliveryDate ? 
-                      new Date(dropshipOrderResults.estimatedDeliveryDate).toLocaleDateString() : 'TBD'}</p>
-                  </div>
-                </div>
-                
-                {dropshipOrderResults.trackingInfo && (
-                  <div className="mt-3 pt-3 border-t border-green-300">
-                    <p className="text-sm"><strong>Tracking Number:</strong> {dropshipOrderResults.trackingInfo.trackingNumber}</p>
-                    <p className="text-sm"><strong>Carrier:</strong> {dropshipOrderResults.trackingInfo.carrier}</p>
-                    {dropshipOrderResults.trackingInfo.trackingUrl && (
-                      <p className="text-sm">
-                        <strong>Track Order:</strong> 
-                        <a href={dropshipOrderResults.trackingInfo.trackingUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-1">
-                          {dropshipOrderResults.trackingInfo.trackingUrl}
-                        </a>
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Order History */}
-          {debugMode && dropshipOrderStatus?.orderHistory?.length > 0 && (
-            <div>
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <History className="h-4 w-4" />
-                Recent Orders
-              </Label>
-              <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
-                {dropshipOrderStatus.orderHistory.map((item, index) => (
-                  <div key={item.id} className="flex items-center justify-between p-2 border rounded text-sm">
-                    <div>
-                      <p className="font-medium">{item.orderReference}</p>
-                      <p className="text-muted-foreground">
-                        {safeFormatRelativeTime(item.timestamp)} • {item.itemCount} items
-                        {item.keystoneOrderId && <span> • {item.keystoneOrderId}</span>}
-                        {item.customerInfo && (
-                          <span> • {item.customerInfo.firstName} {item.customerInfo.lastName}</span>
-                        )}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant={item.success ? "default" : "destructive"} className="text-xs">
-                        {item.success ? 'Success' : 'Failed'}
-                      </Badge>
-                      {item.totalValue && (
-                        <p className="text-xs text-muted-foreground mt-1">${item.totalValue.toFixed(2)}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Order Tracking */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Order Tracking
-          </CardTitle>
-          <CardDescription>
-            Track order status and delivery information (1 tracking request per 3 minutes)
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Order Tracking Status */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-sm font-medium">Tracking Status</Label>
-              <div className="flex items-center gap-2 mt-1">
-                {orderTrackingStatus?.isRateLimited ? (
-                  <>
-                    <Badge variant="destructive">Rate Limited</Badge>
-                    <Timer className="h-4 w-4 text-orange-500" />
-                    <span className="text-sm text-muted-foreground">
-                      {orderTrackingStatus.rateLimitMessage}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                      Available
-                    </Badge>
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="text-sm text-muted-foreground">Ready to track orders</span>
-                  </>
-                )}
-              </div>
-            </div>
-            
-            <div>
-              <Label className="text-sm font-medium">Last Tracking Request</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                {safeFormatRelativeTime(orderTrackingStatus?.lastTrackingTime)}
-              </p>
-            </div>
-          </div>
-
-          {/* Order References Input */}
-          <div>
-            <Label className="text-sm font-medium">Order References to Track (max 20)</Label>
-            <Textarea
-              placeholder="Enter order references separated by commas, spaces, or new lines&#10;Example:&#10;DO-1750623630250-A5CN01&#10;DO-1750623630251-B6DN02&#10;DO-1750623630252-C7EO03"
-              value={trackingOrderRefs}
-              onChange={(e) => setTrackingOrderRefs(e.target.value)}
-              className="mt-1"
-              rows={4}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Enter up to 20 order references. Use order references from placed dropship orders.
-            </p>
-          </div>
-
-          {/* Track Orders Button */}
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handleOrderTracking}
-              disabled={trackingLoading || orderTrackingStatus?.isRateLimited || !trackingOrderRefs.trim()}
-              className="flex items-center gap-2"
-            >
-              {trackingLoading ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
-              {trackingLoading ? 'Tracking Orders...' : 'Track Orders'}
-            </Button>
-            
-            {debugMode && !orderTrackingStatus?.isRateLimited && (
-              <Button
-                variant="outline"
-                onClick={handleClearTrackingRateLimit}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Clear Rate Limit
-              </Button>
-            )}
-          </div>
-
-          {/* Tracking Results */}
-          {trackingResults.length > 0 && (
-            <div>
-              <Label className="text-sm font-medium">Order Tracking Results</Label>
-              <div className="mt-2 space-y-3 max-h-80 overflow-y-auto">
-                {trackingResults.map((result, index) => (
-                  <div key={index} className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="font-medium">{result.orderReference}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {result.trackingNumber && `Tracking: ${result.trackingNumber}`}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        {getTrackingStatusBadge(result.status)}
-                        {result.carrier && (
-                          <p className="text-xs text-muted-foreground mt-1">{result.carrier}</p>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {result.error ? (
-                      <p className="text-sm text-red-600">{result.error}</p>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          {result.estimatedDelivery && (
-                            <p><strong>Est. Delivery:</strong> {new Date(result.estimatedDelivery).toLocaleDateString()}</p>
-                          )}
-                          {result.actualDelivery && (
-                            <p><strong>Delivered:</strong> {new Date(result.actualDelivery).toLocaleDateString()}</p>
-                          )}
-                          {result.lastUpdate && (
-                            <p><strong>Last Update:</strong> {safeFormatRelativeTime(result.lastUpdate)}</p>
-                          )}
-                        </div>
-                        <div>
-                          {result.currentLocation && (
-                            <p><strong>Location:</strong> {result.currentLocation}</p>
-                          )}
-                          {result.shippingMethod && (
-                            <p><strong>Method:</strong> {result.shippingMethod}</p>
-                          )}
-                          {result.totalValue && (
-                            <p><strong>Value:</strong> ${result.totalValue.toFixed(2)}</p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {result.trackingEvents && result.trackingEvents.length > 0 && (
-                      <div className="mt-3 pt-3 border-t">
-                        <p className="text-sm font-medium mb-2">Recent Events:</p>
-                        <div className="space-y-1 max-h-32 overflow-y-auto">
-                          {result.trackingEvents.slice(0, 3).map((event, eventIndex) => (
-                            <div key={eventIndex} className="text-xs text-muted-foreground">
-                              <span className="font-medium">{event.status}</span>
-                              {event.location && <span> - {event.location}</span>}
-                              {event.timestamp && (
-                                <span className="float-right">
-                                  {new Date(event.timestamp).toLocaleDateString()}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {result.trackingUrl && (
-                      <div className="mt-3 pt-3 border-t">
-                        <a 
-                          href={result.trackingUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:underline"
-                        >
-                          View Full Tracking Details →
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Inventory Sync Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="h-5 w-5" />
-            Inventory Sync Status
-          </CardTitle>
-          <CardDescription>
-            Current status of Keystone inventory synchronization
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <Label className="text-sm font-medium">Sync Status</Label>
-              <div className="flex items-center gap-2 mt-1">
-                {syncStatus?.lastSyncStatus ? getStatusBadge(syncStatus.lastSyncStatus) : getStatusBadge('never')}
-                {syncStatus?.isRateLimited && <Timer className="h-4 w-4 text-orange-500" />}
-              </div>
-            </div>
-            
-            <div>
-              <Label className="text-sm font-medium">Last Sync</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                {safeFormatRelativeTime(syncStatus?.lastSyncTime)}
-              </p>
-            </div>
-            
-            <div>
-              <Label className="text-sm font-medium">Next Sync</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                {safeFormatFutureTime(syncStatus?.nextSyncTime)}
-              </p>
-            </div>
-            
-            <div>
-              <Label className="text-sm font-medium">Items Synced</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                {safeDisplayValue(syncStatus?.itemsSynced, '0')}
-              </p>
-            </div>
-          </div>
-
-          {syncStatus?.isRateLimited && (
-            <Alert className="border-orange-200 bg-orange-50">
-              <AlertTriangle className="h-4 w-4 text-orange-600" />
-              <AlertDescription className="text-orange-800">
-                <strong>Rate Limited:</strong> GetInventoryFull API is rate limited. 
-                Next sync available in {syncStatus.rateLimitTimeRemaining ? 
-                  `${Math.floor(syncStatus.rateLimitTimeRemaining / 3600)}h ${Math.floor((syncStatus.rateLimitTimeRemaining % 3600) / 60)}m` : 
-                  'calculating...'}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Delta Sync Status */}
-          {deltaSyncSettings.enabled && (
-            <div className="mt-6 pt-4 border-t">
-              <h4 className="font-medium mb-3">Delta Sync Status</h4>
-              <div className="grid grid-cols-3 gap-6">
-                <div>
-                  <Label className="text-sm font-medium">Last Delta Sync</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <RotateCcw className="h-4 w-4 text-blue-500" />
-                    <span className="text-sm">{safeFormatRelativeTime(syncStatus?.lastDeltaSyncTime)}</span>
-                  </div>
-                </div>
-                
-                <div>
-                  <Label className="text-sm font-medium">Next Delta Sync</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Timer className="h-4 w-4 text-green-500" />
-                    <span className="text-sm">{safeFormatFutureTime(syncStatus?.nextDeltaSync)}</span>
-                  </div>
-                </div>
-                
-                <div>
-                  <Label className="text-sm font-medium">Delta Sync Result</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    {getStatusBadge(syncStatus?.lastDeltaSyncResult || 'never')}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-6 pt-4 border-t">
-            <h4 className="font-medium mb-3">Sync Statistics</h4>
-            <div className="grid grid-cols-4 gap-6">
-              <div>
-                <Label className="text-sm font-medium">Total Items</Label>
-                <p className="text-2xl font-bold mt-1">{safeDisplayValue(syncStatus?.syncedItems, '0')}</p>
-              </div>
-              
-              <div>
-                <Label className="text-sm font-medium">Synced Items</Label>
-                <p className="text-2xl font-bold mt-1">{safeDisplayValue(syncStatus?.syncedItems, '0')}</p>
-              </div>
-              
-              <div>
-                <Label className="text-sm font-medium">Failed Items</Label>
-                <p className="text-2xl font-bold mt-1">{safeDisplayValue(syncStatus?.failedItems, '0')}</p>
-              </div>
-              
-              <div>
-                <Label className="text-sm font-medium">Success Rate</Label>
-                <p className="text-2xl font-bold mt-1">
-                  {syncStatus?.syncedItems && syncStatus?.totalItems ? 
-                    `${Math.round((syncStatus.syncedItems / syncStatus.totalItems) * 100)}%` : 
-                    '0%'
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            Quick Actions
-          </CardTitle>
-          <CardDescription>
-            Test and manage system operations
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Inventory Sync</Label>
-              <div className="flex flex-col gap-2">
-                <Button
-                  onClick={handleTestSync}
-                  disabled={isLoading || syncStatus?.isRateLimited}
-                  className="w-full justify-start"
-                  variant="outline"
-                >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                  {syncStatus?.isRateLimited ? 'Test Sync (Rate Limited)' : 'Test Sync (10 items)'}
-                </Button>
-                
-                {deltaSyncSettings.enabled && (
-                  <>
-                    <Button
-                      onClick={handleTestDeltaSync}
-                      disabled={isLoading || syncStatus?.isRateLimited}
-                      className="w-full justify-start"
-                      variant="outline"
-                    >
-                      <RotateCcw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                      {syncStatus?.isRateLimited ? 'Test Delta Sync (Rate Limited)' : 'Test Delta Sync'}
-                    </Button>
-                    
-                    <Button
-                      onClick={handleTestQuantityDelta}
-                      disabled={isLoading || syncStatus?.isRateLimited}
-                      className="w-full justify-start"
-                      variant="outline"
-                    >
-                      <TrendingUp className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                      {syncStatus?.isRateLimited ? 'Test Quantity Delta (Rate Limited)' : 'Test Quantity Delta'}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Navigation</Label>
-              <div className="flex flex-col gap-2">
-                <Button
-                  onClick={() => window.location.href = '/shop/admin/inventory-sync'}
-                  className="w-full justify-start"
-                  variant="outline"
-                >
-                  <Package className="h-4 w-4 mr-2" />
-                  Inventory Sync
-                </Button>
-                
-                <Button
-                  onClick={() => window.location.href = '/shop/admin'}
-                  className="w-full justify-start"
-                  variant="outline"
-                >
-                  <Home className="h-4 w-4 mr-2" />
-                  Admin Dashboard
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Debug Information */}
-      {debugMode && (
+        {/* Environment Control - Always visible */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Eye className="h-5 w-5" />
-              Debug Information
+              <Settings className="h-5 w-5" />
+              Environment Control
             </CardTitle>
             <CardDescription>
-              Detailed system information for troubleshooting
+              Control which environment the system uses for API calls
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium">Environment Variables</Label>
-                <div className="mt-2 space-y-1 text-xs font-mono bg-gray-50 p-3 rounded">
-                  <p><strong>VITE_SUPABASE_URL:</strong> {getEnvVar('VITE_SUPABASE_URL') ? '✅ Set' : '❌ Missing'}</p>
-                  <p><strong>VITE_SUPABASE_ANON_TOKEN:</strong> {getEnvVar('VITE_SUPABASE_ANON_TOKEN') ? '✅ Set' : '❌ Missing'}</p>
-                  <p><strong>VITE_KEYSTONE_PROXY_URL:</strong> {getEnvVar('VITE_KEYSTONE_PROXY_URL') ? '✅ Set' : '❌ Missing'}</p>
-                  <p><strong>VITE_KEYSTONE_SECURITY_TOKEN_DEV:</strong> {getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_DEV') ? '✅ Set' : '❌ Missing'}</p>
-                  <p><strong>VITE_KEYSTONE_SECURITY_TOKEN_PROD:</strong> {getEnvVar('VITE_KEYSTONE_SECURITY_TOKEN_PROD') ? '✅ Set' : '❌ Missing'}</p>
+          <CardContent className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium">Current Environment</Label>
+              <p className="text-sm text-muted-foreground">
+                {environment === 'development' ? 'Development (Test Data)' : 'Production (Live Data)'}
+              </p>
+              
+              <div className="flex items-center gap-4 mt-2">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    checked={environment === 'development'}
+                    onCheckedChange={(checked) => handleEnvironmentChange(checked ? 'development' : 'production')}
+                  />
+                  <Label>Development</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    checked={environment === 'production'}
+                    onCheckedChange={(checked) => handleEnvironmentChange(checked ? 'production' : 'development')}
+                  />
+                  <Label>Production</Label>
                 </div>
               </div>
               
-              <div>
-                <Label className="text-sm font-medium">Current Settings</Label>
-                <div className="mt-2 space-y-1 text-xs font-mono bg-gray-50 p-3 rounded">
-                  <p><strong>Environment:</strong> {environment}</p>
-                  <p><strong>Debug Mode:</strong> {debugMode ? 'Enabled' : 'Disabled'}</p>
-                  <p><strong>Delta Sync Enabled:</strong> {deltaSyncSettings.enabled ? 'Yes' : 'No'}</p>
-                  <p><strong>Delta Sync Interval:</strong> {deltaSyncSettings.intervalHours} hours</p>
-                  <p><strong>Last Refresh:</strong> {safeFormatDate(lastRefresh)}</p>
-                </div>
+              <div className="flex items-center gap-2 mt-2">
+                <Badge 
+                  variant="outline" 
+                  className={environment === 'development' ? 
+                    "bg-blue-50 text-blue-700 border-blue-200" : 
+                    "bg-red-50 text-red-700 border-red-200"
+                  }
+                >
+                  {environment === 'development' ? 'DEV' : 'PROD'}
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  {environment === 'development' ? 'DEVELOPMENT' : 'PRODUCTION'} mode active
+                </span>
               </div>
               
-              <div>
-                <Label className="text-sm font-medium">Service Status Details</Label>
-                <div className="mt-2 space-y-2">
-                  <div>
-                    <p className="text-sm font-medium">Inventory Sync Status</p>
-                    <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
-                      <pre>{JSON.stringify(syncStatus, null, 2)}</pre>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <p className="text-sm font-medium">Price Check Status</p>
-                    <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
-                      <pre>{JSON.stringify(priceCheckStatus, null, 2)}</pre>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium">Shipping Quote Status</p>
-                    <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
-                      <pre>{JSON.stringify(shippingQuoteStatus, null, 2)}</pre>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium">Dropship Order Status</p>
-                    <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
-                      <pre>{JSON.stringify(dropshipOrderStatus, null, 2)}</pre>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium">Order Tracking Status</p>
-                    <div className="text-xs font-mono bg-gray-50 p-3 rounded max-h-32 overflow-y-auto">
-                      <pre>{JSON.stringify(orderTrackingStatus, null, 2)}</pre>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Last changed: {safeFormatDate(lastRefresh)}
+              </p>
             </div>
           </CardContent>
         </Card>
-      )}
+
+        {/* Tab Contents */}
+        <TabsContent value="inventory" className="space-y-6">
+          {/* Delta Sync Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RotateCcw className="h-5 w-5" />
+                Delta Sync Settings
+              </CardTitle>
+              <CardDescription>
+                Configure automatic delta inventory synchronization for efficient updates
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">Enable Delta Sync</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically sync only changed inventory items at regular intervals
+                  </p>
+                </div>
+                <Switch
+                  checked={deltaSyncSettings.enabled}
+                  onCheckedChange={(checked) => 
+                    handleDeltaSyncSettingsChange({ ...deltaSyncSettings, enabled: checked })
+                  }
+                />
+              </div>
+              
+              <div>
+                <Label className="text-sm font-medium">Sync Interval</Label>
+                <select
+                  value={deltaSyncSettings.intervalHours}
+                  onChange={(e) => 
+                    handleDeltaSyncSettingsChange({ 
+                      ...deltaSyncSettings, 
+                      intervalHours: parseInt(e.target.value) 
+                    })
+                  }
+                  className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value={6}>Every 6 hours (4x daily)</option>
+                  <option value={12}>Every 12 hours (Twice daily)</option>
+                  <option value={24}>Every 24 hours (Daily)</option>
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Recommended: 12 hours for twice-daily updates
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Badge 
+                  variant={deltaSyncSettings.enabled ? "default" : "secondary"}
+                  className={deltaSyncSettings.enabled ? "bg-green-100 text-green-800 border-green-200" : ""}
+                >
+                  {deltaSyncSettings.enabled ? "Enabled" : "Disabled"}
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  Every {deltaSyncSettings.intervalHours} hours
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Test Sync Buttons */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Test Sync Operations</CardTitle>
+              <CardDescription>
+                Test different sync operations with limited data
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleTestSync}
+                  disabled={isLoading}
+                  className="flex items-center gap-2"
+                >
+                  {isLoading ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Database className="h-4 w-4" />
+                  )}
+                  Test Full Sync (10 items)
+                </Button>
+                
+                <Button
+                  onClick={handleTestDeltaSync}
+                  disabled={isLoading}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  {isLoading ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-4 w-4" />
+                  )}
+                  Test Delta Sync
+                </Button>
+                
+                <Button
+                  onClick={handleTestQuantityDelta}
+                  disabled={isLoading}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  {isLoading ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <TrendingUp className="h-4 w-4" />
+                  )}
+                  Test Quantity Delta
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pricing">
+          {/* Price Check Content - Add your existing price check content here */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Real-Time Price Check
+              </CardTitle>
+              <CardDescription>
+                Check current pricing for VCPNs using Keystone CheckPriceBulk API (1 check per hour)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">Price check functionality will be implemented here.</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="shipping">
+          {/* Shipping Quote Content - Add your existing shipping content here */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="h-5 w-5" />
+                Shipping Quote Testing
+              </CardTitle>
+              <CardDescription>
+                Test shipping quotes using Keystone GetShippingQuote API
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">Shipping quote functionality will be implemented here.</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="orders">
+          {/* Dropship Orders Content - Add your existing orders content here */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Dropship Order Placement
+              </CardTitle>
+              <CardDescription>
+                Place dropship orders directly with Keystone (1 order per 2 minutes)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">Dropship order functionality will be implemented here.</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="tracking">
+          {/* Order Tracking Content - Add your existing tracking content here */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Order Tracking
+              </CardTitle>
+              <CardDescription>
+                Track order status and delivery information
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">Order tracking functionality will be implemented here.</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="kits">
+          {/* Kit Management Content */}
+          <KitManagement />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

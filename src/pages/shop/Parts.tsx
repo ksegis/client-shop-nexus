@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, Truck, MapPin, Clock, Shield, Edit, CheckCircle, Timer, User, CreditCard, FileText, Star, Zap, UserSearch, UserPlus } from "lucide-react";
+import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, Truck, MapPin, Clock, Shield, Edit, CheckCircle, Timer, User, CreditCard, FileText, Star, Zap, UserSearch, UserPlus, Box } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,14 @@ import { DropshipOrderService } from '@/services/dropship_order_service';
 
 // Import customer search service
 import { CustomerSearchService } from '@/services/customer_search_service';
+
+// Import kit components
+import { 
+  KitBadge, 
+  KitComponentsDisplay, 
+  CompactKitDisplay, 
+  useKitCheck 
+} from '@/components/kit_components_display';
 
 // Customer search result interface
 interface CustomerSearchResult {
@@ -81,6 +89,10 @@ interface InventoryPart {
   warranty?: string;
   list_price?: number;
   discount_percentage?: number;
+  
+  // Kit support
+  is_kit?: boolean;
+  kit_component_count?: number;
 }
 
 // Customer interface for special orders
@@ -223,7 +235,7 @@ const CustomerSearchComponent = ({
         </div>
 
         {/* Search Results Dropdown */}
-        {showResults && searchResults.length > 0 && (
+        {showResults && searchResults.length > 0 && !selectedCustomer && (
           <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
             {searchResults.map((customer) => (
               <button
@@ -274,7 +286,7 @@ const CustomerSearchComponent = ({
   );
 };
 
-// Pricing display component with ProductPriceCheck integration
+// Enhanced Pricing display component with ProductPriceCheck integration
 const PricingDisplay = ({ part, className = "" }) => {
   const [showPriceCheck, setShowPriceCheck] = useState(false);
 
@@ -480,7 +492,7 @@ const ShippingOptionsDisplay = ({
   );
 };
 
-// Special Orders Component
+// Special Orders Component (unchanged from previous version)
 const SpecialOrders = () => {
   const { items, total, clearCart } = useCart();
   const { toast } = useToast();
@@ -801,11 +813,17 @@ const SpecialOrders = () => {
                     <div className="space-y-2">
                       {items.map((item) => (
                         <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
-                            <div className="font-medium">{item.name}</div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="font-medium">{item.name}</div>
+                              {/* Show kit badge if item is a kit */}
+                              <KitCheckBadge vcpn={item.id} />
+                            </div>
                             <div className="text-sm text-muted-foreground">
                               {item.id} • Qty: {item.quantity}
                             </div>
+                            {/* Show kit components preview */}
+                            <KitPreview vcpn={item.id} />
                           </div>
                           <div className="text-right">
                             <div className="font-semibold">${(item.price * item.quantity).toFixed(2)}</div>
@@ -1118,7 +1136,10 @@ const SpecialOrders = () => {
                   {items.map((item) => (
                     <div key={item.id} className="flex justify-between text-sm">
                       <div className="flex-1">
-                        <div className="font-medium truncate">{item.name}</div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="font-medium truncate">{item.name}</div>
+                          <KitCheckBadge vcpn={item.id} />
+                        </div>
                         <div className="text-muted-foreground">Qty: {item.quantity}</div>
                       </div>
                       <div className="text-right">
@@ -1162,7 +1183,29 @@ const SpecialOrders = () => {
   );
 };
 
-// Main Parts component with tab functionality
+// Kit Check Badge Component
+const KitCheckBadge = ({ vcpn }: { vcpn: string }) => {
+  const { isKit, isLoading } = useKitCheck(vcpn);
+  
+  if (isLoading || !isKit) return null;
+  
+  return <KitBadge />;
+};
+
+// Kit Preview Component for cart items
+const KitPreview = ({ vcpn }: { vcpn: string }) => {
+  const { isKit } = useKitCheck(vcpn);
+  
+  if (!isKit) return null;
+  
+  return (
+    <div className="mt-2">
+      <CompactKitDisplay kitVcpn={vcpn} className="text-xs" />
+    </div>
+  );
+};
+
+// Main Parts component with tab functionality and kit support
 const Parts = () => {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -1191,7 +1234,7 @@ const Parts = () => {
     window.history.replaceState({}, '', url);
   }, [currentTab]);
 
-  // Mock data for parts with enhanced fields
+  // Mock data for parts with enhanced fields including kit support
   const mockParts: InventoryPart[] = [
     {
       id: 'PART-001',
@@ -1220,6 +1263,33 @@ const Parts = () => {
       discount_percentage: 30.8
     },
     {
+      id: 'KIT-001',
+      name: 'Complete Brake Service Kit',
+      description: 'Complete brake service kit with pads, rotors, and hardware',
+      sku: 'BSK-COMP-001',
+      quantity: 8,
+      price: 299.99,
+      cost: 150.00,
+      category: 'Brakes',
+      supplier: 'BrakeTech Industries',
+      reorder_level: 5,
+      created_at: '2024-01-15T10:00:00Z',
+      updated_at: '2024-01-20T14:30:00Z',
+      keystone_vcpn: 'BT-KIT-001',
+      keystone_synced: true,
+      keystone_last_sync: '2024-01-20T14:30:00Z',
+      warehouse: 'Main',
+      location: 'A-20-A',
+      brand: 'BrakeTech',
+      weight: 15.2,
+      dimensions: '18x12x8 inches',
+      warranty: '2 years',
+      list_price: 399.99,
+      discount_percentage: 25.0,
+      is_kit: true,
+      kit_component_count: 4
+    },
+    {
       id: 'PART-002',
       name: 'Oil Filter - Standard',
       description: 'Standard oil filter for most passenger vehicles',
@@ -1243,6 +1313,33 @@ const Parts = () => {
       warranty: '1 year',
       list_price: 18.99,
       discount_percentage: 31.6
+    },
+    {
+      id: 'KIT-002',
+      name: 'Oil Change Service Kit',
+      description: 'Complete oil change kit with filter, oil, and drain plug gasket',
+      sku: 'OCS-KIT-002',
+      quantity: 25,
+      price: 49.99,
+      cost: 25.00,
+      category: 'Maintenance',
+      supplier: 'FilterMax Corp',
+      reorder_level: 10,
+      created_at: '2024-01-10T09:00:00Z',
+      updated_at: '2024-01-18T11:15:00Z',
+      keystone_vcpn: 'FM-KIT-002',
+      keystone_synced: true,
+      keystone_last_sync: '2024-01-18T11:15:00Z',
+      warehouse: 'Main',
+      location: 'B-25-A',
+      brand: 'FilterMax',
+      weight: 5.2,
+      dimensions: '12x8x6 inches',
+      warranty: '1 year',
+      list_price: 69.99,
+      discount_percentage: 28.6,
+      is_kit: true,
+      kit_component_count: 6
     },
     {
       id: 'PART-003',
@@ -1550,7 +1647,7 @@ const Parts = () => {
     });
   };
 
-  // Part card component
+  // Enhanced Part card component with kit support
   const PartCard = ({ part }: { part: InventoryPart }) => (
     <Card className="group hover:shadow-lg transition-all duration-200 border-gray-200 hover:border-gray-300">
       <CardContent className="p-4">
@@ -1566,6 +1663,7 @@ const Parts = () => {
               <Badge variant="secondary" className="text-xs">
                 {part.category}
               </Badge>
+              {part.is_kit && <KitBadge />}
               {part.keystone_synced && (
                 <Badge variant="outline" className="text-xs text-green-600 border-green-200">
                   Synced
@@ -1577,6 +1675,14 @@ const Parts = () => {
                 </Badge>
               )}
             </div>
+            {/* Kit component count */}
+            {part.is_kit && part.kit_component_count && (
+              <CompactKitDisplay 
+                kitVcpn={part.keystone_vcpn || part.id} 
+                componentCount={part.kit_component_count}
+                className="mb-2"
+              />
+            )}
           </div>
           <Button
             variant="ghost"
@@ -1631,7 +1737,7 @@ const Parts = () => {
     </Card>
   );
 
-  // List view component
+  // Enhanced List view component with kit support
   const PartListItem = ({ part }: { part: InventoryPart }) => (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
@@ -1642,10 +1748,19 @@ const Parts = () => {
               <p className="text-sm text-muted-foreground line-clamp-1">{part.description}</p>
               <div className="flex items-center gap-2 mt-1">
                 <Badge variant="secondary" className="text-xs">{part.category}</Badge>
+                {part.is_kit && <KitBadge />}
                 {part.keystone_synced && (
                   <Badge variant="outline" className="text-xs text-green-600 border-green-200">Synced</Badge>
                 )}
               </div>
+              {/* Kit component count */}
+              {part.is_kit && part.kit_component_count && (
+                <CompactKitDisplay 
+                  kitVcpn={part.keystone_vcpn || part.id} 
+                  componentCount={part.kit_component_count}
+                  className="mt-1"
+                />
+              )}
             </div>
             
             <div className="text-center">
@@ -1922,11 +2037,14 @@ const Parts = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Part Details Modal */}
+      {/* Enhanced Part Details Modal with Kit Support */}
       <Dialog open={!!selectedPart} onOpenChange={() => setSelectedPart(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedPart?.name}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedPart?.name}
+              {selectedPart?.is_kit && <KitBadge />}
+            </DialogTitle>
             <DialogDescription>
               Detailed part information and specifications
             </DialogDescription>
@@ -1961,6 +2079,18 @@ const Parts = () => {
                   {selectedPart.description || 'No description available'}
                 </div>
               </div>
+
+              {/* Kit Components Display */}
+              {selectedPart.is_kit && selectedPart.keystone_vcpn && (
+                <div>
+                  <Label className="text-sm font-medium mb-3 block">Kit Components</Label>
+                  <KitComponentsDisplay 
+                    kitVcpn={selectedPart.keystone_vcpn}
+                    showPricing={true}
+                    defaultExpanded={true}
+                  />
+                </div>
+              )}
 
               {/* Pricing and Stock */}
               <div className="grid grid-cols-2 gap-4">
