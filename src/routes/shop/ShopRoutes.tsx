@@ -25,7 +25,7 @@ import Invoices from "@/pages/shop/invoices";
 import NewInvoice from "@/pages/shop/invoices/NewInvoice";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { CustomersProvider } from "@/pages/shop/customers/CustomersContext";
-import { PartsCartProvider } from "@/contexts/parts/PartsCartContext";
+import { CartProvider } from "@/lib/minimal_cart_context";
 
 
 const ShopRoutes = () => {
@@ -195,9 +195,9 @@ const ShopRoutes = () => {
           path="parts"
           element={
             <ProtectedRoute>
-              <PartsCartProvider>
+              <CartProvider>
                 <Parts />
-              </PartsCartProvider>
+              </CartProvider>
             </ProtectedRoute>
           }
         />
