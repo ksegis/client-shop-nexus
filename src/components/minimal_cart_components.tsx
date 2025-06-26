@@ -20,7 +20,7 @@ import {
   ChevronRight,
   Info
 } from "lucide-react";
-import { useCart, CartItem } from '@/lib/enhanced_cart_context_with_kits';
+import { useCart, CartItem } from '@/lib/minimal_cart_context';
 import { useToast } from "@/hooks/use-toast";
 import { KitBadge, CompactKitDisplay } from '@/components/kit_components_display';
 import { Switch } from "@/components/ui/switch";
