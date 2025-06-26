@@ -22,7 +22,7 @@ import {
   Download,
   Upload,
   Database,
-  Sync,
+  RotateCcw,
   Info,
   Eye,
   Search
@@ -372,7 +372,7 @@ const KitManagement: React.FC = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sync className="h-5 w-5" />
+            <RotateCcw className="h-5 w-5" />
             Kit Synchronization
           </CardTitle>
           <CardDescription>
@@ -398,7 +398,7 @@ const KitManagement: React.FC = () => {
                 {isSyncing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Sync className="h-4 w-4" />
+                  <RotateCcw className="h-4 w-4" />
                 )}
                 Sync Kit
               </Button>
@@ -433,7 +433,7 @@ const KitManagement: React.FC = () => {
                   {isSyncing ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Sync className="h-4 w-4" />
+                    <RotateCcw className="h-4 w-4" />
                   )}
                   Sync All Kits ({allKits.length})
                 </Button>
@@ -488,43 +488,53 @@ const KitManagement: React.FC = () => {
                 className="pl-10"
               />
             </div>
+            <Badge variant="outline" className="flex items-center gap-1">
+              <Package className="h-3 w-3" />
+              {filteredKits.length} kits
+            </Badge>
           </div>
 
           {/* Kit List */}
-          {isLoadingKits ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              <span>Loading kits...</span>
-            </div>
-          ) : filteredKits.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Package className="h-12 w-12 mx-auto mb-4" />
-              <div>No kits found</div>
-              {kitSearchTerm && (
-                <div className="text-sm">Try adjusting your search terms</div>
-              )}
-            </div>
-          ) : (
-            <div className="border rounded-lg">
-              <Table>
-                <TableHeader>
+          <ScrollArea className="h-[400px] border rounded-md">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Kit VCPN</TableHead>
+                  <TableHead>Components</TableHead>
+                  <TableHead>Last Updated</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredKits.length === 0 ? (
                   <TableRow>
-                    <TableHead>Kit VCPN</TableHead>
-                    <TableHead>Components</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                      {isLoadingKits ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading kits...
+                        </div>
+                      ) : allKits.length === 0 ? (
+                        "No kits found. Sync some kits to get started."
+                      ) : (
+                        "No kits match your search."
+                      )}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredKits.map((kit) => (
+                ) : (
+                  filteredKits.map((kit) => (
                     <TableRow key={kit}>
-                      <TableCell className="font-mono">{kit}</TableCell>
+                      <TableCell className="font-medium">{kit}</TableCell>
                       <TableCell>
                         <Badge variant="secondary">
                           Loading...
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
+                      <TableCell className="text-muted-foreground">
+                        Recently
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button
@@ -535,15 +545,19 @@ const KitManagement: React.FC = () => {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                            <DialogContent className="max-w-4xl">
                               <DialogHeader>
                                 <DialogTitle>Kit Components: {kit}</DialogTitle>
                               </DialogHeader>
-                              <KitComponentsDisplay
-                                kitVcpn={kit}
-                                showPricing={true}
-                                defaultExpanded={true}
-                              />
+                              <div className="mt-4">
+                                {selectedKit === kit && (
+                                  <KitComponentsDisplay 
+                                    kitVcpn={kit}
+                                    showTitle={false}
+                                    expandByDefault={true}
+                                  />
+                                )}
+                              </div>
                             </DialogContent>
                           </Dialog>
                           
@@ -560,58 +574,50 @@ const KitManagement: React.FC = () => {
                             variant="ghost"
                             size="sm"
                             onClick={() => deleteKit(kit)}
-                            className="text-red-600 hover:text-red-800"
+                            className="text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </ScrollArea>
         </CardContent>
       </Card>
 
-      {/* System Information */}
+      {/* Kit Statistics */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Info className="h-5 w-5" />
-            System Information
+            Kit Statistics
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <Label className="font-medium">Total Kits in Database</Label>
-              <div className="text-muted-foreground">{allKits.length}</div>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold">{allKits.length}</div>
+              <div className="text-sm text-muted-foreground">Total Kits</div>
             </div>
-            <div>
-              <Label className="font-medium">Kit Cache Expiration</Label>
-              <div className="text-muted-foreground">{settings.kitCacheExpirationHours} hours</div>
-            </div>
-            <div>
-              <Label className="font-medium">Sync Batch Size</Label>
-              <div className="text-muted-foreground">{settings.kitSyncBatchSize} kits</div>
-            </div>
-            <div>
-              <Label className="font-medium">Auto-sync Enabled</Label>
-              <div className="text-muted-foreground">
-                {settings.autoSyncKitsOnInventoryUpdate ? 'Yes' : 'No'}
+            <div className="text-center">
+              <div className="text-2xl font-bold">
+                {settings.enableKitExpansionInCart ? 'ON' : 'OFF'}
               </div>
+              <div className="text-sm text-muted-foreground">Cart Expansion</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold">{settings.kitSyncBatchSize}</div>
+              <div className="text-sm text-muted-foreground">Batch Size</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold">{settings.kitCacheExpirationHours}h</div>
+              <div className="text-sm text-muted-foreground">Cache Duration</div>
             </div>
           </div>
-
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription className="text-xs">
-              Kit components are fetched from the Keystone API via the configured proxy. 
-              All requests use the environment variables for authentication and routing.
-            </AlertDescription>
-          </Alert>
         </CardContent>
       </Card>
     </div>
