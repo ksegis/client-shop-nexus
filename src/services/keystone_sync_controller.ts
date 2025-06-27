@@ -561,6 +561,8 @@ class KeystoneSyncController {
   }
 }
 
+// Export singleton instance AND class
+export const keystoneSyncController = new KeystoneSyncController();
 export default KeystoneSyncController;
 export { KeystoneSyncController };
 export type { SyncOptions, ComprehensiveSyncResult, SyncDecision };
