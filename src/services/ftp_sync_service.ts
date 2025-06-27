@@ -1,4 +1,4 @@
-// FTP Sync Service - eKeystone Integration Based on Official Documentation
+// FTP Sync Service - eKeystone Integration with Correct HTTP Methods
 // Implements both FTP file access and API calls through proxy
 
 import { getSupabaseClient } from '@/lib/supabase';
@@ -227,7 +227,7 @@ class FTPSyncService {
         // Note: GetKitComponents requires specific kit part numbers
         // For bulk sync, we might need to get all kits first
         fullKitPartNumber: options.categories?.join(',') || '' // Kit part numbers if specified
-      });
+      }, 'POST');
 
       if (!response.success) {
         throw new Error(response.message || 'API kit sync failed');
@@ -260,7 +260,7 @@ class FTPSyncService {
         securityToken: this.securityToken,
         method: options.forceRefresh ? 'GetInventoryFull' : 'CheckInventoryBulk',
         batchSize: options.batchSize || 1000
-      });
+      }, 'POST');
 
       if (!response.success) {
         throw new Error(response.message || 'API inventory sync failed');
@@ -290,7 +290,7 @@ class FTPSyncService {
         securityToken: this.securityToken,
         method: 'CheckPriceBulk',
         batchSize: options.batchSize || 1000
-      });
+      }, 'POST');
 
       if (!response.success) {
         throw new Error(response.message || 'API pricing sync failed');
@@ -321,7 +321,7 @@ class FTPSyncService {
         method: 'ftp_download',
         fileType: 'kits',
         batchSize: options.batchSize || 500
-      });
+      }, 'POST');
 
       if (!response.success) {
         throw new Error(response.message || 'FTP kit sync failed');
@@ -353,7 +353,7 @@ class FTPSyncService {
         fileType: 'inventory',
         forceRefresh: options.forceRefresh,
         batchSize: options.batchSize || 1000
-      });
+      }, 'POST');
 
       if (!response.success) {
         throw new Error(response.message || 'FTP inventory sync failed');
@@ -382,7 +382,7 @@ class FTPSyncService {
         method: 'ftp_download',
         fileType: 'pricing',
         batchSize: options.batchSize || 1000
-      });
+      }, 'POST');
 
       if (!response.success) {
         throw new Error(response.message || 'FTP pricing sync failed');
@@ -444,34 +444,52 @@ class FTPSyncService {
     };
   }
 
-  // HTTP request helper for proxy
-  private async makeProxyRequest(endpoint: string, data: any): Promise<any> {
+  // HTTP request helper for proxy - FIXED WITH PROPER HTTP METHODS
+  private async makeProxyRequest(endpoint: string, data: any, method: 'GET' | 'POST' = 'POST'): Promise<any> {
     const url = `${this.proxyBaseUrl}${endpoint}`;
     
     try {
-      console.log(`🌐 Making proxy request to: ${url}`);
+      console.log(`🌐 Making ${method} request to: ${url}`);
       console.log(`📤 Request data:`, { ...data, ftpCredentials: data.ftpCredentials ? '[HIDDEN]' : undefined });
       
-      const response = await fetch(url, {
-        method: 'POST',
+      const requestOptions: RequestInit = {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        },
-        body: JSON.stringify(data)
-      });
+        }
+      };
+
+      // Only add body for POST requests
+      if (method === 'POST' && data) {
+        requestOptions.body = JSON.stringify(data);
+      }
+
+      // For GET requests, add query parameters if data exists
+      let finalUrl = url;
+      if (method === 'GET' && data && Object.keys(data).length > 0) {
+        const params = new URLSearchParams();
+        Object.entries(data).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            params.append(key, String(value));
+          }
+        });
+        finalUrl = `${url}?${params.toString()}`;
+      }
+
+      const response = await fetch(finalUrl, requestOptions);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result = await response.json();
-      console.log(`✅ Proxy request successful:`, result);
+      console.log(`✅ ${method} request successful:`, result);
       
       return result;
 
     } catch (error) {
-      console.error(`❌ Proxy request failed:`, error);
+      console.error(`❌ ${method} request failed:`, error);
       throw error;
     }
   }
@@ -643,15 +661,11 @@ class FTPSyncService {
     }
   }
 
-  // Status and utility methods
+  // Status and utility methods - FIXED WITH GET REQUESTS
   async getFTPSyncStatus(): Promise<any> {
     try {
-      // Test both FTP and API connectivity through proxy
-      const response = await this.makeProxyRequest('/health', {
-        ftpCredentials: this.ftpCredentials,
-        accountNumber: this.accountNumber,
-        securityToken: this.securityToken
-      });
+      // Use GET request for health check
+      const response = await this.makeProxyRequest('/health', {}, 'GET');
 
       return {
         success: true,
@@ -722,14 +736,11 @@ class FTPSyncService {
     }
   }
 
-  // Test connectivity using correct approach
+  // Test connectivity using GET request
   async testFTPConnection(): Promise<{ success: boolean; message: string }> {
     try {
-      // Test the proxy service health
-      const response = await this.makeProxyRequest('/health', {
-        ftpCredentials: this.ftpCredentials,
-        accountNumber: this.accountNumber
-      });
+      // Use GET request for health check
+      const response = await this.makeProxyRequest('/health', {}, 'GET');
       
       return {
         success: true,
