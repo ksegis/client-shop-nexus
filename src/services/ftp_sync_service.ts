@@ -1,4 +1,4 @@
-// FTP Sync Service - eKeystone Integration with Correct HTTP Methods
+// FTP Sync Service - eKeystone Integration with CORS Fix
 // Implements both FTP file access and API calls through proxy
 
 import { getSupabaseClient } from '@/lib/supabase';
@@ -447,7 +447,7 @@ class FTPSyncService {
     };
   }
 
-  // HTTP request helper for proxy - FIXED WITH PROPER HTTP METHODS AND AUTHENTICATION
+  // FIXED: HTTP request helper with CORS-compatible headers
   private async makeProxyRequest(endpoint: string, data: any, method: 'GET' | 'POST' = 'POST'): Promise<any> {
     const url = `${this.proxyBaseUrl}${endpoint}`;
     
@@ -457,12 +457,14 @@ class FTPSyncService {
       
       const requestOptions: RequestInit = {
         method: method,
+        mode: 'cors', // Explicitly set CORS mode
+        credentials: 'omit', // Don't send credentials to avoid CORS issues
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          // Add authentication headers that the proxy might expect
-          'X-Account-Number': this.accountNumber,
-          'X-Security-Token': this.securityToken
+          // Remove custom headers that might trigger CORS preflight
+          // 'X-Account-Number': this.accountNumber,
+          // 'X-Security-Token': this.securityToken
         }
       };
 
