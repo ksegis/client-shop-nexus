@@ -1,579 +1,563 @@
+// FTP Sync Service - Keystone FTP Integration via Proxy
+// Routes through https://146-190-161-109.nip.io/ftp-sync/* endpoints
+
 import { getSupabaseClient } from '@/lib/supabase';
 
-// Types for FTP sync responses
-interface FTPInventoryItem {
+export interface FTPSyncResult {
+  success: boolean;
+  message: string;
+  itemsProcessed: number;
+  itemsUpdated: number;
+  itemsAdded: number;
+  errors: string[];
+  syncType: 'inventory' | 'pricing' | 'kits' | 'full';
+  timestamp: string;
+  source: 'ftp';
+}
+
+export interface FTPSyncOptions {
+  syncType: 'inventory' | 'pricing' | 'kits' | 'full';
+  forceRefresh?: boolean;
+  batchSize?: number;
+  categories?: string[];
+  dateFilter?: string; // YYYY-MM-DD format
+}
+
+export interface FTPInventoryItem {
   vcpn: string;
   name: string;
   description?: string;
+  category?: string;
   price: number;
   cost?: number;
   quantity: number;
-  category?: string;
-  brand?: string;
   weight?: number;
+  brand?: string;
   warehouse?: string;
   location?: string;
-  core_charge?: number;
   availability?: string;
-  in_stock: boolean;
-  images?: string[];
-  specifications?: Record<string, any>;
-  compatibility?: Record<string, any>;
-  features?: Record<string, any>;
+  lastUpdated: string;
 }
 
-interface FTPPricingItem {
-  vcpn: string;
-  list_price: number;
-  dealer_price: number;
-  jobber_price: number;
-  retail_price: number;
-  core_charge?: number;
-  effective_date?: string;
-  currency: string;
-}
-
-interface FTPKitComponent {
-  kit_vcpn: string;
-  component_vcpn: string;
+export interface FTPKitComponent {
+  kitVcpn: string;
+  componentVcpn: string;
+  componentName: string;
   quantity: number;
+  unitPrice: number;
+  category?: string;
   description?: string;
-  component_name?: string;
-  required: boolean;
 }
 
-interface FTPSyncResponse {
-  success: boolean;
-  data: any[];
-  total_records: number;
-  sync_timestamp: string;
-  source: 'ftp';
-  errors?: string[];
-}
-
-interface SyncResult {
+export interface SyncResult {
   success: boolean;
   processed: number;
   updated: number;
   failed: number;
   errors: string[];
   duration: number;
-  source: 'ftp';
+  source: string;
 }
 
 class FTPSyncService {
-  private supabase = getSupabaseClient();
-  private proxyBaseUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL || 'https://146-190-161-109.nip.io';
-  private securityToken = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD || import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_DEV;
-  private accountNumber = import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER;
+  private supabase: any;
+  private baseUrl: string;
+  private accountNumber: string;
+  private securityToken: string;
 
-  /**
-   * Sync inventory data via FTP proxy
-   */
-  async syncInventoryFromFTP(): Promise<SyncResult> {
+  constructor() {
+    this.supabase = getSupabaseClient();
+    this.baseUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL || 'https://146-190-161-109.nip.io';
+    this.accountNumber = import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER || '';
+    this.securityToken = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD || '';
+  }
+
+  // Main FTP sync methods
+  async syncInventoryFTP(options: FTPSyncOptions = { syncType: 'inventory' }): Promise<FTPSyncResult> {
     const startTime = Date.now();
-    const result: SyncResult = {
-      success: false,
-      processed: 0,
-      updated: 0,
-      failed: 0,
-      errors: [],
-      duration: 0,
-      source: 'ftp'
-    };
-
+    
     try {
-      console.log('🔄 Starting FTP inventory sync...');
+      console.log('📁 Starting FTP inventory sync...');
       
-      // Log sync start
-      await this.logSyncStart('inventory', 'ftp');
+      const response = await this.makeRequest('/inventory', {
+        accountNumber: this.accountNumber,
+        securityToken: this.securityToken,
+        forceRefresh: options.forceRefresh || false,
+        batchSize: options.batchSize || 1000,
+        categories: options.categories || [],
+        dateFilter: options.dateFilter
+      });
 
-      // Call FTP proxy endpoint
-      const response = await this.callFTPProxy('/ftp-sync/inventory');
-      
       if (!response.success) {
-        throw new Error(`FTP sync failed: ${response.errors?.join(', ')}`);
+        throw new Error(response.message || 'FTP inventory sync failed');
       }
 
-      const inventoryData: FTPInventoryItem[] = response.data;
-      result.processed = inventoryData.length;
+      // Process and store inventory data
+      const result = await this.processInventoryData(response.data);
+      
+      const syncResult: FTPSyncResult = {
+        success: true,
+        message: `FTP inventory sync completed successfully`,
+        itemsProcessed: result.processed,
+        itemsUpdated: result.updated,
+        itemsAdded: result.added,
+        errors: result.errors,
+        syncType: 'inventory',
+        timestamp: new Date().toISOString(),
+        source: 'ftp'
+      };
 
-      // Process in batches to avoid overwhelming the database
-      const batchSize = 100;
-      for (let i = 0; i < inventoryData.length; i += batchSize) {
-        const batch = inventoryData.slice(i, i + batchSize);
-        
-        try {
-          const batchResult = await this.upsertInventoryBatch(batch);
-          result.updated += batchResult.updated;
-          result.failed += batchResult.failed;
-          result.errors.push(...batchResult.errors);
-        } catch (error) {
-          console.error(`❌ Batch ${i}-${i + batchSize} failed:`, error);
-          result.failed += batch.length;
-          result.errors.push(`Batch ${i}-${i + batchSize}: ${error.message}`);
-        }
-      }
-
-      result.success = result.failed < result.processed * 0.5; // Success if <50% failed
-      result.duration = Date.now() - startTime;
-
-      // Log sync completion
-      await this.logSyncCompletion('inventory', 'ftp', result);
-
-      console.log(`✅ FTP inventory sync completed: ${result.updated} updated, ${result.failed} failed`);
-      return result;
+      await this.logSyncResult(syncResult);
+      console.log('✅ FTP inventory sync completed:', syncResult);
+      
+      return syncResult;
 
     } catch (error) {
       console.error('❌ FTP inventory sync failed:', error);
-      result.duration = Date.now() - startTime;
-      result.errors.push(error.message);
       
-      await this.logSyncError('inventory', 'ftp', error.message);
-      return result;
+      const errorResult: FTPSyncResult = {
+        success: false,
+        message: `FTP inventory sync failed: ${error.message}`,
+        itemsProcessed: 0,
+        itemsUpdated: 0,
+        itemsAdded: 0,
+        errors: [error.message],
+        syncType: 'inventory',
+        timestamp: new Date().toISOString(),
+        source: 'ftp'
+      };
+
+      await this.logSyncResult(errorResult);
+      return errorResult;
     }
   }
 
-  /**
-   * Sync pricing data via FTP proxy
-   */
-  async syncPricingFromFTP(): Promise<SyncResult> {
+  async syncKitsFTP(options: FTPSyncOptions = { syncType: 'kits' }): Promise<FTPSyncResult> {
     const startTime = Date.now();
-    const result: SyncResult = {
-      success: false,
-      processed: 0,
-      updated: 0,
-      failed: 0,
-      errors: [],
-      duration: 0,
-      source: 'ftp'
-    };
-
+    
     try {
-      console.log('🔄 Starting FTP pricing sync...');
+      console.log('📁 Starting FTP kits sync...');
       
-      await this.logSyncStart('pricing', 'ftp');
+      const response = await this.makeRequest('/kits', {
+        accountNumber: this.accountNumber,
+        securityToken: this.securityToken,
+        forceRefresh: options.forceRefresh || false,
+        batchSize: options.batchSize || 500
+      });
 
-      const response = await this.callFTPProxy('/ftp-sync/pricing');
-      
       if (!response.success) {
-        throw new Error(`FTP pricing sync failed: ${response.errors?.join(', ')}`);
+        throw new Error(response.message || 'FTP kits sync failed');
       }
 
-      const pricingData: FTPPricingItem[] = response.data;
-      result.processed = pricingData.length;
+      // Process and store kit data
+      const result = await this.processKitData(response.data);
+      
+      const syncResult: FTPSyncResult = {
+        success: true,
+        message: `FTP kits sync completed successfully`,
+        itemsProcessed: result.processed,
+        itemsUpdated: result.updated,
+        itemsAdded: result.added,
+        errors: result.errors,
+        syncType: 'kits',
+        timestamp: new Date().toISOString(),
+        source: 'ftp'
+      };
 
-      const batchSize = 100;
-      for (let i = 0; i < pricingData.length; i += batchSize) {
-        const batch = pricingData.slice(i, i + batchSize);
-        
-        try {
-          const batchResult = await this.upsertPricingBatch(batch);
-          result.updated += batchResult.updated;
-          result.failed += batchResult.failed;
-          result.errors.push(...batchResult.errors);
-        } catch (error) {
-          console.error(`❌ Pricing batch ${i}-${i + batchSize} failed:`, error);
-          result.failed += batch.length;
-          result.errors.push(`Pricing batch ${i}-${i + batchSize}: ${error.message}`);
-        }
+      await this.logSyncResult(syncResult);
+      console.log('✅ FTP kits sync completed:', syncResult);
+      
+      return syncResult;
+
+    } catch (error) {
+      console.error('❌ FTP kits sync failed:', error);
+      
+      const errorResult: FTPSyncResult = {
+        success: false,
+        message: `FTP kits sync failed: ${error.message}`,
+        itemsProcessed: 0,
+        itemsUpdated: 0,
+        itemsAdded: 0,
+        errors: [error.message],
+        syncType: 'kits',
+        timestamp: new Date().toISOString(),
+        source: 'ftp'
+      };
+
+      await this.logSyncResult(errorResult);
+      return errorResult;
+    }
+  }
+
+  async syncPricingFTP(options: FTPSyncOptions = { syncType: 'pricing' }): Promise<FTPSyncResult> {
+    const startTime = Date.now();
+    
+    try {
+      console.log('📁 Starting FTP pricing sync...');
+      
+      const response = await this.makeRequest('/pricing', {
+        accountNumber: this.accountNumber,
+        securityToken: this.securityToken,
+        forceRefresh: options.forceRefresh || false,
+        batchSize: options.batchSize || 1000,
+        dateFilter: options.dateFilter
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || 'FTP pricing sync failed');
       }
 
-      result.success = result.failed < result.processed * 0.5;
-      result.duration = Date.now() - startTime;
+      // Process and store pricing data
+      const result = await this.processPricingData(response.data);
+      
+      const syncResult: FTPSyncResult = {
+        success: true,
+        message: `FTP pricing sync completed successfully`,
+        itemsProcessed: result.processed,
+        itemsUpdated: result.updated,
+        itemsAdded: result.added,
+        errors: result.errors,
+        syncType: 'pricing',
+        timestamp: new Date().toISOString(),
+        source: 'ftp'
+      };
 
-      await this.logSyncCompletion('pricing', 'ftp', result);
-
-      console.log(`✅ FTP pricing sync completed: ${result.updated} updated, ${result.failed} failed`);
-      return result;
+      await this.logSyncResult(syncResult);
+      console.log('✅ FTP pricing sync completed:', syncResult);
+      
+      return syncResult;
 
     } catch (error) {
       console.error('❌ FTP pricing sync failed:', error);
-      result.duration = Date.now() - startTime;
-      result.errors.push(error.message);
       
-      await this.logSyncError('pricing', 'ftp', error.message);
-      return result;
+      const errorResult: FTPSyncResult = {
+        success: false,
+        message: `FTP pricing sync failed: ${error.message}`,
+        itemsProcessed: 0,
+        itemsUpdated: 0,
+        itemsAdded: 0,
+        errors: [error.message],
+        syncType: 'pricing',
+        timestamp: new Date().toISOString(),
+        source: 'ftp'
+      };
+
+      await this.logSyncResult(errorResult);
+      return errorResult;
     }
   }
 
-  /**
-   * Sync kit data via FTP proxy
-   */
-  async syncKitsFromFTP(): Promise<SyncResult> {
-    const startTime = Date.now();
-    const result: SyncResult = {
-      success: false,
-      processed: 0,
-      updated: 0,
-      failed: 0,
-      errors: [],
+  // Legacy method names for compatibility
+  async syncInventoryFromFTP(): Promise<SyncResult> {
+    const result = await this.syncInventoryFTP();
+    return {
+      success: result.success,
+      processed: result.itemsProcessed,
+      updated: result.itemsUpdated,
+      failed: result.errors.length,
+      errors: result.errors,
       duration: 0,
       source: 'ftp'
     };
+  }
 
+  async syncKitsFromFTP(): Promise<SyncResult> {
+    const result = await this.syncKitsFTP();
+    return {
+      success: result.success,
+      processed: result.itemsProcessed,
+      updated: result.itemsUpdated,
+      failed: result.errors.length,
+      errors: result.errors,
+      duration: 0,
+      source: 'ftp'
+    };
+  }
+
+  async syncPricingFromFTP(): Promise<SyncResult> {
+    const result = await this.syncPricingFTP();
+    return {
+      success: result.success,
+      processed: result.itemsProcessed,
+      updated: result.itemsUpdated,
+      failed: result.errors.length,
+      errors: result.errors,
+      duration: 0,
+      source: 'ftp'
+    };
+  }
+
+  // HTTP request helper
+  private async makeRequest(endpoint: string, data: any): Promise<any> {
+    const url = `${this.baseUrl}/ftp-sync${endpoint}`;
+    
     try {
-      console.log('🔄 Starting FTP kit sync...');
+      console.log(`🌐 Making FTP request to: ${url}`);
       
-      await this.logSyncStart('kits', 'ftp');
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
 
-      const response = await this.callFTPProxy('/ftp-sync/kits');
-      
-      if (!response.success) {
-        throw new Error(`FTP kit sync failed: ${response.errors?.join(', ')}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const kitData: FTPKitComponent[] = response.data;
-      result.processed = kitData.length;
+      const result = await response.json();
+      console.log(`✅ FTP request successful:`, result);
+      
+      return result;
 
-      const batchSize = 50; // Smaller batches for kit components
-      for (let i = 0; i < kitData.length; i += batchSize) {
-        const batch = kitData.slice(i, i + batchSize);
-        
+    } catch (error) {
+      console.error(`❌ FTP request failed:`, error);
+      throw error;
+    }
+  }
+
+  // Data processing methods
+  private async processInventoryData(data: FTPInventoryItem[]): Promise<any> {
+    try {
+      let processed = 0;
+      let updated = 0;
+      let added = 0;
+      const errors: string[] = [];
+
+      for (const item of data) {
         try {
-          const batchResult = await this.upsertKitBatch(batch);
-          result.updated += batchResult.updated;
-          result.failed += batchResult.failed;
-          result.errors.push(...batchResult.errors);
-        } catch (error) {
-          console.error(`❌ Kit batch ${i}-${i + batchSize} failed:`, error);
-          result.failed += batch.length;
-          result.errors.push(`Kit batch ${i}-${i + batchSize}: ${error.message}`);
+          // Upsert inventory item
+          const { error } = await this.supabase
+            .from('inventory')
+            .upsert({
+              vcpn: item.vcpn,
+              name: item.name,
+              description: item.description,
+              category: item.category,
+              price: item.price,
+              cost: item.cost,
+              quantity: item.quantity,
+              weight: item.weight,
+              brand: item.brand,
+              warehouse: item.warehouse,
+              location: item.location,
+              availability: item.availability,
+              last_updated: item.lastUpdated,
+              sync_source: 'ftp',
+              sync_timestamp: new Date().toISOString()
+            }, {
+              onConflict: 'vcpn'
+            });
+
+          if (error) {
+            errors.push(`Failed to upsert ${item.vcpn}: ${error.message}`);
+          } else {
+            processed++;
+            // For simplicity, count all as updated
+            updated++;
+          }
+
+        } catch (itemError) {
+          errors.push(`Error processing ${item.vcpn}: ${itemError.message}`);
         }
       }
 
-      result.success = result.failed < result.processed * 0.5;
-      result.duration = Date.now() - startTime;
-
-      await this.logSyncCompletion('kits', 'ftp', result);
-
-      console.log(`✅ FTP kit sync completed: ${result.updated} updated, ${result.failed} failed`);
-      return result;
+      return { processed, updated, added, errors };
 
     } catch (error) {
-      console.error('❌ FTP kit sync failed:', error);
-      result.duration = Date.now() - startTime;
-      result.errors.push(error.message);
-      
-      await this.logSyncError('kits', 'ftp', error.message);
-      return result;
+      console.error('❌ Failed to process inventory data:', error);
+      throw error;
     }
   }
 
-  /**
-   * Call FTP proxy endpoint
-   */
-  private async callFTPProxy(endpoint: string): Promise<FTPSyncResponse> {
-    const url = `${this.proxyBaseUrl}${endpoint}`;
-    
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    // Add authentication headers
-    if (this.securityToken) {
-      headers['Authorization'] = `Bearer ${this.securityToken}`;
-    }
-    if (this.accountNumber) {
-      headers['X-Account-Number'] = this.accountNumber;
-    }
-
-    console.log(`🌐 Calling FTP proxy: ${url}`);
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
-    }
-
-    const data = await response.json();
-    return data;
-  }
-
-  /**
-   * Upsert inventory batch to database
-   */
-  private async upsertInventoryBatch(items: FTPInventoryItem[]): Promise<{updated: number, failed: number, errors: string[]}> {
-    const result = { updated: 0, failed: 0, errors: [] };
-
+  private async processKitData(data: FTPKitComponent[]): Promise<any> {
     try {
-      // Transform FTP data to match database schema
-      const dbItems = items.map(item => ({
-        name: item.name,
-        description: item.description,
-        sku: item.vcpn, // Map VCPN to SKU
-        quantity: item.quantity,
-        price: item.price,
-        cost: item.cost,
-        category: item.category,
-        supplier: item.brand, // Map brand to supplier
-        core_charge: item.core_charge,
-        keystone_vcpn: item.vcpn,
-        keystone_synced: true,
-        keystone_last_sync: new Date().toISOString(),
-        keystone_sync_status: 'success',
-        warehouse: item.warehouse,
-        location: item.location,
-        brand: item.brand,
-        weight: item.weight,
-        availability: item.availability,
-        in_stock: item.in_stock,
-        images: item.images ? { urls: item.images } : null,
-        compatibility: item.compatibility,
-        features: item.features,
-        updated_at: new Date().toISOString()
-      }));
+      let processed = 0;
+      let updated = 0;
+      let added = 0;
+      const errors: string[] = [];
 
-      // Use upsert with keystone_vcpn as the conflict resolution key
-      const { data, error } = await this.supabase
-        .from('inventory')
-        .upsert(dbItems, { 
-          onConflict: 'keystone_vcpn',
-          ignoreDuplicates: false 
-        })
-        .select('keystone_vcpn');
+      for (const kit of data) {
+        try {
+          // Upsert kit component
+          const { error } = await this.supabase
+            .from('keystone_kit_components')
+            .upsert({
+              kit_vcpn: kit.kitVcpn,
+              component_vcpn: kit.componentVcpn,
+              component_name: kit.componentName,
+              quantity: kit.quantity,
+              unit_price: kit.unitPrice,
+              category: kit.category,
+              description: kit.description,
+              sync_source: 'ftp',
+              sync_timestamp: new Date().toISOString()
+            }, {
+              onConflict: 'kit_vcpn,component_vcpn'
+            });
 
-      if (error) {
-        console.error('❌ Database upsert error:', error);
-        result.failed = items.length;
-        result.errors.push(`Database error: ${error.message}`);
-      } else {
-        result.updated = data?.length || items.length;
-        console.log(`✅ Upserted ${result.updated} inventory items`);
-      }
-
-    } catch (error) {
-      console.error('❌ Inventory batch upsert failed:', error);
-      result.failed = items.length;
-      result.errors.push(`Batch upsert error: ${error.message}`);
-    }
-
-    return result;
-  }
-
-  /**
-   * Upsert pricing batch to database
-   */
-  private async upsertPricingBatch(items: FTPPricingItem[]): Promise<{updated: number, failed: number, errors: string[]}> {
-    const result = { updated: 0, failed: 0, errors: [] };
-
-    try {
-      // Transform FTP pricing data to match database schema
-      const dbItems = items.map(item => ({
-        vcpn: item.vcpn,
-        list_price: item.list_price,
-        dealer_price: item.dealer_price,
-        jobber_price: item.jobber_price,
-        retail_price: item.retail_price,
-        core_charge: item.core_charge,
-        effective_date: item.effective_date,
-        currency: item.currency,
-        last_updated: new Date().toISOString(),
-        sync_source: 'ftp'
-      }));
-
-      const { data, error } = await this.supabase
-        .from('keystone_pricing')
-        .upsert(dbItems, { 
-          onConflict: 'vcpn',
-          ignoreDuplicates: false 
-        })
-        .select('vcpn');
-
-      if (error) {
-        console.error('❌ Pricing database upsert error:', error);
-        result.failed = items.length;
-        result.errors.push(`Pricing database error: ${error.message}`);
-      } else {
-        result.updated = data?.length || items.length;
-        console.log(`✅ Upserted ${result.updated} pricing items`);
-      }
-
-    } catch (error) {
-      console.error('❌ Pricing batch upsert failed:', error);
-      result.failed = items.length;
-      result.errors.push(`Pricing batch upsert error: ${error.message}`);
-    }
-
-    return result;
-  }
-
-  /**
-   * Upsert kit batch to database
-   */
-  private async upsertKitBatch(items: FTPKitComponent[]): Promise<{updated: number, failed: number, errors: string[]}> {
-    const result = { updated: 0, failed: 0, errors: [] };
-
-    try {
-      // Transform FTP kit data to match database schema
-      const dbItems = items.map(item => ({
-        kit_vcpn: item.kit_vcpn,
-        component_vcpn: item.component_vcpn,
-        quantity: item.quantity,
-        description: item.description || item.component_name,
-        required: item.required,
-        sync_source: 'ftp',
-        last_synced: new Date().toISOString()
-      }));
-
-      const { data, error } = await this.supabase
-        .from('keystone_kit_components')
-        .upsert(dbItems, { 
-          onConflict: 'kit_vcpn,component_vcpn',
-          ignoreDuplicates: false 
-        })
-        .select('kit_vcpn, component_vcpn');
-
-      if (error) {
-        console.error('❌ Kit database upsert error:', error);
-        result.failed = items.length;
-        result.errors.push(`Kit database error: ${error.message}`);
-      } else {
-        result.updated = data?.length || items.length;
-        console.log(`✅ Upserted ${result.updated} kit components`);
-      }
-
-    } catch (error) {
-      console.error('❌ Kit batch upsert failed:', error);
-      result.failed = items.length;
-      result.errors.push(`Kit batch upsert error: ${error.message}`);
-    }
-
-    return result;
-  }
-
-  /**
-   * Log sync start
-   */
-  private async logSyncStart(syncType: string, source: string): Promise<void> {
-    try {
-      await this.supabase
-        .from('keystone_sync_logs')
-        .insert({
-          sync_type: syncType,
-          status: 'running',
-          source: source,
-          started_at: new Date().toISOString()
-        });
-    } catch (error) {
-      console.warn('⚠️ Failed to log sync start:', error);
-    }
-  }
-
-  /**
-   * Log sync completion
-   */
-  private async logSyncCompletion(syncType: string, source: string, result: SyncResult): Promise<void> {
-    try {
-      await this.supabase
-        .from('keystone_sync_logs')
-        .insert({
-          sync_type: syncType,
-          status: result.success ? 'completed' : 'failed',
-          source: source,
-          started_at: new Date(Date.now() - result.duration).toISOString(),
-          completed_at: new Date().toISOString(),
-          items_processed: result.processed,
-          items_updated: result.updated,
-          items_failed: result.failed,
-          error_message: result.errors.length > 0 ? result.errors.join('; ') : null,
-          sync_details: {
-            duration_ms: result.duration,
-            errors: result.errors,
-            source: source
+          if (error) {
+            errors.push(`Failed to upsert kit ${kit.kitVcpn}/${kit.componentVcpn}: ${error.message}`);
+          } else {
+            processed++;
+            updated++;
           }
-        });
-    } catch (error) {
-      console.warn('⚠️ Failed to log sync completion:', error);
-    }
-  }
 
-  /**
-   * Log sync error
-   */
-  private async logSyncError(syncType: string, source: string, errorMessage: string): Promise<void> {
-    try {
-      await this.supabase
-        .from('keystone_sync_logs')
-        .insert({
-          sync_type: syncType,
-          status: 'failed',
-          source: source,
-          started_at: new Date().toISOString(),
-          completed_at: new Date().toISOString(),
-          items_processed: 0,
-          items_updated: 0,
-          items_failed: 0,
-          error_message: errorMessage,
-          sync_details: {
-            source: source,
-            error: errorMessage
-          }
-        });
-    } catch (error) {
-      console.warn('⚠️ Failed to log sync error:', error);
-    }
-  }
-
-  /**
-   * Get sync status and history
-   */
-  async getSyncHistory(limit: number = 10): Promise<any[]> {
-    try {
-      const { data, error } = await this.supabase
-        .from('keystone_sync_logs')
-        .select('*')
-        .order('started_at', { ascending: false })
-        .limit(limit);
-
-      if (error) {
-        console.error('❌ Failed to get sync history:', error);
-        return [];
+        } catch (itemError) {
+          errors.push(`Error processing kit ${kit.kitVcpn}: ${itemError.message}`);
+        }
       }
 
-      return data || [];
+      return { processed, updated, added, errors };
+
     } catch (error) {
-      console.error('❌ Failed to get sync history:', error);
-      return [];
+      console.error('❌ Failed to process kit data:', error);
+      throw error;
     }
   }
 
-  /**
-   * Get last sync info for a specific type and source
-   */
-  async getLastSyncInfo(syncType: string, source?: string): Promise<any | null> {
+  private async processPricingData(data: any[]): Promise<any> {
     try {
-      let query = this.supabase
+      let processed = 0;
+      let updated = 0;
+      let added = 0;
+      const errors: string[] = [];
+
+      for (const item of data) {
+        try {
+          // Upsert pricing data
+          const { error } = await this.supabase
+            .from('keystone_pricing')
+            .upsert({
+              vcpn: item.vcpn,
+              price: item.price,
+              cost: item.cost,
+              effective_date: item.effectiveDate,
+              sync_source: 'ftp',
+              sync_timestamp: new Date().toISOString()
+            }, {
+              onConflict: 'vcpn'
+            });
+
+          if (error) {
+            errors.push(`Failed to upsert pricing ${item.vcpn}: ${error.message}`);
+          } else {
+            processed++;
+            updated++;
+          }
+
+        } catch (itemError) {
+          errors.push(`Error processing pricing ${item.vcpn}: ${itemError.message}`);
+        }
+      }
+
+      return { processed, updated, added, errors };
+
+    } catch (error) {
+      console.error('❌ Failed to process pricing data:', error);
+      throw error;
+    }
+  }
+
+  // Status and utility methods
+  async getFTPSyncStatus(): Promise<any> {
+    try {
+      const response = await this.makeRequest('/status', {
+        accountNumber: this.accountNumber
+      });
+
+      return {
+        success: true,
+        message: 'FTP service is available',
+        status: response.status,
+        lastSync: response.lastSync,
+        availableFiles: response.availableFiles
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        message: `FTP service unavailable: ${error.message}`,
+        status: 'error'
+      };
+    }
+  }
+
+  async getLastSyncInfo(syncType: string): Promise<any> {
+    try {
+      const { data } = await this.supabase
         .from('keystone_sync_logs')
         .select('*')
         .eq('sync_type', syncType)
-        .order('started_at', { ascending: false })
-        .limit(1);
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      if (source) {
-        query = query.eq('source', source);
-      }
+      return {
+        lastSync: data?.completed_at,
+        status: data?.status,
+        itemsProcessed: data?.items_processed,
+        message: data?.error_message
+      };
 
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('❌ Failed to get last sync info:', error);
-        return null;
-      }
-
-      return data?.[0] || null;
     } catch (error) {
-      console.error('❌ Failed to get last sync info:', error);
-      return null;
+      return {
+        lastSync: null,
+        status: 'never',
+        itemsProcessed: 0,
+        message: 'No sync history found'
+      };
+    }
+  }
+
+  // Log sync results to database
+  private async logSyncResult(result: FTPSyncResult): Promise<void> {
+    try {
+      await this.supabase
+        .from('keystone_sync_logs')
+        .insert({
+          sync_type: result.syncType,
+          status: result.success ? 'completed' : 'failed',
+          items_processed: result.itemsProcessed,
+          items_updated: result.itemsUpdated,
+          items_failed: result.errors.length,
+          error_message: result.errors.join('; ') || null,
+          sync_details: {
+            source: result.source,
+            timestamp: result.timestamp,
+            message: result.message
+          }
+        });
+    } catch (error) {
+      console.error('❌ Failed to log sync result:', error);
+    }
+  }
+
+  // Test FTP connectivity
+  async testFTPConnection(): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await this.makeRequest('/test', {
+        accountNumber: this.accountNumber
+      });
+      return {
+        success: true,
+        message: 'FTP connection test successful'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `FTP connection test failed: ${error.message}`
+      };
     }
   }
 }
 
+// Export singleton instance - THIS IS THE KEY EXPORT
+export const ftpSyncService = new FTPSyncService();
+
+// Also export the class and default
 export default FTPSyncService;
 export { FTPSyncService };
-export type { SyncResult, FTPInventoryItem, FTPPricingItem, FTPKitComponent };
 
