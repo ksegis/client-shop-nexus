@@ -221,8 +221,8 @@ class FTPSyncService {
     try {
       // Use the proxy's /kits/components endpoint which should call GetKitComponents
       const response = await this.makeProxyRequest('/kits/components', {
-        accountNumber: this.accountNumber,
-        securityToken: this.securityToken,
+        Key: this.securityToken,
+        FullAccountNo: this.accountNumber,
         method: 'GetKitComponents',
         // Note: GetKitComponents requires specific kit part numbers
         // For bulk sync, we might need to get all kits first
@@ -256,8 +256,8 @@ class FTPSyncService {
       const endpoint = options.forceRefresh ? '/inventory/full' : '/inventory/bulk';
       
       const response = await this.makeProxyRequest(endpoint, {
-        accountNumber: this.accountNumber,
-        securityToken: this.securityToken,
+        Key: this.securityToken,
+        FullAccountNo: this.accountNumber,
         method: options.forceRefresh ? 'GetInventoryFull' : 'CheckInventoryBulk',
         batchSize: options.batchSize || 1000
       }, 'POST');
@@ -286,8 +286,8 @@ class FTPSyncService {
     try {
       // Use CheckPriceBulk through proxy
       const response = await this.makeProxyRequest('/pricing/bulk', {
-        accountNumber: this.accountNumber,
-        securityToken: this.securityToken,
+        Key: this.securityToken,
+        FullAccountNo: this.accountNumber,
         method: 'CheckPriceBulk',
         batchSize: options.batchSize || 1000
       }, 'POST');
@@ -317,7 +317,8 @@ class FTPSyncService {
     try {
       // Use proxy to download FTP files containing kit data
       const response = await this.makeProxyRequest('/kits/components', {
-        ftpCredentials: this.ftpCredentials,
+        Key: this.securityToken,
+        FullAccountNo: this.accountNumber,
         method: 'ftp_download',
         fileType: 'kits',
         batchSize: options.batchSize || 500
@@ -348,7 +349,8 @@ class FTPSyncService {
       const endpoint = options.forceRefresh ? '/inventory/full' : '/inventory/bulk';
       
       const response = await this.makeProxyRequest(endpoint, {
-        ftpCredentials: this.ftpCredentials,
+        Key: this.securityToken,
+        FullAccountNo: this.accountNumber,
         method: 'ftp_download',
         fileType: 'inventory',
         forceRefresh: options.forceRefresh,
@@ -378,7 +380,8 @@ class FTPSyncService {
   private async syncPricingViaProxy(options: FTPSyncOptions): Promise<any> {
     try {
       const response = await this.makeProxyRequest('/pricing/bulk', {
-        ftpCredentials: this.ftpCredentials,
+        Key: this.securityToken,
+        FullAccountNo: this.accountNumber,
         method: 'ftp_download',
         fileType: 'pricing',
         batchSize: options.batchSize || 1000
@@ -444,19 +447,22 @@ class FTPSyncService {
     };
   }
 
-  // HTTP request helper for proxy - FIXED WITH PROPER HTTP METHODS
+  // HTTP request helper for proxy - FIXED WITH PROPER HTTP METHODS AND AUTHENTICATION
   private async makeProxyRequest(endpoint: string, data: any, method: 'GET' | 'POST' = 'POST'): Promise<any> {
     const url = `${this.proxyBaseUrl}${endpoint}`;
     
     try {
       console.log(`🌐 Making ${method} request to: ${url}`);
-      console.log(`📤 Request data:`, { ...data, ftpCredentials: data.ftpCredentials ? '[HIDDEN]' : undefined });
+      console.log(`📤 Request data:`, { ...data, Key: data.Key ? '[HIDDEN]' : undefined });
       
       const requestOptions: RequestInit = {
         method: method,
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          // Add authentication headers that the proxy might expect
+          'X-Account-Number': this.accountNumber,
+          'X-Security-Token': this.securityToken
         }
       };
 
