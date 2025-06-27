@@ -35,13 +35,23 @@ import {
   MapPin,
   Building,
   Warehouse,
-  Box
+  Box,
+  HardDrive,
+  Cloud,
+  Wifi,
+  Download,
+  Upload,
+  FileText,
+  Layers,
+  GitBranch
 } from 'lucide-react';
 import { inventorySyncService } from '@/services/inventory_sync_service';
 import { priceCheckService } from '@/services/price_check_service';
 import { shippingQuoteService } from '@/services/shipping_quote_service';
 import { dropshipOrderService } from '@/services/dropship_order_service';
 import { orderTrackingService } from '@/services/order_tracking_service';
+import { ftpSyncService } from '@/services/ftp_sync_service';
+import { keystoneSyncController } from '@/services/keystone_sync_controller';
 import KitManagement from './kit_management_admin';
 
 const AdminSettings = () => {
@@ -58,6 +68,16 @@ const AdminSettings = () => {
     enabled: true,
     intervalHours: 12
   });
+
+  // FTP Sync state variables (NEW)
+  const [ftpSyncStatus, setFtpSyncStatus] = useState(null);
+  const [ftpSyncLoading, setFtpSyncLoading] = useState(false);
+  const [ftpSyncResults, setFtpSyncResults] = useState(null);
+  const [syncRecommendations, setSyncRecommendations] = useState([]);
+  const [syncMethodTest, setSyncMethodTest] = useState(null);
+  const [selectedSyncType, setSelectedSyncType] = useState('inventory');
+  const [syncStrategy, setSyncStrategy] = useState(null);
+  const [rateLimitStatus, setRateLimitStatus] = useState(null);
 
   // Price check state variables
   const [priceCheckStatus, setPriceCheckStatus] = useState(null);
@@ -115,9 +135,14 @@ const AdminSettings = () => {
     loadEnvironment();
     loadDeltaSyncSettings();
     refreshStatus();
+    loadFtpSyncStatus(); // NEW
+    loadSyncRecommendations(); // NEW
     
     // Set up auto-refresh every 30 seconds
-    const interval = setInterval(refreshStatus, 30000);
+    const interval = setInterval(() => {
+      refreshStatus();
+      loadFtpSyncStatus(); // NEW
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -161,6 +186,80 @@ const AdminSettings = () => {
       }
     } catch (error) {
       console.error('Error loading delta sync settings:', error);
+    }
+  };
+
+  // NEW FTP Sync Functions
+  const loadFtpSyncStatus = async () => {
+    try {
+      const status = await ftpSyncService.getFTPSyncStatus();
+      setFtpSyncStatus(status);
+      
+      // Update rate limit status
+      const rateLimitInfo = keystoneSyncController.getRateLimitStatus();
+      setRateLimitStatus(rateLimitInfo);
+    } catch (error) {
+      console.error('Error loading FTP sync status:', error);
+      setFtpSyncStatus({ success: false, message: error.message });
+    }
+  };
+
+  const loadSyncRecommendations = async () => {
+    try {
+      const recommendations = await keystoneSyncController.getSyncRecommendations();
+      setSyncRecommendations(recommendations.recommendations || []);
+    } catch (error) {
+      console.error('Error loading sync recommendations:', error);
+    }
+  };
+
+  const testSyncMethods = async () => {
+    try {
+      setFtpSyncLoading(true);
+      const results = await keystoneSyncController.testSyncMethods();
+      setSyncMethodTest(results);
+    } catch (error) {
+      console.error('Error testing sync methods:', error);
+      setSyncMethodTest({ error: error.message });
+    } finally {
+      setFtpSyncLoading(false);
+    }
+  };
+
+  const executeFtpSync = async (syncType = 'inventory', forceMethod = null) => {
+    try {
+      setFtpSyncLoading(true);
+      setFtpSyncResults(null);
+
+      // Determine sync conditions
+      const conditions = {
+        syncType,
+        forceMethod,
+        priority: 'normal',
+        isRateLimited: rateLimitStatus?.isRateLimited
+      };
+
+      // Get strategy first
+      const strategy = keystoneSyncController.determineSyncStrategy(conditions);
+      setSyncStrategy(strategy);
+
+      // Execute sync
+      const result = await keystoneSyncController.executeSync(conditions, { syncType });
+      setFtpSyncResults(result);
+
+      // Refresh status after sync
+      await loadFtpSyncStatus();
+      await loadSyncRecommendations();
+
+    } catch (error) {
+      console.error('Error executing FTP sync:', error);
+      setFtpSyncResults({
+        success: false,
+        message: error.message,
+        errors: [error.message]
+      });
+    } finally {
+      setFtpSyncLoading(false);
     }
   };
 
@@ -667,6 +766,61 @@ const AdminSettings = () => {
     return <Badge variant="outline" className={config.className}>{status}</Badge>;
   };
 
+  // NEW FTP Sync Helper Functions
+  const renderSyncStrategyBadge = (strategy) => {
+    if (!strategy) return null;
+
+    const methodColors = {
+      ftp: 'bg-blue-100 text-blue-800',
+      api: 'bg-green-100 text-green-800',
+      hybrid: 'bg-purple-100 text-purple-800'
+    };
+
+    return (
+      <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+        <div className="flex items-center gap-2">
+          {strategy.method === 'ftp' && <HardDrive className="h-4 w-4" />}
+          {strategy.method === 'api' && <Cloud className="h-4 w-4" />}
+          {strategy.method === 'hybrid' && <GitBranch className="h-4 w-4" />}
+          <Badge className={methodColors[strategy.method]}>
+            {strategy.method.toUpperCase()}
+          </Badge>
+        </div>
+        <div className="text-sm text-gray-600">
+          {strategy.reason}
+        </div>
+        <div className="text-xs text-gray-500 ml-auto">
+          Est: {strategy.estimatedTime}
+        </div>
+      </div>
+    );
+  };
+
+  const renderRateLimitStatus = () => {
+    if (!rateLimitStatus) return null;
+
+    if (rateLimitStatus.isRateLimited) {
+      const timeRemaining = Math.ceil(rateLimitStatus.timeRemaining / 1000 / 60);
+      return (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertTriangle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800">
+            <strong>API Rate Limited</strong> - Reset in {timeRemaining} minutes. Use FTP sync instead.
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    return (
+      <Alert className="border-green-200 bg-green-50">
+        <CheckCircle className="h-4 w-4 text-green-600" />
+        <AlertDescription className="text-green-800">
+          API is available for sync operations.
+        </AlertDescription>
+      </Alert>
+    );
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -745,12 +899,16 @@ const AdminSettings = () => {
         </Alert>
       )}
 
-      {/* Tabs Navigation */}
+      {/* Tabs Navigation - UPDATED to include FTP Sync */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="inventory" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
             Inventory
+          </TabsTrigger>
+          <TabsTrigger value="ftp-sync" className="flex items-center gap-2">
+            <HardDrive className="h-4 w-4" />
+            FTP Sync
           </TabsTrigger>
           <TabsTrigger value="pricing" className="flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
@@ -831,7 +989,328 @@ const AdminSettings = () => {
           </CardContent>
         </Card>
 
-        {/* Tab Contents */}
+        {/* NEW FTP Sync Tab */}
+        <TabsContent value="ftp-sync" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <HardDrive className="h-5 w-5" />
+                FTP Sync Management
+              </CardTitle>
+              <CardDescription>
+                Intelligent sync routing between FTP and API methods based on conditions
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              
+              {/* Rate Limit Status */}
+              {renderRateLimitStatus()}
+
+              {/* Sync Recommendations */}
+              {syncRecommendations.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium">Sync Recommendations</h3>
+                  {syncRecommendations.map((rec, index) => (
+                    <Alert key={index} className={
+                      rec.type === 'warning' ? 'border-yellow-200 bg-yellow-50' :
+                      rec.type === 'info' ? 'border-blue-200 bg-blue-50' :
+                      'border-gray-200 bg-gray-50'
+                    }>
+                      <AlertDescription>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <strong>{rec.title}</strong> - {rec.message}
+                          </div>
+                          <Badge variant="outline">{rec.priority}</Badge>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  ))}
+                </div>
+              )}
+
+              {/* Sync Strategy Display */}
+              {syncStrategy && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Current Sync Strategy</h3>
+                  {renderSyncStrategyBadge(syncStrategy)}
+                </div>
+              )}
+
+              {/* Quick Sync Actions */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Database className="h-5 w-5 text-blue-600" />
+                    <h3 className="font-medium">Inventory Sync</h3>
+                  </div>
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={() => executeFtpSync('inventory')}
+                      disabled={ftpSyncLoading}
+                      className="w-full"
+                      size="sm"
+                    >
+                      {ftpSyncLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                      Smart Sync
+                    </Button>
+                    <Button 
+                      onClick={() => executeFtpSync('inventory', 'ftp')}
+                      disabled={ftpSyncLoading}
+                      variant="outline"
+                      className="w-full"
+                      size="sm"
+                    >
+                      <HardDrive className="h-4 w-4 mr-2" />
+                      Force FTP
+                    </Button>
+                  </div>
+                </Card>
+
+                <Card className="p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Package className="h-5 w-5 text-green-600" />
+                    <h3 className="font-medium">Kits Sync</h3>
+                  </div>
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={() => executeFtpSync('kits')}
+                      disabled={ftpSyncLoading}
+                      className="w-full"
+                      size="sm"
+                    >
+                      {ftpSyncLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                      Smart Sync
+                    </Button>
+                    <Button 
+                      onClick={() => executeFtpSync('kits', 'ftp')}
+                      disabled={ftpSyncLoading}
+                      variant="outline"
+                      className="w-full"
+                      size="sm"
+                    >
+                      <HardDrive className="h-4 w-4 mr-2" />
+                      Force FTP
+                    </Button>
+                  </div>
+                </Card>
+
+                <Card className="p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <DollarSign className="h-5 w-5 text-purple-600" />
+                    <h3 className="font-medium">Pricing Sync</h3>
+                  </div>
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={() => executeFtpSync('pricing')}
+                      disabled={ftpSyncLoading}
+                      className="w-full"
+                      size="sm"
+                    >
+                      {ftpSyncLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                      Smart Sync
+                    </Button>
+                    <Button 
+                      onClick={() => executeFtpSync('pricing', 'ftp')}
+                      disabled={ftpSyncLoading}
+                      variant="outline"
+                      className="w-full"
+                      size="sm"
+                    >
+                      <HardDrive className="h-4 w-4 mr-2" />
+                      Force FTP
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Full Sync Options */}
+              <Card className="p-4 bg-blue-50 border-blue-200">
+                <div className="flex items-center gap-3 mb-3">
+                  <Layers className="h-5 w-5 text-blue-600" />
+                  <h3 className="font-medium">Full Sync Operations</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <Button 
+                    onClick={() => executeFtpSync('full')}
+                    disabled={ftpSyncLoading}
+                    variant="outline"
+                    className="border-blue-300 hover:bg-blue-100"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Smart Full Sync
+                  </Button>
+                  <Button 
+                    onClick={() => executeFtpSync('full', 'ftp')}
+                    disabled={ftpSyncLoading}
+                    variant="outline"
+                    className="border-blue-300 hover:bg-blue-100"
+                  >
+                    <HardDrive className="h-4 w-4 mr-2" />
+                    Force FTP Full Sync
+                  </Button>
+                </div>
+              </Card>
+
+              {/* Sync Method Testing */}
+              <Card className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium">Sync Method Testing</h3>
+                  <Button 
+                    onClick={testSyncMethods}
+                    disabled={ftpSyncLoading}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Wifi className="h-4 w-4 mr-2" />
+                    Test Methods
+                  </Button>
+                </div>
+                
+                {syncMethodTest && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-3 border rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <HardDrive className="h-4 w-4" />
+                          <span className="font-medium">FTP Method</span>
+                          <Badge variant={syncMethodTest.ftp.available ? "default" : "destructive"}>
+                            {syncMethodTest.ftp.available ? "Available" : "Unavailable"}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-600">{syncMethodTest.ftp.message}</p>
+                        {syncMethodTest.ftp.responseTime > 0 && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Response time: {syncMethodTest.ftp.responseTime}ms
+                          </p>
+                        )}
+                      </div>
+                      
+                      <div className="p-3 border rounded-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Cloud className="h-4 w-4" />
+                          <span className="font-medium">API Method</span>
+                          <Badge variant={syncMethodTest.api.available ? "default" : "destructive"}>
+                            {syncMethodTest.api.available ? "Available" : "Unavailable"}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-600">{syncMethodTest.api.message}</p>
+                        {syncMethodTest.api.responseTime > 0 && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Response time: {syncMethodTest.api.responseTime}ms
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <Alert className="border-blue-200 bg-blue-50">
+                      <AlertDescription className="text-blue-800">
+                        <strong>Recommendation:</strong> {syncMethodTest.recommendation}
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                )}
+              </Card>
+
+              {/* Sync Results */}
+              {ftpSyncResults && (
+                <Card className="p-4">
+                  <h3 className="font-medium mb-3">Last Sync Results</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      {ftpSyncResults.success ? (
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <XCircle className="h-5 w-5 text-red-600" />
+                      )}
+                      <span className={ftpSyncResults.success ? "text-green-800" : "text-red-800"}>
+                        {ftpSyncResults.message}
+                      </span>
+                      <Badge variant="outline" className="ml-auto">
+                        {ftpSyncResults.method?.toUpperCase()}
+                      </Badge>
+                    </div>
+                    
+                    {ftpSyncResults.success && (
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div className="text-center p-2 bg-gray-50 rounded">
+                          <div className="font-medium">{ftpSyncResults.itemsProcessed}</div>
+                          <div className="text-gray-600">Processed</div>
+                        </div>
+                        <div className="text-center p-2 bg-gray-50 rounded">
+                          <div className="font-medium">{ftpSyncResults.itemsUpdated}</div>
+                          <div className="text-gray-600">Updated</div>
+                        </div>
+                        <div className="text-center p-2 bg-gray-50 rounded">
+                          <div className="font-medium">{ftpSyncResults.itemsAdded}</div>
+                          <div className="text-gray-600">Added</div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {ftpSyncResults.errors && ftpSyncResults.errors.length > 0 && (
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-medium text-red-800">Errors:</h4>
+                        {ftpSyncResults.errors.slice(0, 5).map((error, index) => (
+                          <p key={index} className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                            {error}
+                          </p>
+                        ))}
+                        {ftpSyncResults.errors.length > 5 && (
+                          <p className="text-xs text-gray-500">
+                            ... and {ftpSyncResults.errors.length - 5} more errors
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    
+                    <div className="text-xs text-gray-500">
+                      Duration: {ftpSyncResults.duration ? `${Math.round(ftpSyncResults.duration / 1000)}s` : 'N/A'} | 
+                      Timestamp: {new Date(ftpSyncResults.timestamp).toLocaleString()}
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {/* FTP Status */}
+              {ftpSyncStatus && (
+                <Card className="p-4">
+                  <h3 className="font-medium mb-3">FTP Service Status</h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      {ftpSyncStatus.success ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-600" />
+                      )}
+                      <span className="text-sm">{ftpSyncStatus.message}</span>
+                    </div>
+                    
+                    {ftpSyncStatus.status && (
+                      <div className="text-sm text-gray-600">
+                        Status: {ftpSyncStatus.status}
+                      </div>
+                    )}
+                    
+                    {ftpSyncStatus.lastSync && (
+                      <div className="text-sm text-gray-600">
+                        Last sync: {new Date(ftpSyncStatus.lastSync).toLocaleString()}
+                      </div>
+                    )}
+                    
+                    {ftpSyncStatus.availableFiles && ftpSyncStatus.availableFiles.length > 0 && (
+                      <div className="text-sm text-gray-600">
+                        Available files: {ftpSyncStatus.availableFiles.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* EXISTING Tab Contents - ALL PRESERVED */}
         <TabsContent value="inventory" className="space-y-6">
           {/* Delta Sync Settings */}
           <Card>
@@ -941,83 +1420,710 @@ const AdminSettings = () => {
                   {isLoading ? (
                     <RefreshCw className="h-4 w-4 animate-spin" />
                   ) : (
-                    <TrendingUp className="h-4 w-4" />
+                    <Timer className="h-4 w-4" />
                   )}
                   Test Quantity Delta
                 </Button>
               </div>
+              
+              <p className="text-sm text-muted-foreground">
+                Test operations use limited data to avoid rate limiting. Use these to verify connectivity and functionality.
+              </p>
             </CardContent>
           </Card>
+
+          {/* Sync Status Display */}
+          {syncStatus && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Current Sync Status</CardTitle>
+                <CardDescription>
+                  Real-time status of inventory synchronization
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Database className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-medium">Last Full Sync</span>
+                    </div>
+                    <p className="text-lg font-semibold">{safeFormatRelativeTime(syncStatus.lastFullSync)}</p>
+                    <p className="text-xs text-muted-foreground">{safeFormatDate(syncStatus.lastFullSync)}</p>
+                  </div>
+                  
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <RotateCcw className="h-4 w-4 text-green-600" />
+                      <span className="text-sm font-medium">Last Delta Sync</span>
+                    </div>
+                    <p className="text-lg font-semibold">{safeFormatRelativeTime(syncStatus.lastDeltaSync)}</p>
+                    <p className="text-xs text-muted-foreground">{safeFormatDate(syncStatus.lastDeltaSync)}</p>
+                  </div>
+                  
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="h-4 w-4 text-purple-600" />
+                      <span className="text-sm font-medium">Next Scheduled</span>
+                    </div>
+                    <p className="text-lg font-semibold">{safeFormatFutureTime(syncStatus.nextScheduledSync)}</p>
+                    <p className="text-xs text-muted-foreground">{safeFormatDate(syncStatus.nextScheduledSync)}</p>
+                  </div>
+                  
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Activity className="h-4 w-4 text-orange-600" />
+                      <span className="text-sm font-medium">Status</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {getStatusBadge(syncStatus.status)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {safeDisplayValue(syncStatus.statusMessage, 'No additional information')}
+                    </p>
+                  </div>
+                </div>
+                
+                {syncStatus.isRateLimited && (
+                  <Alert className="border-red-200 bg-red-50">
+                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                    <AlertDescription className="text-red-800">
+                      <strong>Rate Limited:</strong> {syncStatus.rateLimitMessage}
+                      <br />
+                      <strong>Reset Time:</strong> {safeFormatDate(syncStatus.rateLimitResetTime)}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
+                {debugMode && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-medium mb-2">Debug Information</h4>
+                    <pre className="text-xs text-gray-600 overflow-auto">
+                      {JSON.stringify(syncStatus, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
-        <TabsContent value="pricing">
-          {/* Price Check Content - Add your existing price check content here */}
+        <TabsContent value="pricing" className="space-y-6">
+          {/* Price Check Tool */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <DollarSign className="h-5 w-5" />
-                Real-Time Price Check
+                Price Check Tool
               </CardTitle>
               <CardDescription>
-                Check current pricing for VCPNs using Keystone CheckPriceBulk API (1 check per hour)
+                Check current pricing for specific VCPNs from Keystone
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Price check functionality will be implemented here.</p>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="price-check-vcpns" className="text-sm font-medium">
+                  VCPNs to Check (max 12)
+                </Label>
+                <Textarea
+                  id="price-check-vcpns"
+                  placeholder="Enter VCPNs separated by newlines, commas, or spaces&#10;Example:&#10;VCPN123&#10;VCPN456&#10;VCPN789"
+                  value={priceCheckVcpns}
+                  onChange={(e) => setPriceCheckVcpns(e.target.value)}
+                  className="mt-1"
+                  rows={6}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter up to 12 VCPNs. Separate multiple VCPNs with newlines, commas, or spaces.
+                </p>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  onClick={handlePriceCheck}
+                  disabled={priceCheckLoading || priceCheckStatus?.isRateLimited}
+                  className="flex items-center gap-2"
+                >
+                  {priceCheckLoading ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4" />
+                  )}
+                  Check Prices
+                </Button>
+                
+                {priceCheckStatus?.isRateLimited && (
+                  <Button
+                    onClick={handleClearPriceRateLimit}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Clear Rate Limit (Test)
+                  </Button>
+                )}
+              </div>
+              
+              {priceCheckStatus?.isRateLimited && (
+                <Alert className="border-orange-200 bg-orange-50">
+                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                  <AlertDescription className="text-orange-800">
+                    <strong>Rate Limited:</strong> {priceCheckStatus.rateLimitMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {priceCheckResults.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Price Check Results</h4>
+                  <div className="space-y-2">
+                    {priceCheckResults.map((result, index) => (
+                      <div key={index} className="p-3 border rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-medium">{result.vcpn}</span>
+                            {result.description && (
+                              <p className="text-sm text-muted-foreground">{result.description}</p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            {result.success ? (
+                              <>
+                                <div className="text-lg font-semibold text-green-600">
+                                  ${result.price?.toFixed(2) || 'N/A'}
+                                </div>
+                                {result.cost && (
+                                  <div className="text-sm text-muted-foreground">
+                                    Cost: ${result.cost.toFixed(2)}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-sm text-red-600">
+                                {result.error || 'Price not available'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {debugMode && priceCheckStatus && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <h4 className="text-sm font-medium mb-2">Price Check Debug Information</h4>
+                  <pre className="text-xs text-gray-600 overflow-auto">
+                    {JSON.stringify(priceCheckStatus, null, 2)}
+                  </pre>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="shipping">
-          {/* Shipping Quote Content - Add your existing shipping content here */}
+        <TabsContent value="shipping" className="space-y-6">
+          {/* Shipping Quote Tool */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Truck className="h-5 w-5" />
-                Shipping Quote Testing
+                Shipping Quote Tool
               </CardTitle>
               <CardDescription>
-                Test shipping quotes using Keystone GetShippingQuote API
+                Get shipping quotes for items to specific addresses
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Shipping quote functionality will be implemented here.</p>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="shipping-items" className="text-sm font-medium">
+                    Items to Ship (max 50)
+                  </Label>
+                  <Textarea
+                    id="shipping-items"
+                    placeholder="Enter items in format: VCPN:quantity&#10;Example:&#10;VCPN123:2&#10;VCPN456:1&#10;VCPN789:3"
+                    value={shippingQuoteItems}
+                    onChange={(e) => setShippingQuoteItems(e.target.value)}
+                    className="mt-1"
+                    rows={6}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Format: VCPN:quantity (one per line)
+                  </p>
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="shipping-address1" className="text-sm font-medium">
+                      Shipping Address
+                    </Label>
+                    <Input
+                      id="shipping-address1"
+                      placeholder="Street Address"
+                      value={shippingAddress.address1}
+                      onChange={(e) => setShippingAddress({...shippingAddress, address1: e.target.value})}
+                      className="mt-1"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="City"
+                      value={shippingAddress.city}
+                      onChange={(e) => setShippingAddress({...shippingAddress, city: e.target.value})}
+                    />
+                    <Input
+                      placeholder="State"
+                      value={shippingAddress.state}
+                      onChange={(e) => setShippingAddress({...shippingAddress, state: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="ZIP Code"
+                      value={shippingAddress.zipCode}
+                      onChange={(e) => setShippingAddress({...shippingAddress, zipCode: e.target.value})}
+                    />
+                    <select
+                      value={shippingAddress.country}
+                      onChange={(e) => setShippingAddress({...shippingAddress, country: e.target.value})}
+                      className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                    >
+                      <option value="US">United States</option>
+                      <option value="CA">Canada</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleShippingQuote}
+                  disabled={shippingQuoteLoading || shippingQuoteStatus?.isRateLimited}
+                  className="flex items-center gap-2"
+                >
+                  {shippingQuoteLoading ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Truck className="h-4 w-4" />
+                  )}
+                  Get Shipping Quote
+                </Button>
+                
+                {shippingQuoteStatus?.isRateLimited && (
+                  <Button
+                    onClick={handleClearShippingRateLimit}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Clear Rate Limit (Test)
+                  </Button>
+                )}
+              </div>
+              
+              {shippingQuoteStatus?.isRateLimited && (
+                <Alert className="border-orange-200 bg-orange-50">
+                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                  <AlertDescription className="text-orange-800">
+                    <strong>Rate Limited:</strong> {shippingQuoteStatus.rateLimitMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {shippingQuoteResults.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Shipping Options</h4>
+                  <div className="space-y-2">
+                    {shippingQuoteResults.map((option, index) => (
+                      <div key={index} className="p-3 border rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-medium">{option.carrier} - {option.service}</span>
+                            <p className="text-sm text-muted-foreground">
+                              Estimated delivery: {option.estimatedDelivery}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-semibold text-green-600">
+                              ${option.cost?.toFixed(2) || 'N/A'}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {option.transitTime}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="orders">
-          {/* Dropship Orders Content - Add your existing orders content here */}
+        <TabsContent value="orders" className="space-y-6">
+          {/* Dropship Order Tool */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                Dropship Order Placement
+                Dropship Order Tool
               </CardTitle>
               <CardDescription>
-                Place dropship orders directly with Keystone (1 order per 2 minutes)
+                Place dropship orders directly through Keystone
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Dropship order functionality will be implemented here.</p>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="dropship-items" className="text-sm font-medium">
+                    Items to Order (max 100)
+                  </Label>
+                  <Textarea
+                    id="dropship-items"
+                    placeholder="Enter items in format: VCPN:quantity&#10;Example:&#10;VCPN123:2&#10;VCPN456:1&#10;VCPN789:3"
+                    value={dropshipOrderItems}
+                    onChange={(e) => setDropshipOrderItems(e.target.value)}
+                    className="mt-1"
+                    rows={6}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Format: VCPN:quantity (one per line)
+                  </p>
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-sm font-medium">Customer Information</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-1">
+                      <Input
+                        placeholder="First Name *"
+                        value={customerInfo.firstName}
+                        onChange={(e) => setCustomerInfo({...customerInfo, firstName: e.target.value})}
+                      />
+                      <Input
+                        placeholder="Last Name *"
+                        value={customerInfo.lastName}
+                        onChange={(e) => setCustomerInfo({...customerInfo, lastName: e.target.value})}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 mt-2">
+                      <Input
+                        placeholder="Email *"
+                        type="email"
+                        value={customerInfo.email}
+                        onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
+                      />
+                      <Input
+                        placeholder="Phone"
+                        value={customerInfo.phone}
+                        onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label className="text-sm font-medium">Shipping Address</Label>
+                    <div className="space-y-2 mt-1">
+                      <Input
+                        placeholder="Street Address *"
+                        value={orderShippingAddress.address1}
+                        onChange={(e) => setOrderShippingAddress({...orderShippingAddress, address1: e.target.value})}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          placeholder="City *"
+                          value={orderShippingAddress.city}
+                          onChange={(e) => setOrderShippingAddress({...orderShippingAddress, city: e.target.value})}
+                        />
+                        <Input
+                          placeholder="State *"
+                          value={orderShippingAddress.state}
+                          onChange={(e) => setOrderShippingAddress({...orderShippingAddress, state: e.target.value})}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          placeholder="ZIP Code *"
+                          value={orderShippingAddress.zipCode}
+                          onChange={(e) => setOrderShippingAddress({...orderShippingAddress, zipCode: e.target.value})}
+                        />
+                        <select
+                          value={orderShippingAddress.country}
+                          onChange={(e) => setOrderShippingAddress({...orderShippingAddress, country: e.target.value})}
+                          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                        >
+                          <option value="US">United States</option>
+                          <option value="CA">Canada</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="shipping-method" className="text-sm font-medium">
+                    Shipping Method
+                  </Label>
+                  <select
+                    id="shipping-method"
+                    value={orderDetails.shippingMethod}
+                    onChange={(e) => setOrderDetails({...orderDetails, shippingMethod: e.target.value})}
+                    className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="standard">Standard</option>
+                    <option value="expedited">Expedited</option>
+                    <option value="overnight">Overnight</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <Label htmlFor="po-number" className="text-sm font-medium">
+                    PO Number
+                  </Label>
+                  <Input
+                    id="po-number"
+                    placeholder="Optional"
+                    value={orderDetails.poNumber}
+                    onChange={(e) => setOrderDetails({...orderDetails, poNumber: e.target.value})}
+                    className="mt-1"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="special-instructions" className="text-sm font-medium">
+                    Special Instructions
+                  </Label>
+                  <Input
+                    id="special-instructions"
+                    placeholder="Optional"
+                    value={orderDetails.specialInstructions}
+                    onChange={(e) => setOrderDetails({...orderDetails, specialInstructions: e.target.value})}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleDropshipOrder}
+                  disabled={dropshipOrderLoading || dropshipOrderStatus?.isRateLimited}
+                  className="flex items-center gap-2"
+                >
+                  {dropshipOrderLoading ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ShoppingCart className="h-4 w-4" />
+                  )}
+                  Place Dropship Order
+                </Button>
+                
+                {dropshipOrderStatus?.isRateLimited && (
+                  <Button
+                    onClick={handleClearDropshipRateLimit}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Clear Rate Limit (Test)
+                  </Button>
+                )}
+              </div>
+              
+              {dropshipOrderStatus?.isRateLimited && (
+                <Alert className="border-orange-200 bg-orange-50">
+                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                  <AlertDescription className="text-orange-800">
+                    <strong>Rate Limited:</strong> {dropshipOrderStatus.rateLimitMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {dropshipOrderResults && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Order Results</h4>
+                  <div className="p-4 border rounded-lg">
+                    {dropshipOrderResults.success ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <span className="font-medium text-green-800">Order Placed Successfully</span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          <p><strong>Order Reference:</strong> {dropshipOrderResults.orderReference}</p>
+                          <p><strong>Total Amount:</strong> ${dropshipOrderResults.totalAmount?.toFixed(2)}</p>
+                          <p><strong>Estimated Delivery:</strong> {dropshipOrderResults.estimatedDelivery}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <XCircle className="h-5 w-5 text-red-600" />
+                          <span className="font-medium text-red-800">Order Failed</span>
+                        </div>
+                        <div className="text-sm text-red-600">
+                          <p>{dropshipOrderResults.message}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="tracking">
-          {/* Order Tracking Content - Add your existing tracking content here */}
+        <TabsContent value="tracking" className="space-y-6">
+          {/* Order Tracking Tool */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5" />
-                Order Tracking
+                Order Tracking Tool
               </CardTitle>
               <CardDescription>
                 Track order status and delivery information
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Order tracking functionality will be implemented here.</p>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="tracking-orders" className="text-sm font-medium">
+                  Order References to Track (max 20)
+                </Label>
+                <Textarea
+                  id="tracking-orders"
+                  placeholder="Enter order references separated by newlines, commas, or spaces&#10;Example:&#10;ORD-2024-001&#10;ORD-2024-002&#10;ORD-2024-003"
+                  value={trackingOrderRefs}
+                  onChange={(e) => setTrackingOrderRefs(e.target.value)}
+                  className="mt-1"
+                  rows={6}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter up to 20 order references. Separate multiple references with newlines, commas, or spaces.
+                </p>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleOrderTracking}
+                  disabled={trackingLoading || orderTrackingStatus?.isRateLimited}
+                  className="flex items-center gap-2"
+                >
+                  {trackingLoading ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4" />
+                  )}
+                  Track Orders
+                </Button>
+                
+                {orderTrackingStatus?.isRateLimited && (
+                  <Button
+                    onClick={handleClearTrackingRateLimit}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Clear Rate Limit (Test)
+                  </Button>
+                )}
+              </div>
+              
+              {orderTrackingStatus?.isRateLimited && (
+                <Alert className="border-orange-200 bg-orange-50">
+                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                  <AlertDescription className="text-orange-800">
+                    <strong>Rate Limited:</strong> {orderTrackingStatus.rateLimitMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {trackingResults.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Tracking Results</h4>
+                  <div className="space-y-3">
+                    {trackingResults.map((result, index) => (
+                      <div key={index} className="p-4 border rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium">{result.orderReference}</span>
+                          {getTrackingStatusBadge(result.status)}
+                        </div>
+                        
+                        {result.success ? (
+                          <div className="space-y-2 text-sm">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <p><strong>Carrier:</strong> {result.carrier}</p>
+                                <p><strong>Tracking Number:</strong> {result.trackingNumber}</p>
+                                <p><strong>Service:</strong> {result.service}</p>
+                              </div>
+                              <div>
+                                <p><strong>Ship Date:</strong> {safeFormatDate(result.shipDate)}</p>
+                                <p><strong>Estimated Delivery:</strong> {safeFormatDate(result.estimatedDelivery)}</p>
+                                <p><strong>Last Update:</strong> {safeFormatDate(result.lastUpdate)}</p>
+                              </div>
+                            </div>
+                            
+                            {result.trackingEvents && result.trackingEvents.length > 0 && (
+                              <div className="mt-3">
+                                <h5 className="font-medium mb-2">Tracking Events</h5>
+                                <div className="space-y-1">
+                                  {result.trackingEvents.slice(0, 3).map((event, eventIndex) => (
+                                    <div key={eventIndex} className="text-xs p-2 bg-gray-50 rounded">
+                                      <div className="flex justify-between">
+                                        <span>{event.description}</span>
+                                        <span>{safeFormatDate(event.timestamp)}</span>
+                                      </div>
+                                      {event.location && (
+                                        <div className="text-gray-500 mt-1">{event.location}</div>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {result.trackingEvents.length > 3 && (
+                                    <p className="text-xs text-gray-500">
+                                      ... and {result.trackingEvents.length - 3} more events
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-red-600">
+                            {result.error || 'Tracking information not available'}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {trackingStatistics && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-medium mb-3">Tracking Statistics</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-3 border rounded-lg text-center">
+                      <div className="text-lg font-semibold">{trackingStatistics.totalOrders}</div>
+                      <div className="text-xs text-muted-foreground">Total Orders</div>
+                    </div>
+                    <div className="p-3 border rounded-lg text-center">
+                      <div className="text-lg font-semibold text-green-600">{trackingStatistics.delivered}</div>
+                      <div className="text-xs text-muted-foreground">Delivered</div>
+                    </div>
+                    <div className="p-3 border rounded-lg text-center">
+                      <div className="text-lg font-semibold text-blue-600">{trackingStatistics.inTransit}</div>
+                      <div className="text-xs text-muted-foreground">In Transit</div>
+                    </div>
+                    <div className="p-3 border rounded-lg text-center">
+                      <div className="text-lg font-semibold text-red-600">{trackingStatistics.exceptions}</div>
+                      <div className="text-xs text-muted-foreground">Exceptions</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
