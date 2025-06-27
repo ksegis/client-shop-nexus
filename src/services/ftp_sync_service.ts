@@ -1,5 +1,5 @@
-// FTP Sync Service - Keystone FTP Integration via Proxy
-// Routes through https://146-190-161-109.nip.io/ftp-sync/* endpoints
+// FTP Sync Service - eKeystone Integration Based on Official Documentation
+// Implements both FTP file access and API calls through proxy
 
 import { getSupabaseClient } from '@/lib/supabase';
 
@@ -12,7 +12,7 @@ export interface FTPSyncResult {
   errors: string[];
   syncType: 'inventory' | 'pricing' | 'kits' | 'full';
   timestamp: string;
-  source: 'ftp';
+  source: 'ftp' | 'api';
 }
 
 export interface FTPSyncOptions {
@@ -20,33 +20,8 @@ export interface FTPSyncOptions {
   forceRefresh?: boolean;
   batchSize?: number;
   categories?: string[];
-  dateFilter?: string; // YYYY-MM-DD format
-}
-
-export interface FTPInventoryItem {
-  vcpn: string;
-  name: string;
-  description?: string;
-  category?: string;
-  price: number;
-  cost?: number;
-  quantity: number;
-  weight?: number;
-  brand?: string;
-  warehouse?: string;
-  location?: string;
-  availability?: string;
-  lastUpdated: string;
-}
-
-export interface FTPKitComponent {
-  kitVcpn: string;
-  componentVcpn: string;
-  componentName: string;
-  quantity: number;
-  unitPrice: number;
-  category?: string;
-  description?: string;
+  dateFilter?: string;
+  useAPI?: boolean; // Toggle between FTP files and API calls
 }
 
 export interface SyncResult {
@@ -61,70 +36,79 @@ export interface SyncResult {
 
 class FTPSyncService {
   private supabase: any;
-  private baseUrl: string;
+  private proxyBaseUrl: string;
+  private apiBaseUrl: string;
+  private ftpCredentials: any;
   private accountNumber: string;
   private securityToken: string;
 
   constructor() {
     this.supabase = getSupabaseClient();
-    this.baseUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL || 'https://146-190-161-109.nip.io';
+    
+    // Proxy service for HTTP API calls
+    this.proxyBaseUrl = import.meta.env.VITE_KEYSTONE_PROXY_URL || 'https://146-190-161-109.nip.io';
+    
+    // Direct eKeystone API (through proxy)
+    this.apiBaseUrl = 'http://order.ekeystone.com/wselectronicorder/electronicorder.asmx';
+    
+    // FTP credentials from documentation
+    this.ftpCredentials = {
+      host: 'ftp.ekeystone.com',
+      username: import.meta.env.VITE_KEYSTONE_FTP_USERNAME || 'S159980',
+      password: import.meta.env.VITE_KEYSTONE_FTP_PASSWORD || 'ctc99mkn'
+    };
+    
+    // API credentials
     this.accountNumber = import.meta.env.VITE_KEYSTONE_ACCOUNT_NUMBER || '';
     this.securityToken = import.meta.env.VITE_KEYSTONE_SECURITY_TOKEN_PROD || '';
   }
 
-  // Main FTP sync methods
-  async syncInventoryFTP(options: FTPSyncOptions = { syncType: 'inventory' }): Promise<FTPSyncResult> {
+  // Main sync methods - choose between FTP files and API calls
+  async syncKitsFTP(options: FTPSyncOptions = { syncType: 'kits' }): Promise<FTPSyncResult> {
     const startTime = Date.now();
     
     try {
-      console.log('📁 Starting FTP inventory sync...');
+      console.log('📁 Starting kit sync via proxy...');
       
-      const response = await this.makeRequest('/inventory', {
-        accountNumber: this.accountNumber,
-        securityToken: this.securityToken,
-        forceRefresh: options.forceRefresh || false,
-        batchSize: options.batchSize || 1000,
-        categories: options.categories || [],
-        dateFilter: options.dateFilter
-      });
-
-      if (!response.success) {
-        throw new Error(response.message || 'FTP inventory sync failed');
+      let result;
+      if (options.useAPI) {
+        // Use GetKitComponents API function through proxy
+        result = await this.syncKitsViaAPI(options);
+      } else {
+        // Use proxy endpoints that handle FTP file downloads
+        result = await this.syncKitsViaProxy(options);
       }
-
-      // Process and store inventory data
-      const result = await this.processInventoryData(response.data);
       
       const syncResult: FTPSyncResult = {
-        success: true,
-        message: `FTP inventory sync completed successfully`,
-        itemsProcessed: result.processed,
-        itemsUpdated: result.updated,
-        itemsAdded: result.added,
-        errors: result.errors,
-        syncType: 'inventory',
+        success: result.success,
+        message: result.message || 'Kit sync completed',
+        itemsProcessed: result.processed || 0,
+        itemsUpdated: result.updated || 0,
+        itemsAdded: result.added || 0,
+        errors: result.errors || [],
+        syncType: 'kits',
         timestamp: new Date().toISOString(),
-        source: 'ftp'
+        source: options.useAPI ? 'api' : 'ftp'
       };
 
       await this.logSyncResult(syncResult);
-      console.log('✅ FTP inventory sync completed:', syncResult);
+      console.log('✅ Kit sync completed:', syncResult);
       
       return syncResult;
 
     } catch (error) {
-      console.error('❌ FTP inventory sync failed:', error);
+      console.error('❌ Kit sync failed:', error);
       
       const errorResult: FTPSyncResult = {
         success: false,
-        message: `FTP inventory sync failed: ${error.message}`,
+        message: `Kit sync failed: ${error.message}`,
         itemsProcessed: 0,
         itemsUpdated: 0,
         itemsAdded: 0,
         errors: [error.message],
-        syncType: 'inventory',
+        syncType: 'kits',
         timestamp: new Date().toISOString(),
-        source: 'ftp'
+        source: options.useAPI ? 'api' : 'ftp'
       };
 
       await this.logSyncResult(errorResult);
@@ -132,56 +116,49 @@ class FTPSyncService {
     }
   }
 
-  async syncKitsFTP(options: FTPSyncOptions = { syncType: 'kits' }): Promise<FTPSyncResult> {
+  async syncInventoryFTP(options: FTPSyncOptions = { syncType: 'inventory' }): Promise<FTPSyncResult> {
     const startTime = Date.now();
     
     try {
-      console.log('📁 Starting FTP kits sync...');
+      console.log('📁 Starting inventory sync...');
       
-      const response = await this.makeRequest('/kits', {
-        accountNumber: this.accountNumber,
-        securityToken: this.securityToken,
-        forceRefresh: options.forceRefresh || false,
-        batchSize: options.batchSize || 500
-      });
-
-      if (!response.success) {
-        throw new Error(response.message || 'FTP kits sync failed');
+      let result;
+      if (options.useAPI) {
+        // Use CheckInventoryBulk or GetInventoryFull API functions
+        result = await this.syncInventoryViaAPI(options);
+      } else {
+        // Use proxy endpoints for FTP file access
+        result = await this.syncInventoryViaProxy(options);
       }
-
-      // Process and store kit data
-      const result = await this.processKitData(response.data);
       
       const syncResult: FTPSyncResult = {
-        success: true,
-        message: `FTP kits sync completed successfully`,
-        itemsProcessed: result.processed,
-        itemsUpdated: result.updated,
-        itemsAdded: result.added,
-        errors: result.errors,
-        syncType: 'kits',
+        success: result.success,
+        message: result.message || 'Inventory sync completed',
+        itemsProcessed: result.processed || 0,
+        itemsUpdated: result.updated || 0,
+        itemsAdded: result.added || 0,
+        errors: result.errors || [],
+        syncType: 'inventory',
         timestamp: new Date().toISOString(),
-        source: 'ftp'
+        source: options.useAPI ? 'api' : 'ftp'
       };
 
       await this.logSyncResult(syncResult);
-      console.log('✅ FTP kits sync completed:', syncResult);
-      
       return syncResult;
 
     } catch (error) {
-      console.error('❌ FTP kits sync failed:', error);
+      console.error('❌ Inventory sync failed:', error);
       
       const errorResult: FTPSyncResult = {
         success: false,
-        message: `FTP kits sync failed: ${error.message}`,
+        message: `Inventory sync failed: ${error.message}`,
         itemsProcessed: 0,
         itemsUpdated: 0,
         itemsAdded: 0,
         errors: [error.message],
-        syncType: 'kits',
+        syncType: 'inventory',
         timestamp: new Date().toISOString(),
-        source: 'ftp'
+        source: options.useAPI ? 'api' : 'ftp'
       };
 
       await this.logSyncResult(errorResult);
@@ -193,53 +170,45 @@ class FTPSyncService {
     const startTime = Date.now();
     
     try {
-      console.log('📁 Starting FTP pricing sync...');
+      console.log('📁 Starting pricing sync...');
       
-      const response = await this.makeRequest('/pricing', {
-        accountNumber: this.accountNumber,
-        securityToken: this.securityToken,
-        forceRefresh: options.forceRefresh || false,
-        batchSize: options.batchSize || 1000,
-        dateFilter: options.dateFilter
-      });
-
-      if (!response.success) {
-        throw new Error(response.message || 'FTP pricing sync failed');
+      let result;
+      if (options.useAPI) {
+        // Use CheckPriceBulk API function
+        result = await this.syncPricingViaAPI(options);
+      } else {
+        // Use proxy endpoints for FTP file access
+        result = await this.syncPricingViaProxy(options);
       }
-
-      // Process and store pricing data
-      const result = await this.processPricingData(response.data);
       
       const syncResult: FTPSyncResult = {
-        success: true,
-        message: `FTP pricing sync completed successfully`,
-        itemsProcessed: result.processed,
-        itemsUpdated: result.updated,
-        itemsAdded: result.added,
-        errors: result.errors,
+        success: result.success,
+        message: result.message || 'Pricing sync completed',
+        itemsProcessed: result.processed || 0,
+        itemsUpdated: result.updated || 0,
+        itemsAdded: result.added || 0,
+        errors: result.errors || [],
         syncType: 'pricing',
         timestamp: new Date().toISOString(),
-        source: 'ftp'
+        source: options.useAPI ? 'api' : 'ftp'
       };
 
       await this.logSyncResult(syncResult);
-      console.log('✅ FTP pricing sync completed:', syncResult);
-      
       return syncResult;
 
     } catch (error) {
-      console.error('❌ FTP pricing sync failed:', error);
+      console.error('❌ Pricing sync failed:', error);
       
       const errorResult: FTPSyncResult = {
         success: false,
-        message: `FTP pricing sync failed: ${error.message}`,
+        message: `Pricing sync failed: ${error.message}`,
         itemsProcessed: 0,
         itemsUpdated: 0,
         itemsAdded: 0,
         errors: [error.message],
         syncType: 'pricing',
         timestamp: new Date().toISOString(),
-        source: 'ftp'
+        source: options.useAPI ? 'api' : 'ftp'
       };
 
       await this.logSyncResult(errorResult);
@@ -247,9 +216,197 @@ class FTPSyncService {
     }
   }
 
+  // API-based sync methods (real-time via eKeystone API)
+  private async syncKitsViaAPI(options: FTPSyncOptions): Promise<any> {
+    try {
+      // Use the proxy's /kits/components endpoint which should call GetKitComponents
+      const response = await this.makeProxyRequest('/kits/components', {
+        accountNumber: this.accountNumber,
+        securityToken: this.securityToken,
+        method: 'GetKitComponents',
+        // Note: GetKitComponents requires specific kit part numbers
+        // For bulk sync, we might need to get all kits first
+        fullKitPartNumber: options.categories?.join(',') || '' // Kit part numbers if specified
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || 'API kit sync failed');
+      }
+
+      // Process the kit components data
+      const result = await this.processKitComponentsData(response.data || []);
+      return {
+        success: true,
+        message: 'API kit sync completed',
+        processed: result.processed,
+        updated: result.updated,
+        added: result.added,
+        errors: result.errors
+      };
+
+    } catch (error) {
+      console.error('❌ API kit sync failed:', error);
+      throw error;
+    }
+  }
+
+  private async syncInventoryViaAPI(options: FTPSyncOptions): Promise<any> {
+    try {
+      // Use CheckInventoryBulk or GetInventoryFull through proxy
+      const endpoint = options.forceRefresh ? '/inventory/full' : '/inventory/bulk';
+      
+      const response = await this.makeProxyRequest(endpoint, {
+        accountNumber: this.accountNumber,
+        securityToken: this.securityToken,
+        method: options.forceRefresh ? 'GetInventoryFull' : 'CheckInventoryBulk',
+        batchSize: options.batchSize || 1000
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || 'API inventory sync failed');
+      }
+
+      const result = await this.processInventoryData(response.data || []);
+      return {
+        success: true,
+        message: 'API inventory sync completed',
+        processed: result.processed,
+        updated: result.updated,
+        added: result.added,
+        errors: result.errors
+      };
+
+    } catch (error) {
+      console.error('❌ API inventory sync failed:', error);
+      throw error;
+    }
+  }
+
+  private async syncPricingViaAPI(options: FTPSyncOptions): Promise<any> {
+    try {
+      // Use CheckPriceBulk through proxy
+      const response = await this.makeProxyRequest('/pricing/bulk', {
+        accountNumber: this.accountNumber,
+        securityToken: this.securityToken,
+        method: 'CheckPriceBulk',
+        batchSize: options.batchSize || 1000
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || 'API pricing sync failed');
+      }
+
+      const result = await this.processPricingData(response.data || []);
+      return {
+        success: true,
+        message: 'API pricing sync completed',
+        processed: result.processed,
+        updated: result.updated,
+        added: result.added,
+        errors: result.errors
+      };
+
+    } catch (error) {
+      console.error('❌ API pricing sync failed:', error);
+      throw error;
+    }
+  }
+
+  // FTP-based sync methods (bulk file downloads via proxy)
+  private async syncKitsViaProxy(options: FTPSyncOptions): Promise<any> {
+    try {
+      // Use proxy to download FTP files containing kit data
+      const response = await this.makeProxyRequest('/kits/components', {
+        ftpCredentials: this.ftpCredentials,
+        method: 'ftp_download',
+        fileType: 'kits',
+        batchSize: options.batchSize || 500
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || 'FTP kit sync failed');
+      }
+
+      const result = await this.processKitComponentsData(response.data || []);
+      return {
+        success: true,
+        message: 'FTP kit sync completed',
+        processed: result.processed,
+        updated: result.updated,
+        added: result.added,
+        errors: result.errors
+      };
+
+    } catch (error) {
+      console.error('❌ FTP kit sync failed:', error);
+      throw error;
+    }
+  }
+
+  private async syncInventoryViaProxy(options: FTPSyncOptions): Promise<any> {
+    try {
+      const endpoint = options.forceRefresh ? '/inventory/full' : '/inventory/bulk';
+      
+      const response = await this.makeProxyRequest(endpoint, {
+        ftpCredentials: this.ftpCredentials,
+        method: 'ftp_download',
+        fileType: 'inventory',
+        forceRefresh: options.forceRefresh,
+        batchSize: options.batchSize || 1000
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || 'FTP inventory sync failed');
+      }
+
+      const result = await this.processInventoryData(response.data || []);
+      return {
+        success: true,
+        message: 'FTP inventory sync completed',
+        processed: result.processed,
+        updated: result.updated,
+        added: result.added,
+        errors: result.errors
+      };
+
+    } catch (error) {
+      console.error('❌ FTP inventory sync failed:', error);
+      throw error;
+    }
+  }
+
+  private async syncPricingViaProxy(options: FTPSyncOptions): Promise<any> {
+    try {
+      const response = await this.makeProxyRequest('/pricing/bulk', {
+        ftpCredentials: this.ftpCredentials,
+        method: 'ftp_download',
+        fileType: 'pricing',
+        batchSize: options.batchSize || 1000
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || 'FTP pricing sync failed');
+      }
+
+      const result = await this.processPricingData(response.data || []);
+      return {
+        success: true,
+        message: 'FTP pricing sync completed',
+        processed: result.processed,
+        updated: result.updated,
+        added: result.added,
+        errors: result.errors
+      };
+
+    } catch (error) {
+      console.error('❌ FTP pricing sync failed:', error);
+      throw error;
+    }
+  }
+
   // Legacy method names for compatibility
   async syncInventoryFromFTP(): Promise<SyncResult> {
-    const result = await this.syncInventoryFTP();
+    const result = await this.syncInventoryFTP({ syncType: 'inventory', useAPI: false });
     return {
       success: result.success,
       processed: result.itemsProcessed,
@@ -262,7 +419,7 @@ class FTPSyncService {
   }
 
   async syncKitsFromFTP(): Promise<SyncResult> {
-    const result = await this.syncKitsFTP();
+    const result = await this.syncKitsFTP({ syncType: 'kits', useAPI: false });
     return {
       success: result.success,
       processed: result.itemsProcessed,
@@ -275,7 +432,7 @@ class FTPSyncService {
   }
 
   async syncPricingFromFTP(): Promise<SyncResult> {
-    const result = await this.syncPricingFTP();
+    const result = await this.syncPricingFTP({ syncType: 'pricing', useAPI: false });
     return {
       success: result.success,
       processed: result.itemsProcessed,
@@ -287,12 +444,13 @@ class FTPSyncService {
     };
   }
 
-  // HTTP request helper
-  private async makeRequest(endpoint: string, data: any): Promise<any> {
-    const url = `${this.baseUrl}/ftp-sync${endpoint}`;
+  // HTTP request helper for proxy
+  private async makeProxyRequest(endpoint: string, data: any): Promise<any> {
+    const url = `${this.proxyBaseUrl}${endpoint}`;
     
     try {
-      console.log(`🌐 Making FTP request to: ${url}`);
+      console.log(`🌐 Making proxy request to: ${url}`);
+      console.log(`📤 Request data:`, { ...data, ftpCredentials: data.ftpCredentials ? '[HIDDEN]' : undefined });
       
       const response = await fetch(url, {
         method: 'POST',
@@ -308,105 +466,61 @@ class FTPSyncService {
       }
 
       const result = await response.json();
-      console.log(`✅ FTP request successful:`, result);
+      console.log(`✅ Proxy request successful:`, result);
       
       return result;
 
     } catch (error) {
-      console.error(`❌ FTP request failed:`, error);
+      console.error(`❌ Proxy request failed:`, error);
       throw error;
     }
   }
 
   // Data processing methods
-  private async processInventoryData(data: FTPInventoryItem[]): Promise<any> {
+  private async processKitComponentsData(data: any[]): Promise<any> {
     try {
       let processed = 0;
       let updated = 0;
       let added = 0;
       const errors: string[] = [];
 
-      for (const item of data) {
-        try {
-          // Upsert inventory item
-          const { error } = await this.supabase
-            .from('inventory')
-            .upsert({
-              vcpn: item.vcpn,
-              name: item.name,
-              description: item.description,
-              category: item.category,
-              price: item.price,
-              cost: item.cost,
-              quantity: item.quantity,
-              weight: item.weight,
-              brand: item.brand,
-              warehouse: item.warehouse,
-              location: item.location,
-              availability: item.availability,
-              last_updated: item.lastUpdated,
-              sync_source: 'ftp',
-              sync_timestamp: new Date().toISOString()
-            }, {
-              onConflict: 'vcpn'
-            });
-
-          if (error) {
-            errors.push(`Failed to upsert ${item.vcpn}: ${error.message}`);
-          } else {
-            processed++;
-            // For simplicity, count all as updated
-            updated++;
-          }
-
-        } catch (itemError) {
-          errors.push(`Error processing ${item.vcpn}: ${itemError.message}`);
-        }
+      if (!Array.isArray(data)) {
+        console.warn('⚠️ Kit data is not an array:', data);
+        return { processed: 0, updated: 0, added: 0, errors: ['Invalid data format'] };
       }
-
-      return { processed, updated, added, errors };
-
-    } catch (error) {
-      console.error('❌ Failed to process inventory data:', error);
-      throw error;
-    }
-  }
-
-  private async processKitData(data: FTPKitComponent[]): Promise<any> {
-    try {
-      let processed = 0;
-      let updated = 0;
-      let added = 0;
-      const errors: string[] = [];
 
       for (const kit of data) {
         try {
+          // Map based on GetKitComponents API response format
+          const kitComponent = {
+            kit_vcpn: kit.KitPartNumber || kit.kitVcpn || kit.kitPartNumber,
+            component_vcpn: kit.ComponentPartNumber || kit.componentVcpn || kit.componentPartNumber,
+            component_name: kit.ComponentName || kit.componentName || kit.description,
+            quantity: parseInt(kit.ComponentQuantity || kit.quantity || kit.qty || 1),
+            unit_price: parseFloat(kit.ComponentPrice || kit.unitPrice || kit.price || 0),
+            is_required: kit.ComponentRequired !== false, // Default to true unless explicitly false
+            category: kit.ComponentCategory || kit.category,
+            description: kit.ComponentDescription || kit.description,
+            sync_source: 'ftp',
+            sync_timestamp: new Date().toISOString()
+          };
+
           // Upsert kit component
           const { error } = await this.supabase
             .from('keystone_kit_components')
-            .upsert({
-              kit_vcpn: kit.kitVcpn,
-              component_vcpn: kit.componentVcpn,
-              component_name: kit.componentName,
-              quantity: kit.quantity,
-              unit_price: kit.unitPrice,
-              category: kit.category,
-              description: kit.description,
-              sync_source: 'ftp',
-              sync_timestamp: new Date().toISOString()
-            }, {
+            .upsert(kitComponent, {
               onConflict: 'kit_vcpn,component_vcpn'
             });
 
           if (error) {
-            errors.push(`Failed to upsert kit ${kit.kitVcpn}/${kit.componentVcpn}: ${error.message}`);
+            errors.push(`Failed to upsert kit ${kitComponent.kit_vcpn}/${kitComponent.component_vcpn}: ${error.message}`);
           } else {
             processed++;
             updated++;
           }
 
         } catch (itemError) {
-          errors.push(`Error processing kit ${kit.kitVcpn}: ${itemError.message}`);
+          errors.push(`Error processing kit: ${itemError.message}`);
         }
       }
 
@@ -418,6 +532,66 @@ class FTPSyncService {
     }
   }
 
+  private async processInventoryData(data: any[]): Promise<any> {
+    try {
+      let processed = 0;
+      let updated = 0;
+      let added = 0;
+      const errors: string[] = [];
+
+      if (!Array.isArray(data)) {
+        console.warn('⚠️ Inventory data is not an array:', data);
+        return { processed: 0, updated: 0, added: 0, errors: ['Invalid data format'] };
+      }
+
+      for (const item of data) {
+        try {
+          // Map based on eKeystone API response format
+          const inventoryItem = {
+            vcpn: item.FullPartNumber || item.vcpn || item.partNumber || item.id,
+            name: item.PartDescription || item.name || item.description || 'Unknown',
+            description: item.LongDescription || item.description || item.longDescription,
+            category: item.CategoryName || item.category || item.categoryName,
+            price: parseFloat(item.Price || item.unitPrice || item.price || 0),
+            cost: parseFloat(item.Cost || item.unitCost || item.cost || 0),
+            quantity: parseInt(item.QuantityAvailable || item.quantity || item.qtyAvailable || 0),
+            weight: parseFloat(item.Weight || item.weight || 0),
+            brand: item.Brand || item.brand || item.manufacturer,
+            warehouse: item.Warehouse || item.warehouse || item.location,
+            location: item.Location || item.location || item.binLocation,
+            availability: item.Availability || item.availability || item.status || 'unknown',
+            last_updated: item.LastUpdated || item.lastUpdated || new Date().toISOString(),
+            sync_source: 'ftp',
+            sync_timestamp: new Date().toISOString()
+          };
+
+          // Upsert inventory item
+          const { error } = await this.supabase
+            .from('inventory')
+            .upsert(inventoryItem, {
+              onConflict: 'vcpn'
+            });
+
+          if (error) {
+            errors.push(`Failed to upsert ${inventoryItem.vcpn}: ${error.message}`);
+          } else {
+            processed++;
+            updated++;
+          }
+
+        } catch (itemError) {
+          errors.push(`Error processing item: ${itemError.message}`);
+        }
+      }
+
+      return { processed, updated, added, errors };
+
+    } catch (error) {
+      console.error('❌ Failed to process inventory data:', error);
+      throw error;
+    }
+  }
+
   private async processPricingData(data: any[]): Promise<any> {
     try {
       let processed = 0;
@@ -425,31 +599,39 @@ class FTPSyncService {
       let added = 0;
       const errors: string[] = [];
 
+      if (!Array.isArray(data)) {
+        console.warn('⚠️ Pricing data is not an array:', data);
+        return { processed: 0, updated: 0, added: 0, errors: ['Invalid data format'] };
+      }
+
       for (const item of data) {
         try {
+          // Map based on eKeystone API response format
+          const pricingItem = {
+            vcpn: item.FullPartNumber || item.vcpn || item.partNumber || item.id,
+            price: parseFloat(item.Price || item.unitPrice || item.price || 0),
+            cost: parseFloat(item.Cost || item.unitCost || item.cost || 0),
+            effective_date: item.EffectiveDate || item.effectiveDate || new Date().toISOString(),
+            sync_source: 'ftp',
+            sync_timestamp: new Date().toISOString()
+          };
+
           // Upsert pricing data
           const { error } = await this.supabase
             .from('keystone_pricing')
-            .upsert({
-              vcpn: item.vcpn,
-              price: item.price,
-              cost: item.cost,
-              effective_date: item.effectiveDate,
-              sync_source: 'ftp',
-              sync_timestamp: new Date().toISOString()
-            }, {
+            .upsert(pricingItem, {
               onConflict: 'vcpn'
             });
 
           if (error) {
-            errors.push(`Failed to upsert pricing ${item.vcpn}: ${error.message}`);
+            errors.push(`Failed to upsert pricing ${pricingItem.vcpn}: ${error.message}`);
           } else {
             processed++;
             updated++;
           }
 
         } catch (itemError) {
-          errors.push(`Error processing pricing ${item.vcpn}: ${itemError.message}`);
+          errors.push(`Error processing pricing: ${itemError.message}`);
         }
       }
 
@@ -464,22 +646,26 @@ class FTPSyncService {
   // Status and utility methods
   async getFTPSyncStatus(): Promise<any> {
     try {
-      const response = await this.makeRequest('/status', {
-        accountNumber: this.accountNumber
+      // Test both FTP and API connectivity through proxy
+      const response = await this.makeProxyRequest('/health', {
+        ftpCredentials: this.ftpCredentials,
+        accountNumber: this.accountNumber,
+        securityToken: this.securityToken
       });
 
       return {
         success: true,
-        message: 'FTP service is available',
-        status: response.status,
-        lastSync: response.lastSync,
-        availableFiles: response.availableFiles
+        message: 'Proxy service is available',
+        status: response.status || 'healthy',
+        ftpStatus: response.ftpStatus || 'unknown',
+        apiStatus: response.apiStatus || 'unknown',
+        availableEndpoints: response.available_endpoints
       };
 
     } catch (error) {
       return {
         success: false,
-        message: `FTP service unavailable: ${error.message}`,
+        message: `Proxy service unavailable: ${error.message}`,
         status: 'error'
       };
     }
@@ -499,7 +685,8 @@ class FTPSyncService {
         lastSync: data?.completed_at,
         status: data?.status,
         itemsProcessed: data?.items_processed,
-        message: data?.error_message
+        message: data?.error_message,
+        source: data?.sync_details?.source
       };
 
     } catch (error) {
@@ -535,20 +722,23 @@ class FTPSyncService {
     }
   }
 
-  // Test FTP connectivity
+  // Test connectivity using correct approach
   async testFTPConnection(): Promise<{ success: boolean; message: string }> {
     try {
-      const response = await this.makeRequest('/test', {
+      // Test the proxy service health
+      const response = await this.makeProxyRequest('/health', {
+        ftpCredentials: this.ftpCredentials,
         accountNumber: this.accountNumber
       });
+      
       return {
         success: true,
-        message: 'FTP connection test successful'
+        message: `Connection test successful. FTP: ${response.ftpStatus || 'unknown'}, API: ${response.apiStatus || 'unknown'}`
       };
     } catch (error) {
       return {
         success: false,
-        message: `FTP connection test failed: ${error.message}`
+        message: `Connection test failed: ${error.message}`
       };
     }
   }
