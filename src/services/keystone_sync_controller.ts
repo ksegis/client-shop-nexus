@@ -559,6 +559,243 @@ class KeystoneSyncController {
       return null;
     }
   }
+
+  // ADDED: Missing methods that AdminSettings is trying to call
+
+  /**
+   * Get rate limit status - MISSING METHOD ADDED
+   */
+  getRateLimitStatus() {
+    // Check if any sync type is currently rate limited
+    const isRateLimited = Object.values(this.rateLimitStatus).some(status => {
+      if (status.limited && status.resetTime) {
+        return new Date() < status.resetTime;
+      }
+      return status.limited;
+    });
+
+    // Find the earliest reset time
+    let earliestResetTime: Date | null = null;
+    for (const status of Object.values(this.rateLimitStatus)) {
+      if (status.resetTime) {
+        if (!earliestResetTime || status.resetTime < earliestResetTime) {
+          earliestResetTime = status.resetTime;
+        }
+      }
+    }
+
+    return {
+      isRateLimited,
+      resetTime: earliestResetTime?.toISOString(),
+      timeRemaining: earliestResetTime ? 
+        Math.max(0, earliestResetTime.getTime() - Date.now()) : 0
+    };
+  }
+
+  /**
+   * Get sync recommendations - MISSING METHOD ADDED
+   */
+  async getSyncRecommendations(): Promise<any> {
+    try {
+      // Get current inventory count
+      const { count: inventoryCount } = await this.supabase
+        .from('inventory')
+        .select('*', { count: 'exact', head: true });
+
+      // Get last sync info
+      const { data: lastSync } = await this.supabase
+        .from('keystone_sync_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      const lastSyncAge = lastSync ? 
+        (Date.now() - new Date(lastSync.created_at).getTime()) / (1000 * 60 * 60) : 999;
+
+      const rateLimitStatus = this.getRateLimitStatus();
+
+      // Generate recommendations
+      const recommendations = [];
+
+      if (rateLimitStatus.isRateLimited) {
+        recommendations.push({
+          type: 'warning',
+          title: 'API Rate Limited',
+          message: `API is rate limited. Use FTP sync instead. Reset in ${Math.ceil(rateLimitStatus.timeRemaining / 1000 / 60)} minutes.`,
+          action: 'Use FTP Sync',
+          priority: 'high'
+        });
+      }
+
+      if (lastSyncAge > 24) {
+        recommendations.push({
+          type: 'info',
+          title: 'Full Sync Recommended',
+          message: `Last sync was ${Math.ceil(lastSyncAge)} hours ago. Consider full inventory refresh.`,
+          action: 'Run Full FTP Sync',
+          priority: 'normal'
+        });
+      }
+
+      if (inventoryCount > 5000) {
+        recommendations.push({
+          type: 'tip',
+          title: 'Large Inventory Detected',
+          message: `${inventoryCount} items in inventory. FTP sync recommended for better performance.`,
+          action: 'Use FTP for Large Updates',
+          priority: 'low'
+        });
+      }
+
+      return {
+        success: true,
+        recommendations,
+        currentState: {
+          inventoryCount,
+          lastSyncAge: Math.ceil(lastSyncAge),
+          rateLimitStatus,
+          preferredMethod: rateLimitStatus.isRateLimited ? 'ftp' : 'api'
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Failed to get sync recommendations:', error);
+      return {
+        success: false,
+        message: error.message,
+        recommendations: []
+      };
+    }
+  }
+
+  /**
+   * Test both sync methods - MISSING METHOD ADDED
+   */
+  async testSyncMethods(): Promise<any> {
+    const results = {
+      ftp: { available: false, message: '', responseTime: 0 },
+      api: { available: false, message: '', responseTime: 0 },
+      recommendation: ''
+    };
+
+    // Test FTP
+    try {
+      const ftpStart = Date.now();
+      const ftpTest = await this.ftpService.testFTPConnection();
+      results.ftp.responseTime = Date.now() - ftpStart;
+      results.ftp.available = ftpTest.success;
+      results.ftp.message = ftpTest.message;
+    } catch (error) {
+      results.ftp.message = error.message;
+    }
+
+    // Test API (check rate limit status)
+    const rateLimitStatus = this.getRateLimitStatus();
+    results.api.available = !rateLimitStatus.isRateLimited;
+    results.api.message = rateLimitStatus.isRateLimited ? 
+      'API is rate limited' : 'API connection available';
+
+    // Generate recommendation
+    if (results.ftp.available && results.api.available) {
+      results.recommendation = 'Both methods available - use API for small updates, FTP for large datasets';
+    } else if (results.ftp.available) {
+      results.recommendation = 'Use FTP sync - API unavailable or rate limited';
+    } else if (results.api.available) {
+      results.recommendation = 'Use API sync - FTP unavailable';
+    } else {
+      results.recommendation = 'No sync methods available - check configuration';
+    }
+
+    return results;
+  }
+
+  /**
+   * Execute sync with conditions - MISSING METHOD ADDED
+   */
+  async executeSync(conditions: any, options: any): Promise<any> {
+    // This is a simplified version that routes to the main sync method
+    const syncOptions: SyncOptions = {
+      syncType: options.syncType || 'inventory',
+      forceMethod: conditions.forceMethod,
+      batchSize: options.batchSize,
+      maxRetries: options.maxRetries
+    };
+
+    const result = await this.performIntelligentSync(syncOptions);
+
+    // Convert to expected format
+    return {
+      success: result.overall_success,
+      method: result.sync_method,
+      message: result.recommendations.join('; ') || 'Sync completed',
+      itemsProcessed: Object.values(result.results).reduce((sum, r) => sum + r.processed, 0),
+      itemsUpdated: Object.values(result.results).reduce((sum, r) => sum + r.updated, 0),
+      itemsAdded: 0, // Not tracked separately in current implementation
+      errors: Object.values(result.results).flatMap(r => r.errors),
+      syncType: syncOptions.syncType,
+      timestamp: new Date().toISOString(),
+      duration: result.total_duration,
+      strategy: result.decision_log[0] || { method: result.sync_method, reason: 'Default', confidence: 1 }
+    };
+  }
+
+  /**
+   * Determine sync strategy - MISSING METHOD ADDED
+   */
+  determineSyncStrategy(conditions: any): any {
+    const syncConditions: SyncConditions = {
+      isRateLimited: conditions.isRateLimited || false,
+      itemCount: conditions.itemCount || 0,
+      isFullRefresh: conditions.isFullRefresh || false,
+      lastSyncAge: conditions.lastSyncAge || 0,
+      apiErrorCount: conditions.apiErrorCount || 0,
+      forceMethod: conditions.forceMethod
+    };
+
+    const decision = this.decideSyncMethod(conditions.syncType || 'inventory', syncConditions);
+
+    return {
+      method: decision.method,
+      reason: decision.reason,
+      estimatedTime: this.estimateTime(decision.method, syncConditions.itemCount, conditions.syncType),
+      batchSize: this.getBatchSize(decision.method, syncConditions.itemCount),
+      fallbackMethod: decision.method === 'ftp' ? 'api' : 'ftp'
+    };
+  }
+
+  // Helper methods for strategy determination
+  private estimateTime(method: 'ftp' | 'api', itemCount: number, syncType: string): string {
+    const baseTime = {
+      ftp: { setup: 30, perItem: 0.1 }, // 30s setup + 0.1s per item
+      api: { setup: 5, perItem: 0.05 }  // 5s setup + 0.05s per item
+    };
+
+    const time = baseTime[method];
+    const totalSeconds = time.setup + (itemCount * time.perItem);
+
+    if (totalSeconds < 60) {
+      return `~${Math.ceil(totalSeconds)}s`;
+    } else if (totalSeconds < 3600) {
+      return `~${Math.ceil(totalSeconds / 60)}m`;
+    } else {
+      return `~${Math.ceil(totalSeconds / 3600)}h`;
+    }
+  }
+
+  private getBatchSize(method: 'ftp' | 'api', itemCount: number): number {
+    if (method === 'ftp') {
+      // FTP can handle larger batches
+      if (itemCount > 10000) return 1000;
+      if (itemCount > 1000) return 500;
+      return 100;
+    } else {
+      // API uses smaller batches to avoid rate limits
+      if (itemCount > 1000) return 50;
+      if (itemCount > 100) return 25;
+      return 10;
+    }
+  }
 }
 
 // Export singleton instance AND class
