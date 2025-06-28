@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -234,17 +233,20 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
     }
   };
 
-  // Fetch vendors for dropdown
+  // Fetch vendors for dropdown - FIXED: Filter out empty/null vendors
   const { data: vendors = [] } = useQuery({
     queryKey: ['vendors'],
     queryFn: async () => {
       const { data } = await supabase
         .from('inventory')
         .select('supplier')
-        .not('supplier', 'is', null);
+        .not('supplier', 'is', null)
+        .neq('supplier', ''); // Also exclude empty strings
       
-      // Get unique suppliers
-      const uniqueSuppliers = [...new Set(data?.map(item => item.supplier))];
+      // Get unique suppliers and filter out any null/empty values
+      const uniqueSuppliers = [...new Set(data?.map(item => item.supplier))]
+        .filter(supplier => supplier && supplier.trim() !== ''); // Filter out null, undefined, and empty strings
+      
       return uniqueSuppliers.map(supplier => ({ name: supplier })) || [];
     },
   });
@@ -710,7 +712,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
                         />
                       </div>
 
-                      {/* Vendor */}
+                      {/* Vendor - FIXED: Filter out empty vendors and provide fallback */}
                       <div className="col-span-2">
                         <Select
                           value={item.vendor || ''}
@@ -720,11 +722,17 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
                             <SelectValue placeholder="Select vendor" />
                           </SelectTrigger>
                           <SelectContent>
-                            {vendors.map((vendor, i) => (
-                              <SelectItem key={i} value={vendor.name || ''}>
-                                {vendor.name}
+                            {vendors.length > 0 ? (
+                              vendors.map((vendor, i) => (
+                                <SelectItem key={i} value={vendor.name}>
+                                  {vendor.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no-vendor" disabled>
+                                No vendors available
                               </SelectItem>
-                            ))}
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -798,13 +806,13 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
                 type="button" 
                 variant="secondary" 
                 onClick={saveAsDraft}
-                className="flex gap-2 items-center"
+                className="flex items-center gap-2"
               >
                 <Save className="h-4 w-4" />
                 Save as Draft
               </Button>
               <Button type="submit">
-                {isEditing ? "Update Estimate" : "Create Estimate"}
+                Create Estimate
               </Button>
             </DialogFooter>
           </form>
@@ -814,4 +822,3 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
   );
 }
 
-export default EstimateDialog;
