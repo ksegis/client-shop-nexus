@@ -178,8 +178,14 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
         total_amount: estimate?.total_amount || 0,
         status: estimate?.status || "pending",
       });
-      // Reset line items
-      setLineItems([]);
+      
+      // Load existing line items if editing an estimate
+      if (estimate && estimate.line_items) {
+        setLineItems(estimate.line_items);
+      } else {
+        setLineItems([]);
+      }
+      
       setShowAddVehicle(false);
       setActiveSearchField(null);
       setSearchTerm("");
