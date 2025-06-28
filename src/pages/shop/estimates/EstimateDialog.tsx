@@ -822,3 +822,6 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
   );
 }
 
+// Add default export to fix import error
+export default EstimateDialog;
+
