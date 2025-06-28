@@ -33,7 +33,8 @@ import { Estimate, EstimateStatus, LineItem } from "./types";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash, Save } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Plus, Trash, Save, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // Line item schema for validation
@@ -69,16 +70,76 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 type VehicleFormValues = z.infer<typeof vehicleSchema>;
 
+// Inventory Search Popover Component
+const InventorySearchPopover = ({
+  children,
+  isOpen,
+  onClose,
+  results,
+  onSelect,
+  searchTerm
+}: {
+  children: React.ReactNode;
+  isOpen: boolean;
+  onClose: () => void;
+  results: any[];
+  onSelect: (item: any) => void;
+  searchTerm: string;
+}) => {
+  return (
+    <Popover open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <PopoverTrigger asChild>
+        {children}
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[400px]" align="start">
+        <Command>
+          <CommandInput 
+            placeholder="Search inventory..." 
+            value={searchTerm}
+            readOnly
+          />
+          <CommandList>
+            <CommandEmpty>No results found</CommandEmpty>
+            <CommandGroup>
+              {results.map((item) => (
+                <CommandItem
+                  key={item.id}
+                  value={`${item.sku || ''}-${item.name}`}
+                  onSelect={() => onSelect(item)}
+                >
+                  <div className="w-full flex flex-col">
+                    <div className="flex justify-between items-center w-full">
+                      <span className="font-medium">{item.name}</span>
+                      <span className="text-muted-foreground">${(item.price || 0).toFixed(2)}</span>
+                    </div>
+                    {item.sku && (
+                      <span className="text-xs text-muted-foreground">
+                        SKU: {item.sku}
+                      </span>
+                    )}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimate; open: boolean; onClose: () => void }) {
   const { createEstimate, updateEstimate } = useEstimates();
   const isEditing = !!estimate;
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
-  const [itemSearchTerm, setItemSearchTerm] = useState("");
-  const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
-  const [showItemResults, setShowItemResults] = useState(false);
   const [showAddVehicle, setShowAddVehicle] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const { toast } = useToast();
+
+  // Inventory search state
+  const [activeSearchField, setActiveSearchField] = useState<{ type: 'part_number' | 'description'; index: number | null } | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -120,6 +181,9 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
       // Reset line items
       setLineItems([]);
       setShowAddVehicle(false);
+      setActiveSearchField(null);
+      setSearchTerm("");
+      setSearchResults([]);
     }
   }, [open, estimate, form]);
 
@@ -161,6 +225,93 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
     enabled: !!form.watch('customer_id'),
   });
 
+  // Fetch vendors for dropdown - Filter out empty/null vendors
+  const { data: vendors = [] } = useQuery({
+    queryKey: ['vendors'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('inventory')
+        .select('supplier')
+        .not('supplier', 'is', null)
+        .neq('supplier', ''); // Also exclude empty strings
+      
+      // Get unique suppliers and filter out any null/empty values
+      const uniqueSuppliers = [...new Set(data?.map(item => item.supplier))]
+        .filter(supplier => supplier && supplier.trim() !== ''); // Filter out null, undefined, and empty strings
+      
+      return uniqueSuppliers.map(supplier => ({ name: supplier })) || [];
+    },
+  });
+
+  // Inventory search functionality
+  const performInventorySearch = async (term: string) => {
+    if (!term || term.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      const { data } = await supabase
+        .from('inventory')
+        .select('*')
+        .or(`name.ilike.%${term}%,description.ilike.%${term}%,sku.ilike.%${term}%`)
+        .limit(10);
+      
+      setSearchResults(data || []);
+    } catch (error) {
+      console.error('Error searching inventory:', error);
+      setSearchResults([]);
+    }
+  };
+
+  const handleSearchClick = (type: 'part_number' | 'description', index: number | null, term: string) => {
+    if (index === -1) {
+      // Close search
+      setActiveSearchField(null);
+      setSearchTerm("");
+      setSearchResults([]);
+      return;
+    }
+
+    setActiveSearchField({ type, index });
+    setSearchTerm(term);
+    performInventorySearch(term);
+  };
+
+  const handleInventoryItemSelect = (item: any, index: number | null) => {
+    if (index === null) {
+      // This is for a new item being added
+      const updatedItems = [...lineItems];
+      const lastIndex = updatedItems.length - 1;
+      if (lastIndex >= 0) {
+        updatedItems[lastIndex] = {
+          ...updatedItems[lastIndex],
+          part_number: item.sku || '',
+          description: item.name || '',
+          price: item.price || 0,
+          vendor: item.supplier || ''
+        };
+        setLineItems(updatedItems);
+      }
+    } else {
+      // This is for an existing item
+      const updatedItems = [...lineItems];
+      updatedItems[index] = {
+        ...updatedItems[index],
+        part_number: item.sku || '',
+        description: item.name || '',
+        price: item.price || 0,
+        vendor: item.supplier || ''
+      };
+      setLineItems(updatedItems);
+    }
+
+    // Close search
+    setActiveSearchField(null);
+    setSearchTerm("");
+    setSearchResults([]);
+  };
+
   // Handle customer selection
   const handleCustomerChange = async (customerId: string) => {
     form.setValue('customer_id', customerId);
@@ -189,12 +340,11 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
         return;
       }
 
-      // Fixed: Ensure required fields (make, model, year) are present and not undefined
       const vehicleData = {
         owner_id: customerId,
-        make: data.make, // Required
-        model: data.model, // Required
-        year: data.year, // Required
+        make: data.make,
+        model: data.model,
+        year: data.year,
         color: data.color || null,
         license_plate: data.license_plate || null,
         vin: data.vin || null,
@@ -234,62 +384,6 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
     }
   };
 
-  // Fetch vendors for dropdown - FIXED: Filter out empty/null vendors
-  const { data: vendors = [] } = useQuery({
-    queryKey: ['vendors'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('inventory')
-        .select('supplier')
-        .not('supplier', 'is', null)
-        .neq('supplier', ''); // Also exclude empty strings
-      
-      // Get unique suppliers and filter out any null/empty values
-      const uniqueSuppliers = [...new Set(data?.map(item => item.supplier))]
-        .filter(supplier => supplier && supplier.trim() !== ''); // Filter out null, undefined, and empty strings
-      
-      return uniqueSuppliers.map(supplier => ({ name: supplier })) || [];
-    },
-  });
-
-  // Fetch inventory items based on search term
-  const { data: inventoryItems = [] } = useQuery({
-    queryKey: ['inventory', itemSearchTerm],
-    queryFn: async () => {
-      if (!itemSearchTerm || itemSearchTerm.length < 2) return [];
-      
-      const { data } = await supabase
-        .from('inventory')
-        .select('*')
-        .or(`name.ilike.%${itemSearchTerm}%,description.ilike.%${itemSearchTerm}%,sku.ilike.%${itemSearchTerm}%`);
-      
-      return data || [];
-    },
-    enabled: itemSearchTerm.length >= 2,
-  });
-
-  const handleItemSearch = (value: string, index: number) => {
-    setItemSearchTerm(value);
-    setSelectedItemIndex(index);
-    setShowItemResults(true);
-  };
-
-  const handleSelectInventoryItem = (item: any) => {
-    if (selectedItemIndex !== null) {
-      const updatedItems = [...lineItems];
-      updatedItems[selectedItemIndex] = {
-        ...updatedItems[selectedItemIndex],
-        part_number: item.sku || '',
-        description: item.name,
-        price: item.price || 0,
-        vendor: item.supplier || ''
-      };
-      setLineItems(updatedItems);
-      setShowItemResults(false);
-      setItemSearchTerm("");
-    }
-  };
-
   const addLineItem = () => {
     setLineItems([
       ...lineItems,
@@ -306,6 +400,13 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
     const updatedItems = [...lineItems];
     updatedItems[index] = { ...updatedItems[index], [field]: value };
     setLineItems(updatedItems);
+
+    // If updating part_number or description, trigger search
+    if (field === 'part_number' || field === 'description') {
+      if (value && value.length >= 2) {
+        handleSearchClick(field, index, value);
+      }
+    }
   };
 
   const onSubmit = async (values: FormValues) => {
@@ -357,7 +458,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
         title: values.title,
         description: values.description || "",
         total_amount: values.total_amount || 0,
-        status: "pending" as EstimateStatus, // Always save as pending for draft
+        status: "pending" as EstimateStatus,
         line_items: lineItems
       };
       
@@ -380,7 +481,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[800px]">
+      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Estimate" : "Create New Estimate"}</DialogTitle>
           <DialogDescription>
@@ -614,7 +715,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
               )}
             />
 
-            {/* Line Items Section */}
+            {/* Line Items Section with Enhanced Search */}
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium">Line Items</h3>
@@ -641,55 +742,62 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
                   
                   {lineItems.map((item, index) => (
                     <div key={index} className="grid grid-cols-12 gap-2 p-3 border-t">
-                      {/* Part Number */}
+                      {/* Part Number with Search */}
                       <div className="col-span-2">
-                        <Input 
-                          value={item.part_number || ''} 
-                          onChange={(e) => updateLineItem(index, 'part_number', e.target.value)}
-                          placeholder="Part #"
-                        />
+                        <div className="relative flex items-center">
+                          <Input 
+                            value={item.part_number || ''} 
+                            onChange={(e) => updateLineItem(index, 'part_number', e.target.value)}
+                            placeholder="Part #"
+                            className="pr-8"
+                          />
+                          <InventorySearchPopover
+                            isOpen={activeSearchField?.type === 'part_number' && activeSearchField.index === index}
+                            onClose={() => handleSearchClick('part_number', -1, '')}
+                            results={searchResults}
+                            onSelect={(item) => handleInventoryItemSelect(item, index)}
+                            searchTerm={searchTerm}
+                          >
+                            <Button 
+                              type="button"
+                              variant="ghost" 
+                              size="sm" 
+                              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                              onClick={() => handleSearchClick('part_number', index, item.part_number || '')}
+                            >
+                              <Search className="h-3 w-3" />
+                            </Button>
+                          </InventorySearchPopover>
+                        </div>
                       </div>
                       
-                      {/* Description with search */}
-                      <div className="col-span-4 relative">
-                        <Popover open={showItemResults && selectedItemIndex === index}>
-                          <PopoverTrigger asChild>
-                            <div>
-                              <Input 
-                                value={item.description} 
-                                onChange={(e) => {
-                                  updateLineItem(index, 'description', e.target.value);
-                                  handleItemSearch(e.target.value, index);
-                                }}
-                                placeholder="Description"
-                                className="w-full"
-                              />
-                            </div>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-96 p-0 max-h-[200px] overflow-y-auto">
-                            {inventoryItems.length > 0 ? (
-                              <div className="py-2">
-                                {inventoryItems.map((invItem) => (
-                                  <div 
-                                    key={invItem.id} 
-                                    className="px-4 py-2 hover:bg-accent cursor-pointer"
-                                    onClick={() => handleSelectInventoryItem(invItem)}
-                                  >
-                                    <div className="font-medium">{invItem.name}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {invItem.sku && `SKU: ${invItem.sku}`}
-                                      {invItem.supplier && ` • Vendor: ${invItem.supplier}`}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="p-4 text-center text-sm text-muted-foreground">
-                                No matching items found
-                              </div>
-                            )}
-                          </PopoverContent>
-                        </Popover>
+                      {/* Description with Search */}
+                      <div className="col-span-4">
+                        <div className="relative flex items-center">
+                          <Input 
+                            value={item.description} 
+                            onChange={(e) => updateLineItem(index, 'description', e.target.value)}
+                            placeholder="Description"
+                            className="pr-8"
+                          />
+                          <InventorySearchPopover
+                            isOpen={activeSearchField?.type === 'description' && activeSearchField.index === index}
+                            onClose={() => handleSearchClick('description', -1, '')}
+                            results={searchResults}
+                            onSelect={(item) => handleInventoryItemSelect(item, index)}
+                            searchTerm={searchTerm}
+                          >
+                            <Button 
+                              type="button"
+                              variant="ghost" 
+                              size="sm" 
+                              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                              onClick={() => handleSearchClick('description', index, item.description || '')}
+                            >
+                              <Search className="h-3 w-3" />
+                            </Button>
+                          </InventorySearchPopover>
+                        </div>
                       </div>
 
                       {/* Quantity */}
@@ -713,7 +821,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
                         />
                       </div>
 
-                      {/* Vendor - FIXED: Filter out empty vendors and provide fallback */}
+                      {/* Vendor */}
                       <div className="col-span-2">
                         <Select
                           value={item.vendor || ''}
@@ -741,6 +849,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
                       {/* Remove button */}
                       <div className="col-span-1 flex items-center justify-end">
                         <Button 
+                          type="button"
                           variant="ghost" 
                           size="icon" 
                           className="h-8 w-8" 
