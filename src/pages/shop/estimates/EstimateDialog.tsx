@@ -63,7 +63,7 @@ const formSchema = z.object({
   title: z.string().min(1, { message: "Title is required" }),
   description: z.string().optional(),
   total_amount: z.coerce.number().min(0, { message: "Amount must be positive" }),
-  status: z.enum(["pending", "approved", "declined", "completed"]),
+  status: z.enum(["draft", "pending", "approved", "declined", "completed"]),
   line_items: z.array(lineItemSchema).optional(),
 });
 
@@ -430,13 +430,14 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
           status: values.status as EstimateStatus,
         });
       } else {
+        // For new estimates, default to pending status (ready for customer)
         await createEstimate({
           customer_id: values.customer_id,
           vehicle_id: values.vehicle_id,
           title: values.title,
           description: values.description,
           total_amount: values.total_amount,
-          status: values.status as EstimateStatus,
+          status: "pending" as EstimateStatus, // Default to pending for formal estimates
         });
       }
       onClose();
@@ -464,7 +465,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
         title: values.title,
         description: values.description || "",
         total_amount: values.total_amount || 0,
-        status: "pending" as EstimateStatus,
+        status: "draft" as EstimateStatus,
         line_items: lineItems
       };
       
@@ -473,7 +474,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
           title: formData.title,
           description: formData.description,
           total_amount: formData.total_amount,
-          status: "pending",
+          status: "draft",
         });
       } else {
         await createEstimate(formData);
@@ -902,6 +903,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="draft">Draft</SelectItem>
                         <SelectItem value="pending">Pending</SelectItem>
                         <SelectItem value="approved">Approved</SelectItem>
                         <SelectItem value="declined">Declined</SelectItem>
