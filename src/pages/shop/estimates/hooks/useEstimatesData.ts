@@ -126,13 +126,14 @@ export function useEstimatesData() {
     description?: string;
     total_amount?: number;
     status?: EstimateStatus;
+    line_items?: any[]; // Add line_items parameter
   }) => {
     try {
       console.log("Creating estimate:", estimate);
       
       const { error: insertError } = await supabase
         .from('estimates')
-        .insert(estimate);
+        .insert(estimate); // This will now include line_items
       
       if (insertError) {
         console.error("Insert error:", insertError);
@@ -162,11 +163,12 @@ export function useEstimatesData() {
     description?: string;
     total_amount?: number;
     status?: EstimateStatus;
+    line_items?: any[]; // Add line_items parameter
   }) => {
     try {
       const { error: updateError } = await supabase
         .from('estimates')
-        .update(estimate)
+        .update(estimate) // This will now include line_items
         .eq('id', id);
       
       if (updateError) throw updateError;

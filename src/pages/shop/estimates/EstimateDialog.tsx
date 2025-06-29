@@ -435,6 +435,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
           description: values.description,
           total_amount: values.total_amount,
           status: values.status as EstimateStatus,
+          line_items: lineItems, // Include line items when updating estimates
         });
       } else {
         // For new estimates, default to pending status (ready for customer)
@@ -445,6 +446,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
           description: values.description,
           total_amount: values.total_amount,
           status: "pending" as EstimateStatus, // Default to pending for formal estimates
+          line_items: lineItems, // Include line items for pending estimates
         });
       }
       onClose();
@@ -482,6 +484,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
           description: formData.description,
           total_amount: formData.total_amount,
           status: "draft",
+          line_items: lineItems, // Include line items when updating to draft
         });
       } else {
         await createEstimate(formData);

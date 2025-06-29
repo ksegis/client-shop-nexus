@@ -17,12 +17,14 @@ interface EstimatesContextType {
     description?: string;
     total_amount?: number;
     status?: EstimateStatus;
+    line_items?: any[]; // Add line_items to the type
   }) => Promise<void>;
   updateEstimate: (id: string, estimate: {
     title?: string;
     description?: string;
     total_amount?: number;
     status?: EstimateStatus;
+    line_items?: any[]; // Add line_items to the type
   }) => Promise<void>;
   updateEstimateStatus: (id: string, status: EstimateStatus) => Promise<void>;
   deleteEstimate: (id: string) => Promise<void>;
