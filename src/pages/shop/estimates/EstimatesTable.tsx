@@ -134,7 +134,7 @@ export function EstimatesTable({ onEdit }: EstimatesTableProps) {
                         asChild
                         className="cursor-pointer"
                       >
-                        <Link to={`/shop/invoices/new?estimateId=${estimate.id}`}>
+                        <Link to={`/shop/invoices/new-from-estimate?estimateId=${estimate.id}`}>
                           <FileText className="mr-2 h-4 w-4" />
                           Convert to Invoice
                         </Link>

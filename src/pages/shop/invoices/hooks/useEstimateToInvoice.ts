@@ -10,7 +10,7 @@ export const useEstimateToInvoice = () => {
   const getEstimateData = async (estimateId: string) => {
     setLoading(true);
     try {
-      // Fetch estimate details
+      // Fetch estimate details with line_items from JSON column
       const { data: estimate, error } = await supabase
         .from('estimates')
         .select(`
@@ -22,17 +22,12 @@ export const useEstimateToInvoice = () => {
 
       if (error) throw error;
 
-      // Fetch line items
-      const { data: lineItems, error: lineItemsError } = await supabase
-        .from('estimate_items')
-        .select('*')
-        .eq('estimate_id', estimateId);
-
-      if (lineItemsError) throw lineItemsError;
+      // Use line_items from the estimates table (JSON column)
+      const lineItems = estimate.line_items || [];
 
       return {
         estimate,
-        lineItems: lineItems || []
+        lineItems
       };
     } catch (error) {
       console.error('Error loading estimate data:', error);

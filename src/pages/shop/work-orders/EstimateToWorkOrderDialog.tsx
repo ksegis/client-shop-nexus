@@ -86,20 +86,12 @@ export const EstimateToWorkOrderDialog = ({ open, onClose, estimateId }: Estimat
       form.setValue('vehicle_id', estimate.vehicle_id);
       form.setValue('estimated_cost', estimate.total_amount);
 
-      // Fetch estimate items
-      const { data: items, error: itemsError } = await supabase
-        .from('estimate_items')
-        .select('*')
-        .eq('estimate_id', estimateId);
-
-      if (itemsError) throw itemsError;
-
-      // Convert estimate items to work order line items
-      if (items) {
-        const workOrderItems = items.map(item => ({
-          description: item.description,
-          quantity: item.quantity,
-          price: item.price,
+      // Use line_items from the estimates table (JSON column)
+      if (estimate.line_items && Array.isArray(estimate.line_items)) {
+        const workOrderItems = estimate.line_items.map((item: any) => ({
+          description: item.description || '',
+          quantity: item.quantity || 1,
+          price: item.price || 0,
           part_number: item.part_number || '',
           vendor: item.vendor || '',
         }));

@@ -140,6 +140,9 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
   const [activeSearchField, setActiveSearchField] = useState<{ type: 'part_number' | 'description'; index: number | null } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  
+  // Manual pricing state
+  const [manualPricing, setManualPricing] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -197,18 +200,24 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
       setActiveSearchField(null);
       setSearchTerm("");
       setSearchResults([]);
+      setManualPricing(false); // Reset manual pricing when dialog opens
     }
   }, [open, estimate, form]);
 
-  // Update total amount when line items change
+  // Update total amount when line items change (only if manual pricing is disabled)
   useEffect(() => {
-    if (lineItems.length > 0) {
-      const newTotal = lineItems.reduce((sum, item) => {
-        return sum + (item.quantity * item.price);
-      }, 0);
-      form.setValue("total_amount", newTotal);
+    if (!manualPricing) {
+      if (lineItems.length > 0) {
+        const newTotal = lineItems.reduce((sum, item) => {
+          return sum + (item.quantity * item.price);
+        }, 0);
+        form.setValue("total_amount", newTotal);
+      } else {
+        // If no line items and manual pricing is off, set total to 0
+        form.setValue("total_amount", 0);
+      }
     }
-  }, [lineItems, form]);
+  }, [lineItems, form, manualPricing]);
 
   // Fetch customers for the dropdown
   const { data: customers = [] } = useQuery({
@@ -891,11 +900,37 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
                 name="total_amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Total Amount</FormLabel>
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Total Amount</FormLabel>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="manual-pricing"
+                          checked={manualPricing}
+                          onChange={(e) => setManualPricing(e.target.checked)}
+                          className="h-4 w-4"
+                        />
+                        <label htmlFor="manual-pricing" className="text-sm text-muted-foreground">
+                          Manual pricing
+                        </label>
+                      </div>
+                    </div>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" {...field} />
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        min="0" 
+                        {...field} 
+                        disabled={!manualPricing && lineItems.length > 0}
+                        placeholder={manualPricing ? "Enter total amount" : "Calculated from line items"}
+                      />
                     </FormControl>
                     <FormMessage />
+                    {!manualPricing && (
+                      <p className="text-xs text-muted-foreground">
+                        Total is automatically calculated from line items
+                      </p>
+                    )}
                   </FormItem>
                 )}
               />
