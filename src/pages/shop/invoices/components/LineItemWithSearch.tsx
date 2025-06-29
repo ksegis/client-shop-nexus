@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,12 +29,15 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
   const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
+  const [showSearchPopover, setShowSearchPopover] = useState(false);
 
   useEffect(() => {
     if (searchQuery.length > 2) {
       searchInventory();
+      setShowSearchPopover(true);
     } else {
       setSearchResults([]);
+      setShowSearchPopover(false);
     }
   }, [searchQuery]);
 
@@ -66,30 +68,53 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
     onUpdate(index, 'core_charge', inventoryItem.core_charge || 0);
     setSearchQuery('');
     setSearchResults([]);
+    setShowSearchPopover(false);
+  };
+
+  const handleDescriptionChange = (value: string) => {
+    setSearchQuery(value);
+    onUpdate(index, 'description', value);
+  };
+
+  const handleSearchIconClick = () => {
+    if (item.description && item.description.length > 2) {
+      setSearchQuery(item.description);
+      searchInventory();
+      setShowSearchPopover(true);
+    }
   };
 
   return (
     <div className="grid grid-cols-12 gap-2 items-start">
       <div className="col-span-4">
-        <Popover>
-          <PopoverTrigger asChild>
-            <div className="relative">
-              <Input
-                placeholder="Search or enter description"
-                value={searchQuery || item.description}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setSearchQuery(value);
-                  onUpdate(index, 'description', value);
-                }}
-                className="pr-8"
-              />
-              <Search className="absolute right-2 top-2.5 h-4 w-4 text-gray-400" />
-            </div>
-          </PopoverTrigger>
-          {searchResults.length > 0 && (
-            <PopoverContent className="w-80 p-2">
-              <div className="space-y-1">
+        <Popover open={showSearchPopover} onOpenChange={setShowSearchPopover}>
+          <div className="relative">
+            <Input
+              placeholder="Search or enter description"
+              value={item.description || ''}
+              onChange={(e) => handleDescriptionChange(e.target.value)}
+              className="pr-8"
+            />
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-1 top-1 h-6 w-6 p-0 hover:bg-gray-100"
+                onClick={handleSearchIconClick}
+              >
+                <Search className="h-4 w-4 text-gray-400" />
+              </Button>
+            </PopoverTrigger>
+          </div>
+          
+          <PopoverContent className="w-80 p-2" align="start">
+            {isSearching ? (
+              <div className="p-2 text-center text-sm text-gray-500">
+                Searching...
+              </div>
+            ) : searchResults.length > 0 ? (
+              <div className="space-y-1 max-h-60 overflow-y-auto">
                 {searchResults.map((result) => (
                   <div
                     key={result.id}
@@ -108,9 +133,18 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
                   </div>
                 ))}
               </div>
-            </PopoverContent>
-          )}
+            ) : searchQuery.length > 2 ? (
+              <div className="p-2 text-center text-sm text-gray-500">
+                No items found for "{searchQuery}"
+              </div>
+            ) : (
+              <div className="p-2 text-center text-sm text-gray-500">
+                Type 3+ characters to search inventory
+              </div>
+            )}
+          </PopoverContent>
         </Popover>
+        
         {selectedInventoryItem && selectedInventoryItem.core_charge && selectedInventoryItem.core_charge > 0 && (
           <div className="mt-1">
             <CoreIndicatorBadge coreCharge={selectedInventoryItem.core_charge} />
@@ -179,3 +213,4 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
     </div>
   );
 }
+
