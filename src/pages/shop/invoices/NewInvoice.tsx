@@ -1,5 +1,5 @@
 import React from 'react';
-import { InvoicesProvider } from '../InvoicesContext';
+import { InvoicesProvider } from './InvoicesContext';
 import InvoiceForm from '../components/InvoiceForm';
 import { ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
