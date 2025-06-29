@@ -170,6 +170,11 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
   // Reset form when the dialog opens or estimate changes
   useEffect(() => {
     if (open) {
+      // Debug logging to see what's in the estimate object
+      console.log("EstimateDialog opened with estimate:", estimate);
+      console.log("Estimate line_items:", estimate?.line_items);
+      console.log("Estimate status:", estimate?.status);
+      
       form.reset({
         customer_id: estimate?.customer_id || "",
         vehicle_id: estimate?.vehicle_id || "",
@@ -181,8 +186,10 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
       
       // Load existing line items if editing an estimate
       if (estimate && estimate.line_items) {
+        console.log("Loading line items:", estimate.line_items);
         setLineItems(estimate.line_items);
       } else {
+        console.log("No line items found, setting empty array");
         setLineItems([]);
       }
       
@@ -930,7 +937,7 @@ export function EstimateDialog({ estimate, open, onClose }: { estimate?: Estimat
                 Save as Draft
               </Button>
               <Button type="submit">
-                Create Estimate
+                {isEditing ? "Update Estimate" : "Create Estimate"}
               </Button>
             </DialogFooter>
           </form>
