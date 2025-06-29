@@ -23,6 +23,7 @@ import SystemSettings from "@/pages/shop/settings/SystemSettings";
 import NotFound from "@/pages/NotFound";
 import Invoices from "@/pages/shop/invoices";
 import NewInvoice from "@/pages/shop/invoices/NewInvoice";
+import NewInvoiceFromEstimate from "@/pages/shop/invoices/NewInvoiceFromEstimate";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { CustomersProvider } from "@/pages/shop/customers/CustomersContext";
 import { CartProvider } from "@/lib/minimal_cart_context";
@@ -176,6 +177,14 @@ const ShopRoutes = () => {
           element={
             <ProtectedRoute>
               <NewInvoice />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="invoices/new-from-estimate"
+          element={
+            <ProtectedRoute>
+              <NewInvoiceFromEstimate />
             </ProtectedRoute>
           }
         />
