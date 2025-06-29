@@ -19,6 +19,7 @@ export function useEstimatesData() {
         .from('estimates')
         .select(`
           *,
+          line_items,
           vehicles (
             make,
             model,
