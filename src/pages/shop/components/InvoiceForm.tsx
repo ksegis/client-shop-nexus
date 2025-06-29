@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useInvoices } from '@/pages/shop/invoices/InvoicesContext';
 
+// Cache bust: Build fix for import path - 2025-06-29
+
 interface InvoiceFormData {
   amount: number;
   date: string;
