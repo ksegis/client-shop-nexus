@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import InvoiceForm from '../components/InvoiceForm';
+import { useInvoices } from '@/pages/shop/invoices/InvoicesContext';
 
 interface InvoiceFormData {
   amount: number;
@@ -23,7 +23,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({
   initialData = {},
   mode = 'create'
 }) => {
-  const { addInvoice, updateInvoice } = useInvoices();
+  const { createInvoice, updateInvoice } = useInvoices();
   
   const [formData, setFormData] = useState<InvoiceFormData>({
     amount: initialData.amount || 0,
@@ -71,7 +71,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({
     }
 
     if (mode === 'create') {
-      addInvoice(formData);
+      createInvoice(formData);
     } else {
       // For edit mode, you'd need to pass the invoice ID
       // updateInvoice(invoiceId, formData);
