@@ -1,4 +1,3 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { Form } from "@/components/ui/form";
@@ -14,8 +13,8 @@ import { InvoiceLineItem } from "../types";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-
-// Cache bust: Force rebuild - 2025-06-29
+import { supabase } from "@/integrations/supabase/client";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 interface InvoiceFormProps {
   invoice?: any;
@@ -28,8 +27,6 @@ interface InvoiceFormProps {
   vehicleOptions: { value: string; label: string; }[];
   onSubmit: (data: InvoiceFormValues) => void;
   customers?: any[];
-  isLoading?: boolean;
-  mode?: 'create' | 'edit';
 }
 
 export function InvoiceForm({
@@ -40,38 +37,69 @@ export function InvoiceForm({
   selectedVehicleId,
   setVehicleId,
   customerDetails,
-  vehicleOptions = [],
+  vehicleOptions,
   onSubmit,
-  customers = [],
-  isLoading = false,
-  mode = 'create'
+  customers
 }: InvoiceFormProps) {
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
-  const [vendors, setVendors] = useState<{name: string}[]>([]);
+  const [vendors, setVendors] = useState<{ name: string }[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  // Extract unique vendors from inventory for dropdown
+  // Fetch real vendors from database
   useEffect(() => {
-    // In a real app, you'd fetch this from an API
-    setVendors([
-      { name: 'OEM Parts' },
-      { name: 'Aftermarket' },
-      { name: 'Local Supplier' },
-      { name: 'Online Retailer' },
-      { name: 'Keystone Automotive' },
-      { name: 'LKQ Corporation' },
-      { name: 'Genuine Parts Company' },
-      { name: 'AutoZone' }
-    ]);
+    const fetchVendors = async () => {
+      try {
+        console.log('Fetching vendors from database...');
+        const { data, error } = await supabase
+          .from('inventory')
+          .select('supplier')
+          .not('supplier', 'is', null)
+          .neq('supplier', '');
+
+        if (error) {
+          console.error('Error fetching vendors:', error);
+          // Fallback to basic vendors if database fetch fails
+          setVendors([
+            { name: 'OEM Parts' },
+            { name: 'Aftermarket' },
+            { name: 'Local Supplier' }
+          ]);
+          return;
+        }
+
+        // Extract unique suppliers
+        const uniqueSuppliers = [...new Set(data.map(item => item.supplier))];
+        const vendorList = uniqueSuppliers.map(supplier => ({ name: supplier }));
+        
+        console.log('Fetched vendors:', vendorList);
+        setVendors(vendorList);
+      } catch (error) {
+        console.error('Error fetching vendors:', error);
+        // Fallback vendors
+        setVendors([
+          { name: 'OEM Parts' },
+          { name: 'Aftermarket' },
+          { name: 'Local Supplier' }
+        ]);
+      }
+    };
+
+    fetchVendors();
   }, []);
 
   // Initialize line items from invoice or estimate
   useEffect(() => {
+    console.log('Initializing line items...');
+    console.log('Invoice:', invoice);
+    console.log('EstimateData:', estimateData);
+
     if (invoice && invoice.lineItems) {
+      console.log('Using invoice.lineItems');
       setLineItems(invoice.lineItems);
     } else if (invoice && invoice.line_items) {
-      // Handle different property names
+      console.log('Using invoice.line_items');
       setLineItems(invoice.line_items.map((item: any) => ({
         description: item.description || '',
         quantity: item.quantity || 1,
@@ -80,6 +108,7 @@ export function InvoiceForm({
         vendor: item.vendor || '',
       })));
     } else if (estimateData && estimateData.lineItems) {
+      console.log('Using estimateData.lineItems');
       setLineItems(estimateData.lineItems.map((item: any) => ({
         description: item.description || '',
         quantity: item.quantity || 1,
@@ -88,7 +117,7 @@ export function InvoiceForm({
         vendor: item.vendor || '',
       })));
     } else if (estimateData && estimateData.line_items) {
-      // Handle different property names for estimate data
+      console.log('Using estimateData.line_items');
       setLineItems(estimateData.line_items.map((item: any) => ({
         description: item.description || '',
         quantity: item.quantity || 1,
@@ -96,6 +125,9 @@ export function InvoiceForm({
         part_number: item.part_number || item.partNumber || '',
         vendor: item.vendor || '',
       })));
+    } else {
+      console.log('No line items found, starting with empty array');
+      setLineItems([]);
     }
   }, [invoice, estimateData]);
 
@@ -106,7 +138,7 @@ export function InvoiceForm({
       description: invoice?.description || estimateData?.description || "",
       total_amount: invoice?.total_amount || estimateData?.total_amount || 0,
       status: invoice?.status || 'draft',
-      due_date: invoice?.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+      due_date: invoice?.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       invoice_date: invoice?.invoice_date || new Date().toISOString().split('T')[0],
     },
   });
@@ -118,26 +150,13 @@ export function InvoiceForm({
         sum + (item.quantity * item.price), 0);
       form.setValue('total_amount', totalAmount);
     } else {
-      // If no line items, reset to 0 unless manually set
       form.setValue('total_amount', 0);
     }
   }, [lineItems, form]);
 
-  // Update customer and vehicle when props change
-  useEffect(() => {
-    if (customerId && customerDetails) {
-      // Update form with customer details if needed
-      const customerName = `${customerDetails.first_name || ''} ${customerDetails.last_name || ''}`.trim();
-      if (customerName) {
-        form.setValue('customer_name', customerName);
-      }
-    }
-  }, [customerId, customerDetails, form]);
-
   const handleSubmitWithItems = async (data: InvoiceFormValues) => {
     setIsSubmitting(true);
     try {
-      // Validate that we have required data
       if (!customerId) {
         toast({
           title: "Error",
@@ -156,26 +175,19 @@ export function InvoiceForm({
         return;
       }
 
-      // Add line items and customer/vehicle data to the form data
-      const submitData = {
+      // Include line items in the submission
+      const formDataWithItems = {
         ...data,
-        customer_id: customerId,
-        vehicle_id: selectedVehicleId,
-        lineItems: lineItems,
-        line_items: lineItems, // Include both formats for compatibility
+        lineItems: lineItems
       };
 
-      await onSubmit(submitData);
-      
-      toast({
-        title: "Success",
-        description: `Invoice ${mode === 'create' ? 'created' : 'updated'} successfully`,
-      });
+      console.log('Submitting form with line items:', formDataWithItems);
+      await onSubmit(formDataWithItems);
     } catch (error) {
-      console.error('Error submitting invoice:', error);
+      console.error('Error submitting form:', error);
       toast({
         title: "Error",
-        description: `Failed to ${mode} invoice. Please try again.`,
+        description: "Failed to save invoice",
         variant: "destructive",
       });
     } finally {
@@ -184,23 +196,22 @@ export function InvoiceForm({
   };
 
   const handleAddLineItem = () => {
-    const newItem: InvoiceLineItem = {
-      description: '',
-      quantity: 1,
-      price: 0,
-      part_number: '',
-      vendor: '',
-    };
-    setLineItems([...lineItems, newItem]);
+    console.log('Adding new line item');
+    setLineItems([
+      ...lineItems,
+      { description: "", quantity: 1, price: 0, part_number: "", vendor: "" }
+    ]);
   };
 
-  const handleUpdateLineItem = (index: number, updatedItem: InvoiceLineItem) => {
+  const handleUpdateLineItem = (index: number, field: keyof InvoiceLineItem, value: any) => {
+    console.log(`Updating line item ${index}, field ${field}, value:`, value);
     const updatedItems = [...lineItems];
-    updatedItems[index] = updatedItem;
+    updatedItems[index] = { ...updatedItems[index], [field]: value };
     setLineItems(updatedItems);
   };
 
   const handleRemoveLineItem = (index: number) => {
+    console.log('Removing line item at index:', index);
     const updatedItems = lineItems.filter((_, i) => i !== index);
     setLineItems(updatedItems);
   };
@@ -283,21 +294,19 @@ export function InvoiceForm({
             </div>
             
             <div className="flex gap-3">
-              <Button 
-                type="button" 
-                variant="outline"
-                onClick={() => window.history.back()}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              
-              <Button 
+              <Button
                 type="submit"
                 disabled={isSubmitting || !customerId || !selectedVehicleId}
+                className="min-w-[120px]"
               >
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {invoice ? "Update Invoice" : "Create Invoice"}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  invoice ? "Update Invoice" : "Create Invoice"
+                )}
               </Button>
             </div>
           </div>
