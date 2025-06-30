@@ -1,261 +1,314 @@
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Search } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { InvoiceLineItem } from '../types';
+import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
+import { Form } from "@/components/ui/form";
+import { Button } from "@/components/ui/button";
+import { CustomerVehicleSection } from "./CustomerVehicleSection";
+import { BasicInfoSection } from "./form-sections/BasicInfoSection";
+import { DescriptionSection } from "./form-sections/DescriptionSection";
+import { StatusSection } from "./form-sections/StatusSection";
+import { AmountSection } from "./form-sections/AmountSection";
+import { invoiceFormSchema, InvoiceFormValues } from "./InvoiceFormSchema";
+import { LineItemsSection } from "./LineItemsSection";
+import { InvoiceLineItem } from "../types";
+import { useEffect, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { zodResolver } from "@hookform/resolvers/zod";
 
-interface LineItemWithSearchProps {
-  item: InvoiceLineItem;
-  index: number;
-  onUpdate: (index: number, field: string, value: any) => void;
-  onRemove: (index: number) => void;
-  vendors: {name: string}[];
+interface InvoiceFormProps {
+  invoice?: any;
+  estimateData?: any;
+  customerId: string;
+  setCustomerId: (id: string) => void;
+  selectedVehicleId: string;
+  setVehicleId: (id: string) => void;
+  customerDetails: { first_name?: string; last_name?: string; email: string; } | null;
+  vehicleOptions: { value: string; label: string; }[];
+  onSubmit: (data: InvoiceFormValues) => void;
+  customers?: any[];
 }
 
-interface InventoryItem {
-  id: string;
-  name: string;
-  sku: string;
-  price: number;
-  core_charge: number | null;
-}
+export function InvoiceForm({
+  invoice,
+  estimateData,
+  customerId,
+  setCustomerId,
+  selectedVehicleId,
+  setVehicleId,
+  customerDetails,
+  vehicleOptions,
+  onSubmit,
+  customers
+}: InvoiceFormProps) {
+  const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
+  const [vendors, setVendors] = useState<{ name: string }[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
 
-export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }: LineItemWithSearchProps) {
-  const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-
-  // Log the current item prop whenever it changes
+  // Fetch real vendors from database
   useEffect(() => {
-    console.log(`Line item ${index} prop updated:`, item);
-  }, [item, index]);
+    const fetchVendors = async () => {
+      try {
+        console.log('Fetching vendors from database...');
+        const { data, error } = await supabase
+          .from('inventory')
+          .select('supplier')
+          .not('supplier', 'is', null)
+          .neq('supplier', '');
 
-  const searchInventory = async (query: string) => {
-    if (query.length < 3) {
-      setSearchResults([]);
-      setShowResults(false);
-      return;
-    }
+        if (error) {
+          console.error('Error fetching vendors:', error);
+          setVendors([
+            { name: 'OEM Parts' },
+            { name: 'Aftermarket' },
+            { name: 'Local Supplier' }
+          ]);
+          return;
+        }
 
-    setIsSearching(true);
-    try {
-      console.log('Searching for:', query);
-      const { data, error } = await supabase
-        .from('inventory')
-        .select('id, name, sku, price, core_charge')
-        .or(`name.ilike.%${query}%,sku.ilike.%${query}%`)
-        .limit(10);
-
-      if (error) {
-        console.error('Search error:', error);
-        throw error;
+        const uniqueSuppliers = [...new Set(data.map(item => item.supplier))];
+        const vendorList = uniqueSuppliers.map(supplier => ({ name: supplier }));
+        
+        console.log('Fetched vendors:', vendorList);
+        setVendors(vendorList);
+      } catch (error) {
+        console.error('Error fetching vendors:', error);
+        setVendors([
+          { name: 'OEM Parts' },
+          { name: 'Aftermarket' },
+          { name: 'Local Supplier' }
+        ]);
       }
-      
-      console.log('Search results:', data);
-      setSearchResults(data || []);
-      setShowResults(data && data.length > 0);
-    } catch (error) {
-      console.error('Error searching inventory:', error);
-      setSearchResults([]);
-      setShowResults(false);
-    } finally {
-      setIsSearching(false);
+    };
+
+    fetchVendors();
+  }, []);
+
+  // Initialize line items from invoice or estimate
+  useEffect(() => {
+    console.log('Initializing line items...');
+    console.log('Invoice:', invoice);
+    console.log('EstimateData:', estimateData);
+
+    if (invoice && invoice.lineItems) {
+      console.log('Using invoice.lineItems');
+      setLineItems(invoice.lineItems);
+    } else if (invoice && invoice.line_items) {
+      console.log('Using invoice.line_items');
+      setLineItems(invoice.line_items.map((item: any) => ({
+        description: item.description || '',
+        quantity: item.quantity || 1,
+        price: item.price || 0,
+        part_number: item.part_number || item.partNumber || '',
+        vendor: item.vendor || '',
+      })));
+    } else if (estimateData && estimateData.lineItems) {
+      console.log('Using estimateData.lineItems');
+      setLineItems(estimateData.lineItems.map((item: any) => ({
+        description: item.description || '',
+        quantity: item.quantity || 1,
+        price: item.price || 0,
+        part_number: item.part_number || item.partNumber || '',
+        vendor: item.vendor || '',
+      })));
+    } else if (estimateData && estimateData.line_items) {
+      console.log('Using estimateData.line_items');
+      setLineItems(estimateData.line_items.map((item: any) => ({
+        description: item.description || '',
+        quantity: item.quantity || 1,
+        price: item.price || 0,
+        part_number: item.part_number || item.partNumber || '',
+        vendor: item.vendor || '',
+      })));
+    } else {
+      console.log('No line items found, starting with empty array');
+      setLineItems([]);
     }
-  };
+  }, [invoice, estimateData]);
 
-  const selectInventoryItem = (inventoryItem: InventoryItem) => {
-    console.log('=== SELECTING INVENTORY ITEM ===');
-    console.log('Selected item:', inventoryItem);
-    console.log('Line item index:', index);
-    console.log('Current item before update:', item);
-    
-    // Update description
-    console.log('Updating description to:', inventoryItem.name);
-    onUpdate(index, 'description', inventoryItem.name);
-    
-    // Update price
-    console.log('Updating price to:', inventoryItem.price);
-    onUpdate(index, 'price', inventoryItem.price);
-    
-    // Update part number
-    console.log('Updating part_number to:', inventoryItem.sku);
-    onUpdate(index, 'part_number', inventoryItem.sku || '');
-    
-    // Clear search
-    setSearchResults([]);
-    setShowResults(false);
-    
-    console.log('=== SELECTION COMPLETE ===');
-  };
-
-  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    console.log(`Description changed for item ${index}:`, value);
-    onUpdate(index, 'description', value);
-    
-    setTimeout(() => {
-      searchInventory(value);
-    }, 300);
-  };
-
-  const handlePartNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    console.log(`Part number changed for item ${index}:`, value);
-    onUpdate(index, 'part_number', value);
-  };
-
-  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value) || 1;
-    console.log(`Quantity changed for item ${index}:`, value);
-    onUpdate(index, 'quantity', value);
-  };
-
-  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseFloat(e.target.value) || 0;
-    console.log(`Price changed for item ${index}:`, value);
-    onUpdate(index, 'price', value);
-  };
-
-  const handleVendorChange = (value: string) => {
-    console.log(`Vendor changed for item ${index}:`, value);
-    onUpdate(index, 'vendor', value);
-  };
-
-  const handleSearchClick = () => {
-    console.log('Search icon clicked, current description:', item.description);
-    if (item.description) {
-      searchInventory(item.description);
-    }
-  };
-
-  // Log current values being displayed
-  console.log(`Rendering line item ${index} with values:`, {
-    description: item.description,
-    price: item.price,
-    part_number: item.part_number,
-    quantity: item.quantity,
-    vendor: item.vendor
+  const form = useForm<InvoiceFormValues>({
+    resolver: zodResolver(invoiceFormSchema),
+    defaultValues: {
+      title: invoice?.title || (estimateData?.title ? `Invoice for ${estimateData?.title}` : ""),
+      description: invoice?.description || estimateData?.description || "",
+      total_amount: invoice?.total_amount || estimateData?.total_amount || 0,
+      status: invoice?.status || 'draft',
+      due_date: invoice?.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      invoice_date: invoice?.invoice_date || new Date().toISOString().split('T')[0],
+    },
   });
 
-  return (
-    <div className="grid grid-cols-12 gap-3 items-start">
-      {/* Part # - Column 1 */}
-      <div className="col-span-2">
-        <Input
-          placeholder="Part #"
-          value={item.part_number || ''}
-          onChange={handlePartNumberChange}
-        />
-      </div>
+  // Calculate total amount whenever line items change
+  useEffect(() => {
+    if (lineItems.length > 0) {
+      const totalAmount = lineItems.reduce((sum, item) => 
+        sum + (item.quantity * item.price), 0);
+      form.setValue('total_amount', totalAmount);
+    } else {
+      form.setValue('total_amount', 0);
+    }
+  }, [lineItems, form]);
 
-      {/* Description with Search - Column 2 */}
-      <div className="col-span-4 relative">
-        <div className="relative">
-          <Input
-            placeholder="Search or enter description"
-            value={item.description || ''}
-            onChange={handleDescriptionChange}
-            className="pr-8"
-            onFocus={() => console.log(`Description field ${index} focused`)}
-            onBlur={() => console.log(`Description field ${index} blurred`)}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="absolute right-1 top-1 h-6 w-6 p-0 hover:bg-gray-100"
-            onClick={handleSearchClick}
-          >
-            <Search className="h-4 w-4 text-gray-400" />
-          </Button>
+  const handleSubmitWithItems = async (data: InvoiceFormValues) => {
+    setIsSubmitting(true);
+    try {
+      if (!customerId) {
+        toast({
+          title: "Error",
+          description: "Please select a customer",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!selectedVehicleId) {
+        toast({
+          title: "Error", 
+          description: "Please select a vehicle",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const formDataWithItems = {
+        ...data,
+        lineItems: lineItems
+      };
+
+      console.log('Submitting form with line items:', formDataWithItems);
+      await onSubmit(formDataWithItems);
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save invoice",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAddLineItem = () => {
+    console.log('Adding new line item');
+    setLineItems([
+      ...lineItems,
+      { description: "", quantity: 1, price: 0, part_number: "", vendor: "" }
+    ]);
+  };
+
+  // FIXED: Handle individual field updates properly
+  const handleUpdateLineItem = (index: number, field: keyof InvoiceLineItem, value: any) => {
+    console.log(`Updating line item ${index}, field ${field}, value:`, value);
+    const updatedItems = [...lineItems];
+    updatedItems[index] = { ...updatedItems[index], [field]: value };
+    setLineItems(updatedItems);
+  };
+
+  const handleRemoveLineItem = (index: number) => {
+    console.log('Removing line item at index:', index);
+    const updatedItems = lineItems.filter((_, i) => i !== index);
+    setLineItems(updatedItems);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading invoice data...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {estimateData && estimateData.id && (
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-md">
+          <p className="text-sm text-blue-800 flex items-center">
+            <span className="font-medium">Based on Estimate: </span>
+            <Link 
+              to={`/shop/estimates`} 
+              className="ml-1 text-blue-600 hover:underline font-medium"
+            >
+              #{estimateData.id.substring(0, 8)}
+            </Link>
+          </p>
+          {estimateData.title && (
+            <p className="text-sm text-blue-700 mt-1">
+              {estimateData.title}
+            </p>
+          )}
         </div>
-        
-        {/* Search results dropdown */}
-        {showResults && searchResults.length > 0 && (
-          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-            <div className="space-y-1 p-1">
-              {searchResults.map((result) => (
-                <div
-                  key={result.id}
-                  className="p-2 hover:bg-gray-100 cursor-pointer rounded text-sm"
-                  onClick={() => selectInventoryItem(result)}
-                >
-                  <div className="font-medium">{result.name}</div>
-                  <div className="text-xs text-gray-500">
-                    SKU: {result.sku} | ${result.price.toFixed(2)}
-                  </div>
-                </div>
-              ))}
+      )}
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(handleSubmitWithItems)} className="space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-6">
+              <BasicInfoSection control={form.control} />
+              <AmountSection control={form.control} />
+            </div>
+
+            <div className="space-y-6">
+              <CustomerVehicleSection
+                customerId={customerId}
+                setCustomerId={setCustomerId}
+                selectedVehicleId={selectedVehicleId}
+                setVehicleId={setVehicleId}
+                customerDetails={customerDetails}
+                vehicleOptions={vehicleOptions}
+                customers={customers}
+              />
             </div>
           </div>
-        )}
-        
-        {isSearching && (
-          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-2">
-            <div className="text-center text-sm text-gray-500">Searching...</div>
+
+          <div className="border-t pt-6">
+            <LineItemsSection 
+              lineItems={lineItems}
+              setLineItems={setLineItems}
+              vendors={vendors}
+              onAddItem={handleAddLineItem}
+              onUpdateItem={handleUpdateLineItem}
+              onRemoveItem={handleRemoveLineItem}
+            />
           </div>
-        )}
-      </div>
 
-      {/* Quantity - Column 3 */}
-      <div className="col-span-1">
-        <Input
-          type="number"
-          placeholder="Qty"
-          min="1"
-          value={item.quantity || 1}
-          onChange={handleQuantityChange}
-        />
-      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <DescriptionSection control={form.control} />
+            <StatusSection control={form.control} />
+          </div>
 
-      {/* Price - Column 4 */}
-      <div className="col-span-2">
-        <Input
-          type="number"
-          placeholder="Price"
-          step="0.01"
-          min="0"
-          value={item.price || 0}
-          onChange={handlePriceChange}
-        />
-      </div>
-
-      {/* Vendor - Column 5 */}
-      <div className="col-span-2">
-        <Select 
-          value={item.vendor || ''} 
-          onValueChange={handleVendorChange}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Vendor" />
-          </SelectTrigger>
-          <SelectContent>
-            {vendors.map((vendor) => (
-              <SelectItem key={vendor.name} value={vendor.name}>
-                {vendor.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Delete Button - Column 6 */}
-      <div className="col-span-1">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            console.log('Removing item at index:', index);
-            onRemove(index);
-          }}
-          className="h-10 w-10 p-0"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
+          <div className="flex justify-between items-center pt-6 border-t">
+            <div className="text-sm text-muted-foreground">
+              {lineItems.length > 0 && (
+                <span>
+                  {lineItems.length} line item{lineItems.length !== 1 ? 's' : ''} • 
+                  Total: ${form.watch('total_amount')?.toFixed(2) || '0.00'}
+                </span>
+              )}
+            </div>
+            
+            <div className="flex gap-3">
+              <Button
+                type="submit"
+                disabled={isSubmitting || !customerId || !selectedVehicleId}
+                className="min-w-[120px]"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  invoice ? "Update Invoice" : "Create Invoice"
+                )}
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Form>
     </div>
   );
 }
