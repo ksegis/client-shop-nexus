@@ -112,8 +112,8 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium">Line Items</h3>
+      {/* REMOVED: Duplicate "Line Items" heading - it's already in WorkOrderForm */}
+      <div className="flex justify-end items-center">
         {!readOnly && (
           <Button 
             type="button" 

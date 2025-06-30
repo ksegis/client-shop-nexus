@@ -1,8 +1,13 @@
-
 import { Input } from '@/components/ui/input';
 import { UseFormReturn } from 'react-hook-form';
 import { WorkOrderFormValues } from '../types';
-import { FormFieldWrapper } from './FormField';
+import {
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 
 interface NumericFieldProps {
   form: UseFormReturn<WorkOrderFormValues>;
@@ -21,38 +26,36 @@ export const NumericField = ({
   min,
   max
 }: NumericFieldProps) => {
-  const { register, setValue } = form;
-  const value = form.getValues(name);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Convert empty string to null for optional numeric fields
-    const newValue = e.target.value === '' ? null : 
-                    !isNaN(Number(e.target.value)) ? Number(e.target.value) : null;
-    setValue(name, newValue as any);
-  };
-
-  // Use inputMode="decimal" instead of type="number" for cost fields
-  const inputType = name.includes('cost') ? 'text' : 'number';
-  const inputMode = name.includes('cost') ? 'decimal' : 'numeric';
-
   return (
-    <FormFieldWrapper form={form} name={name} label={label}>
-      <Input
-        type={inputType}
-        inputMode={inputMode}
-        step="0.01"
-        placeholder={placeholder}
-        {...register(name, {
-          setValueAs: (value) => {
-            return value === '' ? null : 
-                   !isNaN(Number(value)) ? Number(value) : null;
-          }
-        })}
-        value={value === null ? '' : value}
-        onChange={handleChange}
-        min={min}
-        max={max}
-      />
-    </FormFieldWrapper>
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input
+              type="number"
+              step={name.includes('cost') ? "0.01" : "1"}
+              placeholder={placeholder}
+              min={min}
+              max={max}
+              value={field.value || ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Convert to number or null for empty string
+                const numValue = value === '' ? null : Number(value);
+                field.onChange(numValue);
+              }}
+              onBlur={field.onBlur}
+              name={field.name}
+              ref={field.ref}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
   );
 };
+
