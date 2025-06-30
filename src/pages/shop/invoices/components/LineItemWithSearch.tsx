@@ -23,28 +23,25 @@ interface InventoryItem {
 }
 
 export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }: LineItemWithSearchProps) {
-  const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
 
-  useEffect(() => {
-    if (searchQuery.length > 2) {
-      searchInventory();
-    } else {
+  // Simple search function
+  const searchInventory = async (query: string) => {
+    if (query.length < 3) {
       setSearchResults([]);
       setShowResults(false);
+      return;
     }
-  }, [searchQuery]);
 
-  const searchInventory = async () => {
     setIsSearching(true);
     try {
-      console.log('Searching for:', searchQuery);
+      console.log('Searching for:', query);
       const { data, error } = await supabase
         .from('inventory')
         .select('id, name, sku, price, core_charge')
-        .or(`name.ilike.%${searchQuery}%,sku.ilike.%${searchQuery}%`)
+        .or(`name.ilike.%${query}%,sku.ilike.%${query}%`)
         .limit(10);
 
       if (error) {
@@ -54,7 +51,7 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
       
       console.log('Search results:', data);
       setSearchResults(data || []);
-      setShowResults(true);
+      setShowResults(data && data.length > 0);
     } catch (error) {
       console.error('Error searching inventory:', error);
       setSearchResults([]);
@@ -69,22 +66,26 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
     onUpdate(index, 'description', inventoryItem.name);
     onUpdate(index, 'price', inventoryItem.price);
     onUpdate(index, 'part_number', inventoryItem.sku || '');
-    setSearchQuery('');
     setSearchResults([]);
     setShowResults(false);
   };
 
+  // Direct onChange handler for description
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setSearchQuery(value);
+    console.log('Description changed to:', value);
     onUpdate(index, 'description', value);
+    
+    // Trigger search after a short delay
+    setTimeout(() => {
+      searchInventory(value);
+    }, 300);
   };
 
   const handleSearchClick = () => {
-    console.log('Search icon clicked');
-    if (item.description && item.description.length > 2) {
-      setSearchQuery(item.description);
-      searchInventory();
+    console.log('Search icon clicked, current description:', item.description);
+    if (item.description) {
+      searchInventory(item.description);
     }
   };
 
@@ -95,7 +96,10 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
         <Input
           placeholder="Part #"
           value={item.part_number || ''}
-          onChange={(e) => onUpdate(index, 'part_number', e.target.value)}
+          onChange={(e) => {
+            console.log('Part number changed to:', e.target.value);
+            onUpdate(index, 'part_number', e.target.value);
+          }}
         />
       </div>
 
@@ -107,6 +111,8 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
             value={item.description || ''}
             onChange={handleDescriptionChange}
             className="pr-8"
+            onFocus={() => console.log('Description field focused')}
+            onBlur={() => console.log('Description field blurred')}
           />
           <Button
             type="button"
@@ -120,32 +126,28 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
         </div>
         
         {/* Search results dropdown */}
-        {showResults && (
+        {showResults && searchResults.length > 0 && (
           <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-            {isSearching ? (
-              <div className="p-2 text-center text-sm text-gray-500">
-                Searching...
-              </div>
-            ) : searchResults.length > 0 ? (
-              <div className="space-y-1 p-1">
-                {searchResults.map((result) => (
-                  <div
-                    key={result.id}
-                    className="p-2 hover:bg-gray-100 cursor-pointer rounded text-sm"
-                    onClick={() => selectInventoryItem(result)}
-                  >
-                    <div className="font-medium">{result.name}</div>
-                    <div className="text-xs text-gray-500">
-                      SKU: {result.sku} | ${result.price.toFixed(2)}
-                    </div>
+            <div className="space-y-1 p-1">
+              {searchResults.map((result) => (
+                <div
+                  key={result.id}
+                  className="p-2 hover:bg-gray-100 cursor-pointer rounded text-sm"
+                  onClick={() => selectInventoryItem(result)}
+                >
+                  <div className="font-medium">{result.name}</div>
+                  <div className="text-xs text-gray-500">
+                    SKU: {result.sku} | ${result.price.toFixed(2)}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-2 text-center text-sm text-gray-500">
-                No items found for "{searchQuery}"
-              </div>
-            )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {isSearching && (
+          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-2">
+            <div className="text-center text-sm text-gray-500">Searching...</div>
           </div>
         )}
       </div>
@@ -157,7 +159,10 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
           placeholder="Qty"
           min="1"
           value={item.quantity}
-          onChange={(e) => onUpdate(index, 'quantity', parseInt(e.target.value) || 1)}
+          onChange={(e) => {
+            console.log('Quantity changed to:', e.target.value);
+            onUpdate(index, 'quantity', parseInt(e.target.value) || 1);
+          }}
         />
       </div>
 
@@ -169,7 +174,10 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
           step="0.01"
           min="0"
           value={item.price}
-          onChange={(e) => onUpdate(index, 'price', parseFloat(e.target.value) || 0)}
+          onChange={(e) => {
+            console.log('Price changed to:', e.target.value);
+            onUpdate(index, 'price', parseFloat(e.target.value) || 0);
+          }}
         />
       </div>
 
@@ -177,7 +185,10 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
       <div className="col-span-2">
         <Select 
           value={item.vendor || ''} 
-          onValueChange={(value) => onUpdate(index, 'vendor', value)}
+          onValueChange={(value) => {
+            console.log('Vendor changed to:', value);
+            onUpdate(index, 'vendor', value);
+          }}
         >
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Vendor" />
@@ -198,7 +209,10 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => onRemove(index)}
+          onClick={() => {
+            console.log('Removing item at index:', index);
+            onRemove(index);
+          }}
           className="h-10 w-10 p-0"
         >
           <Trash2 className="h-4 w-4" />
