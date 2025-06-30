@@ -20,24 +20,34 @@ interface InventoryItem {
   price: number;
 }
 
-interface SimpleLineItemProps {
+interface LineItemRowProps {
   item: LineItem;
   index: number;
-  onChange: (index: number, updatedItem: LineItem) => void;
+  onUpdate: (index: number, field: keyof LineItem, value: any) => void;
   onRemove: (index: number) => void;
   vendors: string[];
 }
 
-// Inline SimpleLineItem component
-function SimpleLineItem({ item, index, onChange, onRemove, vendors }: SimpleLineItemProps) {
+function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowProps) {
   const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [localValues, setLocalValues] = useState(item);
 
-  const updateItem = (field: keyof LineItem, value: any) => {
-    const updatedItem = { ...item, [field]: value };
-    console.log(`Updating item ${index}:`, updatedItem);
-    onChange(index, updatedItem);
+  // Keep local values in sync with props
+  useEffect(() => {
+    setLocalValues(item);
+  }, [item]);
+
+  const updateField = (field: keyof LineItem, value: any) => {
+    console.log(`Updating field ${field} to:`, value);
+    
+    // Update local state immediately
+    const newValues = { ...localValues, [field]: value };
+    setLocalValues(newValues);
+    
+    // Notify parent
+    onUpdate(index, field, value);
   };
 
   const searchInventory = async (query: string) => {
@@ -73,22 +83,33 @@ function SimpleLineItem({ item, index, onChange, onRemove, vendors }: SimpleLine
   const selectItem = (inventoryItem: InventoryItem) => {
     console.log('=== SELECTING INVENTORY ITEM ===');
     console.log('Selected item:', inventoryItem);
-    const updatedItem = {
-      ...item,
+    
+    // Update all fields immediately in local state
+    const newValues = {
+      ...localValues,
       description: inventoryItem.name,
       price: inventoryItem.price,
       part_number: inventoryItem.sku
     };
-    console.log(`Selected item for ${index}:`, updatedItem);
-    onChange(index, updatedItem);
+    
+    console.log('New values:', newValues);
+    setLocalValues(newValues);
+    
+    // Notify parent of all changes
+    onUpdate(index, 'description', inventoryItem.name);
+    onUpdate(index, 'price', inventoryItem.price);
+    onUpdate(index, 'part_number', inventoryItem.sku);
+    
+    // Clear search
     setSearchResults([]);
     setShowDropdown(false);
+    
     console.log('=== SELECTION COMPLETE ===');
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    updateItem('description', value);
+    updateField('description', value);
     
     // Search after typing
     setTimeout(() => {
@@ -102,8 +123,8 @@ function SimpleLineItem({ item, index, onChange, onRemove, vendors }: SimpleLine
       <div className="col-span-2">
         <Input
           placeholder="Part #"
-          value={item.part_number}
-          onChange={(e) => updateItem('part_number', e.target.value)}
+          value={localValues.part_number}
+          onChange={(e) => updateField('part_number', e.target.value)}
         />
       </div>
 
@@ -112,7 +133,7 @@ function SimpleLineItem({ item, index, onChange, onRemove, vendors }: SimpleLine
         <div className="relative">
           <Input
             placeholder="Search or enter description"
-            value={item.description}
+            value={localValues.description}
             onChange={handleDescriptionChange}
             className="pr-8"
           />
@@ -150,8 +171,8 @@ function SimpleLineItem({ item, index, onChange, onRemove, vendors }: SimpleLine
           type="number"
           placeholder="Qty"
           min="1"
-          value={item.quantity}
-          onChange={(e) => updateItem('quantity', parseInt(e.target.value) || 1)}
+          value={localValues.quantity}
+          onChange={(e) => updateField('quantity', parseInt(e.target.value) || 1)}
         />
       </div>
 
@@ -162,14 +183,14 @@ function SimpleLineItem({ item, index, onChange, onRemove, vendors }: SimpleLine
           placeholder="Price"
           step="0.01"
           min="0"
-          value={item.price}
-          onChange={(e) => updateItem('price', parseFloat(e.target.value) || 0)}
+          value={localValues.price}
+          onChange={(e) => updateField('price', parseFloat(e.target.value) || 0)}
         />
       </div>
 
       {/* Vendor */}
       <div className="col-span-2">
-        <Select value={item.vendor} onValueChange={(value) => updateItem('vendor', value)}>
+        <Select value={localValues.vendor} onValueChange={(value) => updateField('vendor', value)}>
           <SelectTrigger>
             <SelectValue placeholder="Vendor" />
           </SelectTrigger>
@@ -208,7 +229,6 @@ interface LineItemsSectionProps {
   onRemoveItem?: (index: number) => void;
 }
 
-// Export with the expected name to match InvoiceForm import
 export const LineItemsSection = ({ 
   lineItems, 
   setLineItems, 
@@ -217,6 +237,7 @@ export const LineItemsSection = ({
   onUpdateItem,
   onRemoveItem
 }: LineItemsSectionProps) => {
+  const [items, setItems] = useState<LineItem[]>(lineItems);
   const [vendorNames, setVendorNames] = useState<string[]>([]);
 
   // Convert vendors prop to string array
@@ -224,6 +245,16 @@ export const LineItemsSection = ({
     const names = vendors.map(v => v.name);
     setVendorNames(names);
   }, [vendors]);
+
+  // Keep items in sync with props
+  useEffect(() => {
+    setItems(lineItems);
+  }, [lineItems]);
+
+  // Notify parent when items change
+  useEffect(() => {
+    setLineItems(items);
+  }, [items, setLineItems]);
 
   const addItem = () => {
     const newItem: LineItem = {
@@ -234,41 +265,37 @@ export const LineItemsSection = ({
       vendor: ''
     };
     console.log('Adding new item');
+    const newItems = [...items, newItem];
+    setItems(newItems);
+    
     if (onAddItem) {
       onAddItem();
-    } else {
-      setLineItems([...lineItems, newItem]);
     }
   };
 
-  const updateItem = (index: number, updatedItem: LineItem) => {
-    console.log(`Updating item at index ${index}:`, updatedItem);
+  const updateItem = (index: number, field: keyof LineItem, value: any) => {
+    console.log(`Updating item ${index}, field ${field}, value:`, value);
+    
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setItems(newItems);
+    
     if (onUpdateItem) {
-      // If parent provides update function, use individual field updates for compatibility
-      Object.keys(updatedItem).forEach(key => {
-        const field = key as keyof LineItem;
-        if (updatedItem[field] !== lineItems[index]?.[field]) {
-          onUpdateItem(index, field, updatedItem[field]);
-        }
-      });
-    } else {
-      const newItems = [...lineItems];
-      newItems[index] = updatedItem;
-      setLineItems(newItems);
+      onUpdateItem(index, field, value);
     }
   };
 
   const removeItem = (index: number) => {
     console.log(`Removing item at index ${index}`);
+    const newItems = items.filter((_, i) => i !== index);
+    setItems(newItems);
+    
     if (onRemoveItem) {
       onRemoveItem(index);
-    } else {
-      const newItems = lineItems.filter((_, i) => i !== index);
-      setLineItems(newItems);
     }
   };
 
-  const total = lineItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const total = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
 
   return (
     <div className="space-y-4">
@@ -279,7 +306,7 @@ export const LineItemsSection = ({
         </Button>
       </div>
 
-      {lineItems.length > 0 ? (
+      {items.length > 0 ? (
         <div className="border rounded-md p-4">
           {/* Header */}
           <div className="grid grid-cols-12 gap-3 mb-4 font-medium text-sm text-gray-600">
@@ -293,12 +320,12 @@ export const LineItemsSection = ({
 
           {/* Items */}
           <div className="space-y-3">
-            {lineItems.map((item, index) => (
-              <SimpleLineItem
+            {items.map((item, index) => (
+              <LineItemRow
                 key={index}
                 item={item}
                 index={index}
-                onChange={updateItem}
+                onUpdate={updateItem}
                 onRemove={removeItem}
                 vendors={vendorNames}
               />
