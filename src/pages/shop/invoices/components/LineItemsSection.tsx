@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Search } from 'lucide-react';
+import { Plus, Trash } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 interface LineItem {
@@ -11,194 +13,6 @@ interface LineItem {
   price: number;
   part_number: string;
   vendor: string;
-}
-
-interface InventoryItem {
-  id: string;
-  name: string;
-  sku: string;
-  price: number;
-}
-
-interface LineItemRowProps {
-  item: LineItem;
-  index: number;
-  onUpdate: (index: number, field: keyof LineItem, value: any) => void;
-  onRemove: (index: number) => void;
-  vendors: string[];
-}
-
-function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowProps) {
-  const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  
-  // The local state and useEffect for synchronization have been removed.
-  // The component now relies directly on the 'item' prop from the parent.
-
-  const updateField = (field: keyof LineItem, value: any) => {
-    console.log(`Updating field ${field} to:`, value);
-    // This directly notifies the parent, which will update its state and re-render this row.
-    onUpdate(index, field, value);
-  };
-
-  const searchInventory = async (query: string) => {
-    if (query.length < 3) {
-      setSearchResults([]);
-      setShowDropdown(false);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      console.log('Searching for:', query);
-      const { data, error } = await supabase
-        .from('inventory')
-        .select('id, name, sku, price')
-        .or(`name.ilike.%${query}%,sku.ilike.%${query}%`)
-        .limit(10);
-
-      if (error) throw error;
-      
-      console.log('Search results:', data);
-      setSearchResults(data || []);
-      setShowDropdown(data && data.length > 0);
-    } catch (error) {
-      console.error('Search error:', error);
-      setSearchResults([]);
-      setShowDropdown(false);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const selectItem = (inventoryItem: InventoryItem) => {
-    console.log('=== SELECTING INVENTORY ITEM ===');
-    console.log('Selected item:', inventoryItem);
-    
-    // Notify the parent of all changes at once.
-    // The parent's state update will trigger a re-render with the new props.
-    onUpdate(index, 'description', inventoryItem.name);
-    onUpdate(index, 'price', inventoryItem.price);
-    onUpdate(index, 'part_number', inventoryItem.sku);
-    
-    // Clear search
-    setSearchResults([]);
-    setShowDropdown(false);
-    
-    console.log('=== SELECTION COMPLETE ===');
-  };
-
-  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    updateField('description', value);
-    
-    // Search after typing
-    setTimeout(() => {
-      searchInventory(value);
-    }, 300);
-  };
-
-  return (
-    <div className="grid grid-cols-12 gap-3 items-start border-b pb-3">
-      {/* Part Number */}
-      <div className="col-span-2">
-        <Input
-          placeholder="Part #"
-          value={item.part_number} // Bind directly to the prop
-          onChange={(e) => updateField('part_number', e.target.value)}
-        />
-      </div>
-
-      {/* Description with Search */}
-      <div className="col-span-4 relative">
-        <div className="relative">
-          <Input
-            placeholder="Search or enter description"
-            value={item.description} // Bind directly to the prop
-            onChange={handleDescriptionChange}
-            className="pr-8"
-          />
-          <Search className="absolute right-2 top-2.5 h-4 w-4 text-gray-400" />
-        </div>
-        
-        {showDropdown && (
-          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
-            {isSearching ? (
-              <div className="p-2 text-center text-sm text-gray-500">Searching...</div>
-            ) : (
-              <div className="p-1">
-                {searchResults.map((result) => (
-                  <div
-                    key={result.id}
-                    className="p-2 hover:bg-gray-100 cursor-pointer rounded text-sm"
-                    onClick={() => selectItem(result)}
-                  >
-                    <div className="font-medium">{result.name}</div>
-                    <div className="text-xs text-gray-500">
-                      SKU: {result.sku} | ${result.price.toFixed(2)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Quantity */}
-      <div className="col-span-1">
-        <Input
-          type="number"
-          placeholder="Qty"
-          min="1"
-          value={item.quantity} // Bind directly to the prop
-          onChange={(e) => updateField('quantity', parseInt(e.target.value) || 1)}
-        />
-      </div>
-
-      {/* Price */}
-      <div className="col-span-2">
-        <Input
-          type="number"
-          placeholder="Price"
-          step="0.01"
-          min="0"
-          value={item.price} // Bind directly to the prop
-          onChange={(e) => updateField('price', parseFloat(e.target.value) || 0)}
-        />
-      </div>
-
-      {/* Vendor */}
-      <div className="col-span-2">
-        <Select value={item.vendor} onValueChange={(value) => updateField('vendor', value)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Vendor" />
-          </SelectTrigger>
-          <SelectContent>
-            {vendors.map((vendor) => (
-              <SelectItem key={vendor} value={vendor}>
-                {vendor}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Delete */}
-      <div className="col-span-1">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => onRemove(index)}
-          className="h-10 w-10 p-0"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 interface LineItemsSectionProps {
@@ -210,7 +24,6 @@ interface LineItemsSectionProps {
   onRemoveItem?: (index: number) => void;
 }
 
-// === FIX: Add the 'export' keyword here to make it a named export ===
 export const LineItemsSection = ({ 
   lineItems, 
   setLineItems, 
@@ -219,79 +32,108 @@ export const LineItemsSection = ({
   onUpdateItem,
   onRemoveItem
 }: LineItemsSectionProps) => {
-  const [items, setItems] = useState<LineItem[]>(lineItems);
-  const [vendorNames, setVendorNames] = useState<string[]>([]);
+  // EXACT COPY of EstimateDialog state management
+  const [itemSearchTerm, setItemSearchTerm] = useState("");
+  const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
+  const [showItemResults, setShowItemResults] = useState(false);
 
-  // Convert vendors prop to string array
-  useEffect(() => {
-    const names = vendors.map(v => v.name);
-    setVendorNames(names);
-  }, [vendors]);
+  // EXACT COPY of EstimateDialog inventory query
+  const { data: inventoryItems = [] } = useQuery({
+    queryKey: ['inventory', itemSearchTerm],
+    queryFn: async () => {
+      if (!itemSearchTerm || itemSearchTerm.length < 2) return [];
+      
+      const { data } = await supabase
+        .from('inventory')
+        .select('*')
+        .or(`name.ilike.%${itemSearchTerm}%,description.ilike.%${itemSearchTerm}%,sku.ilike.%${itemSearchTerm}%`);
+      
+      return data || [];
+    },
+    enabled: itemSearchTerm.length >= 2,
+  });
 
-  // Keep items in sync with props
-  useEffect(() => {
-    setItems(lineItems);
-  }, [lineItems]);
+  // EXACT COPY of EstimateDialog functions
+  const handleItemSearch = (value: string, index: number) => {
+    setItemSearchTerm(value);
+    setSelectedItemIndex(index);
+    setShowItemResults(true);
+  };
 
-  // Notify parent when items change
-  useEffect(() => {
-    setLineItems(items);
-  }, [items, setLineItems]);
+  const handleSelectInventoryItem = (item: any) => {
+    console.log('=== SELECTING INVENTORY ITEM (EXACT COPY) ===');
+    console.log('Selected item:', item);
+    console.log('Selected index:', selectedItemIndex);
+    
+    if (selectedItemIndex !== null) {
+      const updatedItems = [...lineItems];
+      updatedItems[selectedItemIndex] = {
+        ...updatedItems[selectedItemIndex],
+        part_number: item.sku || '',
+        description: item.name,
+        price: item.price || 0,
+        vendor: item.supplier || ''
+      };
+      console.log('Updated items:', updatedItems);
+      setLineItems(updatedItems);
+      setShowItemResults(false);
+      setItemSearchTerm("");
+    }
+    console.log('=== SELECTION COMPLETE ===');
+  };
 
-  const addItem = () => {
-    const newItem: LineItem = {
-      description: '',
-      quantity: 1,
-      price: 0,
-      part_number: '',
-      vendor: ''
-    };
-    console.log('Adding new item');
-    const newItems = [...items, newItem];
-    setItems(newItems);
+  const addLineItem = () => {
+    console.log('Adding new line item');
+    setLineItems([
+      ...lineItems,
+      { description: "", quantity: 1, price: 0, part_number: "", vendor: "" }
+    ]);
     
     if (onAddItem) {
       onAddItem();
     }
   };
 
-  const updateItem = (index: number, field: keyof LineItem, value: any) => {
-    console.log(`Updating item ${index}, field ${field}, value:`, value);
-    
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setItems(newItems);
-    
-    if (onUpdateItem) {
-      onUpdateItem(index, field, value);
-    }
-  };
-
-  const removeItem = (index: number) => {
-    console.log(`Removing item at index ${index}`);
-    const newItems = items.filter((_, i) => i !== index);
-    setItems(newItems);
+  const removeLineItem = (index: number) => {
+    console.log('Removing line item at index:', index);
+    const updatedItems = lineItems.filter((_, i) => i !== index);
+    setLineItems(updatedItems);
     
     if (onRemoveItem) {
       onRemoveItem(index);
     }
   };
 
-  const total = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const updateLineItem = (index: number, field: keyof LineItem, value: any) => {
+    console.log(`Updating line item ${index}, field ${field}, value:`, value);
+    const updatedItems = [...lineItems];
+    updatedItems[index] = { ...updatedItems[index], [field]: value };
+    setLineItems(updatedItems);
+    
+    if (onUpdateItem) {
+      onUpdateItem(index, field, value);
+    }
+  };
+
+  const total = lineItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium">Line Items</h3>
-        <Button onClick={addItem} size="sm">
+        <Button 
+          type="button" 
+          onClick={addLineItem}
+          size="sm" 
+          className="h-8"
+        >
           <Plus className="mr-1 h-4 w-4" /> Add Item
         </Button>
       </div>
-
-      {items.length > 0 ? (
-        <div className="border rounded-md p-4">
-          {/* Header */}
-          <div className="grid grid-cols-12 gap-3 mb-4 font-medium text-sm text-gray-600">
+      
+      {lineItems.length > 0 ? (
+        <div className="border rounded-md">
+          <div className="grid grid-cols-12 gap-2 p-3 bg-muted/50 font-medium text-sm">
             <div className="col-span-2">Part #</div>
             <div className="col-span-4">Description</div>
             <div className="col-span-1">Qty</div>
@@ -299,23 +141,116 @@ export const LineItemsSection = ({
             <div className="col-span-2">Vendor</div>
             <div className="col-span-1"></div>
           </div>
+          
+          {lineItems.map((item, index) => (
+            <div key={index} className="grid grid-cols-12 gap-2 p-3 border-t">
+              {/* Part Number - EXACT COPY */}
+              <div className="col-span-2">
+                <Input 
+                  value={item.part_number || ''} 
+                  onChange={(e) => updateLineItem(index, 'part_number', e.target.value)}
+                  placeholder="Part #"
+                />
+              </div>
+              
+              {/* Description with search - EXACT COPY */}
+              <div className="col-span-4 relative">
+                <Popover open={showItemResults && selectedItemIndex === index}>
+                  <PopoverTrigger asChild>
+                    <div>
+                      <Input 
+                        value={item.description} 
+                        onChange={(e) => {
+                          updateLineItem(index, 'description', e.target.value);
+                          handleItemSearch(e.target.value, index);
+                        }}
+                        placeholder="Description"
+                        className="w-full"
+                      />
+                    </div>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-96 p-0 max-h-[200px] overflow-y-auto">
+                    {inventoryItems.length > 0 ? (
+                      <div className="py-2">
+                        {inventoryItems.map((invItem) => (
+                          <div 
+                            key={invItem.id} 
+                            className="px-4 py-2 hover:bg-accent cursor-pointer"
+                            onClick={() => handleSelectInventoryItem(invItem)}
+                          >
+                            <div className="font-medium">{invItem.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {invItem.sku && `SKU: ${invItem.sku}`}
+                              {invItem.supplier && ` • Vendor: ${invItem.supplier}`}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center text-sm text-muted-foreground">
+                        No matching items found
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              </div>
 
-          {/* Items */}
-          <div className="space-y-3">
-            {items.map((item, index) => (
-              <LineItemRow
-                key={index}
-                item={item}
-                index={index}
-                onUpdate={updateItem}
-                onRemove={removeItem}
-                vendors={vendorNames}
-              />
-            ))}
-          </div>
+              {/* Quantity - EXACT COPY */}
+              <div className="col-span-1">
+                <Input 
+                  type="number" 
+                  min="1" 
+                  value={item.quantity} 
+                  onChange={(e) => updateLineItem(index, 'quantity', Number(e.target.value))}
+                />
+              </div>
 
+              {/* Price - EXACT COPY */}
+              <div className="col-span-2">
+                <Input 
+                  type="number" 
+                  step="0.01" 
+                  min="0" 
+                  value={item.price} 
+                  onChange={(e) => updateLineItem(index, 'price', Number(e.target.value))}
+                />
+              </div>
+
+              {/* Vendor - EXACT COPY */}
+              <div className="col-span-2">
+                <Select
+                  value={item.vendor || ''}
+                  onValueChange={(value) => updateLineItem(index, 'vendor', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select vendor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vendors.map((vendor, i) => (
+                      <SelectItem key={i} value={vendor.name || ''}>
+                        {vendor.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Remove button - EXACT COPY */}
+              <div className="col-span-1 flex items-center justify-end">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8" 
+                  onClick={() => removeLineItem(index)}
+                >
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+          
           {/* Total */}
-          <div className="mt-4 pt-4 border-t">
+          <div className="p-3 border-t bg-muted/30">
             <div className="text-right">
               <span className="text-lg font-medium">
                 Total: ${total.toFixed(2)}
@@ -324,10 +259,11 @@ export const LineItemsSection = ({
           </div>
         </div>
       ) : (
-        <div className="border rounded-md p-8 text-center text-gray-500">
-          No items added. Click "Add Item" to get started.
+        <div className="border rounded-md p-8 text-center text-muted-foreground">
+          No items added. Click "Add Item" to add items to this invoice.
         </div>
       )}
     </div>
   );
 };
+
