@@ -27,13 +27,11 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
 
-  // Force re-render when item prop changes
-  const [, forceUpdate] = useState({});
+  // Log the current item prop whenever it changes
   useEffect(() => {
-    forceUpdate({});
-  }, [item]);
+    console.log(`Line item ${index} prop updated:`, item);
+  }, [item, index]);
 
-  // Simple search function
   const searchInventory = async (query: string) => {
     if (query.length < 3) {
       setSearchResults([]);
@@ -68,30 +66,35 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
   };
 
   const selectInventoryItem = (inventoryItem: InventoryItem) => {
-    console.log('Selecting item:', inventoryItem);
+    console.log('=== SELECTING INVENTORY ITEM ===');
+    console.log('Selected item:', inventoryItem);
+    console.log('Line item index:', index);
+    console.log('Current item before update:', item);
     
-    // Update all fields
+    // Update description
+    console.log('Updating description to:', inventoryItem.name);
     onUpdate(index, 'description', inventoryItem.name);
+    
+    // Update price
+    console.log('Updating price to:', inventoryItem.price);
     onUpdate(index, 'price', inventoryItem.price);
+    
+    // Update part number
+    console.log('Updating part_number to:', inventoryItem.sku);
     onUpdate(index, 'part_number', inventoryItem.sku || '');
     
-    // Clear search results
+    // Clear search
     setSearchResults([]);
     setShowResults(false);
     
-    // Force component to re-render with new values
-    setTimeout(() => {
-      forceUpdate({});
-    }, 100);
+    console.log('=== SELECTION COMPLETE ===');
   };
 
-  // Direct onChange handlers with proper typing
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    console.log('Description changed to:', value);
+    console.log(`Description changed for item ${index}:`, value);
     onUpdate(index, 'description', value);
     
-    // Trigger search after a short delay
     setTimeout(() => {
       searchInventory(value);
     }, 300);
@@ -99,24 +102,24 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
 
   const handlePartNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    console.log('Part number changed to:', value);
+    console.log(`Part number changed for item ${index}:`, value);
     onUpdate(index, 'part_number', value);
   };
 
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value) || 1;
-    console.log('Quantity changed to:', value);
+    console.log(`Quantity changed for item ${index}:`, value);
     onUpdate(index, 'quantity', value);
   };
 
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value) || 0;
-    console.log('Price changed to:', value);
+    console.log(`Price changed for item ${index}:`, value);
     onUpdate(index, 'price', value);
   };
 
   const handleVendorChange = (value: string) => {
-    console.log('Vendor changed to:', value);
+    console.log(`Vendor changed for item ${index}:`, value);
     onUpdate(index, 'vendor', value);
   };
 
@@ -126,6 +129,15 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
       searchInventory(item.description);
     }
   };
+
+  // Log current values being displayed
+  console.log(`Rendering line item ${index} with values:`, {
+    description: item.description,
+    price: item.price,
+    part_number: item.part_number,
+    quantity: item.quantity,
+    vendor: item.vendor
+  });
 
   return (
     <div className="grid grid-cols-12 gap-3 items-start">
@@ -146,8 +158,8 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
             value={item.description || ''}
             onChange={handleDescriptionChange}
             className="pr-8"
-            onFocus={() => console.log('Description field focused')}
-            onBlur={() => console.log('Description field blurred')}
+            onFocus={() => console.log(`Description field ${index} focused`)}
+            onBlur={() => console.log(`Description field ${index} blurred`)}
           />
           <Button
             type="button"
