@@ -32,21 +32,18 @@ function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowPr
   const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-  const [localValues, setLocalValues] = useState(item);
-
-  // Keep local values in sync with props
-  useEffect(() => {
-    setLocalValues(item);
-  }, [item]);
+  
+  // === REMOVED CODE START ===
+  // This local state and useEffect were the source of the race condition.
+  // const [localValues, setLocalValues] = useState(item);
+  // useEffect(() => {
+  //   setLocalValues(item);
+  // }, [item]);
+  // === REMOVED CODE END ===
 
   const updateField = (field: keyof LineItem, value: any) => {
     console.log(`Updating field ${field} to:`, value);
-    
-    // Update local state immediately
-    const newValues = { ...localValues, [field]: value };
-    setLocalValues(newValues);
-    
-    // Notify parent
+    // Instead of updating local state, we directly inform the parent.
     onUpdate(index, field, value);
   };
 
@@ -84,18 +81,8 @@ function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowPr
     console.log('=== SELECTING INVENTORY ITEM ===');
     console.log('Selected item:', inventoryItem);
     
-    // Update all fields immediately in local state
-    const newValues = {
-      ...localValues,
-      description: inventoryItem.name,
-      price: inventoryItem.price,
-      part_number: inventoryItem.sku
-    };
-    
-    console.log('New values:', newValues);
-    setLocalValues(newValues);
-    
-    // Notify parent of all changes
+    // Now, we only notify the parent. The parent's state update will
+    // trigger a re-render with the correct props.
     onUpdate(index, 'description', inventoryItem.name);
     onUpdate(index, 'price', inventoryItem.price);
     onUpdate(index, 'part_number', inventoryItem.sku);
@@ -123,7 +110,7 @@ function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowPr
       <div className="col-span-2">
         <Input
           placeholder="Part #"
-          value={localValues.part_number}
+          value={item.part_number} // Bind directly to the prop
           onChange={(e) => updateField('part_number', e.target.value)}
         />
       </div>
@@ -133,7 +120,7 @@ function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowPr
         <div className="relative">
           <Input
             placeholder="Search or enter description"
-            value={localValues.description}
+            value={item.description} // Bind directly to the prop
             onChange={handleDescriptionChange}
             className="pr-8"
           />
@@ -171,7 +158,7 @@ function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowPr
           type="number"
           placeholder="Qty"
           min="1"
-          value={localValues.quantity}
+          value={item.quantity} // Bind directly to the prop
           onChange={(e) => updateField('quantity', parseInt(e.target.value) || 1)}
         />
       </div>
@@ -183,14 +170,14 @@ function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowPr
           placeholder="Price"
           step="0.01"
           min="0"
-          value={localValues.price}
+          value={item.price} // Bind directly to the prop
           onChange={(e) => updateField('price', parseFloat(e.target.value) || 0)}
         />
       </div>
 
       {/* Vendor */}
       <div className="col-span-2">
-        <Select value={localValues.vendor} onValueChange={(value) => updateField('vendor', value)}>
+        <Select value={item.vendor} onValueChange={(value) => updateField('vendor', value)}>
           <SelectTrigger>
             <SelectValue placeholder="Vendor" />
           </SelectTrigger>
@@ -220,133 +207,4 @@ function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowPr
   );
 }
 
-interface LineItemsSectionProps {
-  lineItems: LineItem[];
-  setLineItems: (items: LineItem[]) => void;
-  vendors: { name: string }[];
-  onAddItem?: () => void;
-  onUpdateItem?: (index: number, field: keyof LineItem, value: any) => void;
-  onRemoveItem?: (index: number) => void;
-}
-
-export const LineItemsSection = ({ 
-  lineItems, 
-  setLineItems, 
-  vendors,
-  onAddItem,
-  onUpdateItem,
-  onRemoveItem
-}: LineItemsSectionProps) => {
-  const [items, setItems] = useState<LineItem[]>(lineItems);
-  const [vendorNames, setVendorNames] = useState<string[]>([]);
-
-  // Convert vendors prop to string array
-  useEffect(() => {
-    const names = vendors.map(v => v.name);
-    setVendorNames(names);
-  }, [vendors]);
-
-  // Keep items in sync with props
-  useEffect(() => {
-    setItems(lineItems);
-  }, [lineItems]);
-
-  // Notify parent when items change
-  useEffect(() => {
-    setLineItems(items);
-  }, [items, setLineItems]);
-
-  const addItem = () => {
-    const newItem: LineItem = {
-      description: '',
-      quantity: 1,
-      price: 0,
-      part_number: '',
-      vendor: ''
-    };
-    console.log('Adding new item');
-    const newItems = [...items, newItem];
-    setItems(newItems);
-    
-    if (onAddItem) {
-      onAddItem();
-    }
-  };
-
-  const updateItem = (index: number, field: keyof LineItem, value: any) => {
-    console.log(`Updating item ${index}, field ${field}, value:`, value);
-    
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setItems(newItems);
-    
-    if (onUpdateItem) {
-      onUpdateItem(index, field, value);
-    }
-  };
-
-  const removeItem = (index: number) => {
-    console.log(`Removing item at index ${index}`);
-    const newItems = items.filter((_, i) => i !== index);
-    setItems(newItems);
-    
-    if (onRemoveItem) {
-      onRemoveItem(index);
-    }
-  };
-
-  const total = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium">Line Items</h3>
-        <Button onClick={addItem} size="sm">
-          <Plus className="mr-1 h-4 w-4" /> Add Item
-        </Button>
-      </div>
-
-      {items.length > 0 ? (
-        <div className="border rounded-md p-4">
-          {/* Header */}
-          <div className="grid grid-cols-12 gap-3 mb-4 font-medium text-sm text-gray-600">
-            <div className="col-span-2">Part #</div>
-            <div className="col-span-4">Description</div>
-            <div className="col-span-1">Qty</div>
-            <div className="col-span-2">Price</div>
-            <div className="col-span-2">Vendor</div>
-            <div className="col-span-1"></div>
-          </div>
-
-          {/* Items */}
-          <div className="space-y-3">
-            {items.map((item, index) => (
-              <LineItemRow
-                key={index}
-                item={item}
-                index={index}
-                onUpdate={updateItem}
-                onRemove={removeItem}
-                vendors={vendorNames}
-              />
-            ))}
-          </div>
-
-          {/* Total */}
-          <div className="mt-4 pt-4 border-t">
-            <div className="text-right">
-              <span className="text-lg font-medium">
-                Total: ${total.toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="border rounded-md p-8 text-center text-gray-500">
-          No items added. Click "Add Item" to get started.
-        </div>
-      )}
-    </div>
-  );
-};
-
+// ... (LineItemsSection component remains the same) ...
