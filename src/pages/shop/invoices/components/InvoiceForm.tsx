@@ -199,7 +199,7 @@ export function InvoiceForm({
     ]);
   };
 
-  // FIXED: Handle individual field updates properly
+  // FIXED: Handle individual field updates properly hopefully
   const handleUpdateLineItem = (index: number, field: keyof InvoiceLineItem, value: any) => {
     console.log(`Updating line item ${index}, field ${field}, value:`, value);
     const updatedItems = [...lineItems];
