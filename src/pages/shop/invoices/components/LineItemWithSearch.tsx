@@ -27,6 +27,12 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
 
+  // Force re-render when item prop changes
+  const [, forceUpdate] = useState({});
+  useEffect(() => {
+    forceUpdate({});
+  }, [item]);
+
   // Simple search function
   const searchInventory = async (query: string) => {
     if (query.length < 3) {
@@ -63,14 +69,23 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
 
   const selectInventoryItem = (inventoryItem: InventoryItem) => {
     console.log('Selecting item:', inventoryItem);
+    
+    // Update all fields
     onUpdate(index, 'description', inventoryItem.name);
     onUpdate(index, 'price', inventoryItem.price);
     onUpdate(index, 'part_number', inventoryItem.sku || '');
+    
+    // Clear search results
     setSearchResults([]);
     setShowResults(false);
+    
+    // Force component to re-render with new values
+    setTimeout(() => {
+      forceUpdate({});
+    }, 100);
   };
 
-  // Direct onChange handler for description
+  // Direct onChange handlers with proper typing
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     console.log('Description changed to:', value);
@@ -80,6 +95,29 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
     setTimeout(() => {
       searchInventory(value);
     }, 300);
+  };
+
+  const handlePartNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    console.log('Part number changed to:', value);
+    onUpdate(index, 'part_number', value);
+  };
+
+  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value) || 1;
+    console.log('Quantity changed to:', value);
+    onUpdate(index, 'quantity', value);
+  };
+
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseFloat(e.target.value) || 0;
+    console.log('Price changed to:', value);
+    onUpdate(index, 'price', value);
+  };
+
+  const handleVendorChange = (value: string) => {
+    console.log('Vendor changed to:', value);
+    onUpdate(index, 'vendor', value);
   };
 
   const handleSearchClick = () => {
@@ -96,10 +134,7 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
         <Input
           placeholder="Part #"
           value={item.part_number || ''}
-          onChange={(e) => {
-            console.log('Part number changed to:', e.target.value);
-            onUpdate(index, 'part_number', e.target.value);
-          }}
+          onChange={handlePartNumberChange}
         />
       </div>
 
@@ -158,11 +193,8 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
           type="number"
           placeholder="Qty"
           min="1"
-          value={item.quantity}
-          onChange={(e) => {
-            console.log('Quantity changed to:', e.target.value);
-            onUpdate(index, 'quantity', parseInt(e.target.value) || 1);
-          }}
+          value={item.quantity || 1}
+          onChange={handleQuantityChange}
         />
       </div>
 
@@ -173,11 +205,8 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
           placeholder="Price"
           step="0.01"
           min="0"
-          value={item.price}
-          onChange={(e) => {
-            console.log('Price changed to:', e.target.value);
-            onUpdate(index, 'price', parseFloat(e.target.value) || 0);
-          }}
+          value={item.price || 0}
+          onChange={handlePriceChange}
         />
       </div>
 
@@ -185,10 +214,7 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
       <div className="col-span-2">
         <Select 
           value={item.vendor || ''} 
-          onValueChange={(value) => {
-            console.log('Vendor changed to:', value);
-            onUpdate(index, 'vendor', value);
-          }}
+          onValueChange={handleVendorChange}
         >
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Vendor" />
