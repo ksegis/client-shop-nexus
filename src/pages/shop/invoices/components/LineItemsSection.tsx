@@ -28,7 +28,7 @@ interface SimpleLineItemProps {
   vendors: string[];
 }
 
-// Inline SimpleLineItem component to avoid import issues
+// Inline SimpleLineItem component
 function SimpleLineItem({ item, index, onChange, onRemove, vendors }: SimpleLineItemProps) {
   const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -71,7 +71,8 @@ function SimpleLineItem({ item, index, onChange, onRemove, vendors }: SimpleLine
   };
 
   const selectItem = (inventoryItem: InventoryItem) => {
-    console.log('Selecting item:', inventoryItem);
+    console.log('=== SELECTING INVENTORY ITEM ===');
+    console.log('Selected item:', inventoryItem);
     const updatedItem = {
       ...item,
       description: inventoryItem.name,
@@ -82,6 +83,7 @@ function SimpleLineItem({ item, index, onChange, onRemove, vendors }: SimpleLine
     onChange(index, updatedItem);
     setSearchResults([]);
     setShowDropdown(false);
+    console.log('=== SELECTION COMPLETE ===');
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -197,53 +199,31 @@ function SimpleLineItem({ item, index, onChange, onRemove, vendors }: SimpleLine
   );
 }
 
-interface SimpleLineItemsSectionProps {
-  initialItems?: LineItem[];
-  onItemsChange: (items: LineItem[]) => void;
+interface LineItemsSectionProps {
+  lineItems: LineItem[];
+  setLineItems: (items: LineItem[]) => void;
+  vendors: { name: string }[];
+  onAddItem?: () => void;
+  onUpdateItem?: (index: number, field: keyof LineItem, value: any) => void;
+  onRemoveItem?: (index: number) => void;
 }
 
-export function SimpleLineItemsSection({ initialItems = [], onItemsChange }: SimpleLineItemsSectionProps) {
-  const [items, setItems] = useState<LineItem[]>(initialItems);
-  const [vendors, setVendors] = useState<string[]>([]);
+// Export with the expected name to match InvoiceForm import
+export const LineItemsSection = ({ 
+  lineItems, 
+  setLineItems, 
+  vendors,
+  onAddItem,
+  onUpdateItem,
+  onRemoveItem
+}: LineItemsSectionProps) => {
+  const [vendorNames, setVendorNames] = useState<string[]>([]);
 
-  // Fetch vendors from database
+  // Convert vendors prop to string array
   useEffect(() => {
-    const fetchVendors = async () => {
-      try {
-        console.log('Fetching vendors...');
-        const { data, error } = await supabase
-          .from('inventory')
-          .select('supplier')
-          .not('supplier', 'is', null)
-          .neq('supplier', '');
-
-        if (error) throw error;
-
-        const uniqueVendors = [...new Set(data.map(item => item.supplier))];
-        console.log('Fetched vendors:', uniqueVendors);
-        setVendors(uniqueVendors);
-      } catch (error) {
-        console.error('Error fetching vendors:', error);
-        setVendors(['OEM Parts', 'Aftermarket', 'Local Supplier']);
-      }
-    };
-
-    fetchVendors();
-  }, []);
-
-  // Initialize items
-  useEffect(() => {
-    if (initialItems.length > 0) {
-      console.log('Initializing items:', initialItems);
-      setItems(initialItems);
-    }
-  }, [initialItems]);
-
-  // Notify parent when items change
-  useEffect(() => {
-    console.log('Items changed:', items);
-    onItemsChange(items);
-  }, [items, onItemsChange]);
+    const names = vendors.map(v => v.name);
+    setVendorNames(names);
+  }, [vendors]);
 
   const addItem = () => {
     const newItem: LineItem = {
@@ -254,23 +234,41 @@ export function SimpleLineItemsSection({ initialItems = [], onItemsChange }: Sim
       vendor: ''
     };
     console.log('Adding new item');
-    setItems([...items, newItem]);
+    if (onAddItem) {
+      onAddItem();
+    } else {
+      setLineItems([...lineItems, newItem]);
+    }
   };
 
   const updateItem = (index: number, updatedItem: LineItem) => {
     console.log(`Updating item at index ${index}:`, updatedItem);
-    const newItems = [...items];
-    newItems[index] = updatedItem;
-    setItems(newItems);
+    if (onUpdateItem) {
+      // If parent provides update function, use individual field updates for compatibility
+      Object.keys(updatedItem).forEach(key => {
+        const field = key as keyof LineItem;
+        if (updatedItem[field] !== lineItems[index]?.[field]) {
+          onUpdateItem(index, field, updatedItem[field]);
+        }
+      });
+    } else {
+      const newItems = [...lineItems];
+      newItems[index] = updatedItem;
+      setLineItems(newItems);
+    }
   };
 
   const removeItem = (index: number) => {
     console.log(`Removing item at index ${index}`);
-    const newItems = items.filter((_, i) => i !== index);
-    setItems(newItems);
+    if (onRemoveItem) {
+      onRemoveItem(index);
+    } else {
+      const newItems = lineItems.filter((_, i) => i !== index);
+      setLineItems(newItems);
+    }
   };
 
-  const total = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const total = lineItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
 
   return (
     <div className="space-y-4">
@@ -281,7 +279,7 @@ export function SimpleLineItemsSection({ initialItems = [], onItemsChange }: Sim
         </Button>
       </div>
 
-      {items.length > 0 ? (
+      {lineItems.length > 0 ? (
         <div className="border rounded-md p-4">
           {/* Header */}
           <div className="grid grid-cols-12 gap-3 mb-4 font-medium text-sm text-gray-600">
@@ -295,14 +293,14 @@ export function SimpleLineItemsSection({ initialItems = [], onItemsChange }: Sim
 
           {/* Items */}
           <div className="space-y-3">
-            {items.map((item, index) => (
+            {lineItems.map((item, index) => (
               <SimpleLineItem
                 key={index}
                 item={item}
                 index={index}
                 onChange={updateItem}
                 onRemove={removeItem}
-                vendors={vendors}
+                vendors={vendorNames}
               />
             ))}
           </div>
@@ -323,5 +321,5 @@ export function SimpleLineItemsSection({ initialItems = [], onItemsChange }: Sim
       )}
     </div>
   );
-}
+};
 
