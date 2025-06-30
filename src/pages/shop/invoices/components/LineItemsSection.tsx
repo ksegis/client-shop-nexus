@@ -33,17 +33,12 @@ function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowPr
   const [showDropdown, setShowDropdown] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   
-  // === REMOVED CODE START ===
-  // This local state and useEffect were the source of the race condition.
-  // const [localValues, setLocalValues] = useState(item);
-  // useEffect(() => {
-  //   setLocalValues(item);
-  // }, [item]);
-  // === REMOVED CODE END ===
+  // The local state and useEffect for synchronization have been removed.
+  // The component now relies directly on the 'item' prop from the parent.
 
   const updateField = (field: keyof LineItem, value: any) => {
     console.log(`Updating field ${field} to:`, value);
-    // Instead of updating local state, we directly inform the parent.
+    // This directly notifies the parent, which will update its state and re-render this row.
     onUpdate(index, field, value);
   };
 
@@ -81,8 +76,8 @@ function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowPr
     console.log('=== SELECTING INVENTORY ITEM ===');
     console.log('Selected item:', inventoryItem);
     
-    // Now, we only notify the parent. The parent's state update will
-    // trigger a re-render with the correct props.
+    // Notify the parent of all changes at once.
+    // The parent's state update will trigger a re-render with the new props.
     onUpdate(index, 'description', inventoryItem.name);
     onUpdate(index, 'price', inventoryItem.price);
     onUpdate(index, 'part_number', inventoryItem.sku);
@@ -127,7 +122,6 @@ function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowPr
           <Search className="absolute right-2 top-2.5 h-4 w-4 text-gray-400" />
         </div>
         
-        {/* Search Results */}
         {showDropdown && (
           <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
             {isSearching ? (
@@ -207,4 +201,133 @@ function LineItemRow({ item, index, onUpdate, onRemove, vendors }: LineItemRowPr
   );
 }
 
-// ... (LineItemsSection component remains the same) ...
+interface LineItemsSectionProps {
+  lineItems: LineItem[];
+  setLineItems: (items: LineItem[]) => void;
+  vendors: { name: string }[];
+  onAddItem?: () => void;
+  onUpdateItem?: (index: number, field: keyof LineItem, value: any) => void;
+  onRemoveItem?: (index: number) => void;
+}
+
+// === FIX: Add the 'export' keyword here to make it a named export ===
+export const LineItemsSection = ({ 
+  lineItems, 
+  setLineItems, 
+  vendors,
+  onAddItem,
+  onUpdateItem,
+  onRemoveItem
+}: LineItemsSectionProps) => {
+  const [items, setItems] = useState<LineItem[]>(lineItems);
+  const [vendorNames, setVendorNames] = useState<string[]>([]);
+
+  // Convert vendors prop to string array
+  useEffect(() => {
+    const names = vendors.map(v => v.name);
+    setVendorNames(names);
+  }, [vendors]);
+
+  // Keep items in sync with props
+  useEffect(() => {
+    setItems(lineItems);
+  }, [lineItems]);
+
+  // Notify parent when items change
+  useEffect(() => {
+    setLineItems(items);
+  }, [items, setLineItems]);
+
+  const addItem = () => {
+    const newItem: LineItem = {
+      description: '',
+      quantity: 1,
+      price: 0,
+      part_number: '',
+      vendor: ''
+    };
+    console.log('Adding new item');
+    const newItems = [...items, newItem];
+    setItems(newItems);
+    
+    if (onAddItem) {
+      onAddItem();
+    }
+  };
+
+  const updateItem = (index: number, field: keyof LineItem, value: any) => {
+    console.log(`Updating item ${index}, field ${field}, value:`, value);
+    
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setItems(newItems);
+    
+    if (onUpdateItem) {
+      onUpdateItem(index, field, value);
+    }
+  };
+
+  const removeItem = (index: number) => {
+    console.log(`Removing item at index ${index}`);
+    const newItems = items.filter((_, i) => i !== index);
+    setItems(newItems);
+    
+    if (onRemoveItem) {
+      onRemoveItem(index);
+    }
+  };
+
+  const total = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium">Line Items</h3>
+        <Button onClick={addItem} size="sm">
+          <Plus className="mr-1 h-4 w-4" /> Add Item
+        </Button>
+      </div>
+
+      {items.length > 0 ? (
+        <div className="border rounded-md p-4">
+          {/* Header */}
+          <div className="grid grid-cols-12 gap-3 mb-4 font-medium text-sm text-gray-600">
+            <div className="col-span-2">Part #</div>
+            <div className="col-span-4">Description</div>
+            <div className="col-span-1">Qty</div>
+            <div className="col-span-2">Price</div>
+            <div className="col-span-2">Vendor</div>
+            <div className="col-span-1"></div>
+          </div>
+
+          {/* Items */}
+          <div className="space-y-3">
+            {items.map((item, index) => (
+              <LineItemRow
+                key={index}
+                item={item}
+                index={index}
+                onUpdate={updateItem}
+                onRemove={removeItem}
+                vendors={vendorNames}
+              />
+            ))}
+          </div>
+
+          {/* Total */}
+          <div className="mt-4 pt-4 border-t">
+            <div className="text-right">
+              <span className="text-lg font-medium">
+                Total: ${total.toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="border rounded-md p-8 text-center text-gray-500">
+          No items added. Click "Add Item" to get started.
+        </div>
+      )}
+    </div>
+  );
+};
