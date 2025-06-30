@@ -130,7 +130,7 @@ export default function InvoiceDialog({
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[700px]">
+      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {invoice ? "Edit Invoice" : estimateData ? "Convert Estimate to Invoice" : "Create Invoice"}

@@ -74,7 +74,8 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
     setShowResults(false);
   };
 
-  const handleDescriptionChange = (value: string) => {
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
     setSearchQuery(value);
     onUpdate(index, 'description', value);
   };
@@ -83,17 +84,28 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
     console.log('Search icon clicked');
     if (item.description && item.description.length > 2) {
       setSearchQuery(item.description);
+      searchInventory();
     }
   };
 
   return (
-    <div className="grid grid-cols-12 gap-2 items-start">
+    <div className="grid grid-cols-12 gap-3 items-start">
+      {/* Part # - Column 1 */}
+      <div className="col-span-2">
+        <Input
+          placeholder="Part #"
+          value={item.part_number || ''}
+          onChange={(e) => onUpdate(index, 'part_number', e.target.value)}
+        />
+      </div>
+
+      {/* Description with Search - Column 2 */}
       <div className="col-span-4 relative">
         <div className="relative">
           <Input
             placeholder="Search or enter description"
             value={item.description || ''}
-            onChange={(e) => handleDescriptionChange(e.target.value)}
+            onChange={handleDescriptionChange}
             className="pr-8"
           />
           <Button
@@ -107,7 +119,7 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
           </Button>
         </div>
         
-        {/* Simple dropdown for search results */}
+        {/* Search results dropdown */}
         {showResults && (
           <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
             {isSearching ? (
@@ -138,7 +150,8 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
         )}
       </div>
 
-      <div className="col-span-2">
+      {/* Quantity - Column 3 */}
+      <div className="col-span-1">
         <Input
           type="number"
           placeholder="Qty"
@@ -148,6 +161,7 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
         />
       </div>
 
+      {/* Price - Column 4 */}
       <div className="col-span-2">
         <Input
           type="number"
@@ -159,20 +173,13 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
         />
       </div>
 
+      {/* Vendor - Column 5 */}
       <div className="col-span-2">
-        <Input
-          placeholder="Part #"
-          value={item.part_number || ''}
-          onChange={(e) => onUpdate(index, 'part_number', e.target.value)}
-        />
-      </div>
-
-      <div className="col-span-1">
         <Select 
           value={item.vendor || ''} 
           onValueChange={(value) => onUpdate(index, 'vendor', value)}
         >
-          <SelectTrigger>
+          <SelectTrigger className="w-full">
             <SelectValue placeholder="Vendor" />
           </SelectTrigger>
           <SelectContent>
@@ -185,6 +192,7 @@ export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }:
         </Select>
       </div>
 
+      {/* Delete Button - Column 6 */}
       <div className="col-span-1">
         <Button
           type="button"
