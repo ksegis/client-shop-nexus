@@ -1,4 +1,3 @@
-
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { WorkOrder, WorkOrderLineItem } from "../types";
@@ -51,11 +50,16 @@ export const useWorkOrderCrud = (refreshData: () => Promise<void>) => {
       if (lineItems && lineItems.length > 0 && data && data[0]) {
         const workOrderId = data[0].id;
         
-        const lineItemsWithWorkOrderId = lineItems.map(item => ({
-          ...item,
-          work_order_id: workOrderId,
-          id: undefined // Remove any existing IDs for insertion
-        }));
+        // FIXED: Properly remove ID field and any temporary IDs
+        const lineItemsWithWorkOrderId = lineItems.map(item => {
+          const { id, ...itemWithoutId } = item; // Remove id field completely
+          return {
+            ...itemWithoutId,
+            work_order_id: workOrderId
+          };
+        });
+        
+        console.log("Inserting line items:", lineItemsWithWorkOrderId);
         
         const { error: lineItemError } = await supabase
           .from('work_order_line_items')
@@ -69,6 +73,8 @@ export const useWorkOrderCrud = (refreshData: () => Promise<void>) => {
             title: "Warning",
             description: `Work order created but some line items failed to add: ${lineItemError.message}`,
           });
+        } else {
+          console.log("Line items added successfully");
         }
       }
       
@@ -124,12 +130,16 @@ export const useWorkOrderCrud = (refreshData: () => Promise<void>) => {
             description: `Failed to update line items: ${deleteError.message}`,
           });
         } else {
-          // Then insert new line items
-          const lineItemsWithWorkOrderId = lineItems.map(item => ({
-            ...item,
-            work_order_id: id,
-            id: undefined // Remove any existing IDs for re-insertion
-          }));
+          // Then insert new line items - FIXED: Properly remove ID field
+          const lineItemsWithWorkOrderId = lineItems.map(item => {
+            const { id: itemId, ...itemWithoutId } = item; // Remove id field completely
+            return {
+              ...itemWithoutId,
+              work_order_id: id
+            };
+          });
+          
+          console.log("Re-inserting line items:", lineItemsWithWorkOrderId);
           
           const { error: insertError } = await supabase
             .from('work_order_line_items')
@@ -142,6 +152,8 @@ export const useWorkOrderCrud = (refreshData: () => Promise<void>) => {
               title: "Warning",
               description: `Work order updated but line items failed to update: ${insertError.message}`,
             });
+          } else {
+            console.log("Line items updated successfully");
           }
         }
       }
@@ -206,3 +218,4 @@ export const useWorkOrderCrud = (refreshData: () => Promise<void>) => {
     deleteWorkOrder
   };
 };
+
