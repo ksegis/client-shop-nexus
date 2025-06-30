@@ -60,7 +60,6 @@ export function InvoiceForm({
 
         if (error) {
           console.error('Error fetching vendors:', error);
-          // Fallback to basic vendors if database fetch fails
           setVendors([
             { name: 'OEM Parts' },
             { name: 'Aftermarket' },
@@ -69,7 +68,6 @@ export function InvoiceForm({
           return;
         }
 
-        // Extract unique suppliers
         const uniqueSuppliers = [...new Set(data.map(item => item.supplier))];
         const vendorList = uniqueSuppliers.map(supplier => ({ name: supplier }));
         
@@ -77,7 +75,6 @@ export function InvoiceForm({
         setVendors(vendorList);
       } catch (error) {
         console.error('Error fetching vendors:', error);
-        // Fallback vendors
         setVendors([
           { name: 'OEM Parts' },
           { name: 'Aftermarket' },
@@ -175,7 +172,6 @@ export function InvoiceForm({
         return;
       }
 
-      // Include line items in the submission
       const formDataWithItems = {
         ...data,
         lineItems: lineItems
@@ -203,6 +199,7 @@ export function InvoiceForm({
     ]);
   };
 
+  // FIXED: Handle individual field updates properly
   const handleUpdateLineItem = (index: number, field: keyof InvoiceLineItem, value: any) => {
     console.log(`Updating line item ${index}, field ${field}, value:`, value);
     const updatedItems = [...lineItems];
