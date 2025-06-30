@@ -1,17 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { InvoiceLineItem } from '../types';
 
-interface LineItemWithSearchProps {
-  item: InvoiceLineItem;
+interface LineItem {
+  description: string;
+  quantity: number;
+  price: number;
+  part_number: string;
+  vendor: string;
+}
+
+interface SimpleLineItemProps {
+  item: LineItem;
   index: number;
-  onUpdate: (index: number, field: string, value: any) => void;
+  onChange: (index: number, updatedItem: LineItem) => void;
   onRemove: (index: number) => void;
-  vendors: {name: string}[];
+  vendors: string[];
 }
 
 interface InventoryItem {
@@ -19,221 +26,164 @@ interface InventoryItem {
   name: string;
   sku: string;
   price: number;
-  core_charge: number | null;
 }
 
-export function LineItemWithSearch({ item, index, onUpdate, onRemove, vendors }: LineItemWithSearchProps) {
+export function SimpleLineItem({ item, index, onChange, onRemove, vendors }: SimpleLineItemProps) {
   const [searchResults, setSearchResults] = useState<InventoryItem[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-  const [showResults, setShowResults] = useState(false);
+
+  const updateItem = (field: keyof LineItem, value: any) => {
+    const updatedItem = { ...item, [field]: value };
+    console.log(`Updating item ${index}:`, updatedItem);
+    onChange(index, updatedItem);
+  };
 
   const searchInventory = async (query: string) => {
     if (query.length < 3) {
       setSearchResults([]);
-      setShowResults(false);
+      setShowDropdown(false);
       return;
     }
 
     setIsSearching(true);
     try {
-      console.log('Searching for:', query);
       const { data, error } = await supabase
         .from('inventory')
-        .select('id, name, sku, price, core_charge')
+        .select('id, name, sku, price')
         .or(`name.ilike.%${query}%,sku.ilike.%${query}%`)
         .limit(10);
 
-      if (error) {
-        console.error('Search error:', error);
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log('Search results:', data);
       setSearchResults(data || []);
-      setShowResults(data && data.length > 0);
+      setShowDropdown(data && data.length > 0);
     } catch (error) {
-      console.error('Error searching inventory:', error);
+      console.error('Search error:', error);
       setSearchResults([]);
-      setShowResults(false);
+      setShowDropdown(false);
     } finally {
       setIsSearching(false);
     }
   };
 
-  const selectInventoryItem = (inventoryItem: InventoryItem) => {
-    console.log('=== SELECTING INVENTORY ITEM ===');
-    console.log('Selected item:', inventoryItem);
-    console.log('Line item index:', index);
-    
-    // Update all fields
-    console.log('Updating description to:', inventoryItem.name);
-    onUpdate(index, 'description', inventoryItem.name);
-    
-    console.log('Updating price to:', inventoryItem.price);
-    onUpdate(index, 'price', inventoryItem.price);
-    
-    console.log('Updating part_number to:', inventoryItem.sku);
-    onUpdate(index, 'part_number', inventoryItem.sku || '');
-    
-    // Clear search
+  const selectItem = (inventoryItem: InventoryItem) => {
+    const updatedItem = {
+      ...item,
+      description: inventoryItem.name,
+      price: inventoryItem.price,
+      part_number: inventoryItem.sku
+    };
+    console.log(`Selecting inventory item for ${index}:`, updatedItem);
+    onChange(index, updatedItem);
     setSearchResults([]);
-    setShowResults(false);
-    
-    console.log('=== SELECTION COMPLETE ===');
+    setShowDropdown(false);
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    console.log(`Description changed for item ${index}:`, value);
-    onUpdate(index, 'description', value);
+    updateItem('description', value);
     
+    // Search after typing
     setTimeout(() => {
       searchInventory(value);
     }, 300);
   };
 
-  const handlePartNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    console.log(`Part number changed for item ${index}:`, value);
-    onUpdate(index, 'part_number', value);
-  };
-
-  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value) || 1;
-    console.log(`Quantity changed for item ${index}:`, value);
-    onUpdate(index, 'quantity', value);
-  };
-
-  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseFloat(e.target.value) || 0;
-    console.log(`Price changed for item ${index}:`, value);
-    onUpdate(index, 'price', value);
-  };
-
-  const handleVendorChange = (value: string) => {
-    console.log(`Vendor changed for item ${index}:`, value);
-    onUpdate(index, 'vendor', value);
-  };
-
-  const handleSearchClick = () => {
-    console.log('Search icon clicked, current description:', item.description);
-    if (item.description) {
-      searchInventory(item.description);
-    }
-  };
-
   return (
-    <div className="grid grid-cols-12 gap-3 items-start">
-      {/* Part # - Column 1 */}
+    <div className="grid grid-cols-12 gap-3 items-start border-b pb-3">
+      {/* Part Number */}
       <div className="col-span-2">
         <Input
           placeholder="Part #"
-          value={item.part_number || ''}
-          onChange={handlePartNumberChange}
+          value={item.part_number}
+          onChange={(e) => updateItem('part_number', e.target.value)}
         />
       </div>
 
-      {/* Description with Search - Column 2 */}
+      {/* Description with Search */}
       <div className="col-span-4 relative">
         <div className="relative">
           <Input
             placeholder="Search or enter description"
-            value={item.description || ''}
+            value={item.description}
             onChange={handleDescriptionChange}
             className="pr-8"
-            onFocus={() => console.log(`Description field ${index} focused`)}
-            onBlur={() => console.log(`Description field ${index} blurred`)}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="absolute right-1 top-1 h-6 w-6 p-0 hover:bg-gray-100"
-            onClick={handleSearchClick}
-          >
-            <Search className="h-4 w-4 text-gray-400" />
-          </Button>
+          <Search className="absolute right-2 top-2.5 h-4 w-4 text-gray-400" />
         </div>
         
-        {/* Search results dropdown */}
-        {showResults && searchResults.length > 0 && (
-          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-            <div className="space-y-1 p-1">
-              {searchResults.map((result) => (
-                <div
-                  key={result.id}
-                  className="p-2 hover:bg-gray-100 cursor-pointer rounded text-sm"
-                  onClick={() => selectInventoryItem(result)}
-                >
-                  <div className="font-medium">{result.name}</div>
-                  <div className="text-xs text-gray-500">
-                    SKU: {result.sku} | ${result.price.toFixed(2)}
+        {/* Search Results */}
+        {showDropdown && (
+          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+            {isSearching ? (
+              <div className="p-2 text-center text-sm text-gray-500">Searching...</div>
+            ) : (
+              <div className="p-1">
+                {searchResults.map((result) => (
+                  <div
+                    key={result.id}
+                    className="p-2 hover:bg-gray-100 cursor-pointer rounded text-sm"
+                    onClick={() => selectItem(result)}
+                  >
+                    <div className="font-medium">{result.name}</div>
+                    <div className="text-xs text-gray-500">
+                      SKU: {result.sku} | ${result.price.toFixed(2)}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        {isSearching && (
-          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-2">
-            <div className="text-center text-sm text-gray-500">Searching...</div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Quantity - Column 3 */}
+      {/* Quantity */}
       <div className="col-span-1">
         <Input
           type="number"
           placeholder="Qty"
           min="1"
-          value={item.quantity || 1}
-          onChange={handleQuantityChange}
+          value={item.quantity}
+          onChange={(e) => updateItem('quantity', parseInt(e.target.value) || 1)}
         />
       </div>
 
-      {/* Price - Column 4 */}
+      {/* Price */}
       <div className="col-span-2">
         <Input
           type="number"
           placeholder="Price"
           step="0.01"
           min="0"
-          value={item.price || 0}
-          onChange={handlePriceChange}
+          value={item.price}
+          onChange={(e) => updateItem('price', parseFloat(e.target.value) || 0)}
         />
       </div>
 
-      {/* Vendor - Column 5 */}
+      {/* Vendor */}
       <div className="col-span-2">
-        <Select 
-          value={item.vendor || ''} 
-          onValueChange={handleVendorChange}
-        >
-          <SelectTrigger className="w-full">
+        <Select value={item.vendor} onValueChange={(value) => updateItem('vendor', value)}>
+          <SelectTrigger>
             <SelectValue placeholder="Vendor" />
           </SelectTrigger>
           <SelectContent>
             {vendors.map((vendor) => (
-              <SelectItem key={vendor.name} value={vendor.name}>
-                {vendor.name}
+              <SelectItem key={vendor} value={vendor}>
+                {vendor}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Delete Button - Column 6 */}
+      {/* Delete */}
       <div className="col-span-1">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => {
-            console.log('Removing item at index:', index);
-            onRemove(index);
-          }}
+          onClick={() => onRemove(index)}
           className="h-10 w-10 p-0"
         >
           <Trash2 className="h-4 w-4" />
