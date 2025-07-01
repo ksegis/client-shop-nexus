@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { WorkOrderForm } from './WorkOrderForm';
 import { useWorkOrders } from './WorkOrdersContext';
-import { WorkOrderLineItem, WorkOrderFormValues } from './types';
+import { WorkOrderLineItem, WorkOrderFormValues, WorkOrder } from './types';
 import { useToast } from '@/hooks/use-toast';
 
 // Schema for form validation aligned with WorkOrderFormValues type
@@ -26,7 +26,7 @@ export const workOrderSchema = z.object({
   lineItems: z.array(z.any()).optional(),
 });
 
-export const NewWorkOrder = () => {
+const NewWorkOrder = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lineItems, setLineItems] = useState<WorkOrderLineItem[]>([]);
   const { createWorkOrder } = useWorkOrders();
@@ -117,4 +117,6 @@ export const NewWorkOrder = () => {
     </div>
   );
 };
+
+export default NewWorkOrder;
 
