@@ -12,6 +12,7 @@ import Reports from "@/pages/shop/Reports";
 import ServiceDesk from "@/pages/shop/ServiceDesk";
 import ServiceAppointments from "@/pages/shop/ServiceAppointments";
 import WorkOrders from "@/pages/shop/WorkOrders";
+import NewWorkOrder from "@/pages/shop/work-orders/NewWorkOrder";
 import WorkOrderDetailPage from "@/pages/shop/work-orders/WorkOrderDetailPage";
 import { WorkOrdersProvider } from "@/pages/shop/work-orders/WorkOrdersContext";
 import UserManagement from "@/pages/shop/admin/UserManagement";
@@ -150,6 +151,16 @@ const ShopRoutes = () => {
             <ProtectedRoute>
               <WorkOrdersProvider>
                 <WorkOrders />
+              </WorkOrdersProvider>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="work-orders/new"
+          element={
+            <ProtectedRoute>
+              <WorkOrdersProvider>
+                <NewWorkOrder />
               </WorkOrdersProvider>
             </ProtectedRoute>
           }
