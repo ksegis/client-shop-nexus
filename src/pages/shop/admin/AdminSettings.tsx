@@ -561,9 +561,10 @@ const AdminSettings = () => {
   const loadSyncRecommendations = async () => {
     try {
       const recommendations = await keystoneSyncController.getSyncRecommendations();
-      setSyncRecommendations(recommendations.recommendations || []);
+      setSyncRecommendations(recommendations?.recommendations || []);
     } catch (error) {
       console.error('Error loading sync recommendations:', error);
+      setSyncRecommendations([]);
     }
   };
 
@@ -784,11 +785,12 @@ const AdminSettings = () => {
       const result = await priceCheckService.checkPrices({ vcpns });
       
       if (result.success) {
-        setPriceCheckResults(result.results);
+        setPriceCheckResults(result.results || []);
         console.log('Price check successful:', result);
       } else {
         console.error('Price check failed:', result.message);
         alert(`Price check failed: ${result.message}`);
+        setPriceCheckResults([]);
       }
 
       // Refresh status to update rate limiting info
@@ -797,6 +799,7 @@ const AdminSettings = () => {
     } catch (error) {
       console.error('Price check error:', error);
       alert(`Price check error: ${error.message}`);
+      setPriceCheckResults([]);
     } finally {
       setPriceCheckLoading(false);
     }
@@ -856,11 +859,12 @@ const AdminSettings = () => {
       });
       
       if (result.success) {
-        setShippingQuoteResults(result.shippingOptions);
+        setShippingQuoteResults(result.shippingOptions || []);
         console.log('Shipping quote successful:', result);
       } else {
         console.error('Shipping quote failed:', result.message);
         alert(`Shipping quote failed: ${result.message}`);
+        setShippingQuoteResults([]);
       }
 
       // Refresh status to update rate limiting info
@@ -869,6 +873,7 @@ const AdminSettings = () => {
     } catch (error) {
       console.error('Shipping quote error:', error);
       alert(`Shipping quote error: ${error.message}`);
+      setShippingQuoteResults([]);
     } finally {
       setShippingQuoteLoading(false);
     }
@@ -1001,11 +1006,12 @@ const AdminSettings = () => {
       const result = await orderTrackingService.trackOrders(orderReferences);
       
       if (result.success) {
-        setTrackingResults(result.results);
+        setTrackingResults(result.results || []);
         console.log('Order tracking successful:', result);
       } else {
         console.error('Order tracking failed:', result.message);
         alert(`Order tracking failed: ${result.message}`);
+        setTrackingResults([]);
       }
 
       // Refresh status to update rate limiting info
@@ -1014,6 +1020,7 @@ const AdminSettings = () => {
     } catch (error) {
       console.error('Order tracking error:', error);
       alert(`Order tracking error: ${error.message}`);
+      setTrackingResults([]);
     } finally {
       setTrackingLoading(false);
     }
