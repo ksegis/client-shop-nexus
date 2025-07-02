@@ -1,0 +1,2 @@
+
+export { CustomerPartDetail } from './CustomerPartDetail';
