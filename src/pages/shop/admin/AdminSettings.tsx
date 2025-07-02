@@ -210,10 +210,15 @@ const AdminSettings = () => {
         .order('created_at', { ascending: false })
         .limit(10);
 
-      if (error) throw error;
+      if (error) {
+        console.warn('CSV import history table not found (this is normal if migration not run yet):', error);
+        setCsvImportHistory([]);
+        return;
+      }
       setCsvImportHistory(data || []);
     } catch (error) {
-      console.error('Error loading CSV import history:', error);
+      console.warn('Error loading CSV import history (table may not exist yet):', error);
+      setCsvImportHistory([]);
     }
   };
 
