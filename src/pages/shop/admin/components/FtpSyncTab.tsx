@@ -1,10 +1,25 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { HardDrive, RefreshCw, CheckCircle, AlertTriangle, Clock, FileText } from 'lucide-react';
+
+// Safe Array Access Utility
+const safeArrayAccess = <T,>(
+  array: T[] | undefined | null, 
+  componentName: string = 'FtpSyncTab',
+  propertyName: string = 'array',
+  defaultValue: T[] = []
+): T[] => {
+  if (Array.isArray(array)) {
+    return array;
+  }
+  
+  console.warn(`[SafeArray] ${componentName}.${propertyName} is ${array === null ? 'null' : 'undefined'}, using default:`, defaultValue);
+  return defaultValue;
+};
 
 interface FtpSyncTabProps {
   ftpSyncStatus: any;
@@ -39,16 +54,35 @@ const FtpSyncTab: React.FC<FtpSyncTabProps> = ({
   safeFormatDate,
   safeFormatRelativeTime
 }) => {
+  // Component registration for debugging
+  useEffect(() => {
+    console.log('[FtpSyncTab] Component mounted - registering as potential p3e component');
+    
+    // Register this component for p3e tracking
+    if (typeof window !== 'undefined' && window.ErrorTracker) {
+      window.ErrorTracker.registerComponent('p3e', 'FtpSyncTab');
+    }
+    
+    return () => {
+      console.log('[FtpSyncTab] Component unmounted');
+    };
+  }, []);
+
+  // Safe array handling for all array props
+  const safeSyncRecommendations = safeArrayAccess(syncRecommendations, 'FtpSyncTab', 'syncRecommendations', []);
+  const safeFtpSyncResultsErrors = safeArrayAccess(ftpSyncResults?.errors, 'FtpSyncTab', 'ftpSyncResultsErrors', []);
+  const safeAvailableFiles = safeArrayAccess(ftpSyncStatus?.availableFiles, 'FtpSyncTab', 'availableFiles', []);
+
   return (
-    <div className="space-y-6">
+    <div data-component="FtpSyncTab" className="space-y-6">
       {/* Rate Limit Status */}
       {renderRateLimitStatus()}
 
-      {/* Sync Recommendations */}
-      {syncRecommendations.length > 0 && (
+      {/* Sync Recommendations - SAFE ARRAY ACCESS */}
+      {safeSyncRecommendations.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium">Sync Recommendations</h3>
-          {syncRecommendations.map((rec, index) => (
+          {safeSyncRecommendations.map((rec, index) => (
             <Alert key={index} className={
               rec.type === 'warning' ? 'border-yellow-200 bg-yellow-50' :
               rec.type === 'info' ? 'border-blue-200 bg-blue-50' :
@@ -57,9 +91,9 @@ const FtpSyncTab: React.FC<FtpSyncTabProps> = ({
               <AlertDescription>
                 <div className="flex items-center justify-between">
                   <div>
-                    <strong>{rec.title}</strong> - {rec.message}
+                    <strong>{rec.title || 'Recommendation'}</strong> - {rec.message || 'No message'}
                   </div>
-                  <Badge variant="outline">{rec.priority}</Badge>
+                  <Badge variant="outline">{rec.priority || 'normal'}</Badge>
                 </div>
               </AlertDescription>
             </Alert>
@@ -100,8 +134,8 @@ const FtpSyncTab: React.FC<FtpSyncTabProps> = ({
             <Alert className="border-blue-200 bg-blue-50">
               <AlertDescription>
                 <div className="space-y-1">
-                  <div><strong>Recommended Strategy:</strong> {syncStrategy.method}</div>
-                  <div className="text-sm">{syncStrategy.reason}</div>
+                  <div><strong>Recommended Strategy:</strong> {syncStrategy.method || 'Unknown'}</div>
+                  <div className="text-sm">{syncStrategy.reason || 'No reason provided'}</div>
                   {syncStrategy.estimatedTime && (
                     <div className="text-xs">Estimated time: {syncStrategy.estimatedTime}</div>
                   )}
@@ -144,7 +178,7 @@ const FtpSyncTab: React.FC<FtpSyncTabProps> = ({
         </CardContent>
       </Card>
 
-      {/* Sync Method Test Results */}
+      {/* Sync Method Test Results - SAFE OBJECT ACCESS */}
       {syncMethodTest && (
         <Card>
           <CardHeader>
@@ -160,19 +194,19 @@ const FtpSyncTab: React.FC<FtpSyncTabProps> = ({
               </Alert>
             ) : (
               <div className="space-y-3">
-                {Object.entries(syncMethodTest).map(([method, result]: [string, any]) => (
+                {syncMethodTest && typeof syncMethodTest === 'object' && Object.entries(syncMethodTest).map(([method, result]: [string, any]) => (
                   <div key={method} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
                       <span className="font-medium capitalize">{method}</span>
                       <p className="text-sm text-muted-foreground">
-                        {result.available ? 'Available' : 'Unavailable'}
+                        {result?.available ? 'Available' : 'Unavailable'}
                       </p>
                     </div>
                     <div className="text-right">
-                      <Badge variant={result.available ? 'default' : 'secondary'}>
-                        {result.available ? 'Ready' : 'Not Available'}
+                      <Badge variant={result?.available ? 'default' : 'secondary'}>
+                        {result?.available ? 'Ready' : 'Not Available'}
                       </Badge>
-                      {result.responseTime && (
+                      {result?.responseTime && (
                         <p className="text-xs text-muted-foreground mt-1">
                           {result.responseTime}ms
                         </p>
@@ -186,7 +220,7 @@ const FtpSyncTab: React.FC<FtpSyncTabProps> = ({
         </Card>
       )}
 
-      {/* FTP Sync Results */}
+      {/* FTP Sync Results - SAFE ARRAY ACCESS */}
       {ftpSyncResults && (
         <Card>
           <CardHeader>
@@ -226,19 +260,20 @@ const FtpSyncTab: React.FC<FtpSyncTabProps> = ({
                 </div>
               )}
 
-              {ftpSyncResults.errors && ftpSyncResults.errors.length > 0 && (
+              {/* SAFE ERROR ARRAY HANDLING */}
+              {safeFtpSyncResultsErrors.length > 0 && (
                 <Alert className="border-red-200 bg-red-50">
                   <AlertTriangle className="h-4 w-4 text-red-600" />
                   <AlertDescription className="text-red-800">
                     <strong>Sync Errors:</strong>
                     <ul className="mt-1 list-disc list-inside">
-                      {ftpSyncResults.errors.slice(0, 5).map((error: string, index: number) => (
-                        <li key={index} className="text-xs">{error}</li>
+                      {safeFtpSyncResultsErrors.slice(0, 5).map((error: string, index: number) => (
+                        <li key={index} className="text-xs">{error || 'Unknown error'}</li>
                       ))}
                     </ul>
-                    {ftpSyncResults.errors.length > 5 && (
+                    {safeFtpSyncResultsErrors.length > 5 && (
                       <p className="text-xs mt-1">
-                        ... and {ftpSyncResults.errors.length - 5} more errors
+                        ... and {safeFtpSyncResultsErrors.length - 5} more errors
                       </p>
                     )}
                   </AlertDescription>
@@ -249,7 +284,7 @@ const FtpSyncTab: React.FC<FtpSyncTabProps> = ({
         </Card>
       )}
 
-      {/* FTP Status Information */}
+      {/* FTP Status Information - SAFE ARRAY ACCESS */}
       {ftpSyncStatus && (
         <Card>
           <CardHeader>
@@ -274,16 +309,22 @@ const FtpSyncTab: React.FC<FtpSyncTabProps> = ({
                 </div>
               )}
 
-              {ftpSyncStatus.availableFiles && ftpSyncStatus.availableFiles.length > 0 && (
+              {/* SAFE AVAILABLE FILES ARRAY HANDLING */}
+              {safeAvailableFiles.length > 0 && (
                 <div>
                   <h4 className="font-medium mb-2">Available Files:</h4>
                   <div className="space-y-1">
-                    {ftpSyncStatus.availableFiles.slice(0, 5).map((file: any, index: number) => (
+                    {safeAvailableFiles.slice(0, 5).map((file: any, index: number) => (
                       <div key={index} className="text-sm flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span>{file.name}</span>
-                        <span className="text-muted-foreground">{safeFormatDate(file.modified)}</span>
+                        <span>{file?.name || 'Unknown file'}</span>
+                        <span className="text-muted-foreground">{safeFormatDate(file?.modified)}</span>
                       </div>
                     ))}
+                    {safeAvailableFiles.length > 5 && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        ... and {safeAvailableFiles.length - 5} more files
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -300,6 +341,15 @@ const FtpSyncTab: React.FC<FtpSyncTabProps> = ({
           </CardContent>
         </Card>
       )}
+
+      {/* Debug Information */}
+      <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs">
+        <div className="font-semibold mb-1">🐛 FtpSyncTab Debug Info</div>
+        <div>Component: FtpSyncTab (potential p3e component)</div>
+        <div>Sync Recommendations: {safeSyncRecommendations.length} items</div>
+        <div>Available Files: {safeAvailableFiles.length} items</div>
+        <div>Sync Errors: {safeFtpSyncResultsErrors.length} items</div>
+      </div>
     </div>
   );
 };

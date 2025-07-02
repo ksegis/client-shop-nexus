@@ -1,8 +1,23 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Upload, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
+
+// Safe Array Access Utility
+const safeArrayAccess = <T,>(
+  array: T[] | undefined | null, 
+  componentName: string = 'CsvUploadTab',
+  propertyName: string = 'array',
+  defaultValue: T[] = []
+): T[] => {
+  if (Array.isArray(array)) {
+    return array;
+  }
+  
+  console.warn(`[SafeArray] ${componentName}.${propertyName} is ${array === null ? 'null' : 'undefined'}, using default:`, defaultValue);
+  return defaultValue;
+};
 
 interface CsvUploadTabProps {
   csvFile: File | null;
@@ -25,8 +40,26 @@ const CsvUploadTab: React.FC<CsvUploadTabProps> = ({
   handleCsvUpload,
   safeFormatDate
 }) => {
+  // Component registration for debugging
+  useEffect(() => {
+    console.log('[CsvUploadTab] Component mounted - registering as potential p3e component');
+    
+    // Register this component for p3e tracking
+    if (typeof window !== 'undefined' && window.ErrorTracker) {
+      window.ErrorTracker.registerComponent('p3e', 'CsvUploadTab');
+    }
+    
+    return () => {
+      console.log('[CsvUploadTab] Component unmounted');
+    };
+  }, []);
+
+  // Safe array handling for all array props
+  const safeCsvImportHistory = safeArrayAccess(csvImportHistory, 'CsvUploadTab', 'csvImportHistory', []);
+  const safeCsvUploadResultsErrors = safeArrayAccess(csvUploadResults?.errors, 'CsvUploadTab', 'csvUploadResultsErrors', []);
+
   return (
-    <div className="space-y-6">
+    <div data-component="CsvUploadTab" className="space-y-6">
       {/* CSV Upload Interface */}
       <Card>
         <CardHeader>
@@ -88,32 +121,33 @@ const CsvUploadTab: React.FC<CsvUploadTabProps> = ({
             </div>
           )}
 
-          {/* Upload Results */}
+          {/* Upload Results - SAFE ARRAY ACCESS */}
           {csvUploadResults && (
             <Card className="p-4">
               <h3 className="font-medium mb-3">Upload Results</h3>
               <div className="space-y-3">
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div className="text-center p-3 bg-gray-50 rounded">
-                    <div className="text-lg font-semibold">{csvUploadResults.totalProcessed}</div>
+                    <div className="text-lg font-semibold">{csvUploadResults.totalProcessed || 0}</div>
                     <div className="text-gray-600">Processed</div>
                   </div>
                   <div className="text-center p-3 bg-green-50 rounded">
-                    <div className="text-lg font-semibold text-green-600">{csvUploadResults.totalInserted}</div>
+                    <div className="text-lg font-semibold text-green-600">{csvUploadResults.totalInserted || 0}</div>
                     <div className="text-gray-600">Inserted</div>
                   </div>
                   <div className="text-center p-3 bg-blue-50 rounded">
-                    <div className="text-lg font-semibold text-blue-600">{csvUploadResults.totalUpdated}</div>
+                    <div className="text-lg font-semibold text-blue-600">{csvUploadResults.totalUpdated || 0}</div>
                     <div className="text-gray-600">Updated</div>
                   </div>
                 </div>
                 
-                {csvUploadResults.errors && csvUploadResults.errors.length > 0 && (
+                {/* SAFE ERROR ARRAY HANDLING */}
+                {safeCsvUploadResultsErrors.length > 0 && (
                   <div className="space-y-1">
-                    <h4 className="text-sm font-medium text-red-800">Errors:</h4>
-                    {csvUploadResults.errors.map((error: string, index: number) => (
+                    <h4 className="text-sm font-medium text-red-800">Errors ({safeCsvUploadResultsErrors.length}):</h4>
+                    {safeCsvUploadResultsErrors.map((error: string, index: number) => (
                       <p key={index} className="text-xs text-red-600 bg-red-50 p-2 rounded">
-                        {error}
+                        {error || 'Unknown error'}
                       </p>
                     ))}
                   </div>
@@ -122,26 +156,26 @@ const CsvUploadTab: React.FC<CsvUploadTabProps> = ({
             </Card>
           )}
 
-          {/* Import History */}
-          {csvImportHistory.length > 0 && (
+          {/* Import History - SAFE ARRAY ACCESS */}
+          {safeCsvImportHistory.length > 0 && (
             <Card className="p-4">
-              <h3 className="font-medium mb-3">Recent Imports</h3>
+              <h3 className="font-medium mb-3">Recent Imports ({safeCsvImportHistory.length})</h3>
               <div className="space-y-2">
-                {csvImportHistory.map((batch) => (
-                  <div key={batch.id} className="flex items-center justify-between p-3 border rounded-lg">
+                {safeCsvImportHistory.map((batch) => (
+                  <div key={batch?.id || Math.random()} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
-                      <span className="font-medium">{batch.filename}</span>
+                      <span className="font-medium">{batch?.filename || 'Unknown file'}</span>
                       <p className="text-sm text-muted-foreground">
-                        {safeFormatDate(batch.created_at)}
+                        {safeFormatDate(batch?.created_at)}
                       </p>
                     </div>
                     <div className="text-right">
                       <div className="text-sm">
-                        {batch.processed_records} processed
+                        {batch?.processed_records || 0} processed
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        +{batch.inserted_records} / ~{batch.updated_records}
-                        {batch.error_records > 0 && ` / ${batch.error_records} errors`}
+                        +{batch?.inserted_records || 0} / ~{batch?.updated_records || 0}
+                        {(batch?.error_records || 0) > 0 && ` / ${batch.error_records} errors`}
                       </div>
                     </div>
                   </div>
@@ -185,6 +219,17 @@ const CsvUploadTab: React.FC<CsvUploadTabProps> = ({
           </Card>
         </CardContent>
       </Card>
+
+      {/* Debug Information */}
+      <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs">
+        <div className="font-semibold mb-1">🐛 CsvUploadTab Debug Info</div>
+        <div>Component: CsvUploadTab (potential p3e component)</div>
+        <div>Import History: {safeCsvImportHistory.length} items</div>
+        <div>Upload Errors: {safeCsvUploadResultsErrors.length} items</div>
+        <div>Current File: {csvFile ? csvFile.name : 'None selected'}</div>
+        <div>Upload Progress: {csvUploadProgress}%</div>
+        <div>Upload Loading: {csvUploadLoading ? 'Yes' : 'No'}</div>
+      </div>
     </div>
   );
 };

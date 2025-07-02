@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Settings, RefreshCw, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
+
+// Safe Array Access Utility
+const safeArrayAccess = <T,>(
+  array: T[] | undefined | null, 
+  componentName: string = 'InventoryTab',
+  propertyName: string = 'array',
+  defaultValue: T[] = []
+): T[] => {
+  if (Array.isArray(array)) {
+    return array;
+  }
+  
+  console.warn(`[SafeArray] ${componentName}.${propertyName} is ${array === null ? 'null' : 'undefined'}, using default:`, defaultValue);
+  return defaultValue;
+};
 
 interface InventoryTabProps {
   environment: string;
@@ -43,8 +58,25 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
   safeFormatRelativeTime,
   getEnvVar
 }) => {
+  // Component registration for debugging
+  useEffect(() => {
+    console.log('[InventoryTab] Component mounted - registering as potential p3e component');
+    
+    // Register this component for p3e tracking
+    if (typeof window !== 'undefined' && window.ErrorTracker) {
+      window.ErrorTracker.registerComponent('p3e', 'InventoryTab');
+    }
+    
+    return () => {
+      console.log('[InventoryTab] Component unmounted');
+    };
+  }, []);
+
+  // Safe array handling for all array props
+  const safeSyncStatusErrors = safeArrayAccess(syncStatus?.errors, 'InventoryTab', 'syncStatusErrors', []);
+
   return (
-    <div className="space-y-6">
+    <div data-component="InventoryTab" className="space-y-6">
       {/* Environment Control */}
       <Card>
         <CardHeader>
@@ -95,7 +127,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
           <div className="flex items-center space-x-2">
             <Switch
               id="delta-sync-enabled"
-              checked={deltaSyncSettings.enabled}
+              checked={deltaSyncSettings?.enabled || false}
               onCheckedChange={(checked) =>
                 setDeltaSyncSettings({ ...deltaSyncSettings, enabled: checked })
               }
@@ -109,7 +141,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
           <div>
             <Label htmlFor="sync-interval">Sync Interval</Label>
             <Select
-              value={deltaSyncSettings.intervalHours.toString()}
+              value={(deltaSyncSettings?.intervalHours || 12).toString()}
               onValueChange={(value) =>
                 setDeltaSyncSettings({ ...deltaSyncSettings, intervalHours: parseInt(value) })
               }
@@ -133,9 +165,9 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
 
           <div className="flex items-center gap-2">
             <Badge variant="outline">
-              {deltaSyncSettings.enabled ? 'Enabled' : 'Disabled'}
+              {deltaSyncSettings?.enabled ? 'Enabled' : 'Disabled'}
             </Badge>
-            <span className="text-sm">Every {deltaSyncSettings.intervalHours} hours</span>
+            <span className="text-sm">Every {deltaSyncSettings?.intervalHours || 12} hours</span>
           </div>
 
           <Button onClick={handleUpdateDeltaSyncSettings} className="w-full">
@@ -236,18 +268,19 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                 </div>
               </div>
 
-              {syncStatus.errors && syncStatus.errors.length > 0 && (
+              {/* SAFE ERROR ARRAY HANDLING */}
+              {safeSyncStatusErrors.length > 0 && (
                 <Alert className="border-red-200 bg-red-50">
                   <AlertTriangle className="h-4 w-4 text-red-600" />
                   <AlertDescription className="text-red-800">
-                    <strong>Sync Errors:</strong>
+                    <strong>Sync Errors ({safeSyncStatusErrors.length}):</strong>
                     <ul className="mt-1 list-disc list-inside">
-                      {syncStatus.errors.slice(0, 3).map((error: string, index: number) => (
-                        <li key={index} className="text-xs">{error}</li>
+                      {safeSyncStatusErrors.slice(0, 3).map((error: string, index: number) => (
+                        <li key={index} className="text-xs">{error || 'Unknown error'}</li>
                       ))}
                     </ul>
-                    {syncStatus.errors.length > 3 && (
-                      <p className="text-xs mt-1">... and {syncStatus.errors.length - 3} more errors</p>
+                    {safeSyncStatusErrors.length > 3 && (
+                      <p className="text-xs mt-1">... and {safeSyncStatusErrors.length - 3} more errors</p>
                     )}
                   </AlertDescription>
                 </Alert>
@@ -265,7 +298,15 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
                         <li>VITE_KEYSTONE_PASSWORD: {getEnvVar('VITE_KEYSTONE_PASSWORD') ? '***' : 'Not set'}</li>
                       </ul>
                     </div>
-                    <pre className="text-xs text-gray-600 overflow-auto">
+                    <div className="text-xs">
+                      <strong>Sync Status Debug:</strong>
+                      <div className="mt-1 text-gray-600">
+                        <div>Errors Array Length: {safeSyncStatusErrors.length}</div>
+                        <div>Success: {syncStatus.success ? 'true' : 'false'}</div>
+                        <div>Records Processed: {syncStatus.recordsProcessed || 0}</div>
+                      </div>
+                    </div>
+                    <pre className="text-xs text-gray-600 overflow-auto max-h-40">
                       {JSON.stringify(syncStatus, null, 2)}
                     </pre>
                   </div>
@@ -281,6 +322,18 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
           )}
         </CardContent>
       </Card>
+
+      {/* Debug Information */}
+      <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs">
+        <div className="font-semibold mb-1">🐛 InventoryTab Debug Info</div>
+        <div>Component: InventoryTab (potential p3e component)</div>
+        <div>Sync Status Errors: {safeSyncStatusErrors.length} items</div>
+        <div>Environment: {environment}</div>
+        <div>Delta Sync Enabled: {deltaSyncSettings?.enabled ? 'Yes' : 'No'}</div>
+        <div>Delta Sync Interval: {deltaSyncSettings?.intervalHours || 12} hours</div>
+        <div>Is Loading: {isLoading ? 'Yes' : 'No'}</div>
+        <div>Debug Mode: {debugMode ? 'Yes' : 'No'}</div>
+      </div>
     </div>
   );
 };
