@@ -31,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useEstimates } from "./EstimatesContext";
 import { Estimate, EstimateStatus, LineItem } from "./types";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Plus, Trash, Save, Search } from "lucide-react";

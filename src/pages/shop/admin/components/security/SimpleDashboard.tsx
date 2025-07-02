@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { Alert } from '@/hooks/useSecurityDashboard';
 import { Badge } from '@/components/ui/badge';
 import { ShieldCheck, ShieldX, Bell, AlertCircle, Activity } from 'lucide-react';

@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { TestResult, TestStatus, TestPriority } from '@/types/testing';
 import { useAuth } from '@/contexts/auth';

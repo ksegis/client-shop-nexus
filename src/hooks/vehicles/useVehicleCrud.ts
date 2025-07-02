@@ -4,7 +4,7 @@ import { Vehicle } from '@/types/vehicle';
 import { useVehicles } from './useFetchVehicles';
 import { useAddVehicle } from './useAddVehicle';
 import { useUpdateVehicle } from './useUpdateVehicle';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
 
 export function useVehicleCrud() {

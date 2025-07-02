@@ -1,5 +1,5 @@
 
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
 import { useEffect } from 'react';
 

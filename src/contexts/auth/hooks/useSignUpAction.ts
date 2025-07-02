@@ -1,5 +1,5 @@
 
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { AuthResult, UserRole } from '../types';
 import { useAuthMethods } from './useAuthMethods';
 import { useAuthLogging } from './useAuthLogging';

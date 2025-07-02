@@ -1,5 +1,5 @@
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { WorkOrder, WorkOrderLineItem } from "../types";
 import { useWorkOrderLineItems } from "./useWorkOrderLineItems";
 

@@ -4,7 +4,7 @@ import { AuthContext } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { getInvitationData, clearInvitationData } from '@/utils/invitationStorage';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 
 interface AuthProviderProps {
   children: ReactNode;

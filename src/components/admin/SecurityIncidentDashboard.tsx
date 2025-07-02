@@ -5,7 +5,7 @@ import { useSecurityDashboard } from '@/hooks/useSecurityDashboard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Check, AlertTriangle, Shield, Clock } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
 // Define the proper SecurityIncident interface

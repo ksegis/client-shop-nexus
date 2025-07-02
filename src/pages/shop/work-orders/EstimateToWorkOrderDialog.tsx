@@ -6,7 +6,7 @@ import * as z from 'zod';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { WorkOrderForm } from './WorkOrderForm';
 import { WorkOrderFormValues, WorkOrderLineItem, WorkOrderStatus } from './types';
 import { useWorkOrderCrud } from './hooks/useWorkOrderCrud';

@@ -1,9 +1,18 @@
 import { ReactNode, useState, useEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase, handleAuthError, logAuthEvent } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import type { UserRole } from './types';
+
+// Simple error handling
+const handleAuthError = (error: any) => {
+  return error?.message || 'An unexpected error occurred. Please try again.';
+};
+
+const logAuthEvent = (eventType: string, userId?: string | null) => {
+  console.log(`[Auth] ${eventType}`, { userId });
+};
 
 interface Profile {
   id: string;

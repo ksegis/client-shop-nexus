@@ -54,7 +54,7 @@ import { dropshipOrderService } from '@/services/dropship_order_service';
 import { orderTrackingService } from '@/services/order_tracking_service';
 import { ftpSyncService } from '@/services/ftp_sync_service';
 import { keystoneSyncController } from '@/services/keystone_sync_controller';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import KitManagement from './kit_management_admin';
 
 const AdminSettings = () => {

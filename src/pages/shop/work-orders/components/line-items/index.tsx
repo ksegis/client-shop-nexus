@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Plus, Search, Trash2 } from 'lucide-react';
 import { WorkOrderLineItem } from '../../types';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 
 interface LineItemsProps {
   items: WorkOrderLineItem[];

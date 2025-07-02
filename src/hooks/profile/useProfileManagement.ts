@@ -1,6 +1,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { UserProfile } from '@/contexts/auth/types';
 import { User } from '@supabase/supabase-js';
 

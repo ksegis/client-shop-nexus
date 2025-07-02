@@ -1,6 +1,6 @@
 
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { AuthResult } from '../types';
 import { useAuthMethods } from './useAuthMethods';
 import { useAuthLogging } from './useAuthLogging';

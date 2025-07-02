@@ -1,5 +1,5 @@
 
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 
 export const useAuditLogger = () => {
   const logAuditEvent = async (action: string, targetUserId: string, description?: string, metadata?: any) => {

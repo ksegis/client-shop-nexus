@@ -4,7 +4,7 @@
 // =====================================================
 
 import { KeystoneService } from './KeystoneService';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 
 /**
  * Extended Keystone service with all API methods implemented

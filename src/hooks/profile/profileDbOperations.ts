@@ -1,5 +1,5 @@
 
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { mapExtendedRoleToDbRole } from '@/integrations/supabase/types-extensions';
 import { ProfileData, ProfileUpdateData } from './types';
 import { mapDbProfileToExtendedProfile, createProfileFromUserMetadata } from './profileUtils';

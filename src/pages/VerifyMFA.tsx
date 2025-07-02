@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { MfaVerificationForm } from '@/components/auth/MfaVerificationForm';
 import { mfaService } from '@/services/mfa/mfaService';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { webAuthnService } from '@/services/auth/webauthn';
 import { managementManager } from '@/services/auth/webauthn/managementManager';
 

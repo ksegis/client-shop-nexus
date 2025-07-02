@@ -1,5 +1,5 @@
 
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { arrayBufferToBase64, base64ToArrayBuffer } from './utils';
 import type { AuthenticateParams } from './types';
 

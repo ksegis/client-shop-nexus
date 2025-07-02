@@ -1,6 +1,6 @@
 
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { UserRole } from '../types';
 import { User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';

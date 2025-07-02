@@ -1,5 +1,5 @@
 
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { generateRandomString, generateRecoveryCodes } from '@/lib/utils';
 
 // Simple 6-digit code generator using cryptographically secure random values
