@@ -2057,10 +2057,10 @@ const AdminSettings = () => {
                       {JSON.stringify(syncStatus, null, 2)}
                     </pre>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="pricing" className="space-y-6">
