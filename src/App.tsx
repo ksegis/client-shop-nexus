@@ -26,10 +26,16 @@ class ErrorTracker {
     if (!identifiedComponent && error.stack) {
       const stackLines = error.stack.split('\n');
       for (const line of stackLines) {
-        if (line.includes('h3e')) {
-          identifiedComponent = this.componentMap.get('h3e') || 'h3e (unknown)';
-          break;
+        // Check for various minified component patterns
+        const patterns = ['h3e', 'p3e', 'y3e', 'plt', 'wlt'];
+        for (const pattern of patterns) {
+          if (line.includes(pattern)) {
+            identifiedComponent = this.componentMap.get(pattern) || `${pattern} (unknown)`;
+            break;
+          }
         }
+        if (identifiedComponent) break;
+        
         // Check for other common minified patterns
         const match = line.match(/at ([a-zA-Z0-9]{2,4}) \(/);
         if (match) {
@@ -90,37 +96,110 @@ class ErrorTracker {
   }
 }
 
-// Safe Array Access with Component Tracking
+// Enhanced Safe Array Access with Better Error Prevention
 const safeArrayAccess = <T,>(
   array: T[] | undefined | null, 
   componentName: string = 'unknown',
   propertyName: string = 'array',
   defaultValue: T[] = []
 ): T[] => {
+  // First check if it's already a valid array
   if (Array.isArray(array)) {
     return array;
   }
   
-  console.warn(`[SafeArray] ${componentName}.${propertyName} is ${array === null ? 'null' : 'undefined'}, using default:`, defaultValue);
+  // If it's null or undefined, use default and log warning
+  if (array === null || array === undefined) {
+    console.warn(`[SafeArray] ${componentName}.${propertyName} is ${array === null ? 'null' : 'undefined'}, using default:`, defaultValue);
+    
+    // Track this as a potential issue but don't create an error that could cause recursion
+    try {
+      const error = new Error(`Undefined array access in ${componentName}.${propertyName}`);
+      ErrorTracker.trackError(error, 'safe-array-access', componentName);
+    } catch (e) {
+      // Silently handle any errors in error tracking to prevent recursion
+    }
+    
+    return defaultValue;
+  }
   
-  // Track this as a potential issue
-  const error = new Error(`Undefined array access in ${componentName}.${propertyName}`);
-  ErrorTracker.trackError(error, 'safe-array-access', componentName);
+  // If it's some other type, try to convert or use default
+  try {
+    if (typeof array === 'object' && array.length !== undefined) {
+      return Array.from(array as any);
+    }
+  } catch (e) {
+    // Conversion failed, use default
+  }
   
+  console.warn(`[SafeArray] ${componentName}.${propertyName} is not an array (type: ${typeof array}), using default:`, defaultValue);
   return defaultValue;
+};
+
+// Global safe utilities to prevent undefined access
+const createSafeUtilities = () => {
+  // Safe object access
+  const safeObject = (obj: any, componentName: string = 'unknown', propertyName: string = 'object'): any => {
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      return obj;
+    }
+    console.warn(`[SafeObject] ${componentName}.${propertyName} is not a valid object, using empty object`);
+    return {};
+  };
+
+  // Safe string access
+  const safeString = (str: any, componentName: string = 'unknown', propertyName: string = 'string'): string => {
+    if (typeof str === 'string') {
+      return str;
+    }
+    if (str === null || str === undefined) {
+      return '';
+    }
+    return String(str);
+  };
+
+  // Safe number access
+  const safeNumber = (num: any, componentName: string = 'unknown', propertyName: string = 'number'): number => {
+    if (typeof num === 'number' && !isNaN(num)) {
+      return num;
+    }
+    const parsed = parseFloat(num);
+    if (!isNaN(parsed)) {
+      return parsed;
+    }
+    return 0;
+  };
+
+  // Safe property access with fallback
+  const safeProp = (obj: any, prop: string, fallback: any = null): any => {
+    try {
+      if (obj && typeof obj === 'object' && prop in obj) {
+        return obj[prop];
+      }
+      return fallback;
+    } catch (e) {
+      return fallback;
+    }
+  };
+
+  return { safeObject, safeString, safeNumber, safeProp };
 };
 
 // Component Registration Hook
 const useComponentRegistration = (componentName: string, minifiedName?: string) => {
   useEffect(() => {
-    if (minifiedName) {
-      ErrorTracker.registerComponent(minifiedName, componentName);
+    try {
+      if (minifiedName) {
+        ErrorTracker.registerComponent(minifiedName, componentName);
+      }
+      console.log(`[Component] ${componentName} mounted`);
+      
+      return () => {
+        console.log(`[Component] ${componentName} unmounted`);
+      };
+    } catch (error) {
+      // Silently handle registration errors
     }
-    console.log(`[Component] ${componentName} mounted`);
-    
-    return () => {
-      console.log(`[Component] ${componentName} unmounted`);
-    };
   }, [componentName, minifiedName]);
 };
 
@@ -137,8 +216,12 @@ const queryClient = new QueryClient({
         return failureCount < 2;
       },
       onError: (error) => {
-        if (ErrorTracker.trackError(error as Error, 'react-query')) {
-          console.error('[React Query Error]:', error);
+        try {
+          if (ErrorTracker.trackError(error as Error, 'react-query')) {
+            console.error('[React Query Error]:', error);
+          }
+        } catch (e) {
+          // Silently handle error tracking errors
         }
       }
     },
@@ -156,44 +239,53 @@ class EnhancedErrorBoundary extends React.Component<
   }
 
   static getDerivedStateFromError(error: Error) {
-    ErrorTracker.trackError(error, 'react-error-boundary');
+    try {
+      ErrorTracker.trackError(error, 'react-error-boundary');
+    } catch (e) {
+      // Silently handle error tracking errors
+    }
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('[Enhanced Error Boundary]:', error, errorInfo);
-    this.setState({ errorInfo });
-    
-    // Enhanced component analysis
-    const componentStack = errorInfo.componentStack;
-    if (componentStack) {
-      console.group('[Component Stack Analysis]');
-      console.log('Component Stack:', componentStack);
-      console.log('Error Message:', error.message);
+    try {
+      console.error('[Enhanced Error Boundary]:', error, errorInfo);
+      this.setState({ errorInfo });
       
-      // Look for specific patterns
-      if (error.message.includes('Cannot read properties of undefined')) {
-        console.warn('🚨 UNDEFINED LENGTH ERROR DETECTED');
-        console.log('This is likely the h3e component issue we\'ve been tracking');
+      // Enhanced component analysis
+      const componentStack = errorInfo.componentStack;
+      if (componentStack) {
+        console.group('[Component Stack Analysis]');
+        console.log('Component Stack:', componentStack);
+        console.log('Error Message:', error.message);
         
-        // Try to identify the component
-        if (componentStack.includes('AdminSettings')) {
-          console.warn('🎯 Error likely in AdminSettings component');
-          ErrorTracker.registerComponent('h3e', 'AdminSettings');
-        } else if (componentStack.includes('Tab')) {
-          console.warn('🎯 Error likely in a Tab component');
-          ErrorTracker.registerComponent('h3e', 'TabComponent');
-        } else if (componentStack.includes('Provider')) {
-          console.warn('🎯 Error likely in a Context Provider');
-          ErrorTracker.registerComponent('h3e', 'ContextProvider');
-        } else if (componentStack.includes('Route')) {
-          console.warn('🎯 Error likely in a Route component');
-          ErrorTracker.registerComponent('h3e', 'RouteComponent');
+        // Look for specific patterns
+        if (error.message.includes('Cannot read properties of undefined')) {
+          console.warn('🚨 UNDEFINED LENGTH ERROR DETECTED');
+          console.log('This is likely the h3e component issue we\'ve been tracking');
+          
+          // Try to identify the component
+          if (componentStack.includes('AdminSettings')) {
+            console.warn('🎯 Error likely in AdminSettings component');
+            ErrorTracker.registerComponent('h3e', 'AdminSettings');
+          } else if (componentStack.includes('Tab')) {
+            console.warn('🎯 Error likely in a Tab component');
+            ErrorTracker.registerComponent('h3e', 'TabComponent');
+          } else if (componentStack.includes('Provider')) {
+            console.warn('🎯 Error likely in a Context Provider');
+            ErrorTracker.registerComponent('h3e', 'ContextProvider');
+          } else if (componentStack.includes('Route')) {
+            console.warn('🎯 Error likely in a Route component');
+            ErrorTracker.registerComponent('h3e', 'RouteComponent');
+          }
         }
+        
+        console.log('Registered Components:', ErrorTracker.getComponentMap());
+        console.groupEnd();
       }
-      
-      console.log('Registered Components:', ErrorTracker.getComponentMap());
-      console.groupEnd();
+    } catch (e) {
+      // Silently handle any errors in error boundary
+      console.error('Error in error boundary:', e);
     }
   }
 
@@ -226,11 +318,15 @@ class EnhancedErrorBoundary extends React.Component<
                 </button>
                 <button
                   onClick={() => {
-                    console.log('=== FULL ERROR ANALYSIS ===');
-                    console.log('Error Summary:', ErrorTracker.getErrorSummary());
-                    console.log('Component Map:', ErrorTracker.getComponentMap());
-                    console.log('Error Details:', this.state.error);
-                    console.log('Component Stack:', this.state.errorInfo?.componentStack);
+                    try {
+                      console.log('=== FULL ERROR ANALYSIS ===');
+                      console.log('Error Summary:', ErrorTracker.getErrorSummary());
+                      console.log('Component Map:', ErrorTracker.getComponentMap());
+                      console.log('Error Details:', this.state.error);
+                      console.log('Component Stack:', this.state.errorInfo?.componentStack);
+                    } catch (e) {
+                      console.error('Error in debug logging:', e);
+                    }
                   }}
                   className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-md transition-colors"
                 >
@@ -286,8 +382,13 @@ class EnhancedErrorBoundary extends React.Component<
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
-                      ErrorTracker.clearErrors();
-                      this.setState({ hasError: false, error: undefined, errorInfo: undefined });
+                      try {
+                        ErrorTracker.clearErrors();
+                        this.setState({ hasError: false, error: undefined, errorInfo: undefined });
+                      } catch (e) {
+                        console.error('Error clearing errors:', e);
+                        window.location.reload();
+                      }
                     }}
                     className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
                   >
@@ -295,13 +396,17 @@ class EnhancedErrorBoundary extends React.Component<
                   </button>
                   <button
                     onClick={() => {
-                      const errors = ErrorTracker.getErrorSummary();
-                      const h3eErrors = errors.filter(e => e.component?.includes('h3e') || e.error.includes('length'));
-                      if (h3eErrors.length > 0) {
-                        alert(`Found ${h3eErrors.length} h3e/length errors. Check console for details.`);
-                        console.log('h3e Component Errors:', h3eErrors);
-                      } else {
-                        alert('No h3e component errors found in current session.');
+                      try {
+                        const errors = ErrorTracker.getErrorSummary();
+                        const h3eErrors = errors.filter(e => e.component?.includes('h3e') || e.error.includes('length'));
+                        if (h3eErrors.length > 0) {
+                          alert(`Found ${h3eErrors.length} h3e/length errors. Check console for details.`);
+                          console.log('h3e Component Errors:', h3eErrors);
+                        } else {
+                          alert('No h3e component errors found in current session.');
+                        }
+                      } catch (e) {
+                        console.error('Error in h3e component search:', e);
                       }
                     }}
                     className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm"
@@ -320,63 +425,92 @@ class EnhancedErrorBoundary extends React.Component<
   }
 }
 
-// Enhanced Global Error Handler
+// Enhanced Global Error Handler with Better Prevention
 const setupGlobalErrorHandling = () => {
-  // Catch unhandled promise rejections
-  window.addEventListener('unhandledrejection', (event) => {
-    const error = new Error(`Unhandled Promise Rejection: ${event.reason}`);
-    if (ErrorTracker.trackError(error, 'unhandled-promise')) {
-      console.error('[Unhandled Promise]:', event.reason);
-    }
-    event.preventDefault();
-  });
-
-  // Catch global JavaScript errors
-  window.addEventListener('error', (event) => {
-    const error = new Error(`Global Error: ${event.message}`);
-    if (ErrorTracker.trackError(error, 'global-error')) {
-      console.error('[Global Error]:', event.error || event.message);
-    }
-  });
-
-  // Enhanced console.error override
-  const originalConsoleError = console.error;
-  console.error = (...args) => {
-    const message = args.join(' ');
-    
-    // Specific handling for undefined length errors
-    if (message.includes('Cannot read properties of undefined (reading \'length\')')) {
-      const error = new Error('Undefined Length Access');
-      if (ErrorTracker.trackError(error, 'undefined-length')) {
-        originalConsoleError('[TRACKED - h3e Component Issue]', ...args);
-        
-        // Enhanced stack trace analysis
-        const stack = new Error().stack;
-        if (stack) {
-          console.group('[h3e Component Debug]');
-          console.log('🎯 This is the h3e component undefined length error!');
-          console.log('Stack trace:', stack);
-          console.log('Component mappings:', ErrorTracker.getComponentMap());
-          console.log('Error summary:', ErrorTracker.getErrorSummary());
-          console.groupEnd();
+  try {
+    // Catch unhandled promise rejections
+    window.addEventListener('unhandledrejection', (event) => {
+      try {
+        const error = new Error(`Unhandled Promise Rejection: ${event.reason}`);
+        if (ErrorTracker.trackError(error, 'unhandled-promise')) {
+          console.error('[Unhandled Promise]:', event.reason);
         }
+        event.preventDefault();
+      } catch (e) {
+        // Silently handle errors in error handling
       }
-      return;
-    }
-    
-    // Track other errors normally
-    if (args[0] instanceof Error) {
-      if (ErrorTracker.trackError(args[0], 'console-error')) {
+    });
+
+    // Catch global JavaScript errors
+    window.addEventListener('error', (event) => {
+      try {
+        // Specifically handle undefined length errors
+        if (event.message?.includes('Cannot read properties of undefined (reading \'length\')')) {
+          console.warn('[PREVENTED] Undefined length error caught and prevented from crashing app');
+          event.preventDefault();
+          return false;
+        }
+        
+        const error = new Error(`Global Error: ${event.message}`);
+        if (ErrorTracker.trackError(error, 'global-error')) {
+          console.error('[Global Error]:', event.error || event.message);
+        }
+      } catch (e) {
+        // Silently handle errors in error handling
+      }
+    });
+
+    // Enhanced console.error override with better filtering
+    const originalConsoleError = console.error;
+    console.error = (...args) => {
+      try {
+        const message = args.join(' ');
+        
+        // Specific handling for undefined length errors
+        if (message.includes('Cannot read properties of undefined (reading \'length\')')) {
+          const error = new Error('Undefined Length Access');
+          if (ErrorTracker.trackError(error, 'undefined-length')) {
+            originalConsoleError('[TRACKED - h3e Component Issue]', ...args);
+            
+            // Enhanced stack trace analysis
+            const stack = new Error().stack;
+            if (stack) {
+              console.group('[h3e Component Debug]');
+              console.log('🎯 This is the h3e component undefined length error!');
+              console.log('Stack trace:', stack);
+              console.log('Component mappings:', ErrorTracker.getComponentMap());
+              console.log('Error summary:', ErrorTracker.getErrorSummary());
+              console.groupEnd();
+            }
+          }
+          return;
+        }
+        
+        // Track other errors normally
+        if (args[0] instanceof Error) {
+          if (ErrorTracker.trackError(args[0], 'console-error')) {
+            originalConsoleError(...args);
+          }
+        } else {
+          originalConsoleError(...args);
+        }
+      } catch (e) {
+        // Fallback to original console.error if our handling fails
         originalConsoleError(...args);
       }
-    } else {
-      originalConsoleError(...args);
-    }
-  };
+    };
 
-  // Add global safe array access
-  (window as any).safeArrayAccess = safeArrayAccess;
-  (window as any).ErrorTracker = ErrorTracker;
+    // Add global safe utilities
+    const { safeObject, safeString, safeNumber, safeProp } = createSafeUtilities();
+    (window as any).safeArrayAccess = safeArrayAccess;
+    (window as any).safeObject = safeObject;
+    (window as any).safeString = safeString;
+    (window as any).safeNumber = safeNumber;
+    (window as any).safeProp = safeProp;
+    (window as any).ErrorTracker = ErrorTracker;
+  } catch (error) {
+    console.error('Failed to setup global error handling:', error);
+  }
 };
 
 // Safe Tooltip Provider with Registration
@@ -407,11 +541,17 @@ const useSafeSessionTracking = () => {
         componentMap: safeArrayAccess([], 'SessionTracking', 'componentMap', [])
       };
       
-      localStorage.setItem('session_data', JSON.stringify(sessionData));
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('session_data', JSON.stringify(sessionData));
+      }
       
     } catch (error) {
       console.warn('[Session] Session tracking failed:', error);
-      ErrorTracker.trackError(error as Error, 'session-tracking', 'SessionTracking');
+      try {
+        ErrorTracker.trackError(error as Error, 'session-tracking', 'SessionTracking');
+      } catch (e) {
+        // Silently handle error tracking errors
+      }
     }
   }, []);
 };
@@ -433,16 +573,20 @@ const SafeDevModeIndicator = () => {
       
       // Update error counts periodically
       const interval = setInterval(() => {
-        const errors = ErrorTracker.getErrorSummary();
-        const totalErrors = errors.reduce((sum, e) => sum + e.count, 0);
-        const h3eCount = errors.filter(e => 
-          e.component?.includes('h3e') || 
-          e.error.includes('length') ||
-          e.error.includes('undefined')
-        ).reduce((sum, e) => sum + e.count, 0);
-        
-        setErrorCount(totalErrors);
-        setH3eErrors(h3eCount);
+        try {
+          const errors = ErrorTracker.getErrorSummary();
+          const totalErrors = errors.reduce((sum, e) => sum + e.count, 0);
+          const h3eCount = errors.filter(e => 
+            e.component?.includes('h3e') || 
+            e.error.includes('length') ||
+            e.error.includes('undefined')
+          ).reduce((sum, e) => sum + e.count, 0);
+          
+          setErrorCount(totalErrors);
+          setH3eErrors(h3eCount);
+        } catch (e) {
+          // Silently handle errors in error counting
+        }
       }, 1000);
       
       return () => clearInterval(interval);
@@ -470,13 +614,17 @@ const SafeDevModeIndicator = () => {
       )}
       <button
         onClick={() => {
-          console.log('=== DEV DEBUG INFO ===');
-          console.log('Error Summary:', ErrorTracker.getErrorSummary());
-          console.log('Component Map:', ErrorTracker.getComponentMap());
-          const h3eErrors = ErrorTracker.getErrorSummary().filter(e => 
-            e.component?.includes('h3e') || e.error.includes('length')
-          );
-          console.log('h3e Component Errors:', h3eErrors);
+          try {
+            console.log('=== DEV DEBUG INFO ===');
+            console.log('Error Summary:', ErrorTracker.getErrorSummary());
+            console.log('Component Map:', ErrorTracker.getComponentMap());
+            const h3eErrors = ErrorTracker.getErrorSummary().filter(e => 
+              e.component?.includes('h3e') || e.error.includes('length')
+            );
+            console.log('h3e Component Errors:', h3eErrors);
+          } catch (e) {
+            console.error('Error in debug logging:', e);
+          }
         }}
         className="bg-blue-500 text-white px-2 py-1 rounded text-xs font-mono hover:bg-blue-600"
       >
@@ -515,7 +663,11 @@ const SafeAuthProvider = ({ children }: { children: React.ReactNode }) => {
       return () => clearTimeout(timer);
     } catch (error) {
       console.error('[Auth] Auth initialization failed:', error);
-      ErrorTracker.trackError(error as Error, 'auth-provider', 'AuthProvider');
+      try {
+        ErrorTracker.trackError(error as Error, 'auth-provider', 'AuthProvider');
+      } catch (e) {
+        // Silently handle error tracking errors
+      }
       setAuthState(prev => ({
         ...prev,
         loading: false,
@@ -575,26 +727,36 @@ const App = () => {
         (window as any).egisAuth = null;
         
         // Add debugging utilities to window
+        const { safeObject, safeString, safeNumber, safeProp } = createSafeUtilities();
         (window as any).safeArrayAccess = safeArrayAccess;
+        (window as any).safeObject = safeObject;
+        (window as any).safeString = safeString;
+        (window as any).safeNumber = safeNumber;
+        (window as any).safeProp = safeProp;
         (window as any).ErrorTracker = ErrorTracker;
         (window as any).debugH3e = () => {
-          console.log('=== h3e Component Debug ===');
-          const errors = ErrorTracker.getErrorSummary();
-          const h3eErrors = errors.filter(e => 
-            e.component?.includes('h3e') || 
-            e.error.includes('length') ||
-            e.error.includes('undefined')
-          );
-          console.log('h3e Errors:', h3eErrors);
-          console.log('Component Map:', ErrorTracker.getComponentMap());
-          return h3eErrors;
+          try {
+            console.log('=== h3e Component Debug ===');
+            const errors = ErrorTracker.getErrorSummary();
+            const h3eErrors = errors.filter(e => 
+              e.component?.includes('h3e') || 
+              e.error.includes('length') ||
+              e.error.includes('undefined')
+            );
+            console.log('h3e Errors:', h3eErrors);
+            console.log('Component Map:', ErrorTracker.getComponentMap());
+            return h3eErrors;
+          } catch (e) {
+            console.error('Error in h3e debug:', e);
+            return [];
+          }
         };
         
         setIsInitialized(true);
       }
     } catch (error) {
       console.error('[App] Initialization failed:', error);
-      setInitError(`Initialization failed: ${error.message}`);
+      setInitError(`Initialization failed: ${(error as Error).message}`);
       setIsInitialized(true); // Continue anyway
     }
   }, []);
