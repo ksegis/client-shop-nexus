@@ -1250,38 +1250,46 @@ const AdminSettings = () => {
 
       {/* Tabs Navigation - UPDATED to include CSV Upload */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-8">
-          <TabsTrigger value="inventory" className="flex items-center gap-2">
-            <Database className="h-4 w-4" />
-            Inventory
+        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8 gap-1">
+          <TabsTrigger value="inventory" className="flex items-center gap-1 text-xs lg:text-sm">
+            <Database className="h-3 w-3 lg:h-4 lg:w-4" />
+            <span className="hidden sm:inline">Inventory</span>
+            <span className="sm:hidden">Inv</span>
           </TabsTrigger>
-          <TabsTrigger value="ftp-sync" className="flex items-center gap-2">
-            <HardDrive className="h-4 w-4" />
-            FTP Sync
+          <TabsTrigger value="ftp-sync" className="flex items-center gap-1 text-xs lg:text-sm">
+            <HardDrive className="h-3 w-3 lg:h-4 lg:w-4" />
+            <span className="hidden sm:inline">FTP Sync</span>
+            <span className="sm:hidden">FTP</span>
           </TabsTrigger>
-          <TabsTrigger value="csv-upload" className="flex items-center gap-2">
-            <Upload className="h-4 w-4" />
-            CSV Upload
+          <TabsTrigger value="csv-upload" className="flex items-center gap-1 text-xs lg:text-sm">
+            <Upload className="h-3 w-3 lg:h-4 lg:w-4" />
+            <span className="hidden sm:inline">CSV Upload</span>
+            <span className="sm:hidden">CSV</span>
           </TabsTrigger>
-          <TabsTrigger value="pricing" className="flex items-center gap-2">
-            <DollarSign className="h-4 w-4" />
-            Pricing
+          <TabsTrigger value="pricing" className="flex items-center gap-1 text-xs lg:text-sm">
+            <DollarSign className="h-3 w-3 lg:h-4 lg:w-4" />
+            <span className="hidden sm:inline">Pricing</span>
+            <span className="sm:hidden">$</span>
           </TabsTrigger>
-          <TabsTrigger value="shipping" className="flex items-center gap-2">
-            <Truck className="h-4 w-4" />
-            Shipping
+          <TabsTrigger value="shipping" className="flex items-center gap-1 text-xs lg:text-sm">
+            <Truck className="h-3 w-3 lg:h-4 lg:w-4" />
+            <span className="hidden sm:inline">Shipping</span>
+            <span className="sm:hidden">Ship</span>
           </TabsTrigger>
-          <TabsTrigger value="orders" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Orders
+          <TabsTrigger value="orders" className="flex items-center gap-1 text-xs lg:text-sm">
+            <Package className="h-3 w-3 lg:h-4 lg:w-4" />
+            <span className="hidden sm:inline">Orders</span>
+            <span className="sm:hidden">Ord</span>
           </TabsTrigger>
-          <TabsTrigger value="tracking" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Tracking
+          <TabsTrigger value="tracking" className="flex items-center gap-1 text-xs lg:text-sm">
+            <BarChart3 className="h-3 w-3 lg:h-4 lg:w-4" />
+            <span className="hidden sm:inline">Tracking</span>
+            <span className="sm:hidden">Track</span>
           </TabsTrigger>
-          <TabsTrigger value="kits" className="flex items-center gap-2">
-            <Box className="h-4 w-4" />
-            Kits
+          <TabsTrigger value="kits" className="flex items-center gap-1 text-xs lg:text-sm">
+            <Box className="h-3 w-3 lg:h-4 lg:w-4" />
+            <span className="hidden sm:inline">Kits</span>
+            <span className="sm:hidden">Kit</span>
           </TabsTrigger>
         </TabsList>
 
