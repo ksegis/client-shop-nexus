@@ -276,3 +276,6 @@ export const LineItems = ({ items, onChange, readOnly = false }: LineItemsProps)
   );
 };
 
+// Add the missing default export to fix the build error
+export default LineItems;
+
