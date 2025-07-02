@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import { SupabaseAuthProvider } from '@/contexts/auth/SupabaseAuthProvider'
 import App from './App.tsx'
 import './index.css'
 
@@ -40,11 +41,13 @@ if (rootElement) {
     `;
   } else {
     createRoot(rootElement).render(
-      <BrowserRouter>
-        <CartProvider>
-          <App />
-        </CartProvider>
-      </BrowserRouter>
+      <SupabaseAuthProvider>
+        <BrowserRouter>
+          <CartProvider>
+            <App />
+          </CartProvider>
+        </BrowserRouter>
+      </SupabaseAuthProvider>
     );
   }
 }
