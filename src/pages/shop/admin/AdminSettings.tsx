@@ -36,7 +36,36 @@ import { keystoneSyncController } from '@/services/keystone_sync_controller';
 import { supabase } from '@/integrations/supabase/client';
 import KitManagement from './kit_management_admin';
 
+// Safe Array Access Utility
+const safeArrayAccess = <T,>(
+  array: T[] | undefined | null, 
+  componentName: string = 'AdminSettings',
+  propertyName: string = 'array',
+  defaultValue: T[] = []
+): T[] => {
+  if (Array.isArray(array)) {
+    return array;
+  }
+  
+  console.warn(`[SafeArray] ${componentName}.${propertyName} is ${array === null ? 'null' : 'undefined'}, using default:`, defaultValue);
+  return defaultValue;
+};
+
 const AdminSettings = () => {
+  // Component registration for debugging
+  useEffect(() => {
+    console.log('[AdminSettings] Component mounted - registering as potential h3e component');
+    
+    // Register this component for h3e tracking
+    if (typeof window !== 'undefined' && window.ErrorTracker) {
+      window.ErrorTracker.registerComponent('h3e', 'AdminSettings');
+    }
+    
+    return () => {
+      console.log('[AdminSettings] Component unmounted');
+    };
+  }, []);
+
   // Tab state
   const [activeTab, setActiveTab] = useState('inventory');
 
@@ -53,41 +82,57 @@ const AdminSettings = () => {
     intervalHours: 12
   });
 
-  // FTP sync state
+  // FTP sync state - ALL ARRAYS SAFELY INITIALIZED
   const [ftpSyncStatus, setFtpSyncStatus] = useState(null);
   const [ftpSyncLoading, setFtpSyncLoading] = useState(false);
   const [ftpSyncResults, setFtpSyncResults] = useState(null);
-  const [syncRecommendations, setSyncRecommendations] = useState([]);
+  const [syncRecommendations, setSyncRecommendations] = useState(() => 
+    safeArrayAccess([], 'AdminSettings', 'syncRecommendations', [])
+  );
   const [syncMethodTest, setSyncMethodTest] = useState(null);
   const [selectedSyncType, setSelectedSyncType] = useState('inventory');
   const [syncStrategy, setSyncStrategy] = useState(null);
   const [rateLimitStatus, setRateLimitStatus] = useState(null);
 
-  // CSV upload state
+  // CSV upload state - ALL ARRAYS SAFELY INITIALIZED
   const [csvFile, setCsvFile] = useState(null);
   const [csvUploadLoading, setCsvUploadLoading] = useState(false);
   const [csvUploadProgress, setCsvUploadProgress] = useState(0);
   const [csvUploadResults, setCsvUploadResults] = useState(null);
-  const [csvImportHistory, setCsvImportHistory] = useState([]);
+  const [csvImportHistory, setCsvImportHistory] = useState(() => 
+    safeArrayAccess([], 'AdminSettings', 'csvImportHistory', [])
+  );
 
   const { toast } = useToast();
 
   // Load initial data
   useEffect(() => {
-    loadDebugMode();
-    loadEnvironment();
-    loadDeltaSyncSettings();
-    refreshStatus();
-    loadFtpSyncStatus();
-    loadSyncRecommendations();
-    loadCsvImportHistory();
-    
-    // Set up auto-refresh every 30 seconds
-    const interval = setInterval(() => {
+    try {
+      console.log('[AdminSettings] Loading initial data with safe array handling');
+      
+      loadDebugMode();
+      loadEnvironment();
+      loadDeltaSyncSettings();
       refreshStatus();
       loadFtpSyncStatus();
-    }, 30000);
-    return () => clearInterval(interval);
+      loadSyncRecommendations();
+      loadCsvImportHistory();
+      
+      // Set up auto-refresh every 30 seconds
+      const interval = setInterval(() => {
+        refreshStatus();
+        loadFtpSyncStatus();
+      }, 30000);
+      
+      return () => clearInterval(interval);
+    } catch (error) {
+      console.error('[AdminSettings] Error in useEffect:', error);
+      
+      // Track this error for h3e debugging
+      if (typeof window !== 'undefined' && window.ErrorTracker) {
+        window.ErrorTracker.trackError(error, 'admin-settings-useeffect', 'AdminSettings');
+      }
+    }
   }, []);
 
   // Utility functions
@@ -96,7 +141,7 @@ const AdminSettings = () => {
       const saved = localStorage.getItem('admin_debug_mode');
       setDebugMode(saved === 'true');
     } catch (error) {
-      console.error('Error loading debug mode:', error);
+      console.error('[AdminSettings] Error loading debug mode:', error);
     }
   };
 
@@ -105,7 +150,7 @@ const AdminSettings = () => {
       const saved = localStorage.getItem('admin_environment');
       setEnvironment(saved || 'development');
     } catch (error) {
-      console.error('Error loading environment:', error);
+      console.error('[AdminSettings] Error loading environment:', error);
     }
   };
 
@@ -117,7 +162,7 @@ const AdminSettings = () => {
         setDeltaSyncSettings(settings);
       }
     } catch (error) {
-      console.error('Error loading delta sync settings:', error);
+      console.error('[AdminSettings] Error loading delta sync settings:', error);
     }
   };
 
@@ -130,14 +175,17 @@ const AdminSettings = () => {
         .limit(10);
 
       if (error) {
-        console.warn('CSV import history table not found (this is normal if migration not run yet):', error);
-        setCsvImportHistory([]);
+        console.warn('[AdminSettings] CSV import history table not found (this is normal if migration not run yet):', error);
+        setCsvImportHistory(safeArrayAccess([], 'AdminSettings', 'csvImportHistory', []));
         return;
       }
-      setCsvImportHistory(data || []);
+      
+      // Safe array access for the response
+      const safeData = safeArrayAccess(data, 'AdminSettings', 'csvImportHistoryResponse', []);
+      setCsvImportHistory(safeData);
     } catch (error) {
-      console.warn('Error loading CSV import history (table may not exist yet):', error);
-      setCsvImportHistory([]);
+      console.warn('[AdminSettings] Error loading CSV import history (table may not exist yet):', error);
+      setCsvImportHistory(safeArrayAccess([], 'AdminSettings', 'csvImportHistory', []));
     }
   };
 
@@ -146,7 +194,7 @@ const AdminSettings = () => {
       const status = await ftpSyncService.getStatus();
       setFtpSyncStatus(status);
     } catch (error) {
-      console.error('Error loading FTP sync status:', error);
+      console.error('[AdminSettings] Error loading FTP sync status:', error);
       setFtpSyncStatus({ success: false, message: error.message });
     }
   };
@@ -154,10 +202,18 @@ const AdminSettings = () => {
   const loadSyncRecommendations = async () => {
     try {
       const recommendations = await keystoneSyncController.getSyncRecommendations();
-      setSyncRecommendations(recommendations?.recommendations || []);
+      
+      // Safe array access for recommendations
+      const safeRecommendations = safeArrayAccess(
+        recommendations?.recommendations, 
+        'AdminSettings', 
+        'syncRecommendations', 
+        []
+      );
+      setSyncRecommendations(safeRecommendations);
     } catch (error) {
-      console.error('Error loading sync recommendations:', error);
-      setSyncRecommendations([]);
+      console.error('[AdminSettings] Error loading sync recommendations:', error);
+      setSyncRecommendations(safeArrayAccess([], 'AdminSettings', 'syncRecommendations', []));
     }
   };
 
@@ -168,7 +224,7 @@ const AdminSettings = () => {
       setSyncStatus(status);
       setLastRefresh(new Date());
     } catch (error) {
-      console.error('Error refreshing status:', error);
+      console.error('[AdminSettings] Error refreshing status:', error);
     } finally {
       setIsLoading(false);
     }
@@ -189,16 +245,16 @@ const AdminSettings = () => {
       if (inventorySyncService.updateDeltaSyncSettings) {
         const result = await inventorySyncService.updateDeltaSyncSettings(deltaSyncSettings);
         if (result.success) {
-          console.log('✅ Delta sync settings updated successfully');
+          console.log('[AdminSettings] ✅ Delta sync settings updated successfully');
           refreshStatus();
         } else {
-          console.warn('⚠️ Failed to update delta sync settings in service, using localStorage fallback');
+          console.warn('[AdminSettings] ⚠️ Failed to update delta sync settings in service, using localStorage fallback');
         }
       } else {
-        console.warn('⚠️ Delta sync service method not available, using localStorage fallback');
+        console.warn('[AdminSettings] ⚠️ Delta sync service method not available, using localStorage fallback');
       }
     } catch (error) {
-      console.error('Error updating delta sync settings:', error);
+      console.error('[AdminSettings] Error updating delta sync settings:', error);
     }
   };
 
@@ -207,10 +263,10 @@ const AdminSettings = () => {
     setIsLoading(true);
     try {
       const result = await inventorySyncService.performFullSync(10);
-      console.log('Test sync result:', result);
+      console.log('[AdminSettings] Test sync result:', result);
       refreshStatus();
     } catch (error) {
-      console.error('Test sync failed:', error);
+      console.error('[AdminSettings] Test sync failed:', error);
     } finally {
       setIsLoading(false);
     }
@@ -220,10 +276,10 @@ const AdminSettings = () => {
     setIsLoading(true);
     try {
       const result = await inventorySyncService.performDeltaSync('delta_inventory');
-      console.log('Test delta sync result:', result);
+      console.log('[AdminSettings] Test delta sync result:', result);
       refreshStatus();
     } catch (error) {
-      console.error('Test delta sync failed:', error);
+      console.error('[AdminSettings] Test delta sync failed:', error);
     } finally {
       setIsLoading(false);
     }
@@ -233,10 +289,10 @@ const AdminSettings = () => {
     setIsLoading(true);
     try {
       const result = await inventorySyncService.performDeltaSync('delta_quantity');
-      console.log('Test quantity delta result:', result);
+      console.log('[AdminSettings] Test quantity delta result:', result);
       refreshStatus();
     } catch (error) {
-      console.error('Test quantity delta failed:', error);
+      console.error('[AdminSettings] Test quantity delta failed:', error);
     } finally {
       setIsLoading(false);
     }
@@ -249,7 +305,7 @@ const AdminSettings = () => {
       const results = await keystoneSyncController.testSyncMethods();
       setSyncMethodTest(results);
     } catch (error) {
-      console.error('Error testing sync methods:', error);
+      console.error('[AdminSettings] Error testing sync methods:', error);
       setSyncMethodTest({ error: error.message });
     } finally {
       setFtpSyncLoading(false);
@@ -277,7 +333,7 @@ const AdminSettings = () => {
       await loadFtpSyncStatus();
       await loadCsvImportHistory();
     } catch (error) {
-      console.error('Error executing FTP sync:', error);
+      console.error('[AdminSettings] Error executing FTP sync:', error);
       setFtpSyncResults({ success: false, message: error.message });
     } finally {
       setFtpSyncLoading(false);
@@ -343,7 +399,7 @@ const AdminSettings = () => {
       let totalProcessed = 0;
       let totalInserted = 0;
       let totalUpdated = 0;
-      const errors: string[] = [];
+      const errors: string[] = safeArrayAccess([], 'AdminSettings', 'csvUploadErrors', []);
 
       for (let i = 0; i < dataLines.length; i += chunkSize) {
         const chunk = dataLines.slice(i, i + chunkSize);
@@ -352,7 +408,10 @@ const AdminSettings = () => {
         const chunkResults = await processChunk(chunk, headers, batch.id);
         totalInserted += chunkResults.inserted;
         totalUpdated += chunkResults.updated;
-        errors.push(...chunkResults.errors);
+        
+        // Safe array handling for errors
+        const chunkErrors = safeArrayAccess(chunkResults.errors, 'AdminSettings', 'chunkErrors', []);
+        errors.push(...chunkErrors);
         
         totalProcessed += chunk.length;
         const progress = Math.round((totalProcessed / dataLines.length) * 100);
@@ -387,7 +446,7 @@ const AdminSettings = () => {
       });
 
     } catch (error) {
-      console.error('CSV upload error:', error);
+      console.error('[AdminSettings] CSV upload error:', error);
       toast({
         title: "Upload Failed",
         description: error.message,
@@ -403,11 +462,11 @@ const AdminSettings = () => {
     return {
       inserted: Math.floor(chunk.length * 0.3),
       updated: Math.floor(chunk.length * 0.7),
-      errors: []
+      errors: safeArrayAccess([], 'AdminSettings', 'processChunkErrors', [])
     };
   };
 
-  // Utility functions
+  // Utility functions with safe handling
   const safeDisplayValue = (value: any) => {
     if (value === null || value === undefined) return 'Not set';
     if (typeof value === 'string' && value.trim() === '') return 'Empty';
@@ -474,7 +533,10 @@ const AdminSettings = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div 
+      data-component="AdminSettings" 
+      className="container mx-auto p-6 space-y-6"
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Settings className="h-6 w-6" />
@@ -545,7 +607,7 @@ const AdminSettings = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="inventory">
+        <TabsContent value="inventory" data-tab="inventory">
           <InventoryTab
             environment={environment}
             setEnvironment={handleEnvironmentChange}
@@ -565,7 +627,7 @@ const AdminSettings = () => {
           />
         </TabsContent>
 
-        <TabsContent value="ftp-sync">
+        <TabsContent value="ftp-sync" data-tab="ftp-sync">
           <FtpSyncTab
             ftpSyncStatus={ftpSyncStatus}
             ftpSyncLoading={ftpSyncLoading}
@@ -584,7 +646,7 @@ const AdminSettings = () => {
           />
         </TabsContent>
 
-        <TabsContent value="csv-upload">
+        <TabsContent value="csv-upload" data-tab="csv-upload">
           <CsvUploadTab
             csvFile={csvFile}
             csvUploadLoading={csvUploadLoading}
@@ -597,38 +659,53 @@ const AdminSettings = () => {
           />
         </TabsContent>
 
-        <TabsContent value="pricing">
+        <TabsContent value="pricing" data-tab="pricing">
           <div className="text-center py-8 text-muted-foreground">
             <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p>Pricing tab content will be implemented here</p>
           </div>
         </TabsContent>
 
-        <TabsContent value="shipping">
+        <TabsContent value="shipping" data-tab="shipping">
           <div className="text-center py-8 text-muted-foreground">
             <Truck className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p>Shipping tab content will be implemented here</p>
           </div>
         </TabsContent>
 
-        <TabsContent value="orders">
+        <TabsContent value="orders" data-tab="orders">
           <div className="text-center py-8 text-muted-foreground">
             <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p>Orders tab content will be implemented here</p>
           </div>
         </TabsContent>
 
-        <TabsContent value="tracking">
+        <TabsContent value="tracking" data-tab="tracking">
           <div className="text-center py-8 text-muted-foreground">
             <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p>Tracking tab content will be implemented here</p>
           </div>
         </TabsContent>
 
-        <TabsContent value="kits">
-          <KitManagement />
+        <TabsContent value="kits" data-tab="kits">
+          <div data-component="KitManagement">
+            <KitManagement />
+          </div>
         </TabsContent>
       </Tabs>
+
+      {debugMode && (
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="font-semibold mb-2">🐛 AdminSettings Debug Info</h3>
+          <div className="text-xs space-y-1">
+            <div>Component: AdminSettings (potential h3e component)</div>
+            <div>Sync Recommendations: {safeArrayAccess(syncRecommendations, 'AdminSettings', 'debugSyncRecommendations', []).length} items</div>
+            <div>CSV Import History: {safeArrayAccess(csvImportHistory, 'AdminSettings', 'debugCsvImportHistory', []).length} items</div>
+            <div>Active Tab: {activeTab}</div>
+            <div>Last Refresh: {safeFormatRelativeTime(lastRefresh)}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
