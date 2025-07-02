@@ -19,6 +19,7 @@ import UserManagement from "@/pages/shop/admin/UserManagement";
 import KeystoneConfig from "@/pages/shop/admin/KeystoneConfig";
 import PricingManagement from "@/pages/shop/admin/PricingManagement.tsx";
 import InventorySyncManagement from "@/pages/shop/admin/InventorySyncManagement";
+import InventoryManagement from "@/pages/shop/admin/InventoryManagement";
 import AdminSettings from "@/pages/shop/admin/AdminSettings";
 import SystemSettings from "@/pages/shop/settings/SystemSettings";
 import NotFound from "@/pages/NotFound";
@@ -114,6 +115,14 @@ const ShopRoutes = () => {
           element={
             <ProtectedRoute>
               <InventorySyncManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/inventory-management"
+          element={
+            <ProtectedRoute>
+              <InventoryManagement />
             </ProtectedRoute>
           }
         />
