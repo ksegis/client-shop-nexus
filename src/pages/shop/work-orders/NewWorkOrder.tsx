@@ -10,7 +10,7 @@ import { useWorkOrders } from './WorkOrdersContext';
 import { WorkOrderLineItem, WorkOrderFormValues, WorkOrder } from './types';
 import { useToast } from '@/hooks/use-toast';
 
-// Schema for form validation aligned with WorkOrderFormValues type
+// Schema for form validation aligned with WorkOrderFormValues  type
 export const workOrderSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional().nullable(),
