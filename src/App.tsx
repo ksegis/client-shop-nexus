@@ -1,58 +1,188 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AppRoutes from "./routes/AppRoutes";
 import { setupAudioCleanupOnNavigation } from "@/utils/audioUtils";
 
-// Create a client
+// Enhanced Error Tracking
+class ErrorTracker {
+  private static errors: Map<string, { count: number; lastSeen: number; stack?: string }> = new Map();
+  private static maxErrors = 10;
+  private static timeWindow = 5000; // 5 seconds
+
+  static trackError(error: Error, context?: string): boolean {
+    const errorKey = `${error.message}-${context || 'unknown'}`;
+    const now = Date.now();
+    
+    const existing = this.errors.get(errorKey);
+    if (existing) {
+      // If same error within time window, increment count
+      if (now - existing.lastSeen < this.timeWindow) {
+        existing.count++;
+        existing.lastSeen = now;
+        
+        // If too many of same error, suppress it
+        if (existing.count > this.maxErrors) {
+          console.warn(`[ErrorTracker] Suppressing repeated error: ${errorKey} (${existing.count} times)`);
+          return false; // Suppress this error
+        }
+      } else {
+        // Reset count if outside time window
+        existing.count = 1;
+        existing.lastSeen = now;
+      }
+    } else {
+      // New error
+      this.errors.set(errorKey, {
+        count: 1,
+        lastSeen: now,
+        stack: error.stack
+      });
+    }
+    
+    return true; // Allow this error to be logged
+  }
+
+  static getErrorSummary() {
+    return Array.from(this.errors.entries()).map(([key, data]) => ({
+      error: key,
+      count: data.count,
+      lastSeen: new Date(data.lastSeen).toISOString(),
+      stack: data.stack
+    }));
+  }
+
+  static clearErrors() {
+    this.errors.clear();
+  }
+}
+
+// Create a client with enhanced error handling
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60 * 1000, // 1 minute
+      staleTime: 60 * 1000,
       retry: 1,
+      onError: (error) => {
+        if (ErrorTracker.trackError(error as Error, 'react-query')) {
+          console.error('[React Query Error]:', error);
+        }
+      }
     },
   },
 });
 
-// Error Boundary Component
-class ErrorBoundary extends React.Component<
+// Enhanced Error Boundary with debugging
+class EnhancedErrorBoundary extends React.Component<
   { children: React.ReactNode },
-  { hasError: boolean; error?: Error }
+  { hasError: boolean; error?: Error; errorInfo?: React.ErrorInfo; showDebug: boolean }
 > {
   constructor(props: { children: React.ReactNode }) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, showDebug: false };
   }
 
   static getDerivedStateFromError(error: Error) {
+    ErrorTracker.trackError(error, 'react-error-boundary');
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('App Error Boundary caught an error:', error, errorInfo);
+    console.error('[Enhanced Error Boundary]:', error, errorInfo);
+    this.setState({ errorInfo });
+    
+    // Try to identify the problematic component
+    const componentStack = errorInfo.componentStack;
+    if (componentStack) {
+      console.group('[Component Stack Analysis]');
+      console.log('Component Stack:', componentStack);
+      
+      // Look for common problematic patterns
+      if (componentStack.includes('AdminSettings')) {
+        console.warn('🚨 Error likely in AdminSettings component');
+      }
+      if (componentStack.includes('Tab')) {
+        console.warn('🚨 Error likely in a Tab component');
+      }
+      if (componentStack.includes('Provider')) {
+        console.warn('🚨 Error likely in a Context Provider');
+      }
+      
+      console.groupEnd();
+    }
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
-            <div className="text-center">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+          <div className="max-w-2xl w-full bg-white shadow-lg rounded-lg p-6">
+            <div className="text-center mb-6">
               <div className="text-red-500 text-6xl mb-4">⚠️</div>
               <h1 className="text-xl font-bold text-gray-900 mb-2">
-                Something went wrong
+                Application Error Detected
               </h1>
               <p className="text-gray-600 mb-4">
-                The application encountered an error. Please refresh the page to try again.
+                The application encountered an error. This has been logged for debugging.
               </p>
-              <button
-                onClick={() => window.location.reload()}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors"
-              >
-                Refresh Page
-              </button>
+              
+              <div className="flex gap-3 justify-center mb-4">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors"
+                >
+                  Refresh Page
+                </button>
+                <button
+                  onClick={() => this.setState({ showDebug: !this.state.showDebug })}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md transition-colors"
+                >
+                  {this.state.showDebug ? 'Hide' : 'Show'} Debug Info
+                </button>
+              </div>
             </div>
+
+            {this.state.showDebug && (
+              <div className="bg-gray-50 rounded-lg p-4 text-left">
+                <h3 className="font-bold mb-2">Debug Information:</h3>
+                
+                {this.state.error && (
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-red-600">Error Message:</h4>
+                    <pre className="text-xs bg-red-50 p-2 rounded overflow-auto">
+                      {this.state.error.message}
+                    </pre>
+                  </div>
+                )}
+
+                {this.state.errorInfo && (
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-blue-600">Component Stack:</h4>
+                    <pre className="text-xs bg-blue-50 p-2 rounded overflow-auto max-h-32">
+                      {this.state.errorInfo.componentStack}
+                    </pre>
+                  </div>
+                )}
+
+                <div className="mb-4">
+                  <h4 className="font-semibold text-green-600">Error Summary:</h4>
+                  <pre className="text-xs bg-green-50 p-2 rounded overflow-auto max-h-32">
+                    {JSON.stringify(ErrorTracker.getErrorSummary(), null, 2)}
+                  </pre>
+                </div>
+
+                <button
+                  onClick={() => {
+                    ErrorTracker.clearErrors();
+                    this.setState({ hasError: false, error: undefined, errorInfo: undefined });
+                  }}
+                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
+                >
+                  Clear Errors & Retry
+                </button>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -62,31 +192,91 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// Safe Tooltip Provider Wrapper
-const TooltipProviderWrapper = ({ children }: { children: React.ReactNode }) => {
-  return <TooltipProvider>{children}</TooltipProvider>;
+// Safe Array Access Utility
+const safeArrayAccess = <T,>(array: T[] | undefined | null, defaultValue: T[] = []): T[] => {
+  if (Array.isArray(array)) return array;
+  console.warn('[SafeArray] Accessed undefined/null array, returning default:', defaultValue);
+  return defaultValue;
 };
 
-// Safe Session Tracking Hook
-const useSessionTrackingSafe = () => {
+// Enhanced Global Error Handler
+const setupGlobalErrorHandling = () => {
+  // Catch unhandled promise rejections
+  window.addEventListener('unhandledrejection', (event) => {
+    const error = new Error(`Unhandled Promise Rejection: ${event.reason}`);
+    if (ErrorTracker.trackError(error, 'unhandled-promise')) {
+      console.error('[Unhandled Promise]:', event.reason);
+    }
+    event.preventDefault(); // Prevent default browser error handling
+  });
+
+  // Catch global JavaScript errors
+  window.addEventListener('error', (event) => {
+    const error = new Error(`Global Error: ${event.message}`);
+    if (ErrorTracker.trackError(error, 'global-error')) {
+      console.error('[Global Error]:', event.error || event.message);
+    }
+  });
+
+  // Override console.error to track errors
+  const originalConsoleError = console.error;
+  console.error = (...args) => {
+    const message = args.join(' ');
+    
+    // Check for the specific undefined length error
+    if (message.includes('Cannot read properties of undefined (reading \'length\')')) {
+      const error = new Error('Undefined Length Access');
+      if (ErrorTracker.trackError(error, 'undefined-length')) {
+        originalConsoleError('[TRACKED]', ...args);
+        
+        // Try to get stack trace to identify source
+        const stack = new Error().stack;
+        if (stack) {
+          console.group('[Undefined Length Debug]');
+          console.log('Stack trace:', stack);
+          console.log('This error suggests an array is undefined when .length is accessed');
+          console.log('Common causes: API responses, state initialization, prop passing');
+          console.groupEnd();
+        }
+      }
+      return; // Don't spam console with repeated errors
+    }
+    
+    // For other errors, use normal tracking
+    if (args[0] instanceof Error) {
+      if (ErrorTracker.trackError(args[0], 'console-error')) {
+        originalConsoleError(...args);
+      }
+    } else {
+      originalConsoleError(...args);
+    }
+  };
+};
+
+// Safe Tooltip Provider
+const SafeTooltipProvider = ({ children }: { children: React.ReactNode }) => {
+  try {
+    return <TooltipProvider>{children}</TooltipProvider>;
+  } catch (error) {
+    console.warn('[SafeTooltipProvider] Failed to initialize:', error);
+    return <>{children}</>;
+  }
+};
+
+// Safe Session Tracking with Array Protection
+const useSafeSessionTracking = () => {
   useEffect(() => {
     try {
-      // Safe session tracking implementation
-      console.log('[Session] Initializing session tracking');
+      console.log('[Session] Initializing safe session tracking');
       
-      // Initialize session data safely
       const sessionData = {
         startTime: new Date().toISOString(),
-        pageViews: [],
-        userAgent: navigator?.userAgent || 'unknown'
+        pageViews: safeArrayAccess([], []), // Safe array initialization
+        userAgent: navigator?.userAgent || 'unknown',
+        errors: safeArrayAccess([], [])
       };
       
-      // Store in localStorage safely
-      try {
-        localStorage.setItem('session_data', JSON.stringify(sessionData));
-      } catch (storageError) {
-        console.warn('[Session] localStorage not available:', storageError);
-      }
+      localStorage.setItem('session_data', JSON.stringify(sessionData));
       
     } catch (error) {
       console.warn('[Session] Session tracking failed:', error);
@@ -95,8 +285,9 @@ const useSessionTrackingSafe = () => {
 };
 
 // Safe Dev Mode Indicator
-const DevModeIndicatorSafe = () => {
+const SafeDevModeIndicator = () => {
   const [isDev, setIsDev] = useState(false);
+  const [errorCount, setErrorCount] = useState(0);
   
   useEffect(() => {
     try {
@@ -104,40 +295,54 @@ const DevModeIndicatorSafe = () => {
                      import.meta.env?.MODE === 'development' ||
                      window.location.hostname === 'localhost';
       setIsDev(devMode);
+      
+      // Update error count periodically
+      const interval = setInterval(() => {
+        const errors = ErrorTracker.getErrorSummary();
+        setErrorCount(errors.reduce((sum, e) => sum + e.count, 0));
+      }, 1000);
+      
+      return () => clearInterval(interval);
     } catch (error) {
       console.warn('[DevMode] Failed to detect dev mode:', error);
-      setIsDev(false);
     }
   }, []);
 
   if (!isDev) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 bg-yellow-500 text-black px-2 py-1 rounded text-xs font-mono z-50">
-      DEV
+    <div className="fixed bottom-4 right-4 z-50 space-y-2">
+      <div className="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-mono">
+        DEV MODE
+      </div>
+      {errorCount > 0 && (
+        <div className="bg-red-500 text-white px-2 py-1 rounded text-xs font-mono">
+          {errorCount} ERRORS
+        </div>
+      )}
     </div>
   );
 };
 
-// Safe Supabase Auth Provider
-const SupabaseAuthProviderSafe = ({ children }: { children: React.ReactNode }) => {
+// Safe Auth Provider
+const SafeAuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [authState, setAuthState] = useState({
     user: null,
     session: null,
     loading: true,
-    error: null
+    error: null,
+    permissions: safeArrayAccess([], []) // Safe array for permissions
   });
 
   useEffect(() => {
     try {
-      // Safe auth initialization
-      console.log('[Auth] Initializing Supabase auth');
+      console.log('[Auth] Initializing safe auth provider');
       
-      // Simulate auth loading
       const timer = setTimeout(() => {
         setAuthState(prev => ({
           ...prev,
-          loading: false
+          loading: false,
+          permissions: safeArrayAccess(prev.permissions, [])
         }));
       }, 100);
 
@@ -147,23 +352,24 @@ const SupabaseAuthProviderSafe = ({ children }: { children: React.ReactNode }) =
       setAuthState(prev => ({
         ...prev,
         loading: false,
-        error: error as Error
+        error: error as Error,
+        permissions: safeArrayAccess([], [])
       }));
     }
   }, []);
 
-  // Provide safe auth context
-  return (
-    <div data-auth-provider="safe">
-      {children}
-    </div>
-  );
+  return <div data-auth-provider="safe">{children}</div>;
 };
 
 const App = () => {
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Safe audio cleanup setup
+  // Setup global error handling
+  useEffect(() => {
+    setupGlobalErrorHandling();
+  }, []);
+
+  // Safe audio cleanup
   useEffect(() => {
     try {
       const cleanup = setupAudioCleanupOnNavigation();
@@ -174,68 +380,52 @@ const App = () => {
   }, []);
   
   // Safe session tracking
-  useSessionTrackingSafe();
+  useSafeSessionTracking();
 
-  // Safe auth system blocking
+  // Safe initialization
   useEffect(() => {
     try {
-      console.log('[Auth] Setting up safe auth environment');
+      console.log('[App] Initializing application with enhanced error handling');
       
-      // Block conflicting auth systems safely
       if (typeof window !== 'undefined') {
-        // Safely block EGIS
+        // Safe auth blocking
         (window as any).EGISAuth = null;
         (window as any).egisAuth = null;
         
-        // Safe console override
-        const originalConsoleError = console.error;
-        console.error = (...args) => {
-          const argString = args.join(' ');
-          if (argString.includes('EGIS') || 
-              argString.includes('Missing code or state parameter') ||
-              argString.includes('Invalid callback parameters')) {
-            return; // Suppress these specific errors
-          }
-          originalConsoleError(...args);
-        };
-
-        // Mark as initialized
+        // Add global array safety
+        (window as any).safeArrayAccess = safeArrayAccess;
+        
         setIsInitialized(true);
-
-        return () => {
-          console.error = originalConsoleError;
-        };
       }
     } catch (error) {
-      console.warn('[Auth] Auth blocking setup failed:', error);
-      setIsInitialized(true); // Continue anyway
+      console.warn('[App] Initialization failed:', error);
+      setIsInitialized(true);
     }
   }, []);
 
-  // Show loading state while initializing
   if (!isInitialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Initializing application...</p>
+          <p className="text-gray-600">Initializing with enhanced error handling...</p>
         </div>
       </div>
     );
   }
   
   return (
-    <ErrorBoundary>
+    <EnhancedErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <TooltipProviderWrapper>
-          <SupabaseAuthProviderSafe>
+        <SafeTooltipProvider>
+          <SafeAuthProvider>
             <AppRoutes />
             <Toaster />
-            <DevModeIndicatorSafe />
-          </SupabaseAuthProviderSafe>
-        </TooltipProviderWrapper>
+            <SafeDevModeIndicator />
+          </SafeAuthProvider>
+        </SafeTooltipProvider>
       </QueryClientProvider>
-    </ErrorBoundary>
+    </EnhancedErrorBoundary>
   );
 };
 
