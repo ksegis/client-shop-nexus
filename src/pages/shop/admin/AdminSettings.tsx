@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/hooks/use-toast';
 import { 
   Settings, 
   Database, 
@@ -52,6 +54,7 @@ import { dropshipOrderService } from '@/services/dropship_order_service';
 import { orderTrackingService } from '@/services/order_tracking_service';
 import { ftpSyncService } from '@/services/ftp_sync_service';
 import { keystoneSyncController } from '@/services/keystone_sync_controller';
+import { supabase } from '@/integrations/supabase/client';
 import KitManagement from './kit_management_admin';
 
 const AdminSettings = () => {
@@ -129,6 +132,14 @@ const AdminSettings = () => {
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [trackingStatistics, setTrackingStatistics] = useState(null);
 
+  // CSV Upload state variables (NEW)
+  const [csvFile, setCsvFile] = useState(null);
+  const [csvUploadLoading, setCsvUploadLoading] = useState(false);
+  const [csvUploadProgress, setCsvUploadProgress] = useState(0);
+  const [csvUploadResults, setCsvUploadResults] = useState(null);
+  const [csvImportHistory, setCsvImportHistory] = useState([]);
+  const { toast } = useToast();
+
   // Load initial data
   useEffect(() => {
     loadDebugMode();
@@ -137,6 +148,7 @@ const AdminSettings = () => {
     refreshStatus();
     loadFtpSyncStatus(); // NEW
     loadSyncRecommendations(); // NEW
+    loadCsvImportHistory(); // NEW
     
     // Set up auto-refresh every 30 seconds
     const interval = setInterval(() => {
@@ -186,6 +198,343 @@ const AdminSettings = () => {
       }
     } catch (error) {
       console.error('Error loading delta sync settings:', error);
+    }
+  };
+
+  // NEW CSV Import Functions
+  const loadCsvImportHistory = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inventory_import_batches')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      setCsvImportHistory(data || []);
+    } catch (error) {
+      console.error('Error loading CSV import history:', error);
+    }
+  };
+
+  const handleCsvFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+        toast({
+          title: "Invalid File Type",
+          description: "Please select a CSV file.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (file.size > 50 * 1024 * 1024) { // 50MB limit
+        toast({
+          title: "File Too Large",
+          description: "Please select a file smaller than 50MB.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      setCsvFile(file);
+    }
+  };
+
+  const processCsvInChunks = async (csvData, chunkSize = 1000) => {
+    const lines = csvData.split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const dataLines = lines.slice(1).filter(line => line.trim());
+    
+    let totalProcessed = 0;
+    let totalInserted = 0;
+    let totalUpdated = 0;
+    let errors = [];
+    
+    // Create import batch record
+    const { data: batchData, error: batchError } = await supabase
+      .from('inventory_import_batches')
+      .insert({
+        filename: csvFile.name,
+        total_records: dataLines.length,
+        status: 'processing'
+      })
+      .select()
+      .single();
+
+    if (batchError) throw batchError;
+    const batchId = batchData.id;
+
+    // Process in chunks
+    for (let i = 0; i < dataLines.length; i += chunkSize) {
+      const chunk = dataLines.slice(i, i + chunkSize);
+      const chunkResults = await processChunk(chunk, headers, batchId);
+      
+      totalProcessed += chunkResults.processed;
+      totalInserted += chunkResults.inserted;
+      totalUpdated += chunkResults.updated;
+      errors = errors.concat(chunkResults.errors);
+      
+      // Update progress
+      const progress = Math.round((totalProcessed / dataLines.length) * 100);
+      setCsvUploadProgress(progress);
+      
+      // Small delay to prevent UI blocking
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    // Update batch record
+    await supabase
+      .from('inventory_import_batches')
+      .update({
+        processed_records: totalProcessed,
+        inserted_records: totalInserted,
+        updated_records: totalUpdated,
+        error_records: errors.length,
+        status: 'completed',
+        completed_at: new Date().toISOString()
+      })
+      .eq('id', batchId);
+
+    return {
+      batchId,
+      totalProcessed,
+      totalInserted,
+      totalUpdated,
+      errors: errors.slice(0, 10) // Limit errors shown
+    };
+  };
+
+  const processChunk = async (chunk, headers, batchId) => {
+    let processed = 0;
+    let inserted = 0;
+    let updated = 0;
+    let errors = [];
+
+    for (const line of chunk) {
+      try {
+        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+        const record = {};
+        
+        // Map CSV fields to database columns
+        headers.forEach((header, index) => {
+          const value = values[index] || '';
+          
+          // Field mapping based on your CSV structure
+          switch (header.toLowerCase()) {
+            case 'vendorname':
+              record.supplier = value;
+              break;
+            case 'vcpn':
+              record.vcpn = value;
+              break;
+            case 'partnumber':
+              record.sku = value;
+              break;
+            case 'description':
+              record.description = value;
+              break;
+            case 'jobberprice':
+              record.price = parseFloat(value) || 0;
+              break;
+            case 'totalqty':
+              record.quantity = parseInt(value) || 0;
+              break;
+            case 'upc':
+              record.upc_code = value;
+              break;
+            case 'aaia':
+              record.aaia_code = value;
+              break;
+            case 'caseqty':
+              record.case_qty = parseInt(value) || 0;
+              break;
+            case 'upsable':
+              record.upsable = value.toLowerCase() === 'true' || value === '1';
+              break;
+            case 'oversized':
+              record.is_oversized = value.toLowerCase() === 'true' || value === '1';
+              break;
+            case 'hazmat':
+              record.is_hazmat = value.toLowerCase() === 'true' || value === '1';
+              break;
+            case 'chemical':
+              record.is_chemical = value.toLowerCase() === 'true' || value === '1';
+              break;
+            case 'nonreturnable':
+              record.is_non_returnable = value.toLowerCase() === 'true' || value === '1';
+              break;
+            case 'kit':
+              record.is_kit = value.toLowerCase() === 'true' || value === '1';
+              break;
+            case 'height':
+              record.height = parseFloat(value) || 0;
+              break;
+            case 'length':
+              record.length = parseFloat(value) || 0;
+              break;
+            case 'width':
+              record.width = parseFloat(value) || 0;
+              break;
+            case 'manufacturerpartno':
+              record.manufacturer_part_no = value;
+              break;
+            case 'vendorcode':
+              record.vendor_code = value;
+              break;
+            case 'prop65toxicity':
+              record.prop65_toxicity = value;
+              break;
+            case 'upsgroundassessorial':
+              record.ups_ground_assessorial = value;
+              break;
+            case 'usltl':
+              record.us_ltl = value;
+              break;
+            case 'kitcomponents':
+              record.kit_components = value;
+              break;
+            // Regional quantities
+            case 'eastqty':
+              record.east_qty = parseInt(value) || 0;
+              break;
+            case 'midwestqty':
+              record.midwest_qty = parseInt(value) || 0;
+              break;
+            case 'californiaqty':
+              record.california_qty = parseInt(value) || 0;
+              break;
+            case 'southeastqty':
+              record.southeast_qty = parseInt(value) || 0;
+              break;
+            case 'pacificnwqty':
+              record.pacific_nw_qty = parseInt(value) || 0;
+              break;
+            case 'texasqty':
+              record.texas_qty = parseInt(value) || 0;
+              break;
+            case 'greatlakesqty':
+              record.great_lakes_qty = parseInt(value) || 0;
+              break;
+            case 'floridaqty':
+              record.florida_qty = parseInt(value) || 0;
+              break;
+            default:
+              // Handle any unmapped fields
+              break;
+          }
+        });
+
+        // Skip if no SKU or VCPN
+        if (!record.sku && !record.vcpn) {
+          errors.push(`Row ${processed + 1}: Missing SKU and VCPN`);
+          processed++;
+          continue;
+        }
+
+        // Check if item exists (by SKU or VCPN)
+        const { data: existingItem } = await supabase
+          .from('inventory')
+          .select('id')
+          .or(`sku.eq.${record.sku},vcpn.eq.${record.vcpn}`)
+          .single();
+
+        if (existingItem) {
+          // Update existing item
+          const { error: updateError } = await supabase
+            .from('inventory')
+            .update({
+              ...record,
+              updated_at: new Date().toISOString(),
+              import_batch_id: batchId
+            })
+            .eq('id', existingItem.id);
+
+          if (updateError) {
+            errors.push(`Row ${processed + 1}: Update failed - ${updateError.message}`);
+          } else {
+            updated++;
+          }
+        } else {
+          // Insert new item
+          const { error: insertError } = await supabase
+            .from('inventory')
+            .insert({
+              ...record,
+              import_batch_id: batchId,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+
+          if (insertError) {
+            errors.push(`Row ${processed + 1}: Insert failed - ${insertError.message}`);
+          } else {
+            inserted++;
+          }
+        }
+
+        processed++;
+      } catch (error) {
+        errors.push(`Row ${processed + 1}: ${error.message}`);
+        processed++;
+      }
+    }
+
+    return { processed, inserted, updated, errors };
+  };
+
+  const handleCsvUpload = async () => {
+    if (!csvFile) {
+      toast({
+        title: "No File Selected",
+        description: "Please select a CSV file to upload.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCsvUploadLoading(true);
+    setCsvUploadProgress(0);
+    setCsvUploadResults(null);
+
+    try {
+      // Read file content
+      const fileContent = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsText(csvFile);
+      });
+
+      // Process CSV in chunks
+      const results = await processCsvInChunks(fileContent);
+      
+      setCsvUploadResults(results);
+      
+      toast({
+        title: "CSV Upload Complete",
+        description: `Processed ${results.totalProcessed} records. ${results.totalInserted} inserted, ${results.totalUpdated} updated.`,
+      });
+
+      // Refresh import history
+      await loadCsvImportHistory();
+      
+      // Clear file selection
+      setCsvFile(null);
+      const fileInput = document.getElementById('csv-file-input');
+      if (fileInput) fileInput.value = '';
+
+    } catch (error) {
+      console.error('CSV upload error:', error);
+      toast({
+        title: "Upload Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setCsvUploadLoading(false);
+      setCsvUploadProgress(0);
     }
   };
 
@@ -899,9 +1248,9 @@ const AdminSettings = () => {
         </Alert>
       )}
 
-      {/* Tabs Navigation - UPDATED to include FTP Sync */}
+      {/* Tabs Navigation - UPDATED to include CSV Upload */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="inventory" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
             Inventory
@@ -909,6 +1258,10 @@ const AdminSettings = () => {
           <TabsTrigger value="ftp-sync" className="flex items-center gap-2">
             <HardDrive className="h-4 w-4" />
             FTP Sync
+          </TabsTrigger>
+          <TabsTrigger value="csv-upload" className="flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            CSV Upload
           </TabsTrigger>
           <TabsTrigger value="pricing" className="flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
@@ -953,43 +1306,211 @@ const AdminSettings = () => {
               <div className="flex items-center gap-4 mt-2">
                 <div className="flex items-center space-x-2">
                   <Switch
-                    checked={environment === 'development'}
-                    onCheckedChange={(checked) => handleEnvironmentChange(checked ? 'development' : 'production')}
-                  />
-                  <Label>Development</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Switch
                     checked={environment === 'production'}
-                    onCheckedChange={(checked) => handleEnvironmentChange(checked ? 'production' : 'development')}
+                    onCheckedChange={(checked) => 
+                      handleEnvironmentChange(checked ? 'production' : 'development')
+                    }
                   />
-                  <Label>Production</Label>
+                  <Label className="text-sm">Production Mode</Label>
                 </div>
-              </div>
-              
-              <div className="flex items-center gap-2 mt-2">
-                <Badge 
-                  variant="outline" 
-                  className={environment === 'development' ? 
-                    "bg-blue-50 text-blue-700 border-blue-200" : 
-                    "bg-red-50 text-red-700 border-red-200"
-                  }
-                >
-                  {environment === 'development' ? 'DEV' : 'PROD'}
+                
+                <Badge variant={environment === 'production' ? 'destructive' : 'secondary'}>
+                  {environment.toUpperCase()}
                 </Badge>
-                <span className="text-sm text-muted-foreground">
-                  {environment === 'development' ? 'DEVELOPMENT' : 'PRODUCTION'} mode active
-                </span>
               </div>
-              
-              <p className="text-xs text-muted-foreground mt-1">
-                Last changed: {safeFormatDate(lastRefresh)}
-              </p>
+            </div>
+            
+            <Separator />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <Label className="text-sm font-medium">Development</Label>
+                <ul className="text-muted-foreground space-y-1 mt-1">
+                  <li>• Safe testing environment</li>
+                  <li>• Limited test data</li>
+                  <li>• No real transactions</li>
+                </ul>
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Production</Label>
+                <ul className="text-muted-foreground space-y-1 mt-1">
+                  <li>• Live data and transactions</li>
+                  <li>• Full inventory access</li>
+                  <li>• Real customer orders</li>
+                </ul>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* NEW FTP Sync Tab */}
+        {/* NEW CSV Upload Tab Content */}
+        <TabsContent value="csv-upload" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                CSV Inventory Upload
+              </CardTitle>
+              <CardDescription>
+                Upload CSV files to update inventory with chunked processing and audit logging
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              
+              {/* File Upload Section */}
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="csv-file-input" className="text-sm font-medium">
+                    Select CSV File
+                  </Label>
+                  <Input
+                    id="csv-file-input"
+                    type="file"
+                    accept=".csv"
+                    onChange={handleCsvFileSelect}
+                    className="mt-1"
+                    disabled={csvUploadLoading}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Maximum file size: 50MB. Only CSV files are accepted.
+                  </p>
+                </div>
+
+                {csvFile && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-medium">{csvFile.name}</span>
+                      <Badge variant="outline" className="ml-auto">
+                        {(csvFile.size / 1024 / 1024).toFixed(2)} MB
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleCsvUpload}
+                    disabled={!csvFile || csvUploadLoading}
+                    className="flex items-center gap-2"
+                  >
+                    {csvUploadLoading ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {csvUploadLoading ? 'Processing...' : 'Upload CSV'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              {csvUploadLoading && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Processing CSV...</span>
+                    <span>{csvUploadProgress}%</span>
+                  </div>
+                  <Progress value={csvUploadProgress} className="w-full" />
+                </div>
+              )}
+
+              {/* Upload Results */}
+              {csvUploadResults && (
+                <Card className="p-4">
+                  <h3 className="font-medium mb-3">Upload Results</h3>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div className="text-center p-3 bg-gray-50 rounded">
+                        <div className="text-lg font-semibold">{csvUploadResults.totalProcessed}</div>
+                        <div className="text-gray-600">Processed</div>
+                      </div>
+                      <div className="text-center p-3 bg-green-50 rounded">
+                        <div className="text-lg font-semibold text-green-600">{csvUploadResults.totalInserted}</div>
+                        <div className="text-gray-600">Inserted</div>
+                      </div>
+                      <div className="text-center p-3 bg-blue-50 rounded">
+                        <div className="text-lg font-semibold text-blue-600">{csvUploadResults.totalUpdated}</div>
+                        <div className="text-gray-600">Updated</div>
+                      </div>
+                    </div>
+                    
+                    {csvUploadResults.errors && csvUploadResults.errors.length > 0 && (
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-medium text-red-800">Errors:</h4>
+                        {csvUploadResults.errors.map((error, index) => (
+                          <p key={index} className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                            {error}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+
+              {/* Import History */}
+              {csvImportHistory.length > 0 && (
+                <Card className="p-4">
+                  <h3 className="font-medium mb-3">Recent Imports</h3>
+                  <div className="space-y-2">
+                    {csvImportHistory.map((batch) => (
+                      <div key={batch.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <span className="font-medium">{batch.filename}</span>
+                          <p className="text-sm text-muted-foreground">
+                            {safeFormatDate(batch.created_at)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm">
+                            {batch.processed_records} processed
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            +{batch.inserted_records} / ~{batch.updated_records}
+                            {batch.error_records > 0 && ` / ${batch.error_records} errors`}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Field Mapping Information */}
+              <Card className="p-4 bg-blue-50 border-blue-200">
+                <h3 className="font-medium mb-3">CSV Field Mapping</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <h4 className="font-medium mb-2">Required Fields:</h4>
+                    <ul className="space-y-1 text-muted-foreground">
+                      <li>• <code>PartNumber</code> → SKU</li>
+                      <li>• <code>VCPN</code> → Vendor Catalog Part Number</li>
+                      <li>• <code>Description</code> → Product Description</li>
+                      <li>• <code>JobberPrice</code> → Price</li>
+                      <li>• <code>TotalQty</code> → Quantity</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">Optional Fields:</h4>
+                    <ul className="space-y-1 text-muted-foreground">
+                      <li>• <code>VendorName</code> → Supplier</li>
+                      <li>• <code>UPC</code> → UPC Code</li>
+                      <li>• <code>AAIA</code> → AAIA Code</li>
+                      <li>• <code>Height/Length/Width</code> → Dimensions</li>
+                      <li>• Regional quantities (EastQty, etc.)</li>
+                    </ul>
+                  </div>
+                </div>
+                <p className="text-xs text-blue-700 mt-3">
+                  Items are matched by SKU or VCPN. Existing items will be updated, new items will be inserted.
+                </p>
+              </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* FTP Sync Tab Content */}
         <TabsContent value="ftp-sync" className="space-y-6">
           <Card>
             <CardHeader>
@@ -1351,153 +1872,187 @@ const AdminSettings = () => {
                   }
                   className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
                 >
-                  <option value={6}>Every 6 hours (4x daily)</option>
-                  <option value={12}>Every 12 hours (Twice daily)</option>
-                  <option value={24}>Every 24 hours (Daily)</option>
+                  <option value={1}>Every hour</option>
+                  <option value={2}>Every 2 hours</option>
+                  <option value={4}>Every 4 hours</option>
+                  <option value={6}>Every 6 hours</option>
+                  <option value={12}>Every 12 hours</option>
+                  <option value={24}>Daily</option>
                 </select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Recommended: 12 hours for twice-daily updates
+                <p className="text-sm text-muted-foreground mt-1">
+                  How often to check for inventory changes and sync them automatically
                 </p>
               </div>
               
-              <div className="flex items-center gap-2">
-                <Badge 
-                  variant={deltaSyncSettings.enabled ? "default" : "secondary"}
-                  className={deltaSyncSettings.enabled ? "bg-green-100 text-green-800 border-green-200" : ""}
-                >
-                  {deltaSyncSettings.enabled ? "Enabled" : "Disabled"}
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  Every {deltaSyncSettings.intervalHours} hours
-                </span>
+              <Separator />
+              
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Manual Sync Actions</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={handleTestSync}
+                    disabled={isLoading}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {isLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
+                    Test Full Sync (10 items)
+                  </Button>
+                  
+                  <Button
+                    onClick={handleTestDeltaSync}
+                    disabled={isLoading}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {isLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                    Test Delta Sync
+                  </Button>
+                  
+                  <Button
+                    onClick={handleTestQuantityDelta}
+                    disabled={isLoading}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {isLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <TrendingUp className="h-4 w-4 mr-2" />}
+                    Test Quantity Delta
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Test Sync Buttons */}
+          {/* Sync Status */}
           <Card>
             <CardHeader>
-              <CardTitle>Test Sync Operations</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                Sync Status
+                <Badge variant="outline" className="ml-auto">
+                  Last updated: {safeFormatRelativeTime(lastRefresh)}
+                </Badge>
+              </CardTitle>
               <CardDescription>
-                Test different sync operations with limited data
+                Current status of inventory synchronization services
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleTestSync}
-                  disabled={isLoading}
-                  className="flex items-center gap-2"
-                >
-                  {isLoading ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Database className="h-4 w-4" />
-                  )}
-                  Test Full Sync (10 items)
-                </Button>
-                
-                <Button
-                  onClick={handleTestDeltaSync}
-                  disabled={isLoading}
-                  variant="outline"
-                  className="flex items-center gap-2"
-                >
-                  {isLoading ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RotateCcw className="h-4 w-4" />
-                  )}
-                  Test Delta Sync
-                </Button>
-                
-                <Button
-                  onClick={handleTestQuantityDelta}
-                  disabled={isLoading}
-                  variant="outline"
-                  className="flex items-center gap-2"
-                >
-                  {isLoading ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Timer className="h-4 w-4" />
-                  )}
-                  Test Quantity Delta
-                </Button>
-              </div>
-              
-              <p className="text-sm text-muted-foreground">
-                Test operations use limited data to avoid rate limiting. Use these to verify connectivity and functionality.
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Sync Status Display */}
-          {syncStatus && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Sync Status</CardTitle>
-                <CardDescription>
-                  Real-time status of inventory synchronization
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Database className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm font-medium">Last Full Sync</span>
+            <CardContent>
+              {syncStatus ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Last Full Sync</Label>
+                      <div className="flex items-center gap-2">
+                        {getStatusBadge(syncStatus.lastFullSyncStatus || 'never')}
+                        <span className="text-sm text-muted-foreground">
+                          {safeFormatRelativeTime(syncStatus.lastFullSync)}
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-lg font-semibold">{safeFormatRelativeTime(syncStatus.lastFullSync)}</p>
-                    <p className="text-xs text-muted-foreground">{safeFormatDate(syncStatus.lastFullSync)}</p>
+                    
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Last Delta Sync</Label>
+                      <div className="flex items-center gap-2">
+                        {getStatusBadge(syncStatus.lastDeltaSyncStatus || 'never')}
+                        <span className="text-sm text-muted-foreground">
+                          {safeFormatRelativeTime(syncStatus.lastDeltaSync)}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Next Scheduled</Label>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-blue-500" />
+                        <span className="text-sm text-muted-foreground">
+                          {safeFormatFutureTime(syncStatus.nextScheduledSync)}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Items Synced</Label>
+                      <div className="flex items-center gap-2">
+                        <Database className="h-4 w-4 text-green-500" />
+                        <span className="text-sm font-medium">
+                          {safeDisplayValue(syncStatus.totalItemsSynced, '0')}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <RotateCcw className="h-4 w-4 text-green-600" />
-                      <span className="text-sm font-medium">Last Delta Sync</span>
+                  <Separator />
+                  
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Service Health</Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Database className="h-4 w-4" />
+                          <span className="text-sm">Database Connection</span>
+                        </div>
+                        {syncStatus.databaseConnected ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Wifi className="h-4 w-4" />
+                          <span className="text-sm">API Connection</span>
+                        </div>
+                        {syncStatus.apiConnected ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        )}
+                      </div>
                     </div>
-                    <p className="text-lg font-semibold">{safeFormatRelativeTime(syncStatus.lastDeltaSync)}</p>
-                    <p className="text-xs text-muted-foreground">{safeFormatDate(syncStatus.lastDeltaSync)}</p>
                   </div>
                   
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Clock className="h-4 w-4 text-purple-600" />
-                      <span className="text-sm font-medium">Next Scheduled</span>
+                  {syncStatus.errors && syncStatus.errors.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-red-600">Recent Errors</Label>
+                      <div className="space-y-1">
+                        {syncStatus.errors.slice(0, 3).map((error, index) => (
+                          <Alert key={index} className="border-red-200 bg-red-50">
+                            <AlertTriangle className="h-4 w-4 text-red-600" />
+                            <AlertDescription className="text-red-800">
+                              {error.message} 
+                              <span className="text-xs text-red-600 ml-2">
+                                {safeFormatRelativeTime(error.timestamp)}
+                              </span>
+                            </AlertDescription>
+                          </Alert>
+                        ))}
+                      </div>
                     </div>
-                    <p className="text-lg font-semibold">{safeFormatFutureTime(syncStatus.nextScheduledSync)}</p>
-                    <p className="text-xs text-muted-foreground">{safeFormatDate(syncStatus.nextScheduledSync)}</p>
-                  </div>
-                  
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Activity className="h-4 w-4 text-orange-600" />
-                      <span className="text-sm font-medium">Status</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {getStatusBadge(syncStatus.status)}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {safeDisplayValue(syncStatus.statusMessage, 'No additional information')}
-                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm text-muted-foreground">Loading sync status...</p>
                   </div>
                 </div>
-                
-                {syncStatus.isRateLimited && (
-                  <Alert className="border-red-200 bg-red-50">
-                    <AlertTriangle className="h-4 w-4 text-red-600" />
-                    <AlertDescription className="text-red-800">
-                      <strong>Rate Limited:</strong> {syncStatus.rateLimitMessage}
-                      <br />
-                      <strong>Reset Time:</strong> {safeFormatDate(syncStatus.rateLimitResetTime)}
-                    </AlertDescription>
-                  </Alert>
-                )}
-                
-                {debugMode && (
-                  <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                    <h4 className="text-sm font-medium mb-2">Debug Information</h4>
+              )}
+              
+              {debugMode && syncStatus && (
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                  <h4 className="text-sm font-medium mb-2">Debug Information</h4>
+                  <div className="space-y-2">
+                    <div className="text-xs">
+                      <strong>Environment Variables:</strong>
+                      <ul className="mt-1 space-y-1 text-gray-600">
+                        <li>VITE_KEYSTONE_API_URL: {safeDisplayValue(getEnvVar('VITE_KEYSTONE_API_URL'))}</li>
+                        <li>VITE_KEYSTONE_USERNAME: {safeDisplayValue(getEnvVar('VITE_KEYSTONE_USERNAME'))}</li>
+                        <li>VITE_KEYSTONE_PASSWORD: {getEnvVar('VITE_KEYSTONE_PASSWORD') ? '***' : 'Not set'}</li>
+                      </ul>
+                    </div>
                     <pre className="text-xs text-gray-600 overflow-auto">
                       {JSON.stringify(syncStatus, null, 2)}
                     </pre>
@@ -1864,48 +2419,30 @@ const AdminSettings = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="shipping-method" className="text-sm font-medium">
-                    Shipping Method
-                  </Label>
-                  <select
-                    id="shipping-method"
-                    value={orderDetails.shippingMethod}
-                    onChange={(e) => setOrderDetails({...orderDetails, shippingMethod: e.target.value})}
-                    className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
-                  >
-                    <option value="standard">Standard</option>
-                    <option value="expedited">Expedited</option>
-                    <option value="overnight">Overnight</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <Label htmlFor="po-number" className="text-sm font-medium">
-                    PO Number
-                  </Label>
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Order Details</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Input
-                    id="po-number"
-                    placeholder="Optional"
+                    placeholder="PO Number (optional)"
                     value={orderDetails.poNumber}
                     onChange={(e) => setOrderDetails({...orderDetails, poNumber: e.target.value})}
-                    className="mt-1"
                   />
+                  <select
+                    value={orderDetails.shippingMethod}
+                    onChange={(e) => setOrderDetails({...orderDetails, shippingMethod: e.target.value})}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="standard">Standard Shipping</option>
+                    <option value="expedited">Expedited Shipping</option>
+                    <option value="overnight">Overnight Shipping</option>
+                  </select>
                 </div>
-                
-                <div>
-                  <Label htmlFor="special-instructions" className="text-sm font-medium">
-                    Special Instructions
-                  </Label>
-                  <Input
-                    id="special-instructions"
-                    placeholder="Optional"
-                    value={orderDetails.specialInstructions}
-                    onChange={(e) => setOrderDetails({...orderDetails, specialInstructions: e.target.value})}
-                    className="mt-1"
-                  />
-                </div>
+                <Textarea
+                  placeholder="Special Instructions (optional)"
+                  value={orderDetails.specialInstructions}
+                  onChange={(e) => setOrderDetails({...orderDetails, specialInstructions: e.target.value})}
+                  rows={3}
+                />
               </div>
               
               <div className="flex gap-2">
@@ -1917,9 +2454,9 @@ const AdminSettings = () => {
                   {dropshipOrderLoading ? (
                     <RefreshCw className="h-4 w-4 animate-spin" />
                   ) : (
-                    <ShoppingCart className="h-4 w-4" />
+                    <Package className="h-4 w-4" />
                   )}
-                  Place Dropship Order
+                  Place Order
                 </Button>
                 
                 {dropshipOrderStatus?.isRateLimited && (
@@ -1945,28 +2482,23 @@ const AdminSettings = () => {
               {dropshipOrderResults && (
                 <div className="space-y-3">
                   <h4 className="text-sm font-medium">Order Results</h4>
-                  <div className="p-4 border rounded-lg">
+                  <div className="p-3 border rounded-lg">
                     {dropshipOrderResults.success ? (
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
                           <CheckCircle className="h-5 w-5 text-green-600" />
-                          <span className="font-medium text-green-800">Order Placed Successfully</span>
+                          <span className="font-medium text-green-800">Order placed successfully!</span>
                         </div>
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-muted-foreground">
                           <p><strong>Order Reference:</strong> {dropshipOrderResults.orderReference}</p>
                           <p><strong>Total Amount:</strong> ${dropshipOrderResults.totalAmount?.toFixed(2)}</p>
                           <p><strong>Estimated Delivery:</strong> {dropshipOrderResults.estimatedDelivery}</p>
                         </div>
                       </div>
                     ) : (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <XCircle className="h-5 w-5 text-red-600" />
-                          <span className="font-medium text-red-800">Order Failed</span>
-                        </div>
-                        <div className="text-sm text-red-600">
-                          <p>{dropshipOrderResults.message}</p>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <XCircle className="h-5 w-5 text-red-600" />
+                        <span className="text-red-800">{dropshipOrderResults.message}</span>
                       </div>
                     )}
                   </div>
@@ -1995,7 +2527,7 @@ const AdminSettings = () => {
                 </Label>
                 <Textarea
                   id="tracking-orders"
-                  placeholder="Enter order references separated by newlines, commas, or spaces&#10;Example:&#10;ORD-2024-001&#10;ORD-2024-002&#10;ORD-2024-003"
+                  placeholder="Enter order references separated by newlines, commas, or spaces&#10;Example:&#10;ORD123456&#10;ORD789012&#10;ORD345678"
                   value={trackingOrderRefs}
                   onChange={(e) => setTrackingOrderRefs(e.target.value)}
                   className="mt-1"
@@ -2043,51 +2575,25 @@ const AdminSettings = () => {
               {trackingResults.length > 0 && (
                 <div className="space-y-3">
                   <h4 className="text-sm font-medium">Tracking Results</h4>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {trackingResults.map((result, index) => (
-                      <div key={index} className="p-4 border rounded-lg">
+                      <div key={index} className="p-3 border rounded-lg">
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-medium">{result.orderReference}</span>
-                          {getTrackingStatusBadge(result.status)}
+                          {result.success ? (
+                            getTrackingStatusBadge(result.status)
+                          ) : (
+                            <Badge variant="destructive">Error</Badge>
+                          )}
                         </div>
-                        
                         {result.success ? (
-                          <div className="space-y-2 text-sm">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <p><strong>Carrier:</strong> {result.carrier}</p>
-                                <p><strong>Tracking Number:</strong> {result.trackingNumber}</p>
-                                <p><strong>Service:</strong> {result.service}</p>
-                              </div>
-                              <div>
-                                <p><strong>Ship Date:</strong> {safeFormatDate(result.shipDate)}</p>
-                                <p><strong>Estimated Delivery:</strong> {safeFormatDate(result.estimatedDelivery)}</p>
-                                <p><strong>Last Update:</strong> {safeFormatDate(result.lastUpdate)}</p>
-                              </div>
-                            </div>
-                            
-                            {result.trackingEvents && result.trackingEvents.length > 0 && (
-                              <div className="mt-3">
-                                <h5 className="font-medium mb-2">Tracking Events</h5>
-                                <div className="space-y-1">
-                                  {result.trackingEvents.slice(0, 3).map((event, eventIndex) => (
-                                    <div key={eventIndex} className="text-xs p-2 bg-gray-50 rounded">
-                                      <div className="flex justify-between">
-                                        <span>{event.description}</span>
-                                        <span>{safeFormatDate(event.timestamp)}</span>
-                                      </div>
-                                      {event.location && (
-                                        <div className="text-gray-500 mt-1">{event.location}</div>
-                                      )}
-                                    </div>
-                                  ))}
-                                  {result.trackingEvents.length > 3 && (
-                                    <p className="text-xs text-gray-500">
-                                      ... and {result.trackingEvents.length - 3} more events
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
+                          <div className="space-y-1 text-sm text-muted-foreground">
+                            <p><strong>Carrier:</strong> {result.carrier}</p>
+                            <p><strong>Tracking Number:</strong> {result.trackingNumber}</p>
+                            <p><strong>Last Update:</strong> {result.lastUpdate}</p>
+                            <p><strong>Location:</strong> {result.currentLocation}</p>
+                            {result.estimatedDelivery && (
+                              <p><strong>Estimated Delivery:</strong> {result.estimatedDelivery}</p>
                             )}
                           </div>
                         ) : (
