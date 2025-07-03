@@ -157,7 +157,7 @@ const InventoryContent = () => {
   );
 };
 
-// The main Inventory component that wraps everything with the provider - preserved exactly
+// The main Inventory component that_wraps everything with the provider - preserved exactly
 const Inventory = () => {
   return (
     <InventoryProvider>
