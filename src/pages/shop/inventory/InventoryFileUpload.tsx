@@ -29,8 +29,7 @@ export function InventoryFileUpload() {
 
   const processCSVFile = async (file: File) => {
     try {
-      // DEBUG: Confirm we're using the improved component
-      console.log('🔧 Using improved component - direct Supabase calls, no API');
+      console.log('🔧 Using corrected component - proper CSV field mapping');
       console.log('📁 File details:', { name: file.name, size: file.size, type: file.type });
       
       setIsUploading(true);
@@ -85,23 +84,24 @@ export function InventoryFileUpload() {
 
         for (const record of batch) {
           try {
-            // Map CSV fields to database columns
+            // Map CSV fields to database columns with correct field names
             const inventoryItem = {
-              name: record['Description'] || record['Name'] || 'Unknown Item',
-              description: record['Description'] || null,
-              sku: record['PartNumber'] || record['SKU'] || null,
-              quantity: parseInt(record['TotalQty'] || record['Quantity'] || '0') || 0,
-              price: parseFloat(record['JobberPrice'] || record['Price'] || '0') || 0,
+              // Use LongDescription from CSV for description field
+              name: record['LongDescription'] || record['PartNumber'] || 'Unknown Item',
+              description: record['LongDescription'] || null,
+              sku: record['PartNumber'] || record['VCPN'] || null,
+              quantity: parseInt(record['TotalQty'] || '0') || 0,
+              price: parseFloat(record['JobberPrice'] || '0') || 0,
               cost: parseFloat(record['Cost'] || '0') || null,
-              category: record['Category'] || null,
-              supplier: record['VendorName'] || record['Supplier'] || null,
-              reorder_level: parseInt(record['ReorderLevel'] || '0') || null,
+              category: null, // Not in CSV, could be derived from other fields if needed
+              supplier: record['VendorName'] || null,
+              reorder_level: null, // Not in CSV
               core_charge: parseFloat(record['CoreCharge'] || '0') || null,
-              // FTP specific fields
+              // FTP specific fields from your CSV
               vendor_code: record['VendorCode'] || null,
               manufacturer_part_no: record['ManufacturerPartNo'] || null,
               case_qty: parseInt(record['CaseQty'] || '0') || null,
-              // Regional quantities
+              // Regional quantities from your CSV
               california_qty: parseInt(record['CaliforniaQty'] || '0') || null,
               east_qty: parseInt(record['EastQty'] || '0') || null,
               florida_qty: parseInt(record['FloridaQty'] || '0') || null,
@@ -113,8 +113,9 @@ export function InventoryFileUpload() {
             };
 
             console.log('💾 Processing item:', inventoryItem.name, 'SKU:', inventoryItem.sku);
+            console.log('📝 Description:', inventoryItem.description);
 
-            // Check if item exists by SKU
+            // Check if item exists by SKU (PartNumber)
             let existingItem = null;
             if (inventoryItem.sku) {
               const { data: existing } = await supabase
