@@ -1,20 +1,19 @@
 import React, { useState, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Upload, FileText, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useInventoryContext } from './InventoryContext';
+import { useToast } from '@/hooks/use-toast';
 
-interface UploadResult {
-  success: boolean;
-  message: string;
-  processed: number;
-  updated: number;
-  inserted: number;
+interface CSVUploadResult {
+  total: number;
+  successful: number;
+  failed: number;
   errors: string[];
-  warnings: string[];
 }
 
 interface CSVRecord {
@@ -22,427 +21,434 @@ interface CSVRecord {
 }
 
 export function InventoryFileUpload() {
-  const [isOpen, setIsOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
-  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
-  const { toast } = useToast();
-  const { refetchInventory } = useInventoryContext();
+  const [uploadResult, setUploadResult] = useState<CSVUploadResult | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [previewData, setPreviewData] = useState<CSVRecord[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { refetchInventory } = useInventoryContext();
+  const { toast } = useToast();
 
-  const processCSVFile = async (file: File) => {
+  // Handle button click - simplified
+  const handleUploadClick = () => {
+    console.log('🖱️ Upload button clicked');
+    setShowUploadDialog(true);
+    setUploadResult(null);
+    setSelectedFile(null);
+    setPreviewData([]);
+  };
+
+  // Handle file selection
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      console.log('📁 File selected:', file.name, file.size);
+      setSelectedFile(file);
+      setUploadResult(null);
+      previewCSVFile(file);
+    }
+  };
+
+  // Preview CSV file
+  const previewCSVFile = async (file: File) => {
     try {
-      console.log('🔧 Processing large CSV file with optimized component');
-      console.log('📁 File details:', { name: file.name, size: file.size, type: file.type });
-      
-      setIsUploading(true);
-      setUploadStatus('uploading');
-      setUploadProgress(0);
-
-      // Read and parse CSV file
       const text = await file.text();
-      console.log('📄 File content length:', text.length);
+      const lines = text.split('\n');
+      const headers = lines[0]?.split(',').map(h => h.trim().replace(/"/g, '')) || [];
       
-      const lines = text.split('\n').filter(line => line.trim());
-      console.log('📊 Total lines found:', lines.length);
-      
-      if (lines.length < 2) {
-        throw new Error('CSV file must contain at least a header row and one data row');
-      }
+      // Parse first few rows for preview
+      const preview = lines.slice(1, 4).map(line => {
+        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+        const record: CSVRecord = {};
+        headers.forEach((header, index) => {
+          record[header] = values[index] || '';
+        });
+        return record;
+      }).filter(record => Object.values(record).some(value => value.length > 0));
 
-      // Parse CSV headers and data
-      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-      console.log('📋 CSV headers:', headers);
+      setPreviewData(preview);
+      console.log('👀 CSV Preview:', { headers, preview: preview.length });
+    } catch (error) {
+      console.error('❌ Preview error:', error);
+      toast({
+        title: "Preview Error",
+        description: "Could not preview the CSV file",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Parse CSV content
+  const parseCSV = (csvText: string): CSVRecord[] => {
+    try {
+      const lines = csvText.split('\n');
+      const headers = lines[0]?.split(',').map(h => h.trim().replace(/"/g, '')) || [];
+      
+      console.log('📋 CSV Headers found:', headers);
       
       const records: CSVRecord[] = [];
+      
       for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-        if (values.length === headers.length) {
-          const record: CSVRecord = {};
-          headers.forEach((header, index) => {
-            record[header] = values[index];
-          });
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+        const record: CSVRecord = {};
+        
+        headers.forEach((header, index) => {
+          record[header] = values[index] || '';
+        });
+        
+        // Only include records with at least a name or part number
+        if (record['LongDescription'] || record['PartNumber'] || record['Description']) {
           records.push(record);
         }
       }
       
-      console.log('📦 Parsed records:', records.length);
-      console.log('🔍 Sample record:', records[0]);
+      console.log('✅ Parsed CSV records:', records.length);
+      return records;
+    } catch (error) {
+      console.error('❌ CSV parsing error:', error);
+      throw new Error('Failed to parse CSV file');
+    }
+  };
 
-      // Show warning for large datasets
-      if (records.length > 1000) {
-        console.log('⚠️ Large dataset detected:', records.length, 'records');
-      }
+  // Map CSV record to inventory item
+  const mapCSVToInventoryItem = (record: CSVRecord) => {
+    try {
+      const item = {
+        name: record['LongDescription'] || record['Description'] || record['PartNumber'] || 'Unknown Item',
+        description: record['LongDescription'] || record['Description'] || null,
+        sku: record['PartNumber'] || record['SKU'] || null,
+        quantity: parseInt(record['QtyOnHand'] || record['Quantity'] || '0') || 0,
+        price: parseFloat(record['Price'] || record['SellPrice'] || '0') || 0,
+        cost: parseFloat(record['Cost'] || record['CostPrice'] || '0') || null,
+        category: record['Category'] || record['ProductCategory'] || null,
+        supplier: record['Supplier'] || record['Vendor'] || null,
+        reorder_level: parseInt(record['ReorderLevel'] || record['MinQty'] || '0') || null,
+      };
 
-      // Process records in smaller batches for large datasets
-      const batchSize = records.length > 1000 ? 25 : 10;
+      return item;
+    } catch (error) {
+      console.error('❌ Mapping error for record:', record, error);
+      throw new Error(`Failed to map CSV record: ${error}`);
+    }
+  };
+
+  // Process CSV file
+  const processCSVFile = async () => {
+    if (!selectedFile) {
+      toast({
+        title: "No File Selected",
+        description: "Please select a CSV file to upload",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    console.log('🚀 Starting CSV upload process:', selectedFile.name);
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadResult(null);
+
+    const result: CSVUploadResult = {
+      total: 0,
+      successful: 0,
+      failed: 0,
+      errors: []
+    };
+
+    try {
+      // Read and parse CSV
+      const csvText = await selectedFile.text();
+      const records = parseCSV(csvText);
+      result.total = records.length;
+
+      console.log(`📊 Processing ${records.length} records`);
+
+      // Process in batches
+      const batchSize = 10;
       const batches = [];
       for (let i = 0; i < records.length; i += batchSize) {
         batches.push(records.slice(i, i + batchSize));
       }
-      
-      console.log('🔄 Processing in', batches.length, 'batches of', batchSize);
 
-      let processed = 0;
-      let updated = 0;
-      let inserted = 0;
-      let errors: string[] = [];
-      let warnings: string[] = [];
+      console.log(`🔄 Processing ${batches.length} batches`);
 
+      // Process each batch
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const batch = batches[batchIndex];
-        console.log(`🔄 Processing batch ${batchIndex + 1}/${batches.length} with ${batch.length} items`);
+        console.log(`📦 Processing batch ${batchIndex + 1}/${batches.length}`);
 
-        // Process batch items
+        // Process items in current batch
         for (const record of batch) {
           try {
-            // Map CSV fields to database columns with correct field names
-            const inventoryItem = {
-              // Use LongDescription from CSV for both name and description
-              name: record['LongDescription'] || record['PartNumber'] || 'Unknown Item',
-              description: record['LongDescription'] || null,
-              sku: record['PartNumber'] || record['VCPN'] || null,
-              quantity: parseInt(record['TotalQty'] || '0') || 0,
-              price: parseFloat(record['JobberPrice'] || '0') || 0,
-              cost: parseFloat(record['Cost'] || '0') || null,
-              category: null,
-              supplier: record['VendorName'] || null,
-              reorder_level: null,
-              core_charge: parseFloat(record['CoreCharge'] || '0') || null,
-              // FTP specific fields
-              vendor_code: record['VendorCode'] || null,
-              manufacturer_part_no: record['ManufacturerPartNo'] || null,
-              case_qty: parseInt(record['CaseQty'] || '0') || null,
-              // Regional quantities
-              california_qty: parseInt(record['CaliforniaQty'] || '0') || null,
-              east_qty: parseInt(record['EastQty'] || '0') || null,
-              florida_qty: parseInt(record['FloridaQty'] || '0') || null,
-              great_lakes_qty: parseInt(record['GreatLakesQty'] || '0') || null,
-              midwest_qty: parseInt(record['MidwestQty'] || '0') || null,
-              pacific_nw_qty: parseInt(record['PacificNWQty'] || '0') || null,
-              southeast_qty: parseInt(record['SoutheastQty'] || '0') || null,
-              texas_qty: parseInt(record['TexasQty'] || '0') || null,
-            };
+            const inventoryItem = mapCSVToInventoryItem(record);
+            
+            // Insert item
+            const { error } = await supabase
+              .from('inventory')
+              .insert([inventoryItem]);
 
-            // Validate required fields
-            if (!inventoryItem.name || inventoryItem.name === 'Unknown Item') {
-              warnings.push(`Row ${processed + 1}: Missing product name/description`);
-            }
-
-            if (!inventoryItem.sku) {
-              warnings.push(`Row ${processed + 1}: Missing SKU/Part Number`);
-            }
-
-            console.log('💾 Processing item:', inventoryItem.name, 'SKU:', inventoryItem.sku);
-
-            // Check if item exists by SKU
-            let existingItem = null;
-            if (inventoryItem.sku) {
-              const { data: existing } = await supabase
-                .from('inventory')
-                .select('id')
-                .eq('sku', inventoryItem.sku)
-                .single();
-              existingItem = existing;
-            }
-
-            if (existingItem) {
-              // Update existing item
-              console.log('🔄 Updating existing item with ID:', existingItem.id);
-              const { error } = await supabase
-                .from('inventory')
-                .update(inventoryItem)
-                .eq('id', existingItem.id);
-
-              if (error) {
-                console.error('❌ Update error:', error);
-                errors.push(`Failed to update ${inventoryItem.name}: ${error.message}`);
-              } else {
-                console.log('✅ Updated successfully');
-                updated++;
-              }
+            if (error) {
+              console.error('❌ Insert error:', error);
+              result.failed++;
+              result.errors.push(`${inventoryItem.name}: ${error.message}`);
             } else {
-              // Insert new item
-              console.log('➕ Inserting new item');
-              const { error } = await supabase
-                .from('inventory')
-                .insert([inventoryItem]);
-
-              if (error) {
-                console.error('❌ Insert error:', error);
-                errors.push(`Failed to insert ${inventoryItem.name}: ${error.message}`);
-              } else {
-                console.log('✅ Inserted successfully');
-                inserted++;
-              }
+              result.successful++;
+              console.log('✅ Item inserted:', inventoryItem.name);
             }
-
-            processed++;
           } catch (error) {
             console.error('❌ Item processing error:', error);
-            errors.push(`Error processing row ${processed + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            result.failed++;
+            result.errors.push(`Row processing error: ${error}`);
           }
         }
 
         // Update progress
         const progress = Math.round(((batchIndex + 1) / batches.length) * 100);
         setUploadProgress(progress);
-        console.log('📊 Progress:', progress + '%');
 
-        // Add small delay for large batches to prevent overwhelming the database
-        if (records.length > 1000 && batchIndex < batches.length - 1) {
+        // Small delay between batches
+        if (batchIndex < batches.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
 
-      // Refresh inventory data (this will respect current pagination)
-      await refetchInventory();
-      console.log('🔄 Refreshed inventory data');
-
-      const result: UploadResult = {
-        success: errors.length === 0,
-        message: errors.length === 0 
-          ? `Successfully processed ${processed} items (${inserted} new, ${updated} updated)`
-          : `Processed ${processed} items with ${errors.length} errors (${inserted} new, ${updated} updated)`,
-        processed,
-        updated,
-        inserted,
-        errors,
-        warnings
-      };
-
-      console.log('🎯 Final result:', result);
+      console.log('✅ Upload completed:', result);
       setUploadResult(result);
-      setUploadStatus(errors.length === 0 ? 'success' : 'error');
+
+      // Refresh inventory data
+      await refetchInventory();
 
       toast({
-        title: errors.length === 0 ? "Upload Successful" : "Upload Completed with Errors",
-        description: result.message,
-        variant: errors.length === 0 ? "default" : "destructive",
+        title: "Upload Complete",
+        description: `Successfully processed ${result.successful} of ${result.total} items`,
       });
 
     } catch (error) {
-      console.error('💥 Upload error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      setUploadResult({
-        success: false,
-        message: errorMessage,
-        processed: 0,
-        updated: 0,
-        inserted: 0,
-        errors: [errorMessage],
-        warnings: []
-      });
-      setUploadStatus('error');
+      console.error('💥 Upload process error:', error);
+      result.errors.push(`Upload failed: ${error}`);
+      setUploadResult(result);
+      
       toast({
         title: "Upload Failed",
-        description: errorMessage,
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
         variant: "destructive",
       });
     } finally {
       setIsUploading(false);
-      console.log('🏁 Upload process completed');
+      setUploadProgress(100);
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      console.log('📁 File selected via button:', file.name);
-      
-      // Check file size (warn if > 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        toast({
-          title: "Large File Detected",
-          description: "This file is quite large. Upload may take several minutes.",
-          variant: "default",
-        });
-      }
-      
-      processCSVFile(file);
+  // Reset upload state
+  const resetUpload = () => {
+    setSelectedFile(null);
+    setUploadResult(null);
+    setUploadProgress(0);
+    setPreviewData([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
-  const handleButtonClick = () => {
-    console.log('🖱️ File selection button clicked');
+  // Open file picker
+  const openFilePicker = () => {
+    console.log('📁 Opening file picker');
     fileInputRef.current?.click();
   };
 
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const file = event.dataTransfer.files[0];
-    if (file) {
-      console.log('📁 File dropped:', file.name);
-      
-      // Check file size
-      if (file.size > 10 * 1024 * 1024) {
-        toast({
-          title: "Large File Detected",
-          description: "This file is quite large. Upload may take several minutes.",
-          variant: "default",
-        });
-      }
-      
-      processCSVFile(file);
-    }
-  };
-
-  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-  };
-
-  const resetUpload = () => {
-    console.log('🔄 Resetting upload state');
-    setUploadStatus('idle');
-    setUploadProgress(0);
-    setUploadResult(null);
+  // Close dialog
+  const closeDialog = () => {
+    setShowUploadDialog(false);
+    resetUpload();
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" onClick={() => {
-          console.log('🚀 Opening upload dialog');
-          resetUpload();
-        }}>
-          <Upload className="w-4 h-4 mr-2" />
-          Upload CSV
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Upload Inventory CSV</DialogTitle>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          {uploadStatus === 'idle' && (
-            <div
-              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors"
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-            >
-              <FileText className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-              <p className="text-sm text-gray-600 mb-2">
-                Drag and drop your CSV file here, or click to select
-              </p>
-              <p className="text-xs text-gray-500 mb-4">
-                Supports large files up to 12,000+ records
-              </p>
-              
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleFileSelect}
-                style={{ display: 'none' }}
-                disabled={isUploading}
-              />
-              
-              {/* Clickable button */}
-              <Button 
-                variant="outline" 
-                onClick={handleButtonClick}
-                disabled={isUploading}
-                type="button"
-              >
-                Select CSV File
+    <>
+      {/* Upload Button */}
+      <Button 
+        variant="outline" 
+        onClick={handleUploadClick}
+        type="button"
+      >
+        <Upload className="w-4 h-4 mr-2" />
+        Upload CSV
+      </Button>
+
+      {/* Upload Dialog - Simple Modal */}
+      {showUploadDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Upload Inventory CSV</h2>
+              <Button variant="outline" onClick={closeDialog} disabled={isUploading}>
+                ✕
               </Button>
             </div>
-          )}
-
-          {uploadStatus === 'uploading' && (
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Upload className="w-4 h-4 animate-spin" />
-                <span className="text-sm">Uploading inventory data...</span>
-              </div>
-              <Progress value={uploadProgress} className="w-full" />
-              <p className="text-xs text-gray-500 text-center">
-                {uploadProgress}% complete
-              </p>
-              {uploadProgress > 0 && (
-                <p className="text-xs text-gray-400 text-center">
-                  Processing large datasets may take several minutes
-                </p>
-              )}
-            </div>
-          )}
-
-          {uploadStatus === 'success' && uploadResult && (
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2 text-green-600">
-                <CheckCircle className="w-5 h-5" />
-                <span className="font-medium">Upload Successful!</span>
-              </div>
-              <div className="bg-green-50 p-3 rounded-md">
-                <p className="text-sm text-green-800">{uploadResult.message}</p>
-                <div className="text-xs text-green-600 mt-2 space-y-1">
-                  <p>• {uploadResult.inserted} new items added</p>
-                  <p>• {uploadResult.updated} existing items updated</p>
-                  <p>• {uploadResult.processed} total items processed</p>
+            
+            <div className="space-y-6">
+              {/* File Selection */}
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  disabled={isUploading}
+                />
+                
+                <div className="space-y-2">
+                  <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                  <div>
+                    <p className="text-lg font-medium">
+                      {selectedFile ? selectedFile.name : 'Select CSV File'}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Click below to select your CSV file
+                    </p>
+                    {selectedFile && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Size: {(selectedFile.size / 1024).toFixed(1)} KB
+                      </p>
+                    )}
+                  </div>
+                  <Button onClick={openFilePicker} disabled={isUploading}>
+                    Select File
+                  </Button>
                 </div>
-                {uploadResult.warnings.length > 0 && (
-                  <div className="mt-3 p-2 bg-yellow-50 rounded border-l-4 border-yellow-400">
-                    <div className="flex items-center">
-                      <AlertTriangle className="w-4 h-4 text-yellow-600 mr-2" />
-                      <span className="text-xs font-medium text-yellow-800">
-                        {uploadResult.warnings.length} warnings
-                      </span>
-                    </div>
-                    <ul className="text-xs text-yellow-700 mt-1 space-y-1">
-                      {uploadResult.warnings.slice(0, 3).map((warning, index) => (
-                        <li key={index}>• {warning}</li>
-                      ))}
-                      {uploadResult.warnings.length > 3 && (
-                        <li>• ... and {uploadResult.warnings.length - 3} more warnings</li>
-                      )}
-                    </ul>
-                  </div>
-                )}
               </div>
-              <Button onClick={() => setIsOpen(false)} className="w-full">
-                Close
-              </Button>
-            </div>
-          )}
 
-          {uploadStatus === 'error' && uploadResult && (
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2 text-red-600">
-                <XCircle className="w-5 h-5" />
-                <span className="font-medium">Upload Error</span>
-              </div>
-              <div className="bg-red-50 p-3 rounded-md">
-                <p className="text-sm text-red-800">{uploadResult.message}</p>
-                {uploadResult.errors.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs text-red-600 font-medium">Errors:</p>
-                    <ul className="text-xs text-red-600 mt-1 space-y-1">
-                      {uploadResult.errors.slice(0, 5).map((error, index) => (
-                        <li key={index}>• {error}</li>
-                      ))}
-                      {uploadResult.errors.length > 5 && (
-                        <li>• ... and {uploadResult.errors.length - 5} more errors</li>
-                      )}
-                    </ul>
+              {/* CSV Preview */}
+              {previewData.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">CSV Preview</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xs space-y-2">
+                      <p><strong>Detected Fields:</strong> {Object.keys(previewData[0] || {}).join(', ')}</p>
+                      <p><strong>Sample Records:</strong> {previewData.length} shown</p>
+                      <div className="bg-gray-50 p-2 rounded text-xs max-h-32 overflow-y-auto">
+                        {previewData.map((record, index) => (
+                          <div key={index} className="mb-1">
+                            <strong>Row {index + 1}:</strong> {record['LongDescription'] || record['PartNumber'] || 'Unknown'}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Upload Progress */}
+              {isUploading && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress}%</span>
                   </div>
-                )}
-              </div>
-              <div className="flex space-x-2">
-                <Button onClick={resetUpload} variant="outline" className="flex-1">
-                  Try Again
+                  <Progress value={uploadProgress} className="w-full" />
+                </div>
+              )}
+
+              {/* Upload Results */}
+              {uploadResult && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm flex items-center">
+                      {uploadResult.successful === uploadResult.total ? (
+                        <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
+                      ) : uploadResult.failed > 0 ? (
+                        <AlertTriangle className="w-4 h-4 text-yellow-500 mr-2" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-red-500 mr-2" />
+                      )}
+                      Upload Results
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <Badge variant="outline" className="mr-2">Total</Badge>
+                          {uploadResult.total}
+                        </div>
+                        <div>
+                          <Badge variant="default" className="mr-2">Success</Badge>
+                          {uploadResult.successful}
+                        </div>
+                        <div>
+                          <Badge variant="destructive" className="mr-2">Failed</Badge>
+                          {uploadResult.failed}
+                        </div>
+                      </div>
+
+                      {uploadResult.errors.length > 0 && (
+                        <Alert>
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertDescription>
+                            <details className="text-xs">
+                              <summary className="cursor-pointer font-medium">
+                                {uploadResult.errors.length} errors occurred
+                              </summary>
+                              <div className="mt-2 max-h-32 overflow-y-auto">
+                                {uploadResult.errors.slice(0, 5).map((error, index) => (
+                                  <div key={index} className="text-xs text-red-600">
+                                    {error}
+                                  </div>
+                                ))}
+                                {uploadResult.errors.length > 5 && (
+                                  <div className="text-xs text-gray-500">
+                                    ... and {uploadResult.errors.length - 5} more errors
+                                  </div>
+                                )}
+                              </div>
+                            </details>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-between">
+                <Button
+                  variant="outline"
+                  onClick={resetUpload}
+                  disabled={isUploading}
+                >
+                  Reset
                 </Button>
-                <Button onClick={() => setIsOpen(false)} className="flex-1">
-                  Close
-                </Button>
+                <div className="space-x-2">
+                  <Button
+                    variant="outline"
+                    onClick={closeDialog}
+                    disabled={isUploading}
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    onClick={processCSVFile}
+                    disabled={!selectedFile || isUploading}
+                  >
+                    {isUploading ? 'Uploading...' : 'Upload CSV'}
+                  </Button>
+                </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      )}
+    </>
   );
 }
+
+export default InventoryFileUpload;
 
