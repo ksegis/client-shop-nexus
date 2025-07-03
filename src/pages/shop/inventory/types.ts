@@ -126,7 +126,7 @@ export interface CSVInventoryRecord {
   IsKit: string;
 }
 
-// Extended form schema for FTP fields (optional, for future use)
+// Extended form schema_for FTP fields (optional, for future use)
 export const extendedInventoryFormSchema = inventoryFormSchema.extend({
   vendor_name: z.string().optional().nullable(),
   vcpn: z.string().optional().nullable(),
