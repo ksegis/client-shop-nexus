@@ -1,4 +1,3 @@
-
 import { createContext, useContext, ReactNode, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,12 +11,10 @@ interface InventoryContextProps {
   sortField: keyof InventoryItem;
   sortDirection: 'asc' | 'desc';
   handleSort: (field: keyof InventoryItem) => void;
-  addItem: (values: InventoryFormValues) => void;
-  updateItem: (values: InventoryFormValues & { id: string }) => void;
+  addItem: (values: InventoryFormValues) => Promise<void>;
+  updateItem: (values: InventoryFormValues & { id: string }) => Promise<void>;
   isSubmitting: boolean;
 }
-
-const InventoryContext = createContext<InventoryContextProps | undefined>(undefined);
 
 export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
@@ -25,92 +22,188 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const [sortField, setSortField] = useState<keyof InventoryItem>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
-  // Fetch inventory items
+  // Fetch inventory items with improved error handling
   const { data: inventoryItems, isLoading, error } = useQuery({
     queryKey: ['inventory', sortField, sortDirection],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('inventory')
-        .select('*')
-        .order(sortField, { ascending: sortDirection === 'asc' });
-      
-      if (error) throw error;
-      return data as InventoryItem[];
+      try {
+        const { data, error } = await supabase
+          .from('inventory')
+          .select('*')
+          .order(sortField, { ascending: sortDirection === 'asc' });
+
+        if (error) {
+          console.error('Supabase fetch error:', error.message, error.details);
+          throw new Error(`Failed to fetch inventory: ${error.message}`);
+        }
+
+        if (!data) {
+          throw new Error('No data returned from inventory query');
+        }
+
+        return data as InventoryItem[];
+      } catch (err: any) {
+        console.error('Inventory fetch error:', err);
+        throw err;
+      }
     },
+    retry: (failureCount, error) => {
+      // Retry up to 3 times for network errors, but not for auth/permission errors
+      if (failureCount < 3 && !error.message.includes('permission')) {
+        return true;
+      }
+      return false;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
-  // Add inventory item mutation
+  // Add inventory item mutation with improved error handling
   const addItemMutation = useMutation({
     mutationFn: async (values: InventoryFormValues) => {
-      // Fix: Ensure the values object has all required fields including name
-      if (!values.name) {
-        throw new Error("Name is required");
+      try {
+        // Validate required fields
+        if (!values.name) {
+          throw new Error('Name is required');
+        }
+
+        const inventoryItem = {
+          name: values.name,
+          description: values.description,
+          sku: values.sku,
+          quantity: values.quantity,
+          price: values.price,
+          cost: values.cost,
+          category: values.category,
+          supplier: values.supplier,
+          reorder_level: values.reorder_level,
+          core_charge: values.core_charge,
+        };
+
+        const { data, error } = await supabase
+          .from('inventory')
+          .insert(inventoryItem)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Supabase insert error:', error.message, error.details, error.hint);
+          
+          // Provide more specific error messages
+          if (error.code === '23505') {
+            throw new Error('An item with this name or SKU already exists');
+          } else if (error.code === '42501') {
+            throw new Error('Permission denied. Please check your access rights.');
+          } else if (error.code === '23502') {
+            throw new Error('Missing required field. Please fill in all required information.');
+          } else {
+            throw new Error(`Failed to add item: ${error.message}`);
+          }
+        }
+
+        if (!data) {
+          throw new Error('No data returned after inserting item');
+        }
+
+        return data;
+      } catch (err: any) {
+        console.error('Add item error:', err);
+        throw err;
       }
-      
-      const { error } = await supabase.from('inventory').insert({
-        name: values.name,
-        description: values.description,
-        sku: values.sku,
-        quantity: values.quantity,
-        price: values.price,
-        cost: values.cost,
-        category: values.category,
-        supplier: values.supplier,
-        reorder_level: values.reorder_level
-      });
-      
-      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       toast({
-        title: "Item added",
-        description: "Inventory item has been added successfully",
+        title: "Success",
+        description: "Item added successfully",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error('Add item mutation error:', error);
       toast({
-        title: "Error adding item",
-        description: error.message,
+        title: "Error",
+        description: error.message || "Failed to add item",
         variant: "destructive",
       });
     },
   });
 
-  // Update inventory item mutation
+  // Update inventory item mutation with improved error handling
   const updateItemMutation = useMutation({
     mutationFn: async (values: InventoryFormValues & { id: string }) => {
-      const { id, ...itemData } = values;
-      
-      // Fix: Ensure name is included and not undefined
-      if (!itemData.name) {
-        throw new Error("Name is required");
+      try {
+        // Validate required fields
+        if (!values.name) {
+          throw new Error('Name is required');
+        }
+        if (!values.id) {
+          throw new Error('Item ID is required for update');
+        }
+
+        const inventoryItem = {
+          name: values.name,
+          description: values.description,
+          sku: values.sku,
+          quantity: values.quantity,
+          price: values.price,
+          cost: values.cost,
+          category: values.category,
+          supplier: values.supplier,
+          reorder_level: values.reorder_level,
+          core_charge: values.core_charge,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { data, error } = await supabase
+          .from('inventory')
+          .update(inventoryItem)
+          .eq('id', values.id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Supabase update error:', error.message, error.details, error.hint);
+          
+          // Provide more specific error messages
+          if (error.code === '23505') {
+            throw new Error('An item with this name or SKU already exists');
+          } else if (error.code === '42501') {
+            throw new Error('Permission denied. Please check your access rights.');
+          } else if (error.code === '23502') {
+            throw new Error('Missing required field. Please fill in all required information.');
+          } else if (error.code === 'PGRST116') {
+            throw new Error('Item not found. It may have been deleted by another user.');
+          } else {
+            throw new Error(`Failed to update item: ${error.message}`);
+          }
+        }
+
+        if (!data) {
+          throw new Error('No data returned after updating item');
+        }
+
+        return data;
+      } catch (err: any) {
+        console.error('Update item error:', err);
+        throw err;
       }
-      
-      const { error } = await supabase
-        .from('inventory')
-        .update(itemData)
-        .eq('id', id);
-      
-      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       toast({
-        title: "Item updated",
-        description: "Inventory item has been updated successfully",
+        title: "Success",
+        description: "Item updated successfully",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error('Update item mutation error:', error);
       toast({
-        title: "Error updating item",
-        description: error.message,
+        title: "Error",
+        description: error.message || "Failed to update item",
         variant: "destructive",
       });
     },
   });
 
-  // Handle sort
   const handleSort = (field: keyof InventoryItem) => {
     if (field === sortField) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -120,16 +213,34 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const value = {
+  const addItem = async (values: InventoryFormValues): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      addItemMutation.mutate(values, {
+        onSuccess: () => resolve(),
+        onError: (error) => reject(error),
+      });
+    });
+  };
+
+  const updateItem = async (values: InventoryFormValues & { id: string }): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      updateItemMutation.mutate(values, {
+        onSuccess: () => resolve(),
+        onError: (error) => reject(error),
+      });
+    });
+  };
+
+  const value: InventoryContextProps = {
     inventoryItems: inventoryItems || [],
     isLoading,
-    error: error as Error | null,
+    error,
     sortField,
     sortDirection,
     handleSort,
-    addItem: addItemMutation.mutate,
-    updateItem: updateItemMutation.mutate,
-    isSubmitting: addItemMutation.isPending || updateItemMutation.isPending
+    addItem,
+    updateItem,
+    isSubmitting: addItemMutation.isPending || updateItemMutation.isPending,
   };
 
   return (
@@ -139,10 +250,13 @@ export const InventoryProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-export const useInventoryContext = (): InventoryContextProps => {
+const InventoryContext = createContext<InventoryContextProps | undefined>(undefined);
+
+export const useInventoryContext = () => {
   const context = useContext(InventoryContext);
   if (context === undefined) {
     throw new Error('useInventoryContext must be used within an InventoryProvider');
   }
   return context;
 };
+
