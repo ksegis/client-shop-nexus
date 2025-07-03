@@ -11,7 +11,7 @@ import { SearchFilter } from './inventory/SearchFilter';
 import { InventoryFileUpload } from './inventory/InventoryFileUpload';
 import { InventoryProvider, useInventoryContext } from './inventory/InventoryContext';
 
-// This is the container component that uses the context
+// This is the container component that uses the_context
 const InventoryContent = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
