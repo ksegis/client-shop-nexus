@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Upload, AlertTriangle, FileText, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Upload, AlertTriangle, FileText, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -50,6 +51,14 @@ interface CSVRecord {
   [key: string]: string;
 }
 
+// Pagination interface
+interface PaginationInfo {
+  currentPage: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
 export default function Inventory() {
   const [items, setItems] = useState<BasicInventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -70,6 +79,15 @@ export default function Inventory() {
     reorder_level: '0'
   });
 
+  // Pagination states
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    currentPage: 1,
+    pageSize: 20,
+    totalItems: 0,
+    totalPages: 0
+  });
+  const [searchTerm, setSearchTerm] = useState('');
+
   // CSV Upload states
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -81,18 +99,30 @@ export default function Inventory() {
 
   const { toast } = useToast();
 
-  // Simple fetch function
-  const fetchInventory = async () => {
+  // Fetch inventory with pagination
+  const fetchInventory = async (page: number = pagination.currentPage, pageSize: number = pagination.pageSize, search: string = searchTerm) => {
     try {
-      console.log('🔍 Fetching inventory (RLS workaround version)');
+      console.log(`🔍 Fetching inventory - Page: ${page}, Size: ${pageSize}, Search: "${search}"`);
       setIsLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      // Calculate offset
+      const offset = (page - 1) * pageSize;
+
+      // Build query
+      let query = supabase
         .from('inventory')
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
-        .limit(50);
+        .range(offset, offset + pageSize - 1);
+
+      // Add search filter if provided
+      if (search.trim()) {
+        const searchFilter = search.trim();
+        query = query.or(`name.ilike.%${searchFilter}%,description.ilike.%${searchFilter}%,sku.ilike.%${searchFilter}%,supplier.ilike.%${searchFilter}%`);
+      }
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error('❌ Fetch error:', error);
@@ -100,9 +130,19 @@ export default function Inventory() {
       }
 
       const safeData = data || [];
-      console.log('✅ Fetched items:', safeData.length);
+      const totalItems = count || 0;
+      const totalPages = Math.ceil(totalItems / pageSize);
+
+      console.log(`✅ Fetched ${safeData.length} items (${totalItems} total, ${totalPages} pages)`);
       
       setItems(safeData);
+      setPagination({
+        currentPage: page,
+        pageSize,
+        totalItems,
+        totalPages
+      });
+
     } catch (err) {
       console.error('💥 Fetch error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch inventory';
@@ -120,6 +160,28 @@ export default function Inventory() {
   useEffect(() => {
     fetchInventory();
   }, []);
+
+  // Pagination handlers
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      fetchInventory(newPage, pagination.pageSize, searchTerm);
+    }
+  };
+
+  const handlePageSizeChange = (newPageSize: string) => {
+    const pageSize = parseInt(newPageSize);
+    fetchInventory(1, pageSize, searchTerm);
+  };
+
+  const handleSearch = (search: string) => {
+    setSearchTerm(search);
+    fetchInventory(1, pagination.pageSize, search);
+  };
+
+  const clearSearch = () => {
+    setSearchTerm('');
+    fetchInventory(1, pagination.pageSize, '');
+  };
 
   // Reset form data
   const resetForm = () => {
@@ -177,9 +239,11 @@ export default function Inventory() {
       }
 
       console.log('✅ Item added:', data.id);
-      setItems(prev => [data, ...prev]);
       resetForm();
       setIsAddDialogOpen(false);
+
+      // Refresh current page
+      await fetchInventory(pagination.currentPage, pagination.pageSize, searchTerm);
 
       toast({
         title: "Success",
@@ -233,19 +297,12 @@ export default function Inventory() {
 
       console.log('✅ Item updated:', data.id);
 
-      const updatedItems = [];
-      for (const item of items) {
-        if (item.id === editingItem.id) {
-          updatedItems.push(data);
-        } else {
-          updatedItems.push(item);
-        }
-      }
-      setItems(updatedItems);
-      
       resetForm();
       setIsEditDialogOpen(false);
       setEditingItem(null);
+
+      // Refresh current page
+      await fetchInventory(pagination.currentPage, pagination.pageSize, searchTerm);
 
       toast({
         title: "Success",
@@ -316,14 +373,8 @@ export default function Inventory() {
         });
       }
 
-      // Remove from local state regardless of method used
-      const updatedItems = [];
-      for (const item of items) {
-        if (item.id !== id) {
-          updatedItems.push(item);
-        }
-      }
-      setItems(updatedItems);
+      // Refresh current page
+      await fetchInventory(pagination.currentPage, pagination.pageSize, searchTerm);
 
     } catch (err) {
       console.error('❌ Delete error:', err);
@@ -482,7 +533,7 @@ export default function Inventory() {
 
       console.log(`📊 Processing ${records.length} records`);
 
-      const batchSize = 10;
+      const batchSize = 25; // Larger batch size for better performance
       const batches = [];
       for (let i = 0; i < records.length; i += batchSize) {
         batches.push(records.slice(i, i + batchSize));
@@ -521,14 +572,15 @@ export default function Inventory() {
         setUploadProgress(progress);
 
         if (batchIndex < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 50)); // Shorter delay for better performance
         }
       }
 
       console.log('✅ Upload completed:', result);
       setUploadResult(result);
 
-      await fetchInventory();
+      // Refresh inventory to show new items
+      await fetchInventory(1, pagination.pageSize, searchTerm);
 
       toast({
         title: "Upload Complete",
@@ -579,6 +631,82 @@ export default function Inventory() {
     }).format(amount);
   };
 
+  // Pagination component
+  const PaginationControls = () => {
+    const startItem = (pagination.currentPage - 1) * pagination.pageSize + 1;
+    const endItem = Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems);
+
+    return (
+      <div className="flex items-center justify-between px-2">
+        <div className="flex items-center space-x-2">
+          <p className="text-sm text-gray-700">
+            Showing {startItem} to {endItem} of {pagination.totalItems} items
+            {searchTerm && (
+              <span className="text-blue-600"> (filtered by "{searchTerm}")</span>
+            )}
+          </p>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2">
+            <Label htmlFor="pageSize" className="text-sm">Items per page:</Label>
+            <Select value={pagination.pageSize.toString()} onValueChange={handlePageSizeChange}>
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+                <SelectItem value="200">200</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center space-x-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(1)}
+              disabled={pagination.currentPage === 1}
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(pagination.currentPage - 1)}
+              disabled={pagination.currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            <span className="text-sm px-3">
+              Page {pagination.currentPage} of {pagination.totalPages}
+            </span>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(pagination.currentPage + 1)}
+              disabled={pagination.currentPage === pagination.totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(pagination.totalPages)}
+              disabled={pagination.currentPage === pagination.totalPages}
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -598,7 +726,7 @@ export default function Inventory() {
             <div className="text-center text-red-600">
               <h2 className="text-lg font-semibold mb-2">Error Loading Inventory</h2>
               <p>{error}</p>
-              <Button onClick={fetchInventory} className="mt-4">
+              <Button onClick={() => fetchInventory()} className="mt-4">
                 Try Again
               </Button>
             </div>
@@ -614,10 +742,12 @@ export default function Inventory() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
-          <p className="text-gray-600 mt-1">RLS Workaround version - {items.length} items loaded</p>
+          <p className="text-gray-600 mt-1">
+            {pagination.totalItems} total items • Page {pagination.currentPage} of {pagination.totalPages}
+          </p>
         </div>
         <div className="flex space-x-2">
-          <Button onClick={fetchInventory} variant="outline">
+          <Button onClick={() => fetchInventory(pagination.currentPage, pagination.pageSize, searchTerm)} variant="outline">
             Refresh
           </Button>
           <Button variant="outline" onClick={handleUploadClick}>
@@ -732,6 +862,26 @@ export default function Inventory() {
           </Dialog>
         </div>
       </div>
+
+      {/* Search Bar */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-2">
+            <Search className="h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search inventory by name, description, SKU, or supplier..."
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="flex-1"
+            />
+            {searchTerm && (
+              <Button variant="outline" size="sm" onClick={clearSearch}>
+                Clear
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* CSV Upload Dialog */}
       <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
@@ -922,20 +1072,10 @@ export default function Inventory() {
         </Card>
       )}
 
-      {/* Debug Info */}
+      {/* Pagination Controls - Top */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-sm text-blue-600">🔧 RLS Workaround Version with Working CSV Upload</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-xs text-gray-600 space-y-1">
-            <p>• RLS delete workaround implemented</p>
-            <p>• Soft delete fallback for RLS issues</p>
-            <p>• Add, Edit functionality working</p>
-            <p>• ✅ CSV Upload functionality added</p>
-            <p>• Error detection and reporting</p>
-            <p>• Limited to 50 items display</p>
-          </div>
+        <CardContent className="p-4">
+          <PaginationControls />
         </CardContent>
       </Card>
 
@@ -1046,8 +1186,17 @@ export default function Inventory() {
         <Card>
           <CardContent className="p-6">
             <div className="text-center text-gray-500">
-              <p>No inventory items found.</p>
-              <p className="text-sm mt-1">Add some items to get started.</p>
+              {searchTerm ? (
+                <>
+                  <p>No items found matching "{searchTerm}".</p>
+                  <p className="text-sm mt-1">Try a different search term or clear the search.</p>
+                </>
+              ) : (
+                <>
+                  <p>No inventory items found.</p>
+                  <p className="text-sm mt-1">Add some items to get started.</p>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -1126,13 +1275,34 @@ export default function Inventory() {
         </div>
       )}
 
+      {/* Pagination Controls - Bottom */}
+      <Card>
+        <CardContent className="p-4">
+          <PaginationControls />
+        </CardContent>
+      </Card>
+
       {/* Footer Info */}
       <Card>
         <CardContent className="p-4">
           <div className="text-center text-sm text-gray-600">
-            Showing {items.length} items (limited to 50 for safety)
-            <br />
-            <span className="text-xs">RLS Workaround version with working CSV upload functionality</span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-lg font-semibold text-blue-600">{pagination.totalItems}</div>
+                <div className="text-xs">Total Items</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-green-600">{pagination.totalPages}</div>
+                <div className="text-xs">Total Pages</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-purple-600">{pagination.pageSize}</div>
+                <div className="text-xs">Items per Page</div>
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-gray-500">
+              ✅ Pagination enabled • ✅ Search functionality • ✅ CSV upload • ✅ RLS workaround
+            </div>
           </div>
         </CardContent>
       </Card>
