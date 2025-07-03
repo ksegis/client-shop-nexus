@@ -12,7 +12,6 @@ interface InventoryTableProps {
   onDelete: (id: string) => void;
 }
 
-// IMPORTANT: Make sure this component is properly exported
 export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
   const {
     items,
@@ -25,14 +24,24 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
     setPageSize,
   } = useInventoryContext();
 
+  // Defensive data handling
+  const safeItems = Array.isArray(items) ? items : [];
+  const safeTotalCount = typeof totalCount === 'number' ? totalCount : 0;
+  const safeCurrentPage = typeof currentPage === 'number' ? Math.max(1, currentPage) : 1;
+  const safePageSize = typeof pageSize === 'number' ? Math.max(1, pageSize) : 20;
+  const safeTotalPages = typeof totalPages === 'number' ? Math.max(1, totalPages) : 1;
+
   const getStockStatus = (quantity: number, reorderLevel?: number | null) => {
-    if (quantity === 0) return { label: 'Out of Stock', variant: 'destructive' as const };
-    if (reorderLevel && quantity <= reorderLevel) return { label: 'Low Stock', variant: 'secondary' as const };
+    const safeQuantity = typeof quantity === 'number' ? quantity : 0;
+    const safeReorderLevel = typeof reorderLevel === 'number' ? reorderLevel : null;
+    
+    if (safeQuantity === 0) return { label: 'Out of Stock', variant: 'destructive' as const };
+    if (safeReorderLevel && safeQuantity <= safeReorderLevel) return { label: 'Low Stock', variant: 'secondary' as const };
     return { label: 'In Stock', variant: 'default' as const };
   };
 
-  const formatCurrency = (amount: number | null) => {
-    if (amount === null || amount === undefined) return '—';
+  const formatCurrency = (amount: number | null | undefined) => {
+    if (amount === null || amount === undefined || typeof amount !== 'number') return '—';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -40,14 +49,38 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
   };
 
   const handlePageSizeChange = (newPageSize: string) => {
-    setPageSize(parseInt(newPageSize));
-    setCurrentPage(1); // Reset to first page when changing page size
+    const size = parseInt(newPageSize);
+    if (!isNaN(size) && size > 0 && setPageSize) {
+      setPageSize(size);
+      if (setCurrentPage) {
+        setCurrentPage(1); // Reset to first page when changing page size
+      }
+    }
   };
 
-  const goToFirstPage = () => setCurrentPage(1);
-  const goToLastPage = () => setCurrentPage(totalPages);
-  const goToPreviousPage = () => setCurrentPage(Math.max(1, currentPage - 1));
-  const goToNextPage = () => setCurrentPage(Math.min(totalPages, currentPage + 1));
+  const goToFirstPage = () => {
+    if (setCurrentPage) {
+      setCurrentPage(1);
+    }
+  };
+
+  const goToLastPage = () => {
+    if (setCurrentPage) {
+      setCurrentPage(safeTotalPages);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (setCurrentPage) {
+      setCurrentPage(Math.max(1, safeCurrentPage - 1));
+    }
+  };
+
+  const goToNextPage = () => {
+    if (setCurrentPage) {
+      setCurrentPage(Math.min(safeTotalPages, safeCurrentPage + 1));
+    }
+  };
 
   if (isLoading) {
     return (
@@ -62,7 +95,7 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
     );
   }
 
-  if (items.length === 0) {
+  if (!safeItems || safeItems.length === 0) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -79,35 +112,49 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
     <div className="space-y-4">
       {/* Inventory Items */}
       <div className="grid gap-4">
-        {items.map((item) => {
-          const stockStatus = getStockStatus(item.quantity, item.reorder_level);
+        {safeItems.map((item) => {
+          // Defensive item data handling
+          const safeItem = {
+            id: item?.id || '',
+            name: item?.name || 'Unknown Item',
+            description: item?.description || null,
+            sku: item?.sku || null,
+            category: item?.category || null,
+            supplier: item?.supplier || null,
+            quantity: typeof item?.quantity === 'number' ? item.quantity : 0,
+            price: typeof item?.price === 'number' ? item.price : 0,
+            cost: typeof item?.cost === 'number' ? item.cost : null,
+            reorder_level: typeof item?.reorder_level === 'number' ? item.reorder_level : null,
+          };
+
+          const stockStatus = getStockStatus(safeItem.quantity, safeItem.reorder_level);
           
           return (
-            <Card key={item.id} className="hover:shadow-md transition-shadow">
+            <Card key={safeItem.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <h3 className="text-lg font-semibold text-gray-900 truncate">
-                          {item.name}
+                          {safeItem.name}
                         </h3>
-                        {item.description && (
+                        {safeItem.description && (
                           <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                            {item.description}
+                            {safeItem.description}
                           </p>
                         )}
                         <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-                          {item.sku && <span>SKU: {item.sku}</span>}
-                          {item.category && <span>{item.category}</span>}
-                          {item.supplier && <span>Supplier: {item.supplier}</span>}
+                          {safeItem.sku && <span>SKU: {safeItem.sku}</span>}
+                          {safeItem.category && <span>{safeItem.category}</span>}
+                          {safeItem.supplier && <span>Supplier: {safeItem.supplier}</span>}
                         </div>
                       </div>
                       
                       <div className="flex items-center space-x-4 ml-4">
                         <div className="text-right">
                           <div className="text-lg font-semibold text-gray-900">
-                            Qty: {item.quantity}
+                            Qty: {safeItem.quantity}
                           </div>
                           <Badge variant={stockStatus.variant} className="mt-1">
                             {stockStatus.label}
@@ -116,11 +163,11 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
                         
                         <div className="text-right">
                           <div className="text-lg font-semibold text-gray-900">
-                            {formatCurrency(item.price)}
+                            {formatCurrency(safeItem.price)}
                           </div>
-                          {item.cost && (
+                          {safeItem.cost && (
                             <div className="text-sm text-gray-500">
-                              Cost: {formatCurrency(item.cost)}
+                              Cost: {formatCurrency(safeItem.cost)}
                             </div>
                           )}
                         </div>
@@ -129,14 +176,14 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => onEdit(item)}
+                            onClick={() => onEdit && onEdit(item)}
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => onDelete(item.id)}
+                            onClick={() => onDelete && onDelete(safeItem.id)}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -157,12 +204,12 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="text-sm text-gray-700">
-                Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} items
+                Showing {((safeCurrentPage - 1) * safePageSize) + 1} to {Math.min(safeCurrentPage * safePageSize, safeTotalCount)} of {safeTotalCount} items
               </div>
               
               <div className="flex items-center space-x-2">
                 <span className="text-sm text-gray-700">Items per page:</span>
-                <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
+                <Select value={safePageSize.toString()} onValueChange={handlePageSizeChange}>
                   <SelectTrigger className="w-20">
                     <SelectValue />
                   </SelectTrigger>
@@ -181,7 +228,7 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
                 variant="outline"
                 size="sm"
                 onClick={goToFirstPage}
-                disabled={currentPage === 1}
+                disabled={safeCurrentPage === 1}
               >
                 <ChevronsLeft className="w-4 h-4" />
               </Button>
@@ -190,14 +237,14 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
                 variant="outline"
                 size="sm"
                 onClick={goToPreviousPage}
-                disabled={currentPage === 1}
+                disabled={safeCurrentPage === 1}
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
               
               <div className="flex items-center space-x-1">
                 <span className="text-sm text-gray-700">
-                  Page {currentPage} of {totalPages}
+                  Page {safeCurrentPage} of {safeTotalPages}
                 </span>
               </div>
               
@@ -205,7 +252,7 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
                 variant="outline"
                 size="sm"
                 onClick={goToNextPage}
-                disabled={currentPage === totalPages}
+                disabled={safeCurrentPage === safeTotalPages}
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>
@@ -214,7 +261,7 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
                 variant="outline"
                 size="sm"
                 onClick={goToLastPage}
-                disabled={currentPage === totalPages}
+                disabled={safeCurrentPage === safeTotalPages}
               >
                 <ChevronsRight className="w-4 h-4" />
               </Button>
@@ -226,6 +273,5 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
   );
 }
 
-// Also add a default export for compatibility
 export default InventoryTable;
 

@@ -52,45 +52,64 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
   } = useQuery({
     queryKey: ['inventory', currentPage, pageSize, searchTerm],
     queryFn: async () => {
-      console.log('🔍 Fetching inventory:', { currentPage, pageSize, searchTerm, offset });
-      
-      let query = supabase
-        .from('inventory')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + pageSize - 1);
+      try {
+        console.log('🔍 Fetching inventory:', { currentPage, pageSize, searchTerm, offset });
+        
+        let query = supabase
+          .from('inventory')
+          .select('*', { count: 'exact' })
+          .order('created_at', { ascending: false })
+          .range(offset, offset + pageSize - 1);
 
-      // Add search filter if search term exists
-      if (searchTerm.trim()) {
-        query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,supplier.ilike.%${searchTerm}%`);
+        // Add search filter if search term exists
+        if (searchTerm && searchTerm.trim()) {
+          query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,supplier.ilike.%${searchTerm}%`);
+        }
+
+        const { data, error, count } = await query;
+
+        if (error) {
+          console.error('❌ Inventory fetch error:', error);
+          throw new Error(`Failed to fetch inventory: ${error.message}`);
+        }
+
+        // Defensive programming - ensure data is always an array
+        const safeData = Array.isArray(data) ? data : [];
+        const safeCount = typeof count === 'number' ? count : 0;
+
+        console.log('✅ Fetched inventory:', { 
+          items: safeData.length, 
+          totalCount: safeCount,
+          page: currentPage,
+          pageSize 
+        });
+
+        return {
+          items: safeData,
+          totalCount: safeCount
+        };
+      } catch (error) {
+        console.error('💥 Query function error:', error);
+        // Return safe defaults on error
+        return {
+          items: [],
+          totalCount: 0
+        };
       }
-
-      const { data, error, count } = await query;
-
-      if (error) {
-        console.error('❌ Inventory fetch error:', error);
-        throw new Error(`Failed to fetch inventory: ${error.message}`);
-      }
-
-      console.log('✅ Fetched inventory:', { 
-        items: data?.length || 0, 
-        totalCount: count || 0,
-        page: currentPage,
-        pageSize 
-      });
-
-      return {
-        items: data || [],
-        totalCount: count || 0
-      };
     },
     staleTime: 30000, // 30 seconds
     gcTime: 300000, // 5 minutes
+    // Provide default data to prevent undefined errors
+    initialData: {
+      items: [],
+      totalCount: 0
+    },
   });
 
-  const items = inventoryData?.items || [];
-  const totalCount = inventoryData?.totalCount || 0;
-  const totalPages = Math.ceil(totalCount / pageSize);
+  // Defensive data extraction with fallbacks
+  const items = Array.isArray(inventoryData?.items) ? inventoryData.items : [];
+  const totalCount = typeof inventoryData?.totalCount === 'number' ? inventoryData.totalCount : 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   // Add item mutation
   const addItemMutation = useMutation({
@@ -108,7 +127,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         throw new Error(`Failed to add item: ${error.message}`);
       }
 
-      console.log('✅ Item added successfully:', data.id);
+      console.log('✅ Item added successfully:', data?.id);
       return data;
     },
     onSuccess: () => {
@@ -146,7 +165,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         throw new Error(`Failed to update item: ${error.message}`);
       }
 
-      console.log('✅ Item updated successfully:', data.id);
+      console.log('✅ Item updated successfully:', data?.id);
       return data;
     },
     onSuccess: () => {
@@ -227,27 +246,31 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
 
   // Reset to first page when search term changes
   React.useEffect(() => {
-    if (searchTerm.trim()) {
+    if (searchTerm && searchTerm.trim()) {
       setCurrentPage(1);
     }
   }, [searchTerm]);
 
+  // Defensive page bounds checking
+  const safeCurrentPage = Math.max(1, Math.min(currentPage, totalPages));
+  const safePageSize = Math.max(1, pageSize);
+
   const value: InventoryContextType = {
-    // Data
-    items,
-    totalCount,
-    isLoading,
+    // Data with defensive defaults
+    items: items || [],
+    totalCount: totalCount || 0,
+    isLoading: isLoading || false,
     error: error as Error | null,
     
-    // Pagination
-    currentPage,
-    pageSize,
-    totalPages,
-    setCurrentPage,
-    setPageSize,
+    // Pagination with safe bounds
+    currentPage: safeCurrentPage,
+    pageSize: safePageSize,
+    totalPages: totalPages || 1,
+    setCurrentPage: (page: number) => setCurrentPage(Math.max(1, Math.min(page, totalPages))),
+    setPageSize: (size: number) => setPageSize(Math.max(1, size)),
     
     // Search
-    searchTerm,
+    searchTerm: searchTerm || '',
     setSearchTerm,
     
     // CRUD operations
