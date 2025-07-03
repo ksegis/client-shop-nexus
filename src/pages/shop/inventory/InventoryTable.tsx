@@ -24,16 +24,16 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
     setPageSize,
   } = useInventoryContext();
 
-  // Defensive data handling
-  const safeItems = Array.isArray(items) ? items : [];
-  const safeTotalCount = typeof totalCount === 'number' ? totalCount : 0;
-  const safeCurrentPage = typeof currentPage === 'number' ? Math.max(1, currentPage) : 1;
-  const safePageSize = typeof pageSize === 'number' ? Math.max(1, pageSize) : 20;
-  const safeTotalPages = typeof totalPages === 'number' ? Math.max(1, totalPages) : 1;
+  // NO FILTERING - just safe data handling
+  const safeItems = items || [];
+  const safeTotalCount = totalCount || 0;
+  const safeCurrentPage = currentPage || 1;
+  const safePageSize = pageSize || 20;
+  const safeTotalPages = totalPages || 1;
 
   const getStockStatus = (quantity: number, reorderLevel?: number | null) => {
-    const safeQuantity = typeof quantity === 'number' ? quantity : 0;
-    const safeReorderLevel = typeof reorderLevel === 'number' ? reorderLevel : null;
+    const safeQuantity = quantity || 0;
+    const safeReorderLevel = reorderLevel || null;
     
     if (safeQuantity === 0) return { label: 'Out of Stock', variant: 'destructive' as const };
     if (safeReorderLevel && safeQuantity <= safeReorderLevel) return { label: 'Low Stock', variant: 'secondary' as const };
@@ -53,7 +53,7 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
     if (!isNaN(size) && size > 0 && setPageSize) {
       setPageSize(size);
       if (setCurrentPage) {
-        setCurrentPage(1); // Reset to first page when changing page size
+        setCurrentPage(1);
       }
     }
   };
@@ -110,12 +110,12 @@ export function InventoryTable({ onEdit, onDelete }: InventoryTableProps) {
 
   return (
     <div className="space-y-4">
-      {/* Inventory Items */}
+      {/* Inventory Items - NO FILTERING, just direct mapping */}
       <div className="grid gap-4">
-        {safeItems.map((item) => {
-          // Defensive item data handling
+        {safeItems.map((item, index) => {
+          // Safe item handling without any filtering
           const safeItem = {
-            id: item?.id || '',
+            id: item?.id || `item-${index}`,
             name: item?.name || 'Unknown Item',
             description: item?.description || null,
             sku: item?.sku || null,

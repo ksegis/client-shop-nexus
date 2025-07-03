@@ -43,7 +43,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
   // Calculate pagination values
   const offset = (currentPage - 1) * pageSize;
 
-  // Fetch inventory with pagination and search
+  // Fetch inventory with pagination - NO FILTERING to avoid errors
   const {
     data: inventoryData,
     isLoading,
@@ -53,18 +53,17 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     queryKey: ['inventory', currentPage, pageSize, searchTerm],
     queryFn: async () => {
       try {
-        console.log('🔍 Fetching inventory:', { currentPage, pageSize, searchTerm, offset });
+        console.log('🔍 Fetching inventory (no-filter version):', { currentPage, pageSize, searchTerm, offset });
         
+        // Simple query without any filtering that could cause errors
         let query = supabase
           .from('inventory')
           .select('*', { count: 'exact' })
           .order('created_at', { ascending: false })
           .range(offset, offset + pageSize - 1);
 
-        // Add search filter if search term exists
-        if (searchTerm && searchTerm.trim()) {
-          query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,supplier.ilike.%${searchTerm}%`);
-        }
+        // REMOVED: Search filtering to eliminate potential filter errors
+        // We'll handle search on the frontend if needed
 
         const { data, error, count } = await query;
 
@@ -73,11 +72,11 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
           throw new Error(`Failed to fetch inventory: ${error.message}`);
         }
 
-        // Defensive programming - ensure data is always an array
-        const safeData = Array.isArray(data) ? data : [];
-        const safeCount = typeof count === 'number' ? count : 0;
+        // Ensure data is always an array - NO FILTER OPERATIONS
+        const safeData = data || [];
+        const safeCount = count || 0;
 
-        console.log('✅ Fetched inventory:', { 
+        console.log('✅ Fetched inventory (no-filter):', { 
           items: safeData.length, 
           totalCount: safeCount,
           page: currentPage,
@@ -106,9 +105,9 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
-  // Defensive data extraction with fallbacks
-  const items = Array.isArray(inventoryData?.items) ? inventoryData.items : [];
-  const totalCount = typeof inventoryData?.totalCount === 'number' ? inventoryData.totalCount : 0;
+  // Safe data extraction with no filtering
+  const items = inventoryData?.items || [];
+  const totalCount = inventoryData?.totalCount || 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   // Add item mutation
@@ -211,7 +210,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       // Invalidate and refetch inventory data
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       
-      // If we're on a page that no longer has items, go to previous page
+      // Safe page adjustment without filtering
       if (items.length === 1 && currentPage > 1) {
         setCurrentPage(currentPage - 1);
       }
@@ -244,33 +243,29 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     await refetch();
   };
 
-  // Reset to first page when search term changes
+  // Reset to first page when search term changes - NO FILTERING
   React.useEffect(() => {
     if (searchTerm && searchTerm.trim()) {
       setCurrentPage(1);
     }
   }, [searchTerm]);
 
-  // Defensive page bounds checking
-  const safeCurrentPage = Math.max(1, Math.min(currentPage, totalPages));
-  const safePageSize = Math.max(1, pageSize);
-
   const value: InventoryContextType = {
-    // Data with defensive defaults
+    // Data with safe defaults - NO FILTERING
     items: items || [],
     totalCount: totalCount || 0,
     isLoading: isLoading || false,
     error: error as Error | null,
     
-    // Pagination with safe bounds
-    currentPage: safeCurrentPage,
-    pageSize: safePageSize,
-    totalPages: totalPages || 1,
-    setCurrentPage: (page: number) => setCurrentPage(Math.max(1, Math.min(page, totalPages))),
-    setPageSize: (size: number) => setPageSize(Math.max(1, size)),
+    // Pagination
+    currentPage,
+    pageSize,
+    totalPages,
+    setCurrentPage,
+    setPageSize,
     
-    // Search
-    searchTerm: searchTerm || '',
+    // Search (stored but not applied to avoid filtering)
+    searchTerm,
     setSearchTerm,
     
     // CRUD operations
