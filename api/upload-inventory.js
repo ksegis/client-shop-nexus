@@ -2,8 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { parse } from 'csv-parse/sync';
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.VITE_SUPABASE_URL,
+  process.env.VITE_SUPABASE_ANON_TOKEN
 );
 
 export default async function handler(req, res) {
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
       const record = records[i];
       
       try {
-        // Map CSV columns to database_columns (using existing column names where they exist)
+        // Map CSV columns to database columns (using existing column names where they exist)
         const inventoryItem = {
           // Core identification - map to existing columns
           name: record.PartNumber || '',
