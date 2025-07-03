@@ -1,170 +1,276 @@
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { createContext, useContext, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { InventoryItem } from './types';
-import { useInventoryContext } from './InventoryContext';
-import { StockStatusBadge } from './components/StockStatusBadge';
-import { StockStatusProgress } from './components/StockStatusProgress';
-import { TableActions } from './components/TableActions';
-import { EmptyTableRow } from './components/EmptyTableRow';
-import { SortableTableHeader } from './components/SortableTableHeader';
-import { CoreIndicatorBadge } from './components/CoreIndicatorBadge';
+import type { InventoryItem, InventoryFormValues } from './types';
 
-interface InventoryTableProps {
-  onEdit: (item: InventoryItem) => void;
+interface InventoryContextType {
+  // Data
+  items: InventoryItem[];
+  totalCount: number;
+  isLoading: boolean;
+  error: Error | null;
+  
+  // Pagination
+  currentPage: number;
+  pageSize: number;
+  totalPages: number;
+  setCurrentPage: (page: number) => void;
+  setPageSize: (size: number) => void;
+  
+  // Search
+  searchTerm: string;
+  setSearchTerm: (term: string) => void;
+  
+  // CRUD operations
+  addItem: (item: InventoryFormValues) => Promise<void>;
+  updateItem: (id: string, item: InventoryFormValues) => Promise<void>;
+  deleteItem: (id: string) => Promise<void>;
+  
+  // Utility
+  refetchInventory: () => Promise<void>;
 }
 
-export const InventoryTable = ({ onEdit }: InventoryTableProps) => {
+const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
+
+export function InventoryProvider({ children }: { children: React.ReactNode }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
-  const { 
-    inventoryItems,
+
+  // Calculate pagination values
+  const offset = (currentPage - 1) * pageSize;
+
+  // Fetch inventory with pagination and search
+  const {
+    data: inventoryData,
     isLoading,
-    sortField,
-    sortDirection,
-    handleSort
-  } = useInventoryContext();
-  
-  // Delete inventory item mutation
-  const deleteItemMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('inventory')
-        .delete()
-        .eq('id', id);
+    error,
+    refetch
+  } = useQuery({
+    queryKey: ['inventory', currentPage, pageSize, searchTerm],
+    queryFn: async () => {
+      console.log('🔍 Fetching inventory:', { currentPage, pageSize, searchTerm, offset });
       
-      if (error) throw error;
+      let query = supabase
+        .from('inventory')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + pageSize - 1);
+
+      // Add search filter if search term exists
+      if (searchTerm.trim()) {
+        query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,supplier.ilike.%${searchTerm}%`);
+      }
+
+      const { data, error, count } = await query;
+
+      if (error) {
+        console.error('❌ Inventory fetch error:', error);
+        throw new Error(`Failed to fetch inventory: ${error.message}`);
+      }
+
+      console.log('✅ Fetched inventory:', { 
+        items: data?.length || 0, 
+        totalCount: count || 0,
+        page: currentPage,
+        pageSize 
+      });
+
+      return {
+        items: data || [],
+        totalCount: count || 0
+      };
+    },
+    staleTime: 30000, // 30 seconds
+    gcTime: 300000, // 5 minutes
+  });
+
+  const items = inventoryData?.items || [];
+  const totalCount = inventoryData?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  // Add item mutation
+  const addItemMutation = useMutation({
+    mutationFn: async (item: InventoryFormValues) => {
+      console.log('➕ Adding inventory item:', item.name);
+      
+      const { data, error } = await supabase
+        .from('inventory')
+        .insert([item])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Add item error:', error);
+        throw new Error(`Failed to add item: ${error.message}`);
+      }
+
+      console.log('✅ Item added successfully:', data.id);
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
       toast({
-        title: "Item deleted",
-        description: "Inventory item has been deleted successfully",
+        title: "Success",
+        description: "Item added successfully",
       });
+      // Invalidate and refetch inventory data
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
     },
     onError: (error) => {
+      console.error('❌ Add item mutation error:', error);
       toast({
-        title: "Error deleting item",
+        title: "Error",
         description: error.message,
         variant: "destructive",
       });
     },
   });
 
-  if (isLoading) {
-    return <div className="text-center py-4">Loading inventory data...</div>;
-  }
+  // Update item mutation
+  const updateItemMutation = useMutation({
+    mutationFn: async ({ id, item }: { id: string; item: InventoryFormValues }) => {
+      console.log('🔄 Updating inventory item:', id, item.name);
+      
+      const { data, error } = await supabase
+        .from('inventory')
+        .update(item)
+        .eq('id', id)
+        .select()
+        .single();
 
-  if (inventoryItems.length === 0) {
-    return (
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[200px]">Name</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Quantity</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Stock Status</TableHead>
-              <TableHead>Core</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <EmptyTableRow colSpan={7} message="No inventory items found" />
-          </TableBody>
-        </Table>
-      </div>
-    );
-  }
+      if (error) {
+        console.error('❌ Update item error:', error);
+        throw new Error(`Failed to update item: ${error.message}`);
+      }
+
+      console.log('✅ Item updated successfully:', data.id);
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Item updated successfully",
+      });
+      // Invalidate and refetch inventory data
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    },
+    onError: (error) => {
+      console.error('❌ Update item mutation error:', error);
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete item mutation
+  const deleteItemMutation = useMutation({
+    mutationFn: async (id: string) => {
+      console.log('🗑️ Deleting inventory item:', id);
+      
+      const { error } = await supabase
+        .from('inventory')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('❌ Delete item error:', error);
+        throw new Error(`Failed to delete item: ${error.message}`);
+      }
+
+      console.log('✅ Item deleted successfully:', id);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Item deleted successfully",
+      });
+      // Invalidate and refetch inventory data
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      
+      // If we're on a page that no longer has items, go to previous page
+      if (items.length === 1 && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      }
+    },
+    onError: (error) => {
+      console.error('❌ Delete item mutation error:', error);
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Wrapper functions for mutations
+  const addItem = async (item: InventoryFormValues) => {
+    await addItemMutation.mutateAsync(item);
+  };
+
+  const updateItem = async (id: string, item: InventoryFormValues) => {
+    await updateItemMutation.mutateAsync({ id, item });
+  };
+
+  const deleteItem = async (id: string) => {
+    await deleteItemMutation.mutateAsync(id);
+  };
+
+  const refetchInventory = async () => {
+    console.log('🔄 Manually refetching inventory');
+    await refetch();
+  };
+
+  // Reset to first page when search term changes
+  React.useEffect(() => {
+    if (searchTerm.trim()) {
+      setCurrentPage(1);
+    }
+  }, [searchTerm]);
+
+  const value: InventoryContextType = {
+    // Data
+    items,
+    totalCount,
+    isLoading,
+    error: error as Error | null,
+    
+    // Pagination
+    currentPage,
+    pageSize,
+    totalPages,
+    setCurrentPage,
+    setPageSize,
+    
+    // Search
+    searchTerm,
+    setSearchTerm,
+    
+    // CRUD operations
+    addItem,
+    updateItem,
+    deleteItem,
+    
+    // Utility
+    refetchInventory,
+  };
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <SortableTableHeader 
-              field="name" 
-              label="Name" 
-              currentSortField={sortField} 
-              onSort={handleSort} 
-            />
-            <TableHead>Category</TableHead>
-            <SortableTableHeader 
-              field="quantity" 
-              label="Quantity" 
-              currentSortField={sortField} 
-              onSort={handleSort} 
-            />
-            <SortableTableHeader 
-              field="price" 
-              label="Price" 
-              currentSortField={sortField} 
-              onSort={handleSort} 
-            />
-            <TableHead>Stock Status</TableHead>
-            <TableHead>Core</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {inventoryItems.map((item) => {
-            // Calculate stock status
-            const reorderLevel = item.reorder_level || 10;
-            const stockStatus = 
-              item.quantity === 0 ? 'out-of-stock' :
-              item.quantity <= reorderLevel ? 'low-stock' : 'in-stock';
-
-            return (
-              <TableRow key={item.id}>
-                <TableCell>
-                  <div className="font-medium">{item.name}</div>
-                  {item.sku && (
-                    <div className="text-xs text-muted-foreground">
-                      SKU: {item.sku}
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {item.category ? (
-                    <Badge variant="outline">{item.category}</Badge>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell>{item.quantity}</TableCell>
-                <TableCell>${item.price.toFixed(2)}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div className="w-24">
-                      <StockStatusProgress 
-                        quantity={item.quantity} 
-                        reorderLevel={reorderLevel}
-                        status={stockStatus}
-                      />
-                    </div>
-                    <StockStatusBadge status={stockStatus} />
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <CoreIndicatorBadge coreCharge={item.core_charge} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <TableActions 
-                    item={item} 
-                    onEdit={onEdit} 
-                    onDelete={(id) => deleteItemMutation.mutate(id)} 
-                  />
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
+    <InventoryContext.Provider value={value}>
+      {children}
+    </InventoryContext.Provider>
   );
-};
+}
+
+export function useInventoryContext() {
+  const context = useContext(InventoryContext);
+  if (context === undefined) {
+    throw new Error('useInventoryContext must be used within an InventoryProvider');
+  }
+  return context;
+}
+

@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, FileText, CheckCircle, XCircle } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useQueryClient } from '@tanstack/react-query';
+import { useInventoryContext } from './InventoryContext';
 
 interface UploadResult {
   success: boolean;
   message: string;
   processed: number;
+  updated: number;
+  inserted: number;
   errors: string[];
+  warnings: string[];
 }
 
 interface CSVRecord {
@@ -25,11 +28,12 @@ export function InventoryFileUpload() {
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { refetchInventory } = useInventoryContext();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processCSVFile = async (file: File) => {
     try {
-      console.log('🔧 Using corrected component - proper CSV field mapping');
+      console.log('🔧 Processing large CSV file with optimized component');
       console.log('📁 File details:', { name: file.name, size: file.size, type: file.type });
       
       setIsUploading(true);
@@ -66,8 +70,13 @@ export function InventoryFileUpload() {
       console.log('📦 Parsed records:', records.length);
       console.log('🔍 Sample record:', records[0]);
 
-      // Process records in batches
-      const batchSize = 10;
+      // Show warning for large datasets
+      if (records.length > 1000) {
+        console.log('⚠️ Large dataset detected:', records.length, 'records');
+      }
+
+      // Process records in smaller batches for large datasets
+      const batchSize = records.length > 1000 ? 25 : 10;
       const batches = [];
       for (let i = 0; i < records.length; i += batchSize) {
         batches.push(records.slice(i, i + batchSize));
@@ -76,32 +85,36 @@ export function InventoryFileUpload() {
       console.log('🔄 Processing in', batches.length, 'batches of', batchSize);
 
       let processed = 0;
+      let updated = 0;
+      let inserted = 0;
       let errors: string[] = [];
+      let warnings: string[] = [];
 
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const batch = batches[batchIndex];
         console.log(`🔄 Processing batch ${batchIndex + 1}/${batches.length} with ${batch.length} items`);
 
+        // Process batch items
         for (const record of batch) {
           try {
             // Map CSV fields to database columns with correct field names
             const inventoryItem = {
-              // Use LongDescription from CSV for description field
+              // Use LongDescription from CSV for both name and description
               name: record['LongDescription'] || record['PartNumber'] || 'Unknown Item',
               description: record['LongDescription'] || null,
               sku: record['PartNumber'] || record['VCPN'] || null,
               quantity: parseInt(record['TotalQty'] || '0') || 0,
               price: parseFloat(record['JobberPrice'] || '0') || 0,
               cost: parseFloat(record['Cost'] || '0') || null,
-              category: null, // Not in CSV, could be derived from other fields if needed
+              category: null,
               supplier: record['VendorName'] || null,
-              reorder_level: null, // Not in CSV
+              reorder_level: null,
               core_charge: parseFloat(record['CoreCharge'] || '0') || null,
-              // FTP specific fields from your CSV
+              // FTP specific fields
               vendor_code: record['VendorCode'] || null,
               manufacturer_part_no: record['ManufacturerPartNo'] || null,
               case_qty: parseInt(record['CaseQty'] || '0') || null,
-              // Regional quantities from your CSV
+              // Regional quantities
               california_qty: parseInt(record['CaliforniaQty'] || '0') || null,
               east_qty: parseInt(record['EastQty'] || '0') || null,
               florida_qty: parseInt(record['FloridaQty'] || '0') || null,
@@ -112,10 +125,18 @@ export function InventoryFileUpload() {
               texas_qty: parseInt(record['TexasQty'] || '0') || null,
             };
 
-            console.log('💾 Processing item:', inventoryItem.name, 'SKU:', inventoryItem.sku);
-            console.log('📝 Description:', inventoryItem.description);
+            // Validate required fields
+            if (!inventoryItem.name || inventoryItem.name === 'Unknown Item') {
+              warnings.push(`Row ${processed + 1}: Missing product name/description`);
+            }
 
-            // Check if item exists by SKU (PartNumber)
+            if (!inventoryItem.sku) {
+              warnings.push(`Row ${processed + 1}: Missing SKU/Part Number`);
+            }
+
+            console.log('💾 Processing item:', inventoryItem.name, 'SKU:', inventoryItem.sku);
+
+            // Check if item exists by SKU
             let existingItem = null;
             if (inventoryItem.sku) {
               const { data: existing } = await supabase
@@ -139,6 +160,7 @@ export function InventoryFileUpload() {
                 errors.push(`Failed to update ${inventoryItem.name}: ${error.message}`);
               } else {
                 console.log('✅ Updated successfully');
+                updated++;
               }
             } else {
               // Insert new item
@@ -152,13 +174,14 @@ export function InventoryFileUpload() {
                 errors.push(`Failed to insert ${inventoryItem.name}: ${error.message}`);
               } else {
                 console.log('✅ Inserted successfully');
+                inserted++;
               }
             }
 
             processed++;
           } catch (error) {
             console.error('❌ Item processing error:', error);
-            errors.push(`Error processing item: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            errors.push(`Error processing row ${processed + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
           }
         }
 
@@ -166,19 +189,27 @@ export function InventoryFileUpload() {
         const progress = Math.round(((batchIndex + 1) / batches.length) * 100);
         setUploadProgress(progress);
         console.log('📊 Progress:', progress + '%');
+
+        // Add small delay for large batches to prevent overwhelming the database
+        if (records.length > 1000 && batchIndex < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
       }
 
-      // Invalidate queries to refresh the inventory list
-      await queryClient.invalidateQueries({ queryKey: ['inventory'] });
-      console.log('🔄 Invalidated inventory queries');
+      // Refresh inventory data (this will respect current pagination)
+      await refetchInventory();
+      console.log('🔄 Refreshed inventory data');
 
       const result: UploadResult = {
         success: errors.length === 0,
         message: errors.length === 0 
-          ? `Successfully processed ${processed} items`
-          : `Processed ${processed} items with ${errors.length} errors`,
+          ? `Successfully processed ${processed} items (${inserted} new, ${updated} updated)`
+          : `Processed ${processed} items with ${errors.length} errors (${inserted} new, ${updated} updated)`,
         processed,
-        errors
+        updated,
+        inserted,
+        errors,
+        warnings
       };
 
       console.log('🎯 Final result:', result);
@@ -198,7 +229,10 @@ export function InventoryFileUpload() {
         success: false,
         message: errorMessage,
         processed: 0,
-        errors: [errorMessage]
+        updated: 0,
+        inserted: 0,
+        errors: [errorMessage],
+        warnings: []
       });
       setUploadStatus('error');
       toast({
@@ -215,9 +249,24 @@ export function InventoryFileUpload() {
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      console.log('📁 File selected:', file.name);
+      console.log('📁 File selected via button:', file.name);
+      
+      // Check file size (warn if > 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast({
+          title: "Large File Detected",
+          description: "This file is quite large. Upload may take several minutes.",
+          variant: "default",
+        });
+      }
+      
       processCSVFile(file);
     }
+  };
+
+  const handleButtonClick = () => {
+    console.log('🖱️ File selection button clicked');
+    fileInputRef.current?.click();
   };
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
@@ -225,6 +274,16 @@ export function InventoryFileUpload() {
     const file = event.dataTransfer.files[0];
     if (file) {
       console.log('📁 File dropped:', file.name);
+      
+      // Check file size
+      if (file.size > 10 * 1024 * 1024) {
+        toast({
+          title: "Large File Detected",
+          description: "This file is quite large. Upload may take several minutes.",
+          variant: "default",
+        });
+      }
+      
       processCSVFile(file);
     }
   };
@@ -267,19 +326,29 @@ export function InventoryFileUpload() {
               <p className="text-sm text-gray-600 mb-2">
                 Drag and drop your CSV file here, or click to select
               </p>
+              <p className="text-xs text-gray-500 mb-4">
+                Supports large files up to 12,000+ records
+              </p>
+              
+              {/* Hidden file input */}
               <input
+                ref={fileInputRef}
                 type="file"
                 accept=".csv"
                 onChange={handleFileSelect}
-                className="hidden"
-                id="csv-upload"
+                style={{ display: 'none' }}
                 disabled={isUploading}
               />
-              <label htmlFor="csv-upload">
-                <Button variant="outline" className="cursor-pointer" disabled={isUploading}>
-                  Select CSV File
-                </Button>
-              </label>
+              
+              {/* Clickable button */}
+              <Button 
+                variant="outline" 
+                onClick={handleButtonClick}
+                disabled={isUploading}
+                type="button"
+              >
+                Select CSV File
+              </Button>
             </div>
           )}
 
@@ -293,6 +362,11 @@ export function InventoryFileUpload() {
               <p className="text-xs text-gray-500 text-center">
                 {uploadProgress}% complete
               </p>
+              {uploadProgress > 0 && (
+                <p className="text-xs text-gray-400 text-center">
+                  Processing large datasets may take several minutes
+                </p>
+              )}
             </div>
           )}
 
@@ -304,9 +378,29 @@ export function InventoryFileUpload() {
               </div>
               <div className="bg-green-50 p-3 rounded-md">
                 <p className="text-sm text-green-800">{uploadResult.message}</p>
-                <p className="text-xs text-green-600 mt-1">
-                  Processed {uploadResult.processed} items
-                </p>
+                <div className="text-xs text-green-600 mt-2 space-y-1">
+                  <p>• {uploadResult.inserted} new items added</p>
+                  <p>• {uploadResult.updated} existing items updated</p>
+                  <p>• {uploadResult.processed} total items processed</p>
+                </div>
+                {uploadResult.warnings.length > 0 && (
+                  <div className="mt-3 p-2 bg-yellow-50 rounded border-l-4 border-yellow-400">
+                    <div className="flex items-center">
+                      <AlertTriangle className="w-4 h-4 text-yellow-600 mr-2" />
+                      <span className="text-xs font-medium text-yellow-800">
+                        {uploadResult.warnings.length} warnings
+                      </span>
+                    </div>
+                    <ul className="text-xs text-yellow-700 mt-1 space-y-1">
+                      {uploadResult.warnings.slice(0, 3).map((warning, index) => (
+                        <li key={index}>• {warning}</li>
+                      ))}
+                      {uploadResult.warnings.length > 3 && (
+                        <li>• ... and {uploadResult.warnings.length - 3} more warnings</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
               </div>
               <Button onClick={() => setIsOpen(false)} className="w-full">
                 Close
