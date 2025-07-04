@@ -195,12 +195,13 @@ const useInventoryData = () => {
 };
 
 export default function Parts() {
+  // ✅ FIXED: All hooks must be called at the top level, in the same order every time
   const { toast } = useToast();
   
   // ✅ FIXED: Use real inventory data instead of mock data
   const { parts, loading: partsLoading, error: partsError } = useInventoryData();
   
-  // State management
+  // ✅ FIXED: All state hooks declared at top level
   const [filteredParts, setFilteredParts] = useState<InventoryPart[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -255,16 +256,251 @@ export default function Parts() {
   const [showPriceCheckDialog, setShowPriceCheckDialog] = useState(false);
   const [selectedPriceCheckPart, setSelectedPriceCheckPart] = useState<InventoryPart | null>(null);
 
-  // ✅ ULTRA-SIMPLE: State for dialogs
+  // Detail dialog state
   const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
 
+  // ✅ FIXED: All useMemo and useCallback hooks at top level
   // Get unique categories
   const categories = useMemo(() => {
     const uniqueCategories = [...new Set(parts.map(part => part.category || 'Uncategorized'))];
     return uniqueCategories.sort();
   }, [parts]);
 
+  // Calculate cart total
+  const cartTotal = useMemo(() => {
+    return cartItems.reduce((total, item) => total + (item.price * item.cartQuantity), 0);
+  }, [cartItems]);
+
+  const cartItemCount = useMemo(() => {
+    return cartItems.reduce((total, item) => total + item.cartQuantity, 0);
+  }, [cartItems]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredParts.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentParts = filteredParts.slice(startIndex, endIndex);
+
+  // ✅ FIXED: All callback functions defined at top level
+  const addToCart = useCallback((part: InventoryPart, quantity: number = 1) => {
+    setCartItems(prev => {
+      const existingItem = prev.find(item => item.id === part.id);
+      if (existingItem) {
+        return prev.map(item =>
+          item.id === part.id
+            ? { ...item, cartQuantity: Math.min(item.cartQuantity + quantity, item.quantity) }
+            : item
+        );
+      } else {
+        return [...prev, { ...part, cartQuantity: Math.min(quantity, part.quantity) }];
+      }
+    });
+    
+    toast({
+      title: "Added to cart",
+      description: `${part.name} has been added to your cart.`,
+    });
+  }, [toast]);
+
+  const removeFromCart = useCallback((partId: string) => {
+    setCartItems(prev => prev.filter(item => item.id !== partId));
+  }, []);
+
+  const updateCartQuantity = useCallback((partId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      removeFromCart(partId);
+      return;
+    }
+    
+    setCartItems(prev =>
+      prev.map(item =>
+        item.id === partId
+          ? { ...item, cartQuantity: Math.min(newQuantity, item.quantity) }
+          : item
+      )
+    );
+  }, [removeFromCart]);
+
+  const clearCart = useCallback(() => {
+    setCartItems([]);
+  }, []);
+
+  const toggleFavorite = useCallback((partId: string) => {
+    setFavorites(prev => 
+      prev.includes(partId) 
+        ? prev.filter(id => id !== partId)
+        : [...prev, partId]
+    );
+  }, []);
+
+  const searchCustomers = useCallback(async (searchTerm: string) => {
+    if (!searchTerm.trim()) {
+      setCustomerSearchResults([]);
+      return;
+    }
+
+    setIsSearchingCustomers(true);
+    try {
+      const results = await CustomerSearchService.searchCustomers(searchTerm);
+      setCustomerSearchResults(results);
+    } catch (error) {
+      console.error('Error searching customers:', error);
+      toast({
+        title: "Search Error",
+        description: "Failed to search customers. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSearchingCustomers(false);
+    }
+  }, [toast]);
+
+  const submitSpecialOrder = useCallback(async () => {
+    if (!selectedCustomer) {
+      toast({
+        title: "Customer Required",
+        description: "Please select a customer for this special order.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!specialOrderForm.part_description.trim()) {
+      toast({
+        title: "Description Required",
+        description: "Please provide a part description.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      console.log('Creating special order:', {
+        customer_id: selectedCustomer.id,
+        ...specialOrderForm
+      });
+
+      toast({
+        title: "Special Order Created",
+        description: "Your special order has been submitted successfully.",
+      });
+
+      setSpecialOrderForm({
+        part_description: "",
+        manufacturer: "",
+        part_number: "",
+        quantity: 1,
+        notes: ""
+      });
+      setShowSpecialOrderDialog(false);
+    } catch (error) {
+      console.error('Error creating special order:', error);
+      toast({
+        title: "Order Error",
+        description: "Failed to create special order. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [selectedCustomer, specialOrderForm, toast]);
+
+  const getShippingQuotes = useCallback(async () => {
+    if (!selectedShippingAddress.street || !selectedShippingAddress.city || 
+        !selectedShippingAddress.state || !selectedShippingAddress.zip) {
+      toast({
+        title: "Address Required",
+        description: "Please provide a complete shipping address.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (cartItems.length === 0) {
+      toast({
+        title: "Cart Empty",
+        description: "Please add items to your cart before getting shipping quotes.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoadingShipping(true);
+    try {
+      const quotes = await shippingQuoteService.getQuotes({
+        items: cartItems.map(item => ({
+          weight: item.weight || 1,
+          dimensions: item.dimensions || '12x8x4',
+          quantity: item.cartQuantity,
+          value: item.price
+        })),
+        destination: selectedShippingAddress
+      });
+      
+      setShippingQuotes(quotes);
+    } catch (error) {
+      console.error('Error getting shipping quotes:', error);
+      toast({
+        title: "Shipping Error",
+        description: "Failed to get shipping quotes. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingShipping(false);
+    }
+  }, [selectedShippingAddress, cartItems, toast]);
+
+  const processDropshipOrder = useCallback(async () => {
+    if (!selectedDropshipPart || !selectedCustomer) {
+      toast({
+        title: "Missing Information",
+        description: "Please select both a part and customer for dropship order.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessingDropship(true);
+    try {
+      const dropshipService = new DropshipOrderService();
+      await dropshipService.createOrder({
+        part_id: selectedDropshipPart.id,
+        customer_id: selectedCustomer.id,
+        quantity: dropshipQuantity,
+        shipping_address: selectedShippingAddress
+      });
+
+      toast({
+        title: "Dropship Order Created",
+        description: "Your dropship order has been submitted successfully.",
+      });
+
+      setShowDropshipDialog(false);
+      setSelectedDropshipPart(null);
+      setDropshipQuantity(1);
+    } catch (error) {
+      console.error('Error creating dropship order:', error);
+      toast({
+        title: "Dropship Error",
+        description: "Failed to create dropship order. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingDropship(false);
+    }
+  }, [selectedDropshipPart, selectedCustomer, dropshipQuantity, selectedShippingAddress, toast]);
+
+  const handleAddToCart = useCallback((part: InventoryPart) => {
+    console.log('🛒 Add to cart clicked for:', part.name);
+    addToCart(part);
+  }, [addToCart]);
+
+  const handleViewDetail = useCallback((part: InventoryPart) => {
+    console.log('👁️ View detail clicked for:', part.name);
+    setSelectedPart(part);
+    setShowDetailDialog(true);
+  }, []);
+
+  // ✅ FIXED: All useEffect hooks at top level
   // Filter and sort parts
   useEffect(() => {
     let filtered = parts;
@@ -317,97 +553,6 @@ export default function Parts() {
     setCurrentPage(1);
   }, [parts, searchTerm, selectedCategory, priceRange, sortBy, showFavorites, favorites]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredParts.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentParts = filteredParts.slice(startIndex, endIndex);
-
-  // Cart functions
-  const addToCart = useCallback((part: InventoryPart, quantity: number = 1) => {
-    setCartItems(prev => {
-      const existingItem = prev.find(item => item.id === part.id);
-      if (existingItem) {
-        return prev.map(item =>
-          item.id === part.id
-            ? { ...item, cartQuantity: Math.min(item.cartQuantity + quantity, item.quantity) }
-            : item
-        );
-      } else {
-        return [...prev, { ...part, cartQuantity: Math.min(quantity, part.quantity) }];
-      }
-    });
-    
-    toast({
-      title: "Added to cart",
-      description: `${part.name} has been added to your cart.`,
-    });
-  }, [toast]);
-
-  const removeFromCart = useCallback((partId: string) => {
-    setCartItems(prev => prev.filter(item => item.id !== partId));
-  }, []);
-
-  const updateCartQuantity = useCallback((partId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeFromCart(partId);
-      return;
-    }
-    
-    setCartItems(prev =>
-      prev.map(item =>
-        item.id === partId
-          ? { ...item, cartQuantity: Math.min(newQuantity, item.quantity) }
-          : item
-      )
-    );
-  }, [removeFromCart]);
-
-  const clearCart = useCallback(() => {
-    setCartItems([]);
-  }, []);
-
-  // Calculate cart total
-  const cartTotal = useMemo(() => {
-    return cartItems.reduce((total, item) => total + (item.price * item.cartQuantity), 0);
-  }, [cartItems]);
-
-  const cartItemCount = useMemo(() => {
-    return cartItems.reduce((total, item) => total + item.cartQuantity, 0);
-  }, [cartItems]);
-
-  // Favorites functions
-  const toggleFavorite = useCallback((partId: string) => {
-    setFavorites(prev => 
-      prev.includes(partId) 
-        ? prev.filter(id => id !== partId)
-        : [...prev, partId]
-    );
-  }, []);
-
-  // Customer search functions
-  const searchCustomers = useCallback(async (searchTerm: string) => {
-    if (!searchTerm.trim()) {
-      setCustomerSearchResults([]);
-      return;
-    }
-
-    setIsSearchingCustomers(true);
-    try {
-      const results = await CustomerSearchService.searchCustomers(searchTerm);
-      setCustomerSearchResults(results);
-    } catch (error) {
-      console.error('Error searching customers:', error);
-      toast({
-        title: "Search Error",
-        description: "Failed to search customers. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSearchingCustomers(false);
-    }
-  }, [toast]);
-
   // Debounced customer search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -417,152 +562,13 @@ export default function Parts() {
     return () => clearTimeout(timer);
   }, [customerSearchTerm, searchCustomers]);
 
-  // Special order functions
-  const submitSpecialOrder = useCallback(async () => {
-    if (!selectedCustomer) {
-      toast({
-        title: "Customer Required",
-        description: "Please select a customer for this special order.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!specialOrderForm.part_description.trim()) {
-      toast({
-        title: "Description Required",
-        description: "Please provide a part description.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      // Here you would typically make an API call to create the special order
-      console.log('Creating special order:', {
-        customer_id: selectedCustomer.id,
-        ...specialOrderForm
-      });
-
-      toast({
-        title: "Special Order Created",
-        description: "Your special order has been submitted successfully.",
-      });
-
-      // Reset form
-      setSpecialOrderForm({
-        part_description: "",
-        manufacturer: "",
-        part_number: "",
-        quantity: 1,
-        notes: ""
-      });
-      setShowSpecialOrderDialog(false);
-    } catch (error) {
-      console.error('Error creating special order:', error);
-      toast({
-        title: "Order Error",
-        description: "Failed to create special order. Please try again.",
-        variant: "destructive",
-      });
-    }
-  }, [selectedCustomer, specialOrderForm, toast]);
-
-  // Shipping functions
-  const getShippingQuotes = useCallback(async () => {
-    if (!selectedShippingAddress.street || !selectedShippingAddress.city || 
-        !selectedShippingAddress.state || !selectedShippingAddress.zip) {
-      toast({
-        title: "Address Required",
-        description: "Please provide a complete shipping address.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (cartItems.length === 0) {
-      toast({
-        title: "Cart Empty",
-        description: "Please add items to your cart before getting shipping quotes.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoadingShipping(true);
-    try {
-      const quotes = await shippingQuoteService.getQuotes({
-        items: cartItems.map(item => ({
-          weight: item.weight || 1,
-          dimensions: item.dimensions || '12x8x4',
-          quantity: item.cartQuantity,
-          value: item.price
-        })),
-        destination: selectedShippingAddress
-      });
-      
-      setShippingQuotes(quotes);
-    } catch (error) {
-      console.error('Error getting shipping quotes:', error);
-      toast({
-        title: "Shipping Error",
-        description: "Failed to get shipping quotes. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingShipping(false);
-    }
-  }, [selectedShippingAddress, cartItems, toast]);
-
-  // Dropship functions
-  const processDropshipOrder = useCallback(async () => {
-    if (!selectedDropshipPart || !selectedCustomer) {
-      toast({
-        title: "Missing Information",
-        description: "Please select both a part and customer for dropship order.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsProcessingDropship(true);
-    try {
-      const dropshipService = new DropshipOrderService();
-      await dropshipService.createOrder({
-        part_id: selectedDropshipPart.id,
-        customer_id: selectedCustomer.id,
-        quantity: dropshipQuantity,
-        shipping_address: selectedShippingAddress
-      });
-
-      toast({
-        title: "Dropship Order Created",
-        description: "Your dropship order has been submitted successfully.",
-      });
-
-      setShowDropshipDialog(false);
-      setSelectedDropshipPart(null);
-      setDropshipQuantity(1);
-    } catch (error) {
-      console.error('Error creating dropship order:', error);
-      toast({
-        title: "Dropship Error",
-        description: "Failed to create dropship order. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessingDropship(false);
-    }
-  }, [selectedDropshipPart, selectedCustomer, dropshipQuantity, selectedShippingAddress, toast]);
-
-  // Stock status helper
+  // Helper functions
   const getStockStatus = (quantity: number) => {
     if (quantity === 0) return { status: "out-of-stock", color: "destructive", label: "Out of Stock" };
     if (quantity <= 5) return { status: "low-stock", color: "warning", label: "Low Stock" };
     return { status: "in-stock", color: "success", label: "In Stock" };
   };
 
-  // Regional availability helper
   const getRegionalBadgeColor = (region: string) => {
     const colors = {
       "East": "bg-blue-500",
@@ -572,37 +578,7 @@ export default function Parts() {
     return colors[region as keyof typeof colors] || "bg-gray-500";
   };
 
-  // ✅ ULTRA-SIMPLE: Cart functions that WILL work
-  const handleAddToCart = (part: InventoryPart) => {
-    console.log('🛒 Add to cart clicked for:', part.name);
-    
-    // Simple cart logic
-    setCartItems(prev => {
-      const existing = prev.find(item => item.id === part.id);
-      if (existing) {
-        return prev.map(item => 
-          item.id === part.id 
-            ? { ...item, cartQuantity: item.cartQuantity + 1 }
-            : item
-        );
-      } else {
-        return [...prev, { ...part, cartQuantity: 1 }];
-      }
-    });
-
-    toast({
-      title: "Added to Cart",
-      description: `${part.name} has been added to your cart.`,
-    });
-  };
-
-  const handleViewDetail = (part: InventoryPart) => {
-    console.log('👁️ View detail clicked for:', part.name);
-    setSelectedPart(part);
-    setShowDetailDialog(true);
-  };
-
-  // ✅ FIXED: Show loading and error states
+  // ✅ FIXED: Early returns after all hooks are called
   if (partsLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -1059,6 +1035,7 @@ export default function Parts() {
         </TabsContent>
       </Tabs>
 
+      {/* All Dialogs */}
       {/* Customer Search Dialog */}
       <Dialog open={showCustomerSearch} onOpenChange={setShowCustomerSearch}>
         <DialogContent className="max-w-2xl">
@@ -1455,7 +1432,7 @@ export default function Parts() {
         </DialogContent>
       </Dialog>
 
-      {/* ✅ ULTRA-SIMPLE: Cart Dialog */}
+      {/* Cart Dialog */}
       <Dialog open={showCart} onOpenChange={setShowCart}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1515,7 +1492,7 @@ export default function Parts() {
                 <div className="flex justify-between items-center font-semibold">
                   <span>Total: ${cartTotal.toFixed(2)}</span>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setCartItems([])}>
+                    <Button variant="outline" size="sm" onClick={clearCart}>
                       Clear
                     </Button>
                     <Button size="sm">
@@ -1529,7 +1506,7 @@ export default function Parts() {
         </DialogContent>
       </Dialog>
 
-      {/* ✅ ULTRA-SIMPLE: Detail Dialog */}
+      {/* Detail Dialog */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
