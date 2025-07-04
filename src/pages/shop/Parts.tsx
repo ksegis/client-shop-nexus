@@ -223,9 +223,20 @@ const categorizePart = (longDescription: string): string => {
 const extractModelYear = (longDescription: string): string => {
   if (!longDescription) return "";
   
-  // Look for 4-digit years (1990-2030)
-  const yearMatch = longDescription.match(/\b(19[9]\d|20[0-3]\d)\b/);
-  return yearMatch ? yearMatch[1] : "";
+  // Look for realistic vehicle model years (1990-2024)
+  // Vehicle model years typically don't exceed current calendar year
+  const currentYear = new Date().getFullYear();
+  const maxYear = Math.min(currentYear, 2024); // Cap at 2024 for vehicle parts
+  
+  const yearMatch = longDescription.match(/\b(19[9]\d|20[0-2]\d)\b/);
+  if (yearMatch) {
+    const year = parseInt(yearMatch[1]);
+    // Only return years that make sense for vehicle parts (1990-2024)
+    if (year >= 1990 && year <= maxYear) {
+      return yearMatch[1];
+    }
+  }
+  return "";
 };
 
 const extractVehicleModel = (longDescription: string): string => {
@@ -590,11 +601,20 @@ const useProgressiveInventoryData = () => {
   };
 };
 
-// ===== NATIVE FUZZY SEARCH =====
+// ===== FIXED FUZZY SEARCH =====
 const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[] => {
-  if (!searchTerm.trim()) return parts;
+  if (!searchTerm || !searchTerm.trim()) {
+    console.log('🔍 Empty search term, returning all parts');
+    return parts;
+  }
 
   const searchWords = searchTerm.toLowerCase().split(' ').filter(word => word.length > 0);
+  console.log('🔍 Search words:', searchWords);
+  
+  if (searchWords.length === 0) {
+    console.log('🔍 No valid search words, returning all parts');
+    return parts;
+  }
   
   const scorePart = (part: InventoryPart): number => {
     let score = 0;
@@ -609,14 +629,15 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
       vehicleCategory: { value: part.vehicleCategory?.toLowerCase() || '', weight: 15 },
       partCategory: { value: part.partCategory?.toLowerCase() || '', weight: 10 },
       modelYear: { value: part.modelYear?.toLowerCase() || '', weight: 12 },
-      vehicleModel: { value: part.vehicleModel?.toLowerCase() || '', weight: 18 }
+      vehicleModel: { value: part.vehicleModel?.toLowerCase() || '', weight: 18 },
+      keystone_vcpn: { value: part.keystone_vcpn?.toLowerCase() || '', weight: 20 }
     };
 
     searchWords.forEach(word => {
       Object.entries(fields).forEach(([fieldName, field]) => {
-        if (field.value.includes(word)) {
+        if (field.value && field.value.includes(word)) {
           if (field.value.startsWith(word)) {
-            score += field.weight * 2;
+            score += field.weight * 2; // Boost for exact start matches
           } else {
             score += field.weight;
           }
@@ -627,11 +648,15 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
     return score;
   };
 
-  return parts
+  const results = parts
     .map(part => ({ part, score: scorePart(part) }))
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score)
     .map(({ part }) => part);
+
+  console.log(`🔍 Search for "${searchTerm}" returned ${results.length} results from ${parts.length} total parts`);
+  
+  return results;
 };
 
 // ===== MAIN COMPONENT =====
@@ -663,6 +688,7 @@ const Parts: React.FC = () => {
   // State hooks
   const [filteredParts, setFilteredParts] = useState<InventoryPart[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [globalSearchTerm, setGlobalSearchTerm] = useState(''); // For category overview search
   const [selectedVehicleCategory, setSelectedVehicleCategory] = useState<string>('all');
   const [selectedPartCategory, setSelectedPartCategory] = useState<string>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
@@ -697,8 +723,14 @@ const Parts: React.FC = () => {
     return categories.sort();
   }, [parts]);
 
+  // Realistic model years only (1990-2024)
   const availableModelYears = useMemo(() => {
-    const years = [...new Set(parts.map(part => part.modelYear).filter(Boolean))];
+    const years = [...new Set(parts.map(part => part.modelYear).filter(year => {
+      if (!year) return false;
+      const yearNum = parseInt(year);
+      // Only include realistic vehicle model years
+      return yearNum >= 1990 && yearNum <= 2024;
+    }))];
     return years.sort((a, b) => parseInt(b) - parseInt(a)); // Newest first
   }, [parts]);
 
@@ -744,17 +776,25 @@ const Parts: React.FC = () => {
     return stats;
   }, [parts]);
 
-  // ===== SEARCH AND FILTERING =====
+  // ===== FIXED SEARCH AND FILTERING =====
   const searchAndFilterParts = useMemo(() => {
-    let result = parts;
+    console.log('🔍 Starting search and filter process...');
+    console.log('🔍 Total parts available:', parts.length);
+    console.log('🔍 Search term:', searchTerm);
+    console.log('🔍 Selected vehicle category:', selectedVehicleCategory);
+    
+    let result = [...parts]; // Create a copy to avoid mutations
 
-    // Apply search
-    if (searchTerm.trim()) {
-      result = fuzzySearch(searchTerm, result);
+    // Apply search FIRST - this is the critical fix
+    if (searchTerm && searchTerm.trim()) {
+      console.log('🔍 Applying search...');
+      result = fuzzySearch(searchTerm.trim(), result);
+      console.log('🔍 After search:', result.length, 'parts');
     }
 
     // Apply vehicle category filter
     if (selectedVehicleCategory !== 'all') {
+      console.log('🔍 Applying vehicle category filter...');
       if (selectedVehicleCategory === 'universal') {
         result = result.filter(part => {
           const vehicleCatId = getVehicleCategoryId(part.vehicleCategory || '');
@@ -766,37 +806,45 @@ const Parts: React.FC = () => {
           return vehicleCatId === selectedVehicleCategory;
         });
       }
+      console.log('🔍 After vehicle category filter:', result.length, 'parts');
     }
 
     // Apply other filters
     if (selectedPartCategory !== 'all') {
       result = result.filter(part => part.partCategory === selectedPartCategory);
+      console.log('🔍 After part category filter:', result.length, 'parts');
     }
 
     if (selectedBrand !== 'all') {
       result = result.filter(part => part.brand === selectedBrand);
+      console.log('🔍 After brand filter:', result.length, 'parts');
     }
 
     if (selectedStockStatus !== 'all') {
       result = result.filter(part => part.stockStatus === selectedStockStatus);
+      console.log('🔍 After stock status filter:', result.length, 'parts');
     }
 
     if (selectedRegion !== 'all') {
       result = result.filter(part => part.regionalAvailability?.includes(selectedRegion));
+      console.log('🔍 After region filter:', result.length, 'parts');
     }
 
     if (selectedModelYear !== 'all') {
       result = result.filter(part => part.modelYear === selectedModelYear);
+      console.log('🔍 After model year filter:', result.length, 'parts');
     }
 
     if (selectedVehicleModel !== 'all') {
       result = result.filter(part => part.vehicleModel === selectedVehicleModel);
+      console.log('🔍 After vehicle model filter:', result.length, 'parts');
     }
 
     // Apply price range
     result = result.filter(part => 
       part.list_price >= priceRange[0] && part.list_price <= priceRange[1]
     );
+    console.log('🔍 After price range filter:', result.length, 'parts');
 
     // Apply sorting
     result.sort((a, b) => {
@@ -818,8 +866,21 @@ const Parts: React.FC = () => {
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
+    console.log('🔍 Final filtered result:', result.length, 'parts');
     return result;
   }, [parts, searchTerm, selectedVehicleCategory, selectedPartCategory, selectedBrand, selectedStockStatus, selectedRegion, selectedModelYear, selectedVehicleModel, priceRange, sortBy, sortOrder]);
+
+  // ===== GLOBAL SEARCH FOR CATEGORY VIEW =====
+  const globalSearchResults = useMemo(() => {
+    if (!globalSearchTerm || !globalSearchTerm.trim()) {
+      return [];
+    }
+    
+    console.log('🌍 Global search for:', globalSearchTerm);
+    const results = fuzzySearch(globalSearchTerm.trim(), parts);
+    console.log('🌍 Global search results:', results.length);
+    return results;
+  }, [globalSearchTerm, parts]);
 
   // ===== PAGINATION =====
   const paginatedParts = useMemo(() => {
@@ -851,6 +912,7 @@ const Parts: React.FC = () => {
 
   const resetFilters = useCallback(() => {
     setSearchTerm('');
+    setGlobalSearchTerm('');
     setSelectedVehicleCategory('all');
     setSelectedPartCategory('all');
     setSelectedBrand('all');
@@ -861,6 +923,26 @@ const Parts: React.FC = () => {
     setPriceRange([0, 1000]);
     setCurrentPage(1);
   }, []);
+
+  // ===== GLOBAL SEARCH FUNCTIONS =====
+  const handleGlobalSearch = useCallback((searchValue: string) => {
+    console.log('🌍 Global search triggered:', searchValue);
+    setGlobalSearchTerm(searchValue);
+    
+    if (searchValue.trim()) {
+      // Switch to parts view and set search term
+      setSearchTerm(searchValue);
+      setShowCategoryView(false);
+      setCurrentPage(1);
+    }
+  }, []);
+
+  const handleGlobalSearchSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (globalSearchTerm.trim()) {
+      handleGlobalSearch(globalSearchTerm);
+    }
+  }, [globalSearchTerm, handleGlobalSearch]);
 
   // Reset filters when navigating back to category view
   useEffect(() => {
@@ -951,6 +1033,91 @@ const Parts: React.FC = () => {
       </div>
 
       {renderLoadingProgress()}
+
+      {/* Global Search Bar */}
+      <div className="max-w-2xl mx-auto">
+        <form onSubmit={handleGlobalSearchSubmit} className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <Input
+            placeholder="Search all parts by name, SKU, description, vehicle, model, year..."
+            value={globalSearchTerm}
+            onChange={(e) => setGlobalSearchTerm(e.target.value)}
+            className="pl-10 pr-4 py-3 text-lg"
+          />
+          {globalSearchTerm && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2"
+              onClick={() => setGlobalSearchTerm('')}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </form>
+        
+        {/* Global Search Results Preview */}
+        {globalSearchTerm && globalSearchResults.length > 0 && (
+          <Card className="mt-4">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">
+                  Search Results ({globalSearchResults.length.toLocaleString()} found)
+                </CardTitle>
+                <Button 
+                  onClick={() => handleGlobalSearch(globalSearchTerm)}
+                  size="sm"
+                >
+                  View All Results
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {globalSearchResults.slice(0, 5).map((part) => (
+                  <div 
+                    key={part.id} 
+                    className="flex items-center justify-between p-2 border rounded hover:bg-muted cursor-pointer"
+                    onClick={() => handleGlobalSearch(globalSearchTerm)}
+                  >
+                    <div>
+                      <h4 className="font-medium text-sm">{part.name}</h4>
+                      <p className="text-xs text-muted-foreground">
+                        {part.sku && `SKU: ${part.sku} • `}
+                        {part.brand} • ${part.list_price.toFixed(2)}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {part.vehicleCategory}
+                    </Badge>
+                  </div>
+                ))}
+                {globalSearchResults.length > 5 && (
+                  <div className="text-center pt-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleGlobalSearch(globalSearchTerm)}
+                    >
+                      View {(globalSearchResults.length - 5).toLocaleString()} more results
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        {globalSearchTerm && globalSearchResults.length === 0 && (
+          <Card className="mt-4">
+            <CardContent className="text-center py-6">
+              <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-muted-foreground">No parts found for "{globalSearchTerm}"</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {VEHICLE_CATEGORIES.map((category) => {
@@ -1061,7 +1228,7 @@ const Parts: React.FC = () => {
           </Select>
         </div>
 
-        {/* Model Year Filter */}
+        {/* Model Year Filter - Realistic Years Only */}
         <div>
           <Label className="text-sm font-medium">Model Year</Label>
           <Select value={selectedModelYear} onValueChange={setSelectedModelYear}>
@@ -1598,7 +1765,10 @@ const Parts: React.FC = () => {
                 <Input
                   placeholder="Search parts by name, SKU, description, vehicle, model, year..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    console.log('🔍 Search input changed:', e.target.value);
+                    setSearchTerm(e.target.value);
+                  }}
                   className="pl-10"
                 />
               </div>
