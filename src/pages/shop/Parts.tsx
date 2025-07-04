@@ -57,6 +57,7 @@ interface InventoryPart {
   modelYear?: string;
   vehicleModel?: string;
   pricing_status?: string; // From pricing table
+  pricing_source?: string; // Debug info
 }
 
 interface VehicleCategory {
@@ -315,11 +316,16 @@ const useProgressiveInventoryData = () => {
       
       // Load first batch immediately for UI rendering
       const firstBatchSize = 500;
-      const { data: firstBatch, error: firstError } = await supabase
+      
+      // Try multiple approaches to get pricing data
+      console.log('🔍 Attempting to fetch inventory with pricing data...');
+      
+      // First try: Join with pricing_records table
+      let { data: firstBatch, error: firstError } = await supabase
         .from('inventory')
         .select(`
           *,
-          pricing_records (
+          pricing_records!inner (
             list_price,
             cost,
             markup,
@@ -329,9 +335,59 @@ const useProgressiveInventoryData = () => {
         .range(0, firstBatchSize - 1)
         .order('name');
 
-      if (firstError) {
-        console.error('❌ Error fetching first batch:', firstError);
-        setError(firstError.message);
+      // If join fails, try without join and fetch pricing separately
+      if (firstError || !firstBatch || firstBatch.length === 0) {
+        console.log('⚠️ Pricing join failed, trying without join:', firstError?.message);
+        
+        const { data: inventoryData, error: inventoryError } = await supabase
+          .from('inventory')
+          .select('*')
+          .range(0, firstBatchSize - 1)
+          .order('name');
+
+        if (inventoryError) {
+          console.error('❌ Error fetching inventory:', inventoryError);
+          setError(inventoryError.message);
+          setLoading(false);
+          return;
+        }
+
+        firstBatch = inventoryData;
+        
+        // Try to fetch pricing data separately
+        if (firstBatch && firstBatch.length > 0) {
+          console.log('🔍 Fetching pricing data separately...');
+          const skus = firstBatch.map(item => item.sku).filter(Boolean);
+          
+          if (skus.length > 0) {
+            const { data: pricingData, error: pricingError } = await supabase
+              .from('pricing_records')
+              .select('sku, list_price, cost, markup, status')
+              .in('sku', skus);
+            
+            if (!pricingError && pricingData) {
+              console.log(`💰 Found ${pricingData.length} pricing records for ${skus.length} SKUs`);
+              
+              // Map pricing data to inventory items
+              firstBatch = firstBatch.map(item => {
+                const pricing = pricingData.find(p => p.sku === item.sku);
+                if (pricing) {
+                  return {
+                    ...item,
+                    pricing_records: [pricing]
+                  };
+                }
+                return item;
+              });
+            } else {
+              console.log('⚠️ No pricing data found or error:', pricingError?.message);
+            }
+          }
+        }
+      }
+
+      if (!firstBatch) {
+        setError('No data returned from database');
         setLoading(false);
         return;
       }
@@ -363,20 +419,57 @@ const useProgressiveInventoryData = () => {
     return batch.map(item => {
       const longDesc = safeString(item.LongDescription || item.description || '');
       
+      // ENHANCED PRICING LOGIC WITH EXTENSIVE DEBUGGING
+      console.log('🔍 ===== PROCESSING PART PRICING =====');
+      console.log('🔍 Part Name:', item.name);
+      console.log('🔍 SKU:', item.sku);
+      console.log('🔍 Raw item data:', JSON.stringify(item, null, 2));
+      
       // Get pricing data from joined pricing_records table
       const pricingRecord = item.pricing_records?.[0]; // Assuming one pricing record per part
-      const listPrice = Number(pricingRecord?.list_price) || Number(item.list_price) || 0;
-      const cost = Number(pricingRecord?.cost) || Number(item.cost) || 0;
+      console.log('🔍 Pricing record found:', pricingRecord);
       
-      console.log(`💰 Part: ${item.name} - List Price: $${listPrice} (from ${pricingRecord ? 'pricing table' : 'inventory table'})`);
+      // Try multiple sources for list price
+      let listPrice = 0;
+      let cost = 0;
+      let pricingSource = 'none';
       
-      return {
+      if (pricingRecord) {
+        listPrice = Number(pricingRecord.list_price) || 0;
+        cost = Number(pricingRecord.cost) || 0;
+        pricingSource = 'pricing_table';
+        console.log('💰 Using pricing table - List Price:', listPrice, 'Cost:', cost);
+      } else {
+        // Fallback to inventory table
+        listPrice = Number(item.list_price) || 0;
+        cost = Number(item.cost) || 0;
+        pricingSource = 'inventory_table';
+        console.log('💰 Using inventory table - List Price:', listPrice, 'Cost:', cost);
+      }
+      
+      // Additional fallbacks
+      if (listPrice === 0) {
+        // Try other possible field names
+        listPrice = Number(item.price) || Number(item.selling_price) || Number(item.retail_price) || 0;
+        if (listPrice > 0) {
+          pricingSource = 'inventory_fallback';
+          console.log('💰 Using inventory fallback - List Price:', listPrice);
+        }
+      }
+      
+      console.log('💰 FINAL PRICING:');
+      console.log('💰 List Price:', listPrice);
+      console.log('💰 Cost:', cost);
+      console.log('💰 Source:', pricingSource);
+      console.log('🔍 ===== END PRICING PROCESSING =====');
+      
+      const processedPart: InventoryPart = {
         id: safeString(item.id),
         name: safeString(item.name || 'Unnamed Part'),
         sku: safeString(item.sku),
         keystone_vcpn: safeString(item.keystone_vcpn),
         cost: cost,
-        list_price: listPrice, // Use pricing table list_price
+        list_price: listPrice, // Use processed list_price
         quantity_on_hand: Number(item.quantity_on_hand) || 0,
         in_stock: Boolean(item.in_stock), // Use in_stock boolean
         location: safeString(item.location),
@@ -394,8 +487,12 @@ const useProgressiveInventoryData = () => {
         partCategory: categorizePart(longDesc),
         modelYear: extractModelYear(longDesc),
         vehicleModel: extractVehicleModel(longDesc),
-        pricing_status: safeString(pricingRecord?.status)
+        pricing_status: safeString(pricingRecord?.status),
+        pricing_source: pricingSource // Debug info
       };
+      
+      console.log('✅ Processed part:', processedPart.name, 'Final List Price:', processedPart.list_price);
+      return processedPart;
     });
   };
 
@@ -406,7 +503,8 @@ const useProgressiveInventoryData = () => {
     
     while (currentOffset < total) {
       try {
-        const { data, error } = await supabase
+        // Try with pricing join first
+        let { data, error } = await supabase
           .from('inventory')
           .select(`
             *,
@@ -420,9 +518,20 @@ const useProgressiveInventoryData = () => {
           .range(currentOffset, currentOffset + batchSize - 1)
           .order('name');
 
-        if (error) {
-          console.error('❌ Error loading batch:', error);
-          break;
+        // If join fails, try without join
+        if (error || !data) {
+          const { data: inventoryData, error: inventoryError } = await supabase
+            .from('inventory')
+            .select('*')
+            .range(currentOffset, currentOffset + batchSize - 1)
+            .order('name');
+
+          if (inventoryError) {
+            console.error('❌ Error loading batch:', inventoryError);
+            break;
+          }
+
+          data = inventoryData;
         }
 
         if (!data || data.length === 0) {
@@ -583,6 +692,7 @@ const Parts: React.FC = () => {
     console.log('🛒 Part ID:', part.id);
     console.log('🛒 In Stock:', part.in_stock);
     console.log('🛒 List Price:', part.list_price);
+    console.log('🛒 Pricing Source:', part.pricing_source);
     console.log('🛒 Current cart state:', cart);
     
     const partId = part.id;
@@ -963,7 +1073,7 @@ const Parts: React.FC = () => {
   };
 
   const renderPartCard = (part: InventoryPart) => {
-    console.log('🎨 Rendering part card for:', part.name, 'In Stock:', part.in_stock, 'List Price:', part.list_price);
+    console.log('🎨 Rendering part card for:', part.name, 'In Stock:', part.in_stock, 'List Price:', part.list_price, 'Pricing Source:', part.pricing_source);
     const isKit = part.isKit || false;
     
     return (
@@ -1001,6 +1111,12 @@ const Parts: React.FC = () => {
                 {part.vehicleModel && (
                   <Badge variant="secondary" className="text-xs">
                     {safeString(part.vehicleModel)}
+                  </Badge>
+                )}
+                {/* DEBUG: Show pricing source */}
+                {part.pricing_source && (
+                  <Badge variant="outline" className="text-xs bg-yellow-100 text-yellow-800">
+                    {part.pricing_source}
                   </Badge>
                 )}
               </div>
@@ -1229,6 +1345,7 @@ const Parts: React.FC = () => {
                           <p className="text-xs text-muted-foreground">
                             {part.sku && `SKU: ${safeString(part.sku)} • `}
                             {safeString(part.brand)} • ${(Number(part.list_price) || 0).toFixed(2)}
+                            {part.pricing_source && ` (${part.pricing_source})`}
                           </p>
                         </div>
                         <Badge variant="outline" className="text-xs">
@@ -1841,7 +1958,7 @@ const Parts: React.FC = () => {
                   <p className="text-sm">{safeString(selectedPart.modelYear) || 'N/A'}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">Price (from Pricing Management)</Label>
+                  <Label className="text-sm font-medium">Price (from {selectedPart.pricing_source})</Label>
                   <p className="text-lg font-bold text-green-600">
                     ${(Number(selectedPart.list_price) || 0).toFixed(2)}
                   </p>
