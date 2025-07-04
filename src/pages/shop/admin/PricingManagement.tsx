@@ -1,4 +1,4 @@
-// Fixed version of PricingManagement with auto-clearing search results
+// Fixed version of PricingManagement with SKU field added
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -820,6 +820,7 @@ const PricingManagement: React.FC = () => {
                     <thead>
                       <tr className="border-b">
                         <th className="text-left p-2">Part Name</th>
+                        <th className="text-left p-2">SKU</th>
                         <th className="text-left p-2">VCPN</th>
                         <th className="text-left p-2">Cost</th>
                         <th className="text-left p-2">List Price</th>
@@ -836,6 +837,11 @@ const PricingManagement: React.FC = () => {
                         return (
                           <tr key={record.id} className={`border-b hover:bg-gray-50 ${hasNegativeMargin ? 'bg-red-50' : ''}`}>
                             <td className="p-2">{record.part_name}</td>
+                            <td className="p-2">
+                              <span className="text-sm text-gray-600">
+                                {record.part_sku || 'N/A'}
+                              </span>
+                            </td>
                             <td className="p-2">{record.keystone_vcpn}</td>
                             <td className="p-2">${record.cost.toFixed(2)}</td>
                             <td className={`p-2 ${hasNegativeMargin ? 'text-red-600 font-bold' : ''}`}>
@@ -948,7 +954,7 @@ const PricingManagement: React.FC = () => {
                   </div>
                 )}
 
-                {/* Form Fields */}
+                {/* ✅ ENHANCED: Form Fields with SKU field */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="vcpn">Keystone VCPN *</Label>
@@ -966,6 +972,15 @@ const PricingManagement: React.FC = () => {
                       value={formData.part_name}
                       onChange={(e) => setFormData(prev => ({ ...prev, part_name: e.target.value }))}
                       className={!formData.part_name ? 'border-red-300' : ''}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="partSku">SKU</Label>
+                    <Input
+                      id="partSku"
+                      value={formData.part_sku || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, part_sku: e.target.value }))}
+                      placeholder="Enter SKU (optional)"
                     />
                   </div>
                   <div>
@@ -1116,7 +1131,7 @@ const PricingManagement: React.FC = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Create/Edit Dialog */}
+      {/* ✅ ENHANCED: Create/Edit Dialog with SKU field */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1142,6 +1157,15 @@ const PricingManagement: React.FC = () => {
                   value={formData.part_name}
                   onChange={(e) => setFormData(prev => ({ ...prev, part_name: e.target.value }))}
                   className={!formData.part_name ? 'border-red-300' : ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="dialogPartSku">SKU</Label>
+                <Input
+                  id="dialogPartSku"
+                  value={formData.part_sku || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, part_sku: e.target.value }))}
+                  placeholder="Enter SKU (optional)"
                 />
               </div>
               <div>
