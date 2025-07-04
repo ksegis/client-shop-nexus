@@ -53,6 +53,7 @@ interface InventoryPart {
   quantity_on_hand: number;
   location?: string;
   description?: string;
+  LongDescription?: string;
   manufacturer_part_no?: string;
   compatibility?: string;
   category?: string;
@@ -61,6 +62,8 @@ interface InventoryPart {
   margin?: number;
   stockStatus?: 'In Stock' | 'Low Stock' | 'Out of Stock';
   regionalAvailability?: string[];
+  vehicleCategory?: string;
+  partCategory?: string;
 }
 
 interface CartItem {
@@ -76,6 +79,54 @@ interface TruckCategory {
   subcategories: string[];
   color: string;
 }
+
+// ===== CATEGORIZATION LOGIC FROM JSON =====
+const VEHICLE_KEYWORDS = [
+  "FORD", "F150", "F250", "F350", "DODGE", "RAM", "CHEVY", "CHEVROLET", "SILVERADO",
+  "GMC", "TOYOTA", "TUNDRA", "TACOMA", "JEEP", "WRANGLER", "GLADIATOR", "NISSAN",
+  "FRONTIER", "TITAN", "HONDA", "RIDGELINE"
+];
+
+const PART_CATEGORY_MAP = {
+  "Brakes": ["BRAKE", "DISC", "PAD", "CALIPER", "ROTOR"],
+  "Suspension": ["SHOCK", "STRUT", "SPRING", "LIFT", "LEVELING", "CONTROL ARM"],
+  "Lighting": ["LIGHT", "HEADLIGHT", "FOG", "LED", "BULB", "TAILLIGHT"],
+  "Interior Accessories": ["FLOORLINER", "MAT", "SEAT", "COVER", "CONSOLE"],
+  "Exterior Accessories": ["GRILLE", "FENDER", "MIRROR", "STEP", "BULLBAR", "ROOF", "RACK"],
+  "Drivetrain": ["AXLE", "DIFFERENTIAL", "U-JOINT"],
+  "Engine Components": ["OIL", "FILTER", "PUMP", "AIR", "INTAKE", "FUEL"],
+  "Performance Upgrades": ["EXHAUST", "TUNER", "CHIP", "BOOST"],
+  "Electrical": ["BATTERY", "ALTERNATOR", "WIRING", "SWITCH"],
+  "Kits & Bundles": ["KIT", "SET", "BUNDLE"]
+};
+
+const categorizeVehicle = (longDescription: string): string => {
+  if (!longDescription) return "Universal/Other";
+  
+  const upperDesc = longDescription.toUpperCase();
+  for (const keyword of VEHICLE_KEYWORDS) {
+    if (upperDesc.includes(keyword)) {
+      return keyword;
+    }
+  }
+  return "Universal/Other";
+};
+
+const categorizePart = (longDescription: string): string => {
+  if (!longDescription) return "Uncategorized";
+  
+  const upperDesc = longDescription.toUpperCase();
+  const tokens = upperDesc.split(/\s+/);
+  
+  for (const [categoryName, keywords] of Object.entries(PART_CATEGORY_MAP)) {
+    for (const keyword of keywords) {
+      if (tokens.some(token => token.includes(keyword))) {
+        return categoryName;
+      }
+    }
+  }
+  return "Uncategorized";
+};
 
 // ===== TRUCK-SPECIFIC CATEGORIES =====
 const TRUCK_CATEGORIES: TruckCategory[] = [
@@ -123,7 +174,6 @@ const TRUCK_CATEGORIES: TruckCategory[] = [
 
 // ===== UTILITY FUNCTIONS =====
 const checkIfKit = (partId: string): boolean => {
-  // Simple kit detection logic - no hooks
   return partId?.includes('kit') || partId?.includes('set') || false;
 };
 
@@ -132,27 +182,22 @@ const inferCategory = (part: InventoryPart): string => {
   const description = part.description?.toLowerCase() || '';
   const text = `${name} ${description}`;
 
-  // Exterior category keywords
   if (text.match(/bumper|grille|fender|running board|side step|bed|tonneau|lighting|led|headlight|taillight/)) {
     return 'exterior';
   }
   
-  // Performance category keywords
   if (text.match(/exhaust|intake|suspension|brake|turbo|intercooler|performance|engine|chip/)) {
     return 'performance';
   }
   
-  // Interior category keywords
   if (text.match(/seat|floor mat|dashboard|console|trim|organizer|storage/)) {
     return 'interior';
   }
   
-  // Electrical category keywords
   if (text.match(/wiring|switch|battery|audio|electronic|inverter|charger|electrical/)) {
     return 'electrical';
   }
   
-  // Hardware category keywords
   if (text.match(/fastener|tool|maintenance|fluid|filter|belt|gasket|hardware/)) {
     return 'hardware';
   }
@@ -167,7 +212,6 @@ const getStockStatus = (quantity: number): 'In Stock' | 'Low Stock' | 'Out of St
 };
 
 const getRegionalAvailability = (): string[] => {
-  // Mock regional availability - in real app this would come from database
   const regions = ['East', 'Midwest', 'West'];
   return regions.filter(() => Math.random() > 0.3);
 };
@@ -187,42 +231,73 @@ const useInventoryData = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔍 Fetching inventory data from Supabase...');
+      console.log('🔍 Fetching ALL inventory data from Supabase...');
       
       const supabase = getSupabaseClient();
-      const { data, error: fetchError } = await supabase
-        .from('inventory')
-        .select('*')
-        .order('name');
+      
+      // Fetch ALL records without pagination limits
+      let allParts: any[] = [];
+      let from = 0;
+      const batchSize = 1000; // Process in batches to avoid memory issues
+      
+      while (true) {
+        const { data, error: fetchError } = await supabase
+          .from('inventory')
+          .select('*')
+          .range(from, from + batchSize - 1)
+          .order('name');
 
-      if (fetchError) {
-        console.error('❌ Error fetching inventory:', fetchError);
-        setError(fetchError.message);
-        return;
+        if (fetchError) {
+          console.error('❌ Error fetching inventory:', fetchError);
+          setError(fetchError.message);
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          break; // No more data
+        }
+
+        allParts = [...allParts, ...data];
+        from += batchSize;
+        
+        console.log(`📦 Loaded ${allParts.length} parts so far...`);
+        
+        // Break if we got less than batch size (last batch)
+        if (data.length < batchSize) {
+          break;
+        }
       }
 
-      console.log(`✅ Inventory data fetched: ${data?.length || 0} items`);
+      console.log(`✅ Total inventory data fetched: ${allParts.length} items`);
 
-      // Map database fields to component interface
-      const mappedParts: InventoryPart[] = (data || []).map(item => ({
-        id: item.id,
-        name: item.name || 'Unnamed Part',
-        sku: item.sku,
-        keystone_vcpn: item.keystone_vcpn,
-        cost: Number(item.cost) || 0,
-        list_price: Number(item.list_price) || 0,
-        quantity_on_hand: Number(item.quantity_on_hand) || 0,
-        location: item.location,
-        description: item.description,
-        manufacturer_part_no: item.manufacturer_part_no,
-        compatibility: item.compatibility,
-        brand: item.brand || 'Unknown',
-        category: item.category || inferCategory(item),
-        isKit: checkIfKit(item.id),
-        margin: calculateMargin(Number(item.cost) || 0, Number(item.list_price) || 0),
-        stockStatus: getStockStatus(Number(item.quantity_on_hand) || 0),
-        regionalAvailability: getRegionalAvailability()
-      }));
+      // Map database fields to component interface with categorization
+      const mappedParts: InventoryPart[] = allParts.map(item => {
+        const longDesc = item.LongDescription || item.description || '';
+        
+        return {
+          id: item.id,
+          name: item.name || 'Unnamed Part',
+          sku: item.sku,
+          keystone_vcpn: item.keystone_vcpn,
+          cost: Number(item.cost) || 0,
+          list_price: Number(item.list_price) || 0,
+          quantity_on_hand: Number(item.quantity_on_hand) || 0,
+          location: item.location,
+          description: item.description,
+          LongDescription: longDesc,
+          manufacturer_part_no: item.manufacturer_part_no,
+          compatibility: item.compatibility,
+          brand: item.brand || 'Unknown',
+          category: item.category || inferCategory(item),
+          isKit: checkIfKit(item.id),
+          margin: calculateMargin(Number(item.cost) || 0, Number(item.list_price) || 0),
+          stockStatus: getStockStatus(Number(item.quantity_on_hand) || 0),
+          regionalAvailability: getRegionalAvailability(),
+          // NEW CATEGORIZATION FIELDS FROM JSON
+          vehicleCategory: categorizeVehicle(longDesc),
+          partCategory: categorizePart(longDesc)
+        };
+      });
 
       setParts(mappedParts);
     } catch (err) {
@@ -252,16 +327,19 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
       name: { value: part.name?.toLowerCase() || '', weight: 30 },
       sku: { value: part.sku?.toLowerCase() || '', weight: 20 },
       description: { value: part.description?.toLowerCase() || '', weight: 20 },
+      LongDescription: { value: part.LongDescription?.toLowerCase() || '', weight: 25 },
       manufacturer_part_no: { value: part.manufacturer_part_no?.toLowerCase() || '', weight: 15 },
       compatibility: { value: part.compatibility?.toLowerCase() || '', weight: 10 },
-      brand: { value: part.brand?.toLowerCase() || '', weight: 5 }
+      brand: { value: part.brand?.toLowerCase() || '', weight: 5 },
+      vehicleCategory: { value: part.vehicleCategory?.toLowerCase() || '', weight: 15 },
+      partCategory: { value: part.partCategory?.toLowerCase() || '', weight: 10 }
     };
 
     searchWords.forEach(word => {
       Object.entries(fields).forEach(([fieldName, field]) => {
         if (field.value.includes(word)) {
           if (field.value.startsWith(word)) {
-            score += field.weight * 2; // Starts with bonus
+            score += field.weight * 2;
           } else {
             score += field.weight;
           }
@@ -292,6 +370,8 @@ const Parts: React.FC = () => {
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [selectedStockStatus, setSelectedStockStatus] = useState<string>('all');
   const [selectedRegion, setSelectedRegion] = useState<string>('all');
+  const [selectedVehicleCategory, setSelectedVehicleCategory] = useState<string>('all');
+  const [selectedPartCategory, setSelectedPartCategory] = useState<string>('all');
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
@@ -315,6 +395,16 @@ const Parts: React.FC = () => {
   const availableBrands = useMemo(() => {
     const brands = [...new Set(parts.map(part => part.brand).filter(Boolean))];
     return brands.sort();
+  }, [parts]);
+
+  const availableVehicleCategories = useMemo(() => {
+    const categories = [...new Set(parts.map(part => part.vehicleCategory).filter(Boolean))];
+    return categories.sort();
+  }, [parts]);
+
+  const availablePartCategories = useMemo(() => {
+    const categories = [...new Set(parts.map(part => part.partCategory).filter(Boolean))];
+    return categories.sort();
   }, [parts]);
 
   const categoryStats = useMemo(() => {
@@ -352,6 +442,14 @@ const Parts: React.FC = () => {
       result = result.filter(part => part.regionalAvailability?.includes(selectedRegion));
     }
 
+    if (selectedVehicleCategory !== 'all') {
+      result = result.filter(part => part.vehicleCategory === selectedVehicleCategory);
+    }
+
+    if (selectedPartCategory !== 'all') {
+      result = result.filter(part => part.partCategory === selectedPartCategory);
+    }
+
     // Apply price range
     result = result.filter(part => 
       part.list_price >= priceRange[0] && part.list_price <= priceRange[1]
@@ -378,7 +476,7 @@ const Parts: React.FC = () => {
     });
 
     return result;
-  }, [parts, searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, priceRange, sortBy, sortOrder]);
+  }, [parts, searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, selectedVehicleCategory, selectedPartCategory, priceRange, sortBy, sortOrder]);
 
   // ===== PAGINATION =====
   const paginatedParts = useMemo(() => {
@@ -491,6 +589,8 @@ const Parts: React.FC = () => {
     setSelectedBrand('all');
     setSelectedStockStatus('all');
     setSelectedRegion('all');
+    setSelectedVehicleCategory('all');
+    setSelectedPartCategory('all');
     setPriceRange([0, 1000]);
     setCurrentPage(1);
   }, []);
@@ -502,7 +602,7 @@ const Parts: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, priceRange]);
+  }, [searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, selectedVehicleCategory, selectedPartCategory, priceRange]);
 
   // ===== EARLY RETURNS AFTER ALL HOOKS =====
   if (partsLoading) {
@@ -512,6 +612,7 @@ const Parts: React.FC = () => {
           <div className="text-center">
             <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
             <p className="text-lg">Loading inventory...</p>
+            <p className="text-sm text-muted-foreground">This may take a moment for 120k+ parts</p>
           </div>
         </div>
       </div>
@@ -546,7 +647,7 @@ const Parts: React.FC = () => {
       <div className="text-center">
         <h1 className="text-3xl font-bold mb-2">Truck Parts Catalog</h1>
         <p className="text-muted-foreground">
-          Browse our comprehensive selection of truck customization parts organized by category
+          Browse our comprehensive selection of {parts.length.toLocaleString()} truck customization parts organized by category
         </p>
       </div>
 
@@ -568,7 +669,7 @@ const Parts: React.FC = () => {
                   </div>
                   <div>
                     <CardTitle className="text-lg">{category.name}</CardTitle>
-                    <p className="text-sm text-muted-foreground">{count} parts</p>
+                    <p className="text-sm text-muted-foreground">{count.toLocaleString()} parts</p>
                   </div>
                 </div>
               </CardHeader>
@@ -606,7 +707,7 @@ const Parts: React.FC = () => {
               </div>
               <div>
                 <CardTitle className="text-lg">Other Parts</CardTitle>
-                <p className="text-sm text-muted-foreground">{categoryStats.other} parts</p>
+                <p className="text-sm text-muted-foreground">{categoryStats.other.toLocaleString()} parts</p>
               </div>
             </div>
           </CardHeader>
@@ -642,12 +743,48 @@ const Parts: React.FC = () => {
               <SelectItem value="all">All Categories</SelectItem>
               {TRUCK_CATEGORIES.map((cat) => (
                 <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name} ({categoryStats[cat.id] || 0})
+                  {cat.name} ({(categoryStats[cat.id] || 0).toLocaleString()})
                 </SelectItem>
               ))}
               {categoryStats.other > 0 && (
-                <SelectItem value="other">Other ({categoryStats.other})</SelectItem>
+                <SelectItem value="other">Other ({categoryStats.other.toLocaleString()})</SelectItem>
               )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Vehicle Category Filter */}
+        <div>
+          <Label className="text-sm font-medium">Vehicle</Label>
+          <Select value={selectedVehicleCategory} onValueChange={setSelectedVehicleCategory}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Vehicles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Vehicles</SelectItem>
+              {availableVehicleCategories.map((vehicle) => (
+                <SelectItem key={vehicle} value={vehicle}>
+                  {vehicle}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Part Category Filter */}
+        <div>
+          <Label className="text-sm font-medium">Part Type</Label>
+          <Select value={selectedPartCategory} onValueChange={setSelectedPartCategory}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Part Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Part Types</SelectItem>
+              {availablePartCategories.map((partCat) => (
+                <SelectItem key={partCat} value={partCat}>
+                  {partCat}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -730,7 +867,7 @@ const Parts: React.FC = () => {
   };
 
   const renderPartCard = (part: InventoryPart) => {
-    const isKit = part.isKit || false; // ✅ No hook call - using pre-computed value
+    const isKit = part.isKit || false;
     
     return (
       <Card key={part.id} className="h-full flex flex-col hover:shadow-lg transition-shadow">
@@ -747,6 +884,16 @@ const Parts: React.FC = () => {
                 {part.keystone_vcpn && (
                   <Badge variant="outline" className="text-xs">
                     VCPN: {part.keystone_vcpn}
+                  </Badge>
+                )}
+                {part.vehicleCategory && part.vehicleCategory !== 'Universal/Other' && (
+                  <Badge variant="secondary" className="text-xs">
+                    {part.vehicleCategory}
+                  </Badge>
+                )}
+                {part.partCategory && part.partCategory !== 'Uncategorized' && (
+                  <Badge variant="outline" className="text-xs">
+                    {part.partCategory}
                   </Badge>
                 )}
               </div>
@@ -815,7 +962,7 @@ const Parts: React.FC = () => {
               <Button 
                 onClick={() => handleAddToCart(part)}
                 disabled={part.stockStatus === 'Out of Stock'}
-                className="flex-1"
+                className="flex-1 bg-blue-700 hover:bg-blue-800 text-white"
                 size="sm"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -839,7 +986,7 @@ const Parts: React.FC = () => {
   const renderListView = () => (
     <div className="space-y-2">
       {paginatedParts.map((part) => {
-        const isKit = part.isKit || false; // ✅ No hook call - using pre-computed value
+        const isKit = part.isKit || false;
         
         return (
           <Card key={part.id} className="p-4">
@@ -858,6 +1005,11 @@ const Parts: React.FC = () => {
                         Kit
                       </Badge>
                     )}
+                    {part.vehicleCategory && part.vehicleCategory !== 'Universal/Other' && (
+                      <Badge variant="secondary" className="text-xs">
+                        {part.vehicleCategory}
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 
@@ -865,6 +1017,9 @@ const Parts: React.FC = () => {
                   <div className="font-medium">{part.brand}</div>
                   <div className="text-muted-foreground">
                     {part.keystone_vcpn && `VCPN: ${part.keystone_vcpn}`}
+                  </div>
+                  <div className="text-muted-foreground">
+                    {part.partCategory && part.partCategory !== 'Uncategorized' && part.partCategory}
                   </div>
                 </div>
                 
@@ -899,6 +1054,7 @@ const Parts: React.FC = () => {
                   <Button 
                     onClick={() => handleAddToCart(part)}
                     disabled={part.stockStatus === 'Out of Stock'}
+                    className="bg-blue-700 hover:bg-blue-800 text-white"
                     size="sm"
                   >
                     <Plus className="h-4 w-4 mr-2" />
@@ -923,7 +1079,7 @@ const Parts: React.FC = () => {
   const renderPagination = () => (
     <div className="flex items-center justify-between">
       <div className="text-sm text-muted-foreground">
-        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, searchAndFilterParts.length)} of {searchAndFilterParts.length} parts
+        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, searchAndFilterParts.length)} of {searchAndFilterParts.length.toLocaleString()} parts
       </div>
       
       <div className="flex items-center space-x-2">
@@ -988,7 +1144,7 @@ const Parts: React.FC = () => {
             </h1>
             {!showCategoryView && (
               <Badge variant="secondary">
-                {searchAndFilterParts.length} parts
+                {searchAndFilterParts.length.toLocaleString()} parts
               </Badge>
             )}
           </div>
@@ -1090,7 +1246,7 @@ const Parts: React.FC = () => {
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search parts by name, SKU, description..."
+                  placeholder="Search parts by name, SKU, description, vehicle, part type..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -1206,6 +1362,14 @@ const Parts: React.FC = () => {
                   <p className="text-sm">{selectedPart.category}</p>
                 </div>
                 <div>
+                  <Label className="text-sm font-medium">Vehicle</Label>
+                  <p className="text-sm">{selectedPart.vehicleCategory || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Part Type</Label>
+                  <p className="text-sm">{selectedPart.partCategory || 'N/A'}</p>
+                </div>
+                <div>
                   <Label className="text-sm font-medium">Price</Label>
                   <p className="text-lg font-bold text-green-600">
                     ${selectedPart.list_price.toFixed(2)}
@@ -1219,10 +1383,10 @@ const Parts: React.FC = () => {
                 </div>
               </div>
               
-              {selectedPart.description && (
+              {selectedPart.LongDescription && (
                 <div>
                   <Label className="text-sm font-medium">Description</Label>
-                  <p className="text-sm mt-1">{selectedPart.description}</p>
+                  <p className="text-sm mt-1">{selectedPart.LongDescription}</p>
                 </div>
               )}
               
@@ -1230,7 +1394,7 @@ const Parts: React.FC = () => {
                 <Button 
                   onClick={() => handleAddToCart(selectedPart)}
                   disabled={selectedPart.stockStatus === 'Out of Stock'}
-                  className="flex-1"
+                  className="flex-1 bg-blue-700 hover:bg-blue-800 text-white"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add to Cart
