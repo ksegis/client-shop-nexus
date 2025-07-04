@@ -3,16 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useToast } from '@/hooks/use-toast';
 import { 
   Search, 
   Filter, 
@@ -25,22 +22,10 @@ import {
   Trash2,
   ArrowRight,
   Package, 
-  Truck, 
-  Wrench, 
-  Zap, 
-  Home, 
-  Settings,
   ChevronRight,
-  ChevronDown,
   X,
   RefreshCw,
   AlertTriangle,
-  CheckCircle,
-  Clock,
-  MapPin,
-  DollarSign,
-  Percent,
-  Calculator,
   Car,
   Loader2
 } from 'lucide-react';
@@ -70,18 +55,6 @@ interface InventoryPart {
   partCategory?: string;
   modelYear?: string;
   vehicleModel?: string;
-}
-
-interface CartItem {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  sku?: string;
-  category?: string;
-  image?: string;
-  inStock: boolean;
-  maxQuantity: number;
 }
 
 interface VehicleCategory {
@@ -117,7 +90,7 @@ const safeString = (value: any): string => {
   return String(value);
 };
 
-// ===== CATEGORIZATION LOGIC FROM JSON =====
+// ===== CATEGORIZATION LOGIC =====
 const VEHICLE_KEYWORDS = [
   "FORD", "F150", "F250", "F350", "DODGE", "RAM", "CHEVY", "CHEVROLET", "SILVERADO",
   "GMC", "TOYOTA", "TUNDRA", "TACOMA", "JEEP", "WRANGLER", "GLADIATOR", "NISSAN",
@@ -142,7 +115,6 @@ const PART_CATEGORY_MAP = {
   "Kits & Bundles": ["KIT", "SET", "BUNDLE"]
 };
 
-// ===== VEHICLE-BASED CATEGORIES WITH BRAND-SPECIFIC MODELS =====
 const VEHICLE_CATEGORIES: VehicleCategory[] = [
   {
     id: 'ford',
@@ -252,15 +224,12 @@ const extractModelYear = (longDescription: string): string => {
   const desc = safeString(longDescription);
   if (!desc) return "";
   
-  // Look for realistic vehicle model years (1990-2024)
-  // Vehicle model years typically don't exceed current calendar year
   const currentYear = new Date().getFullYear();
-  const maxYear = Math.min(currentYear, 2024); // Cap at 2024 for vehicle parts
+  const maxYear = Math.min(currentYear, 2024);
   
   const yearMatch = desc.match(/\b(19[9]\d|20[0-2]\d)\b/);
   if (yearMatch) {
     const year = parseInt(yearMatch[1]);
-    // Only return years that make sense for vehicle parts (1990-2024)
     if (year >= 1990 && year <= maxYear) {
       return yearMatch[1];
     }
@@ -316,445 +285,6 @@ const calculateMargin = (cost: number, listPrice: number): number => {
   const priceNum = Number(listPrice) || 0;
   if (!costNum || !priceNum || priceNum === 0) return 0;
   return ((priceNum - costNum) / priceNum) * 100;
-};
-
-// ===== FIXED CART HOOK - REMOVED DUPLICATE addToCart =====
-const useCart = () => {
-  const [cart, setCart] = useState<{ [key: string]: number }>({});
-  const { toast } = useToast();
-
-  // Load cart from localStorage on mount
-  useEffect(() => {
-    const savedCart = localStorage.getItem('parts-cart');
-    if (savedCart) {
-      try {
-        setCart(JSON.parse(savedCart));
-      } catch (error) {
-        console.error('Error loading cart:', error);
-      }
-    }
-  }, []);
-
-  // Save cart to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('parts-cart', JSON.stringify(cart));
-  }, [cart]);
-
-  // SINGLE addToCart function - no duplicates
-  const addToCart = useCallback((part: InventoryPart, quantity: number = 1) => {
-    console.log('🛒 Adding to cart:', part.name, 'quantity:', quantity);
-    
-    const partId = part.id;
-    const maxQuantity = Number(part.quantity_on_hand) || 0;
-    const currentQuantity = cart[partId] || 0;
-    const newQuantity = currentQuantity + quantity;
-
-    if (part.stockStatus === 'Out of Stock' || maxQuantity === 0) {
-      toast({
-        title: "Out of Stock",
-        description: "This item is currently out of stock.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (newQuantity > maxQuantity) {
-      toast({
-        title: "Stock Limit",
-        description: `Only ${maxQuantity} available in stock`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setCart(prev => ({
-      ...prev,
-      [partId]: newQuantity
-    }));
-
-    toast({
-      title: currentQuantity > 0 ? "Quantity Updated" : "Added to Cart",
-      description: currentQuantity > 0 
-        ? `${part.name} quantity increased to ${newQuantity}.`
-        : `${part.name} has been added to your cart.`,
-      variant: "default",
-    });
-  }, [cart, toast]);
-
-  const updateQuantity = useCallback((partId: string, quantity: number) => {
-    if (quantity <= 0) {
-      setCart(prev => {
-        const newCart = { ...prev };
-        delete newCart[partId];
-        return newCart;
-      });
-    } else {
-      setCart(prev => ({
-        ...prev,
-        [partId]: quantity
-      }));
-    }
-  }, []);
-
-  const removeItem = useCallback((partId: string) => {
-    setCart(prev => {
-      const newCart = { ...prev };
-      delete newCart[partId];
-      return newCart;
-    });
-  }, []);
-
-  const clearCart = useCallback(() => {
-    setCart({});
-    toast({
-      title: "Cart Cleared",
-      description: "All items removed from cart.",
-      variant: "default",
-    });
-  }, [toast]);
-
-  return {
-    cart,
-    addToCart,
-    updateQuantity,
-    removeItem,
-    clearCart
-  };
-};
-
-// ===== CART DRAWER COMPONENT =====
-interface CartDrawerProps {
-  isOpen: boolean;
-  onClose: () => void;
-  cart: { [key: string]: number };
-  parts: InventoryPart[];
-  onUpdateQuantity: (partId: string, quantity: number) => void;
-  onRemoveItem: (partId: string) => void;
-  onClearCart: () => void;
-}
-
-const CartDrawer: React.FC<CartDrawerProps> = ({
-  isOpen,
-  onClose,
-  cart,
-  parts,
-  onUpdateQuantity,
-  onRemoveItem,
-  onClearCart
-}) => {
-  const { toast } = useToast();
-  
-  // Convert cart object to cart items with part details
-  const cartItems: CartItem[] = Object.entries(cart).map(([partId, quantity]) => {
-    const part = parts.find(p => p.id === partId);
-    return {
-      id: partId,
-      name: safeString(part?.name || 'Unknown Part'),
-      price: Number(part?.list_price) || 0,
-      quantity,
-      sku: safeString(part?.sku || part?.keystone_vcpn),
-      category: safeString(part?.category),
-      inStock: (Number(part?.quantity_on_hand) || 0) > 0,
-      maxQuantity: Number(part?.quantity_on_hand) || 0
-    };
-  }).filter(item => item.quantity > 0);
-
-  // Calculate totals
-  const subtotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-  const tax = subtotal * 0.08; // 8% tax rate - adjust as needed
-  const shipping = subtotal > 100 ? 0 : 15; // Free shipping over $100
-  const total = subtotal + tax + shipping;
-  const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
-
-  // Handle quantity updates
-  const handleQuantityChange = (partId: string, newQuantity: number) => {
-    const item = cartItems.find(item => item.id === partId);
-    if (!item) return;
-
-    if (newQuantity <= 0) {
-      onRemoveItem(partId);
-      toast({
-        title: "Item Removed",
-        description: `${item.name} removed from cart`,
-        variant: "default",
-      });
-    } else if (newQuantity > item.maxQuantity) {
-      toast({
-        title: "Stock Limit",
-        description: `Only ${item.maxQuantity} available in stock`,
-        variant: "destructive",
-      });
-    } else {
-      onUpdateQuantity(partId, newQuantity);
-    }
-  };
-
-  // Handle checkout
-  const handleCheckout = () => {
-    if (cartItems.length === 0) return;
-    
-    // Add your checkout logic here
-    console.log('🛒 Proceeding to checkout with items:', cartItems);
-    toast({
-      title: "Checkout",
-      description: "Proceeding to checkout...",
-      variant: "default",
-    });
-    
-    // Example: Navigate to checkout page
-    // router.push('/checkout');
-  };
-
-  // Backdrop click handler
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
-  // Prevent body scroll when drawer is open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen]);
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className={`fixed inset-0 bg-black bg-opacity-50 z-50 transition-opacity duration-300 ${
-          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-        onClick={handleBackdropClick}
-      />
-
-      {/* Cart Drawer */}
-      <div
-        className={`fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <div className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" />
-            <h2 className="text-lg font-semibold">Shopping Cart</h2>
-            {totalItems > 0 && (
-              <Badge variant="secondary">{totalItems} items</Badge>
-            )}
-          </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Cart Content */}
-        <div className="flex flex-col h-full">
-          {cartItems.length === 0 ? (
-            /* Empty Cart State */
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-              <ShoppingCart className="h-16 w-16 text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-600 mb-2">Your cart is empty</h3>
-              <p className="text-gray-500 mb-6">Add some parts to get started</p>
-              <Button onClick={onClose} variant="outline">
-                Continue Shopping
-              </Button>
-            </div>
-          ) : (
-            <>
-              {/* Cart Items */}
-              <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4">
-                  {cartItems.map((item) => (
-                    <div key={item.id} className="flex gap-3 p-3 border rounded-lg">
-                      {/* Item Image Placeholder */}
-                      <div className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center">
-                        <ShoppingCart className="h-6 w-6 text-gray-400" />
-                      </div>
-
-                      {/* Item Details */}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-sm line-clamp-2">{item.name}</h4>
-                        {item.sku && (
-                          <p className="text-xs text-gray-500">SKU: {item.sku}</p>
-                        )}
-                        {item.category && (
-                          <Badge variant="outline" className="text-xs mt-1">
-                            {item.category}
-                          </Badge>
-                        )}
-                        
-                        {/* Price and Stock Status */}
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="font-semibold text-green-600">
-                            ${item.price.toFixed(2)}
-                          </span>
-                          <span className={`text-xs ${item.inStock ? 'text-green-600' : 'text-red-600'}`}>
-                            {item.inStock ? `${item.maxQuantity} in stock` : 'Out of stock'}
-                          </span>
-                        </div>
-
-                        {/* Quantity Controls */}
-                        <div className="flex items-center justify-between mt-3">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
-                              disabled={item.quantity <= 1}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-8 text-center text-sm font-medium">
-                              {item.quantity}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
-                              disabled={item.quantity >= item.maxQuantity}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-
-                          {/* Remove Button */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onRemoveItem(item.id)}
-                            className="text-red-600 hover:text-red-700 h-8 w-8 p-0"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-
-                        {/* Item Total */}
-                        <div className="text-right mt-2">
-                          <span className="text-sm font-semibold">
-                            ${(item.price * item.quantity).toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-
-              {/* Cart Summary */}
-              <div className="border-t p-4 space-y-4">
-                {/* Clear Cart Button */}
-                {cartItems.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onClearCart}
-                    className="w-full text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Clear Cart
-                  </Button>
-                )}
-
-                <Separator />
-
-                {/* Price Breakdown */}
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Subtotal ({totalItems} items)</span>
-                    <span>${subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Tax</span>
-                    <span>${tax.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Shipping</span>
-                    <span>{shipping === 0 ? 'Free' : `$${shipping.toFixed(2)}`}</span>
-                  </div>
-                  {shipping === 0 && subtotal < 100 && (
-                    <p className="text-xs text-green-600">
-                      Free shipping on orders over $100
-                    </p>
-                  )}
-                  <Separator />
-                  <div className="flex justify-between font-semibold text-lg">
-                    <span>Total</span>
-                    <span>${total.toFixed(2)}</span>
-                  </div>
-                </div>
-
-                {/* Checkout Button */}
-                <Button
-                  onClick={handleCheckout}
-                  className="w-full"
-                  size="lg"
-                  disabled={cartItems.length === 0}
-                >
-                  Proceed to Checkout
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-
-                {/* Continue Shopping */}
-                <Button
-                  variant="outline"
-                  onClick={onClose}
-                  className="w-full"
-                >
-                  Continue Shopping
-                </Button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </>
-  );
-};
-
-// ===== CART BUTTON COMPONENT =====
-interface CartButtonProps {
-  cart: { [key: string]: number };
-  parts: InventoryPart[];
-  onOpenCart: () => void;
-}
-
-const CartButton: React.FC<CartButtonProps> = ({ cart, parts, onOpenCart }) => {
-  const totalItems = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
-  const totalValue = Object.entries(cart).reduce((total, [partId, quantity]) => {
-    const part = parts.find(p => p.id === partId);
-    return total + (Number(part?.list_price) || 0) * quantity;
-  }, 0);
-
-  return (
-    <Button 
-      variant="outline" 
-      className="relative"
-      onClick={onOpenCart}
-    >
-      <ShoppingCart className="h-4 w-4 mr-2" />
-      Cart ({totalItems})
-      {totalItems > 0 && (
-        <>
-          <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center">
-            {totalItems}
-          </Badge>
-          <span className="ml-2 text-sm text-green-600">
-            ${totalValue.toFixed(2)}
-          </span>
-        </>
-      )}
-    </Button>
-  );
 };
 
 // ===== PROGRESSIVE LOADING HOOK =====
@@ -913,26 +443,22 @@ const useProgressiveInventoryData = () => {
   };
 };
 
-// ===== COMPLETELY FIXED FUZZY SEARCH WITH SAFE STRING HANDLING =====
+// ===== FUZZY SEARCH =====
 const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[] => {
   const term = safeString(searchTerm);
   if (!term || !term.trim()) {
-    console.log('🔍 Empty search term, returning all parts');
     return parts;
   }
 
   const searchWords = term.toLowerCase().split(' ').filter(word => word.length > 0);
-  console.log('🔍 Search words:', searchWords);
   
   if (searchWords.length === 0) {
-    console.log('🔍 No valid search words, returning all parts');
     return parts;
   }
   
   const scorePart = (part: InventoryPart): number => {
     let score = 0;
     
-    // All fields are now safely converted to strings
     const fields = {
       name: { value: safeString(part.name).toLowerCase(), weight: 30 },
       sku: { value: safeString(part.sku).toLowerCase(), weight: 20 },
@@ -954,7 +480,7 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
       Object.entries(fields).forEach(([fieldName, field]) => {
         if (field.value && field.value.includes(word)) {
           if (field.value.startsWith(word)) {
-            score += field.weight * 2; // Boost for exact start matches
+            score += field.weight * 2;
           } else {
             score += field.weight;
           }
@@ -972,20 +498,16 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
       .sort((a, b) => b.score - a.score)
       .map(({ part }) => part);
 
-    console.log(`🔍 Search for "${term}" returned ${results.length} results from ${parts.length} total parts`);
-    
     return results;
   } catch (error) {
     console.error('❌ Error in fuzzy search:', error);
-    return parts; // Return all parts if search fails
+    return parts;
   }
 };
 
 // ===== MAIN COMPONENT =====
 const Parts: React.FC = () => {
-  // ===== ALL HOOKS DECLARED AT TOP LEVEL =====
-  const { toast } = useToast();
-  
+  // ===== DATA LOADING =====
   const { 
     parts, 
     loading: partsLoading, 
@@ -997,19 +519,64 @@ const Parts: React.FC = () => {
     refetch 
   } = useProgressiveInventoryData();
 
-  // FIXED: Single cart hook usage - no duplicates
-  const {
-    cart,
-    addToCart,
-    updateQuantity,
-    removeItem,
-    clearCart
-  } = useCart();
-  
-  // State hooks
-  const [filteredParts, setFilteredParts] = useState<InventoryPart[]>([]);
+  // ===== SIMPLE CART STATE - NO COMPLEX HOOKS =====
+  const [cart, setCart] = useState<{ [key: string]: number }>({});
+  const [showCartDrawer, setShowCartDrawer] = useState(false);
+  const [cartMessage, setCartMessage] = useState<string>('');
+
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    const savedCart = localStorage.getItem('parts-cart');
+    if (savedCart) {
+      try {
+        setCart(JSON.parse(savedCart));
+      } catch (error) {
+        console.error('Error loading cart:', error);
+      }
+    }
+  }, []);
+
+  // Save cart to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('parts-cart', JSON.stringify(cart));
+  }, [cart]);
+
+  // ===== SIMPLE ADD TO CART FUNCTION - NO HOOKS, NO COMPLEXITY =====
+  const addToCart = (part: InventoryPart) => {
+    console.log('🛒 SIMPLE ADD TO CART CALLED:', part.name);
+    
+    const partId = part.id;
+    const maxQuantity = Number(part.quantity_on_hand) || 0;
+    const currentQuantity = cart[partId] || 0;
+    const newQuantity = currentQuantity + 1;
+
+    if (part.stockStatus === 'Out of Stock' || maxQuantity === 0) {
+      setCartMessage(`❌ ${part.name} is out of stock`);
+      setTimeout(() => setCartMessage(''), 3000);
+      return;
+    }
+
+    if (newQuantity > maxQuantity) {
+      setCartMessage(`❌ Only ${maxQuantity} available in stock`);
+      setTimeout(() => setCartMessage(''), 3000);
+      return;
+    }
+
+    // Update cart state
+    setCart(prev => ({
+      ...prev,
+      [partId]: newQuantity
+    }));
+
+    setCartMessage(`✅ ${part.name} added to cart!`);
+    setTimeout(() => setCartMessage(''), 3000);
+    
+    console.log('🛒 Cart updated:', { ...cart, [partId]: newQuantity });
+  };
+
+  // ===== OTHER STATE =====
   const [searchTerm, setSearchTerm] = useState('');
-  const [globalSearchTerm, setGlobalSearchTerm] = useState(''); // For category overview search
+  const [globalSearchTerm, setGlobalSearchTerm] = useState('');
   const [selectedVehicleCategory, setSelectedVehicleCategory] = useState<string>('all');
   const [selectedPartCategory, setSelectedPartCategory] = useState<string>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
@@ -1024,13 +591,8 @@ const Parts: React.FC = () => {
   const [itemsPerPage] = useState(12);
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'category' | 'stock'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  
-  // Dialog state
   const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
-  const [showCartDrawer, setShowCartDrawer] = useState(false);
-  
-  // Category view state
   const [showCategoryView, setShowCategoryView] = useState(true);
 
   // ===== MEMOIZED VALUES =====
@@ -1044,28 +606,23 @@ const Parts: React.FC = () => {
     return categories.sort();
   }, [parts]);
 
-  // Realistic model years only (1990-2024)
   const availableModelYears = useMemo(() => {
     const years = [...new Set(parts.map(part => safeString(part.modelYear)).filter(year => {
       if (!year) return false;
       const yearNum = parseInt(year);
-      // Only include realistic vehicle model years
       return yearNum >= 1990 && yearNum <= 2024;
     }))];
-    return years.sort((a, b) => parseInt(b) - parseInt(a)); // Newest first
+    return years.sort((a, b) => parseInt(b) - parseInt(a));
   }, [parts]);
 
-  // Brand-specific vehicle models
   const availableVehicleModels = useMemo(() => {
     if (selectedVehicleCategory === 'all') {
       const models = [...new Set(parts.map(part => safeString(part.vehicleModel)).filter(Boolean))];
       return models.sort();
     }
     
-    // Get models specific to selected brand
     const selectedCategory = VEHICLE_CATEGORIES.find(cat => cat.id === selectedVehicleCategory);
     if (selectedCategory) {
-      // Filter parts by selected vehicle category and extract models
       const categoryParts = parts.filter(part => {
         const vehicleCatId = getVehicleCategoryId(safeString(part.vehicleCategory));
         return vehicleCatId === selectedVehicleCategory;
@@ -1088,7 +645,6 @@ const Parts: React.FC = () => {
       }).length;
     });
     
-    // Universal/Other category
     stats.universal = parts.filter(part => {
       const vehicleCatId = getVehicleCategoryId(safeString(part.vehicleCategory));
       return vehicleCatId === 'universal';
@@ -1097,30 +653,19 @@ const Parts: React.FC = () => {
     return stats;
   }, [parts]);
 
-  // ===== FIXED SEARCH AND FILTERING =====
+  // ===== SEARCH AND FILTERING =====
   const searchAndFilterParts = useMemo(() => {
-    console.log('🔍 Starting search and filter process...');
-    console.log('🔍 Total parts available:', parts.length);
-    console.log('🔍 Search term:', searchTerm);
-    console.log('🔍 Selected vehicle category:', selectedVehicleCategory);
-    
-    let result = [...parts]; // Create a copy to avoid mutations
+    let result = [...parts];
 
-    // Apply search FIRST - this is the critical fix
     if (searchTerm && searchTerm.trim()) {
-      console.log('🔍 Applying search...');
       try {
         result = fuzzySearch(searchTerm.trim(), result);
-        console.log('🔍 After search:', result.length, 'parts');
       } catch (error) {
         console.error('❌ Search error:', error);
-        // If search fails, continue with all parts
       }
     }
 
-    // Apply vehicle category filter
     if (selectedVehicleCategory !== 'all') {
-      console.log('🔍 Applying vehicle category filter...');
       if (selectedVehicleCategory === 'universal') {
         result = result.filter(part => {
           const vehicleCatId = getVehicleCategoryId(safeString(part.vehicleCategory));
@@ -1132,23 +677,18 @@ const Parts: React.FC = () => {
           return vehicleCatId === selectedVehicleCategory;
         });
       }
-      console.log('🔍 After vehicle category filter:', result.length, 'parts');
     }
 
-    // Apply other filters with safe string handling
     if (selectedPartCategory !== 'all') {
       result = result.filter(part => safeString(part.partCategory) === selectedPartCategory);
-      console.log('🔍 After part category filter:', result.length, 'parts');
     }
 
     if (selectedBrand !== 'all') {
       result = result.filter(part => safeString(part.brand) === selectedBrand);
-      console.log('🔍 After brand filter:', result.length, 'parts');
     }
 
     if (selectedStockStatus !== 'all') {
       result = result.filter(part => safeString(part.stockStatus) === selectedStockStatus);
-      console.log('🔍 After stock status filter:', result.length, 'parts');
     }
 
     if (selectedRegion !== 'all') {
@@ -1156,27 +696,21 @@ const Parts: React.FC = () => {
         const availability = part.regionalAvailability || [];
         return availability.includes(selectedRegion);
       });
-      console.log('🔍 After region filter:', result.length, 'parts');
     }
 
     if (selectedModelYear !== 'all') {
       result = result.filter(part => safeString(part.modelYear) === selectedModelYear);
-      console.log('🔍 After model year filter:', result.length, 'parts');
     }
 
     if (selectedVehicleModel !== 'all') {
       result = result.filter(part => safeString(part.vehicleModel) === selectedVehicleModel);
-      console.log('🔍 After vehicle model filter:', result.length, 'parts');
     }
 
-    // Apply price range
     result = result.filter(part => {
       const price = Number(part.list_price) || 0;
       return price >= priceRange[0] && price <= priceRange[1];
     });
-    console.log('🔍 After price range filter:', result.length, 'parts');
 
-    // Apply sorting with safe string handling
     result.sort((a, b) => {
       let comparison = 0;
       switch (sortBy) {
@@ -1196,21 +730,17 @@ const Parts: React.FC = () => {
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
-    console.log('🔍 Final filtered result:', result.length, 'parts');
     return result;
   }, [parts, searchTerm, selectedVehicleCategory, selectedPartCategory, selectedBrand, selectedStockStatus, selectedRegion, selectedModelYear, selectedVehicleModel, priceRange, sortBy, sortOrder]);
 
-  // ===== GLOBAL SEARCH FOR CATEGORY VIEW =====
   const globalSearchResults = useMemo(() => {
     const term = safeString(globalSearchTerm);
     if (!term || !term.trim()) {
       return [];
     }
     
-    console.log('🌍 Global search for:', term);
     try {
       const results = fuzzySearch(term.trim(), parts);
-      console.log('🌍 Global search results:', results.length);
       return results;
     } catch (error) {
       console.error('❌ Global search error:', error);
@@ -1218,7 +748,6 @@ const Parts: React.FC = () => {
     }
   }, [globalSearchTerm, parts]);
 
-  // ===== PAGINATION =====
   const paginatedParts = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     return searchAndFilterParts.slice(startIndex, startIndex + itemsPerPage);
@@ -1226,27 +755,56 @@ const Parts: React.FC = () => {
 
   const totalPages = Math.ceil(searchAndFilterParts.length / itemsPerPage);
 
-  // ===== CART FUNCTIONS - FIXED: Single handleAddToCart function =====
-  const handleAddToCart = useCallback((part: InventoryPart) => {
-    console.log('🛒 Add to cart clicked for:', part.name);
-    addToCart(part);
-  }, [addToCart]);
+  // ===== CART FUNCTIONS =====
+  const getTotalItems = () => {
+    return Object.values(cart).reduce((total, quantity) => total + quantity, 0);
+  };
 
-  const handleViewDetail = useCallback((part: InventoryPart) => {
-    console.log('👁️ View detail clicked for:', part.name);
-    setSelectedPart(part);
-    setShowDetailDialog(true);
-  }, []);
+  const getTotalValue = () => {
+    return Object.entries(cart).reduce((total, [partId, quantity]) => {
+      const part = parts.find(p => p.id === partId);
+      return total + (Number(part?.list_price) || 0) * quantity;
+    }, 0);
+  };
 
-  // ===== CATEGORY FUNCTIONS =====
-  const handleVehicleCategorySelect = useCallback((categoryId: string) => {
+  const updateCartQuantity = (partId: string, quantity: number) => {
+    if (quantity <= 0) {
+      setCart(prev => {
+        const newCart = { ...prev };
+        delete newCart[partId];
+        return newCart;
+      });
+    } else {
+      setCart(prev => ({
+        ...prev,
+        [partId]: quantity
+      }));
+    }
+  };
+
+  const removeFromCart = (partId: string) => {
+    setCart(prev => {
+      const newCart = { ...prev };
+      delete newCart[partId];
+      return newCart;
+    });
+  };
+
+  const clearCart = () => {
+    setCart({});
+    setCartMessage('🗑️ Cart cleared');
+    setTimeout(() => setCartMessage(''), 3000);
+  };
+
+  // ===== OTHER FUNCTIONS =====
+  const handleVehicleCategorySelect = (categoryId: string) => {
     setSelectedVehicleCategory(categoryId);
-    setSelectedVehicleModel('all'); // Reset model when brand changes
+    setSelectedVehicleModel('all');
     setShowCategoryView(false);
     setCurrentPage(1);
-  }, []);
+  };
 
-  const resetFilters = useCallback(() => {
+  const resetFilters = () => {
     setSearchTerm('');
     setGlobalSearchTerm('');
     setSelectedVehicleCategory('all');
@@ -1258,51 +816,42 @@ const Parts: React.FC = () => {
     setSelectedVehicleModel('all');
     setPriceRange([0, 1000]);
     setCurrentPage(1);
-  }, []);
+  };
 
-  // ===== GLOBAL SEARCH FUNCTIONS =====
-  const handleGlobalSearch = useCallback((searchValue: string) => {
+  const handleGlobalSearch = (searchValue: string) => {
     const value = safeString(searchValue);
-    console.log('🌍 Global search triggered:', value);
     setGlobalSearchTerm(value);
     
     if (value.trim()) {
-      // Switch to parts view and set search term
       setSearchTerm(value);
       setShowCategoryView(false);
       setCurrentPage(1);
     }
-  }, []);
+  };
 
-  const handleGlobalSearchSubmit = useCallback((e: React.FormEvent) => {
+  const handleGlobalSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (globalSearchTerm.trim()) {
       handleGlobalSearch(globalSearchTerm);
     }
-  }, [globalSearchTerm, handleGlobalSearch]);
+  };
 
-  // Reset filters when navigating back to category view
+  // ===== EFFECTS =====
   useEffect(() => {
     if (showCategoryView) {
       resetFilters();
     }
-  }, [showCategoryView, resetFilters]);
+  }, [showCategoryView]);
 
-  // Reset vehicle model when vehicle category changes
   useEffect(() => {
     setSelectedVehicleModel('all');
   }, [selectedVehicleCategory]);
-
-  // ===== EFFECTS =====
-  useEffect(() => {
-    setFilteredParts(searchAndFilterParts);
-  }, [searchAndFilterParts]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedVehicleCategory, selectedPartCategory, selectedBrand, selectedStockStatus, selectedRegion, selectedModelYear, selectedVehicleModel, priceRange]);
 
-  // ===== EARLY RETURNS AFTER ALL HOOKS =====
+  // ===== EARLY RETURNS =====
   if (partsLoading) {
     return (
       <div className="container mx-auto p-6">
@@ -1358,316 +907,6 @@ const Parts: React.FC = () => {
       </div>
     );
   };
-
-  const renderVehicleCategoryOverview = () => (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold mb-2">Vehicle Parts Catalog</h1>
-        <p className="text-muted-foreground">
-          Browse our comprehensive selection of {loadedCount.toLocaleString()} truck parts organized by vehicle brand
-          {backgroundLoading && <span className="ml-2">(Loading more in background...)</span>}
-        </p>
-      </div>
-
-      {renderLoadingProgress()}
-
-      {/* Global Search Bar */}
-      <div className="max-w-2xl mx-auto">
-        <form onSubmit={handleGlobalSearchSubmit} className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input
-            placeholder="Search all parts by name, SKU, description, vehicle, model, year..."
-            value={globalSearchTerm}
-            onChange={(e) => setGlobalSearchTerm(safeString(e.target.value))}
-            className="pl-10 pr-4 py-3 text-lg"
-          />
-          {globalSearchTerm && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="absolute right-2 top-1/2 transform -translate-y-1/2"
-              onClick={() => setGlobalSearchTerm('')}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </form>
-        
-        {/* Global Search Results Preview */}
-        {globalSearchTerm && globalSearchResults.length > 0 && (
-          <Card className="mt-4">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">
-                  Search Results ({globalSearchResults.length.toLocaleString()} found)
-                </CardTitle>
-                <Button 
-                  onClick={() => handleGlobalSearch(globalSearchTerm)}
-                  size="sm"
-                >
-                  View All Results
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {globalSearchResults.slice(0, 5).map((part) => (
-                  <div 
-                    key={part.id} 
-                    className="flex items-center justify-between p-2 border rounded hover:bg-muted cursor-pointer"
-                    onClick={() => handleGlobalSearch(globalSearchTerm)}
-                  >
-                    <div>
-                      <h4 className="font-medium text-sm">{safeString(part.name)}</h4>
-                      <p className="text-xs text-muted-foreground">
-                        {part.sku && `SKU: ${safeString(part.sku)} • `}
-                        {safeString(part.brand)} • ${(Number(part.list_price) || 0).toFixed(2)}
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="text-xs">
-                      {safeString(part.vehicleCategory)}
-                    </Badge>
-                  </div>
-                ))}
-                {globalSearchResults.length > 5 && (
-                  <div className="text-center pt-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleGlobalSearch(globalSearchTerm)}
-                    >
-                      View {(globalSearchResults.length - 5).toLocaleString()} more results
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        
-        {globalSearchTerm && globalSearchResults.length === 0 && (
-          <Card className="mt-4">
-            <CardContent className="text-center py-6">
-              <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-              <p className="text-muted-foreground">No parts found for "{globalSearchTerm}"</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {VEHICLE_CATEGORIES.map((category) => {
-          const Icon = category.icon;
-          const count = vehicleCategoryStats[category.id] || 0;
-          
-          return (
-            <Card 
-              key={category.id}
-              className="cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => handleVehicleCategorySelect(category.id)}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-center space-x-3">
-                  <div className={`p-3 rounded-lg ${category.color} text-white`}>
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">{category.name}</CardTitle>
-                    <p className="text-sm text-muted-foreground">{count.toLocaleString()} parts</p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  {category.description}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
-
-        {/* Universal/Other Category */}
-        {vehicleCategoryStats.universal > 0 && (
-          <Card 
-            className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => handleVehicleCategorySelect('universal')}
-          >
-            <CardHeader className="pb-3">
-              <div className="flex items-center space-x-3">
-                <div className="p-3 rounded-lg bg-gray-500 text-white">
-                  <Package className="h-6 w-6" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">Universal/Other</CardTitle>
-                  <p className="text-sm text-muted-foreground">{vehicleCategoryStats.universal.toLocaleString()} parts</p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Universal parts and accessories that fit multiple vehicles
-              </p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderFilters = () => (
-    <Card className={`${showFilters ? 'block' : 'hidden'} lg:block`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Filters</CardTitle>
-          <Button variant="ghost" size="sm" onClick={resetFilters}>
-            Reset
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Vehicle Category Filter */}
-        <div>
-          <Label className="text-sm font-medium">Vehicle Brand</Label>
-          <Select value={selectedVehicleCategory} onValueChange={setSelectedVehicleCategory}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Vehicles" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Vehicles</SelectItem>
-              {VEHICLE_CATEGORIES.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name} ({(vehicleCategoryStats[cat.id] || 0).toLocaleString()})
-                </SelectItem>
-              ))}
-              {vehicleCategoryStats.universal > 0 && (
-                <SelectItem value="universal">Universal/Other ({vehicleCategoryStats.universal.toLocaleString()})</SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Vehicle Model Filter - Brand Specific */}
-        <div>
-          <Label className="text-sm font-medium">Vehicle Model</Label>
-          <Select value={selectedVehicleModel} onValueChange={setSelectedVehicleModel}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Models" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Models</SelectItem>
-              {availableVehicleModels.map((model) => (
-                <SelectItem key={model} value={model}>
-                  {model}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Model Year Filter - Realistic Years Only */}
-        <div>
-          <Label className="text-sm font-medium">Model Year</Label>
-          <Select value={selectedModelYear} onValueChange={setSelectedModelYear}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Years" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Years</SelectItem>
-              {availableModelYears.map((year) => (
-                <SelectItem key={year} value={year}>
-                  {year}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Part Category Filter */}
-        <div>
-          <Label className="text-sm font-medium">Part Type</Label>
-          <Select value={selectedPartCategory} onValueChange={setSelectedPartCategory}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Part Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Part Types</SelectItem>
-              {availablePartCategories.map((partCat) => (
-                <SelectItem key={partCat} value={partCat}>
-                  {partCat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Brand Filter */}
-        <div>
-          <Label className="text-sm font-medium">Brand</Label>
-          <Select value={selectedBrand} onValueChange={setSelectedBrand}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Brands" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Brands</SelectItem>
-              {availableBrands.map((brand) => (
-                <SelectItem key={brand} value={brand}>
-                  {brand}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Stock Status Filter */}
-        <div>
-          <Label className="text-sm font-medium">Stock Status</Label>
-          <Select value={selectedStockStatus} onValueChange={setSelectedStockStatus}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Stock Levels" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Stock Levels</SelectItem>
-              <SelectItem value="In Stock">In Stock</SelectItem>
-              <SelectItem value="Low Stock">Low Stock</SelectItem>
-              <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Regional Availability Filter */}
-        <div>
-          <Label className="text-sm font-medium">Region</Label>
-          <Select value={selectedRegion} onValueChange={setSelectedRegion}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Regions" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Regions</SelectItem>
-              <SelectItem value="East">East</SelectItem>
-              <SelectItem value="Midwest">Midwest</SelectItem>
-              <SelectItem value="West">West</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Price Range Filter */}
-        <div>
-          <Label className="text-sm font-medium">
-            Price Range: ${priceRange[0]} - ${priceRange[1]}
-          </Label>
-          <Slider
-            value={priceRange}
-            onValueChange={setPriceRange}
-            max={1000}
-            min={0}
-            step={10}
-            className="mt-2"
-          />
-        </div>
-      </CardContent>
-    </Card>
-  );
 
   const getStockBadgeColor = (status: string) => {
     switch (status) {
@@ -1782,7 +1021,7 @@ const Parts: React.FC = () => {
           <div className="mt-auto space-y-2">
             <div className="flex gap-2">
               <Button 
-                onClick={() => handleAddToCart(part)}
+                onClick={() => addToCart(part)}
                 disabled={part.stockStatus === 'Out of Stock'}
                 className="flex-1 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
                 size="sm"
@@ -1794,7 +1033,10 @@ const Parts: React.FC = () => {
                 variant="outline" 
                 size="sm" 
                 className="px-3"
-                onClick={() => handleViewDetail(part)}
+                onClick={() => {
+                  setSelectedPart(part);
+                  setShowDetailDialog(true);
+                }}
               >
                 <Eye className="h-4 w-4" />
               </Button>
@@ -1805,157 +1047,16 @@ const Parts: React.FC = () => {
     );
   };
 
-  const renderListView = () => (
-    <div className="space-y-2">
-      {paginatedParts.map((part) => {
-        const isKit = part.isKit || false;
-        
-        return (
-          <Card key={part.id} className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
-                <div>
-                  <h3 className="font-semibold">{safeString(part.name)}</h3>
-                  <div className="flex gap-2 mt-1">
-                    {part.sku && (
-                      <Badge variant="outline" className="text-xs">
-                        {safeString(part.sku)}
-                      </Badge>
-                    )}
-                    {isKit && (
-                      <Badge className="bg-purple-100 text-purple-800 text-xs">
-                        Kit
-                      </Badge>
-                    )}
-                    {part.vehicleCategory && part.vehicleCategory !== 'Universal/Other' && (
-                      <Badge variant="secondary" className="text-xs">
-                        {safeString(part.vehicleCategory)}
-                      </Badge>
-                    )}
-                    {part.modelYear && (
-                      <Badge variant="outline" className="text-xs">
-                        {safeString(part.modelYear)}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="text-sm">
-                  <div className="font-medium">{safeString(part.brand)}</div>
-                  <div className="text-muted-foreground">
-                    {part.keystone_vcpn && `VCPN: ${safeString(part.keystone_vcpn)}`}
-                  </div>
-                  <div className="text-muted-foreground">
-                    {part.partCategory && part.partCategory !== 'Uncategorized' && safeString(part.partCategory)}
-                  </div>
-                  {part.vehicleModel && (
-                    <div className="text-muted-foreground">
-                      {safeString(part.vehicleModel)}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="text-sm">
-                  <div className="font-bold text-green-600">
-                    ${(Number(part.list_price) || 0).toFixed(2)}
-                  </div>
-                  <div className="text-muted-foreground">
-                    Cost: ${(Number(part.cost) || 0).toFixed(2)}
-                  </div>
-                </div>
-                
-                <div className="text-sm">
-                  <div className="font-medium text-blue-600">
-                    {(Number(part.margin) || 0).toFixed(1)}% margin
-                  </div>
-                  <div className="text-muted-foreground">
-                    {safeString(part.location)}
-                  </div>
-                </div>
-                
-                <div>
-                  <Badge className={getStockBadgeColor(safeString(part.stockStatus))}>
-                    {safeString(part.stockStatus)}
-                  </Badge>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {Number(part.quantity_on_hand) || 0} units
-                  </div>
-                </div>
-                
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={() => handleAddToCart(part)}
-                    disabled={part.stockStatus === 'Out of Stock'}
-                    className="bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
-                    size="sm"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleViewDetail(part)}
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-        );
-      })}
-    </div>
-  );
-
-  const renderPagination = () => (
-    <div className="flex items-center justify-between">
-      <div className="text-sm text-muted-foreground">
-        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, searchAndFilterParts.length)} of {searchAndFilterParts.length.toLocaleString()} parts
-        {backgroundLoading && <span className="ml-2">(Loading more...)</span>}
-      </div>
-      
-      <div className="flex items-center space-x-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-          disabled={currentPage === 1}
-        >
-          Previous
-        </Button>
-        
-        <div className="flex items-center space-x-1">
-          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-            const page = i + 1;
-            return (
-              <Button
-                key={page}
-                variant={currentPage === page ? "default" : "outline"}
-                size="sm"
-                onClick={() => setCurrentPage(page)}
-              >
-                {page}
-              </Button>
-            );
-          })}
-        </div>
-        
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-          disabled={currentPage === totalPages}
-        >
-          Next
-        </Button>
-      </div>
-    </div>
-  );
-
   // ===== MAIN RENDER =====
   return (
     <div className="container mx-auto p-6">
+      {/* Cart Message */}
+      {cartMessage && (
+        <div className="fixed top-4 right-4 z-50 bg-white border rounded-lg shadow-lg p-4 max-w-sm">
+          <p className="text-sm">{cartMessage}</p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-4">
@@ -1984,22 +1085,337 @@ const Parts: React.FC = () => {
           </div>
         </div>
 
-        {/* Cart Button */}
-        <CartButton 
-          cart={cart}
-          parts={parts}
-          onOpenCart={() => setShowCartDrawer(true)}
-        />
+        {/* Simple Cart Button */}
+        <Button 
+          variant="outline" 
+          className="relative"
+          onClick={() => setShowCartDrawer(true)}
+        >
+          <ShoppingCart className="h-4 w-4 mr-2" />
+          Cart ({getTotalItems()})
+          {getTotalItems() > 0 && (
+            <>
+              <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center">
+                {getTotalItems()}
+              </Badge>
+              <span className="ml-2 text-sm text-green-600">
+                ${getTotalValue().toFixed(2)}
+              </span>
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Category Overview or Parts List */}
       {showCategoryView ? (
-        renderVehicleCategoryOverview()
+        <div className="space-y-6">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold mb-2">Vehicle Parts Catalog</h1>
+            <p className="text-muted-foreground">
+              Browse our comprehensive selection of {loadedCount.toLocaleString()} truck parts organized by vehicle brand
+              {backgroundLoading && <span className="ml-2">(Loading more in background...)</span>}
+            </p>
+          </div>
+
+          {renderLoadingProgress()}
+
+          {/* Global Search Bar */}
+          <div className="max-w-2xl mx-auto">
+            <form onSubmit={handleGlobalSearchSubmit} className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+              <Input
+                placeholder="Search all parts by name, SKU, description, vehicle, model, year..."
+                value={globalSearchTerm}
+                onChange={(e) => setGlobalSearchTerm(safeString(e.target.value))}
+                className="pl-10 pr-4 py-3 text-lg"
+              />
+              {globalSearchTerm && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                  onClick={() => setGlobalSearchTerm('')}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </form>
+            
+            {/* Global Search Results Preview */}
+            {globalSearchTerm && globalSearchResults.length > 0 && (
+              <Card className="mt-4">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">
+                      Search Results ({globalSearchResults.length.toLocaleString()} found)
+                    </CardTitle>
+                    <Button 
+                      onClick={() => handleGlobalSearch(globalSearchTerm)}
+                      size="sm"
+                    >
+                      View All Results
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {globalSearchResults.slice(0, 5).map((part) => (
+                      <div 
+                        key={part.id} 
+                        className="flex items-center justify-between p-2 border rounded hover:bg-muted cursor-pointer"
+                        onClick={() => handleGlobalSearch(globalSearchTerm)}
+                      >
+                        <div>
+                          <h4 className="font-medium text-sm">{safeString(part.name)}</h4>
+                          <p className="text-xs text-muted-foreground">
+                            {part.sku && `SKU: ${safeString(part.sku)} • `}
+                            {safeString(part.brand)} • ${(Number(part.list_price) || 0).toFixed(2)}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-xs">
+                          {safeString(part.vehicleCategory)}
+                        </Badge>
+                      </div>
+                    ))}
+                    {globalSearchResults.length > 5 && (
+                      <div className="text-center pt-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleGlobalSearch(globalSearchTerm)}
+                        >
+                          View {(globalSearchResults.length - 5).toLocaleString()} more results
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
+            {globalSearchTerm && globalSearchResults.length === 0 && (
+              <Card className="mt-4">
+                <CardContent className="text-center py-6">
+                  <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-muted-foreground">No parts found for "{globalSearchTerm}"</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {VEHICLE_CATEGORIES.map((category) => {
+              const Icon = category.icon;
+              const count = vehicleCategoryStats[category.id] || 0;
+              
+              return (
+                <Card 
+                  key={category.id}
+                  className="cursor-pointer hover:shadow-lg transition-shadow"
+                  onClick={() => handleVehicleCategorySelect(category.id)}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-3 rounded-lg ${category.color} text-white`}>
+                        <Icon className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg">{category.name}</CardTitle>
+                        <p className="text-sm text-muted-foreground">{count.toLocaleString()} parts</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      {category.description}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+
+            {/* Universal/Other Category */}
+            {vehicleCategoryStats.universal > 0 && (
+              <Card 
+                className="cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => handleVehicleCategorySelect('universal')}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-3 rounded-lg bg-gray-500 text-white">
+                      <Package className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Universal/Other</CardTitle>
+                      <p className="text-sm text-muted-foreground">{vehicleCategoryStats.universal.toLocaleString()} parts</p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    Universal parts and accessories that fit multiple vehicles
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Filters Sidebar */}
           <div className="lg:col-span-1">
-            {renderFilters()}
+            <Card className={`${showFilters ? 'block' : 'hidden'} lg:block`}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">Filters</CardTitle>
+                  <Button variant="ghost" size="sm" onClick={resetFilters}>
+                    Reset
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Vehicle Category Filter */}
+                <div>
+                  <Label className="text-sm font-medium">Vehicle Brand</Label>
+                  <Select value={selectedVehicleCategory} onValueChange={setSelectedVehicleCategory}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Vehicles" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Vehicles</SelectItem>
+                      {VEHICLE_CATEGORIES.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.name} ({(vehicleCategoryStats[cat.id] || 0).toLocaleString()})
+                        </SelectItem>
+                      ))}
+                      {vehicleCategoryStats.universal > 0 && (
+                        <SelectItem value="universal">Universal/Other ({vehicleCategoryStats.universal.toLocaleString()})</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Vehicle Model Filter - Brand Specific */}
+                <div>
+                  <Label className="text-sm font-medium">Vehicle Model</Label>
+                  <Select value={selectedVehicleModel} onValueChange={setSelectedVehicleModel}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Models" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Models</SelectItem>
+                      {availableVehicleModels.map((model) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Model Year Filter - Realistic Years Only */}
+                <div>
+                  <Label className="text-sm font-medium">Model Year</Label>
+                  <Select value={selectedModelYear} onValueChange={setSelectedModelYear}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Years" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Years</SelectItem>
+                      {availableModelYears.map((year) => (
+                        <SelectItem key={year} value={year}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Part Category Filter */}
+                <div>
+                  <Label className="text-sm font-medium">Part Type</Label>
+                  <Select value={selectedPartCategory} onValueChange={setSelectedPartCategory}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Part Types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Part Types</SelectItem>
+                      {availablePartCategories.map((partCat) => (
+                        <SelectItem key={partCat} value={partCat}>
+                          {partCat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Brand Filter */}
+                <div>
+                  <Label className="text-sm font-medium">Brand</Label>
+                  <Select value={selectedBrand} onValueChange={setSelectedBrand}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Brands" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Brands</SelectItem>
+                      {availableBrands.map((brand) => (
+                        <SelectItem key={brand} value={brand}>
+                          {brand}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Stock Status Filter */}
+                <div>
+                  <Label className="text-sm font-medium">Stock Status</Label>
+                  <Select value={selectedStockStatus} onValueChange={setSelectedStockStatus}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Stock Levels" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Stock Levels</SelectItem>
+                      <SelectItem value="In Stock">In Stock</SelectItem>
+                      <SelectItem value="Low Stock">Low Stock</SelectItem>
+                      <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Regional Availability Filter */}
+                <div>
+                  <Label className="text-sm font-medium">Region</Label>
+                  <Select value={selectedRegion} onValueChange={setSelectedRegion}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Regions" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Regions</SelectItem>
+                      <SelectItem value="East">East</SelectItem>
+                      <SelectItem value="Midwest">Midwest</SelectItem>
+                      <SelectItem value="West">West</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Price Range Filter */}
+                <div>
+                  <Label className="text-sm font-medium">
+                    Price Range: ${priceRange[0]} - ${priceRange[1]}
+                  </Label>
+                  <Slider
+                    value={priceRange}
+                    onValueChange={setPriceRange}
+                    max={1000}
+                    min={0}
+                    step={10}
+                    className="mt-2"
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Main Content */}
@@ -2015,7 +1431,6 @@ const Parts: React.FC = () => {
                   value={searchTerm}
                   onChange={(e) => {
                     const value = safeString(e.target.value);
-                    console.log('🔍 Search input changed:', value);
                     setSearchTerm(value);
                   }}
                   className="pl-10"
@@ -2086,23 +1501,246 @@ const Parts: React.FC = () => {
               </Card>
             ) : (
               <>
-                {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {paginatedParts.map(renderPartCard)}
-                  </div>
-                ) : (
-                  renderListView()
-                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {paginatedParts.map(renderPartCard)}
+                </div>
                 
                 {totalPages > 1 && (
                   <div className="mt-6">
-                    {renderPagination()}
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">
+                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, searchAndFilterParts.length)} of {searchAndFilterParts.length.toLocaleString()} parts
+                        {backgroundLoading && <span className="ml-2">(Loading more...)</span>}
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          Previous
+                        </Button>
+                        
+                        <div className="flex items-center space-x-1">
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            const page = i + 1;
+                            return (
+                              <Button
+                                key={page}
+                                variant={currentPage === page ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setCurrentPage(page)}
+                              >
+                                {page}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                          disabled={currentPage === totalPages}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </>
             )}
           </div>
         </div>
+      )}
+
+      {/* Simple Cart Drawer */}
+      {showCartDrawer && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-50"
+            onClick={() => setShowCartDrawer(false)}
+          />
+
+          {/* Cart Drawer */}
+          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
+                <h2 className="text-lg font-semibold">Shopping Cart</h2>
+                {getTotalItems() > 0 && (
+                  <Badge variant="secondary">{getTotalItems()} items</Badge>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowCartDrawer(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Cart Content */}
+            <div className="flex flex-col h-full">
+              {getTotalItems() === 0 ? (
+                /* Empty Cart State */
+                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                  <ShoppingCart className="h-16 w-16 text-gray-300 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-600 mb-2">Your cart is empty</h3>
+                  <p className="text-gray-500 mb-6">Add some parts to get started</p>
+                  <Button onClick={() => setShowCartDrawer(false)} variant="outline">
+                    Continue Shopping
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  {/* Cart Items */}
+                  <ScrollArea className="flex-1 p-4">
+                    <div className="space-y-4">
+                      {Object.entries(cart).map(([partId, quantity]) => {
+                        const part = parts.find(p => p.id === partId);
+                        if (!part) return null;
+                        
+                        return (
+                          <div key={partId} className="flex gap-3 p-3 border rounded-lg">
+                            {/* Item Image Placeholder */}
+                            <div className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center">
+                              <ShoppingCart className="h-6 w-6 text-gray-400" />
+                            </div>
+
+                            {/* Item Details */}
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-medium text-sm line-clamp-2">{safeString(part.name)}</h4>
+                              {part.sku && (
+                                <p className="text-xs text-gray-500">SKU: {safeString(part.sku)}</p>
+                              )}
+                              
+                              {/* Price and Stock Status */}
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="font-semibold text-green-600">
+                                  ${(Number(part.list_price) || 0).toFixed(2)}
+                                </span>
+                                <span className="text-xs text-green-600">
+                                  {Number(part.quantity_on_hand) || 0} in stock
+                                </span>
+                              </div>
+
+                              {/* Quantity Controls */}
+                              <div className="flex items-center justify-between mt-3">
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => updateCartQuantity(partId, quantity - 1)}
+                                    disabled={quantity <= 1}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Minus className="h-3 w-3" />
+                                  </Button>
+                                  <span className="w-8 text-center text-sm font-medium">
+                                    {quantity}
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => updateCartQuantity(partId, quantity + 1)}
+                                    disabled={quantity >= (Number(part.quantity_on_hand) || 0)}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
+
+                                {/* Remove Button */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeFromCart(partId)}
+                                  className="text-red-600 hover:text-red-700 h-8 w-8 p-0"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+
+                              {/* Item Total */}
+                              <div className="text-right mt-2">
+                                <span className="text-sm font-semibold">
+                                  ${((Number(part.list_price) || 0) * quantity).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+
+                  {/* Cart Summary */}
+                  <div className="border-t p-4 space-y-4">
+                    {/* Clear Cart Button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearCart}
+                      className="w-full text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Clear Cart
+                    </Button>
+
+                    <Separator />
+
+                    {/* Price Breakdown */}
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Subtotal ({getTotalItems()} items)</span>
+                        <span>${getTotalValue().toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Tax</span>
+                        <span>${(getTotalValue() * 0.08).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Shipping</span>
+                        <span>{getTotalValue() > 100 ? 'Free' : '$15.00'}</span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between font-semibold text-lg">
+                        <span>Total</span>
+                        <span>${(getTotalValue() + (getTotalValue() * 0.08) + (getTotalValue() > 100 ? 0 : 15)).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Checkout Button */}
+                    <Button
+                      onClick={() => {
+                        console.log('🛒 Proceeding to checkout with cart:', cart);
+                        setCartMessage('🛒 Proceeding to checkout...');
+                        setTimeout(() => setCartMessage(''), 3000);
+                      }}
+                      className="w-full"
+                      size="lg"
+                    >
+                      Proceed to Checkout
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+
+                    {/* Continue Shopping */}
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowCartDrawer(false)}
+                      className="w-full"
+                    >
+                      Continue Shopping
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Part Detail Dialog */}
@@ -2169,7 +1807,7 @@ const Parts: React.FC = () => {
               
               <div className="flex gap-2 pt-4">
                 <Button 
-                  onClick={() => handleAddToCart(selectedPart)}
+                  onClick={() => addToCart(selectedPart)}
                   disabled={selectedPart.stockStatus === 'Out of Stock'}
                   className="flex-1 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
                 >
@@ -2184,17 +1822,6 @@ const Parts: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Cart Drawer */}
-      <CartDrawer
-        isOpen={showCartDrawer}
-        onClose={() => setShowCartDrawer(false)}
-        cart={cart}
-        parts={parts}
-        onUpdateQuantity={updateQuantity}
-        onRemoveItem={removeItem}
-        onClearCart={clearCart}
-      />
     </div>
   );
 };
