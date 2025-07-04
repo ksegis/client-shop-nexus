@@ -17,11 +17,7 @@ import {
   Filter, 
   Grid3X3, 
   List, 
-  Plus, 
-  Minus, 
   Eye, 
-  ShoppingCart, 
-  Star, 
   Package, 
   Truck, 
   Wrench, 
@@ -40,8 +36,7 @@ import {
   Percent,
   Calculator,
   Car,
-  Loader2,
-  Trash2
+  Loader2
 } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 
@@ -69,16 +64,6 @@ interface InventoryPart {
   partCategory?: string;
   modelYear?: string;
   vehicleModel?: string;
-}
-
-interface CartItem {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  maxQuantity: number;
-  sku?: string;
-  vcpn?: string;
 }
 
 interface VehicleCategory {
@@ -315,168 +300,6 @@ const calculateMargin = (cost: number, listPrice: number): number => {
   return ((priceNum - costNum) / priceNum) * 100;
 };
 
-// ===== SIMPLE CART HOOK =====
-const useSimpleCart = () => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
-
-  // Load cart from localStorage on mount
-  useEffect(() => {
-    const savedCart = localStorage.getItem('simple-cart');
-    if (savedCart) {
-      try {
-        setCartItems(JSON.parse(savedCart));
-      } catch (error) {
-        console.error('Error loading cart:', error);
-      }
-    }
-  }, []);
-
-  // Save cart to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('simple-cart', JSON.stringify(cartItems));
-  }, [cartItems]);
-
-  const addToCart = useCallback(async (part: InventoryPart) => {
-    setIsLoading(true);
-    
-    try {
-      // Simulate async operation
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      if (part.stockStatus === 'Out of Stock') {
-        toast({
-          title: "Out of Stock",
-          description: "This item is currently out of stock.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      const cartItem: CartItem = {
-        id: safeString(part.keystone_vcpn || part.sku || part.id),
-        name: safeString(part.name),
-        price: Number(part.list_price) || 0,
-        quantity: 1,
-        maxQuantity: Number(part.quantity_on_hand) || 0,
-        sku: safeString(part.sku),
-        vcpn: safeString(part.keystone_vcpn)
-      };
-
-      setCartItems(prev => {
-        const existingIndex = prev.findIndex(item => item.id === cartItem.id);
-        
-        if (existingIndex >= 0) {
-          const existing = prev[existingIndex];
-          const newQuantity = existing.quantity + 1;
-          
-          if (newQuantity > existing.maxQuantity) {
-            toast({
-              title: "Stock Limit Reached",
-              description: `Only ${existing.maxQuantity} units available.`,
-              variant: "destructive"
-            });
-            return prev;
-          }
-          
-          const updated = [...prev];
-          updated[existingIndex] = { ...existing, quantity: newQuantity };
-          
-          toast({
-            title: "Quantity Updated",
-            description: `${part.name} quantity increased to ${newQuantity}.`
-          });
-          
-          return updated;
-        } else {
-          toast({
-            title: "Added to Cart",
-            description: `${part.name} has been added to your cart.`
-          });
-          
-          return [...prev, cartItem];
-        }
-      });
-      
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-      toast({
-        title: "Error",
-        description: "Failed to add item to cart",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
-
-  const removeFromCart = useCallback((id: string) => {
-    setCartItems(prev => {
-      const item = prev.find(item => item.id === id);
-      const updated = prev.filter(item => item.id !== id);
-      
-      if (item) {
-        toast({
-          title: "Removed from Cart",
-          description: `${item.name} removed from cart.`
-        });
-      }
-      
-      return updated;
-    });
-  }, [toast]);
-
-  const updateQuantity = useCallback((id: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(id);
-      return;
-    }
-
-    setCartItems(prev => prev.map(item => {
-      if (item.id === id) {
-        if (quantity > item.maxQuantity) {
-          toast({
-            title: "Stock Limit",
-            description: `Maximum quantity for this item is ${item.maxQuantity}`,
-            variant: "destructive"
-          });
-          return item;
-        }
-        return { ...item, quantity };
-      }
-      return item;
-    }));
-  }, [removeFromCart, toast]);
-
-  const clearCart = useCallback(() => {
-    setCartItems([]);
-    toast({
-      title: "Cart Cleared",
-      description: "All items removed from cart."
-    });
-  }, [toast]);
-
-  const total = useMemo(() => {
-    return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  }, [cartItems]);
-
-  const itemCount = useMemo(() => {
-    return cartItems.reduce((sum, item) => sum + item.quantity, 0);
-  }, [cartItems]);
-
-  return {
-    cartItems,
-    addToCart,
-    removeFromCart,
-    updateQuantity,
-    clearCart,
-    total,
-    itemCount,
-    isLoading
-  };
-};
-
 // ===== PROGRESSIVE LOADING HOOK =====
 const useProgressiveInventoryData = () => {
   const [parts, setParts] = useState<InventoryPart[]>([]);
@@ -705,16 +528,6 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
 const Parts: React.FC = () => {
   // ===== ALL HOOKS DECLARED AT TOP LEVEL =====
   const { toast } = useToast();
-  const { 
-    cartItems, 
-    addToCart, 
-    removeFromCart, 
-    updateQuantity, 
-    clearCart, 
-    total, 
-    itemCount, 
-    isLoading: cartLoading 
-  } = useSimpleCart();
   
   const { 
     parts, 
@@ -749,7 +562,6 @@ const Parts: React.FC = () => {
   // Dialog state
   const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
-  const [showCartDialog, setShowCartDialog] = useState(false);
   
   // Category view state
   const [showCategoryView, setShowCategoryView] = useState(true);
@@ -947,12 +759,7 @@ const Parts: React.FC = () => {
 
   const totalPages = Math.ceil(searchAndFilterParts.length / itemsPerPage);
 
-  // ===== CART FUNCTIONS =====
-  const handleAddToCart = useCallback(async (part: InventoryPart) => {
-    console.log('🛒 Add to cart clicked for:', part.name);
-    await addToCart(part);
-  }, [addToCart]);
-
+  // ===== VIEW DETAIL FUNCTION =====
   const handleViewDetail = useCallback((part: InventoryPart) => {
     console.log('👁️ View detail clicked for:', part.name);
     setSelectedPart(part);
@@ -1500,30 +1307,16 @@ const Parts: React.FC = () => {
             )}
           </div>
           
-          <div className="mt-auto space-y-2">
-            <div className="flex gap-2">
-              <Button 
-                onClick={() => handleAddToCart(part)}
-                disabled={part.stockStatus === 'Out of Stock' || cartLoading}
-                className="flex-1 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
-                size="sm"
-              >
-                {cartLoading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4 mr-2" />
-                )}
-                Add to Cart
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="px-3"
-                onClick={() => handleViewDetail(part)}
-              >
-                <Eye className="h-4 w-4" />
-              </Button>
-            </div>
+          <div className="mt-auto">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full"
+              onClick={() => handleViewDetail(part)}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              View Details
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -1607,26 +1400,14 @@ const Parts: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={() => handleAddToCart(part)}
-                    disabled={part.stockStatus === 'Out of Stock' || cartLoading}
-                    className="bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
-                    size="sm"
-                  >
-                    {cartLoading ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Plus className="h-4 w-4 mr-2" />
-                    )}
-                    Add
-                  </Button>
+                <div>
                   <Button 
                     variant="outline" 
                     size="sm"
                     onClick={() => handleViewDetail(part)}
                   >
-                    <Eye className="h-4 w-4" />
+                    <Eye className="h-4 w-4 mr-2" />
+                    Details
                   </Button>
                 </div>
               </div>
@@ -1712,94 +1493,6 @@ const Parts: React.FC = () => {
             )}
           </div>
         </div>
-
-        {/* Cart Widget */}
-        <Dialog open={showCartDialog} onOpenChange={setShowCartDialog}>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="relative">
-              <ShoppingCart className="h-4 w-4 mr-2" />
-              Cart
-              {itemCount > 0 && (
-                <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
-                  {itemCount}
-                </Badge>
-              )}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Shopping Cart ({itemCount} items)</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 max-h-96 overflow-y-auto">
-              {cartItems.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  Your cart is empty
-                </p>
-              ) : (
-                cartItems.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-3 border rounded">
-                    <div className="flex-1">
-                      <h4 className="font-medium">{safeString(item.name)}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        ${(Number(item.price) || 0).toFixed(2)} each
-                      </p>
-                      {item.sku && (
-                        <p className="text-xs text-muted-foreground">
-                          SKU: {safeString(item.sku)}
-                        </p>
-                      )}
-                      {item.vcpn && (
-                        <p className="text-xs text-muted-foreground">
-                          VCPN: {safeString(item.vcpn)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="w-8 text-center">{item.quantity}</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        disabled={item.quantity >= item.maxQuantity}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => removeFromCart(item.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            {cartItems.length > 0 && (
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-lg font-semibold">
-                    Total: ${total.toFixed(2)}
-                  </span>
-                  <Button variant="outline" onClick={clearCart}>
-                    Clear Cart
-                  </Button>
-                </div>
-                <Button className="w-full">
-                  Proceed to Checkout
-                </Button>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
 
       {/* Category Overview or Parts List */}
@@ -1978,19 +1671,7 @@ const Parts: React.FC = () => {
               )}
               
               <div className="flex gap-2 pt-4">
-                <Button 
-                  onClick={() => handleAddToCart(selectedPart)}
-                  disabled={selectedPart.stockStatus === 'Out of Stock' || cartLoading}
-                  className="flex-1 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
-                >
-                  {cartLoading ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Plus className="h-4 w-4 mr-2" />
-                  )}
-                  Add to Cart
-                </Button>
-                <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
+                <Button variant="outline" onClick={() => setShowDetailDialog(false)} className="w-full">
                   Close
                 </Button>
               </div>
