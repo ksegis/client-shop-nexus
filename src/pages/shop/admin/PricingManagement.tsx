@@ -1,7 +1,7 @@
-// Fixed version of PricingManagement with enhanced error handling
+// Fixed version of PricingManagement with smart auto-calculation that respects manual changes
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +24,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  DollarSign
+  DollarSign,
+  Calculator
 } from 'lucide-react';
 import { getSupabaseClient } from "@/lib/supabase";
 
@@ -106,6 +107,10 @@ const PricingManagement: React.FC = () => {
   const [selectedInventoryPart, setSelectedInventoryPart] = useState<InventoryPart | null>(null);
   const [priceRecommendations, setPriceRecommendations] = useState<{ [vcpn: string]: PriceRecommendation }>({});
   
+  // ✅ NEW: Track if price was manually set by user
+  const [priceManuallySet, setPriceManuallySet] = useState(false);
+  const lastCalculatedPrice = useRef<number>(0);
+  
   // Pricing settings with defaults
   const [pricingSettings, setPricingSettings] = useState<PricingSettings>({
     defaultMarkupPercent: 30,
@@ -140,6 +145,65 @@ const PricingManagement: React.FC = () => {
     auto_update_enabled: true,
     minimum_markup_percentage: 15
   });
+
+  // ✅ ENHANCED: Automatic list price calculation
+  const calculateListPrice = useCallback((cost: number, markupPercent: number): number => {
+    if (!cost || cost <= 0 || !markupPercent || markupPercent < 0) {
+      return 0;
+    }
+    
+    const calculatedPrice = cost * (1 + markupPercent / 100);
+    return Math.round(calculatedPrice * 100) / 100; // Round to 2 decimal places
+  }, []);
+
+  // ✅ IMPROVED: Smart auto-calculation that respects manual changes
+  useEffect(() => {
+    if (formData.cost && formData.markup_percentage) {
+      const newCalculatedPrice = calculateListPrice(formData.cost, formData.markup_percentage);
+      
+      // Only auto-update if:
+      // 1. Price hasn't been manually set by user, AND
+      // 2. Current price is 0 (initial state), OR
+      // 3. Current price matches the last calculated price (meaning it was auto-calculated)
+      const shouldAutoUpdate = !priceManuallySet && (
+        formData.list_price === 0 || 
+        formData.list_price === lastCalculatedPrice.current
+      );
+      
+      if (shouldAutoUpdate) {
+        setFormData(prev => ({
+          ...prev,
+          list_price: newCalculatedPrice
+        }));
+      }
+      
+      // Always update the last calculated price for reference
+      lastCalculatedPrice.current = newCalculatedPrice;
+    }
+  }, [formData.cost, formData.markup_percentage, calculateListPrice, priceManuallySet]);
+
+  // ✅ NEW: Handle manual price input
+  const handlePriceChange = (newPrice: number) => {
+    const calculatedPrice = calculateListPrice(formData.cost || 0, formData.markup_percentage || 0);
+    
+    // If the new price is different from the calculated price, mark as manually set
+    if (Math.abs(newPrice - calculatedPrice) > 0.01) {
+      setPriceManuallySet(true);
+    } else {
+      setPriceManuallySet(false);
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      list_price: newPrice
+    }));
+  };
+
+  // ✅ NEW: Reset manual flag when form is cleared or new item selected
+  const resetPriceManualFlag = () => {
+    setPriceManuallySet(false);
+    lastCalculatedPrice.current = 0;
+  };
 
   // ✅ ENHANCED: Better error handling function
   const handleDatabaseError = (error: any, operation: string) => {
@@ -357,6 +421,7 @@ const PricingManagement: React.FC = () => {
       setEditingRecord(null);
       setIsCreateDialogOpen(false);
       setSelectedInventoryPart(null);
+      resetPriceManualFlag(); // ✅ NEW: Reset manual flag
 
       // Reload records
       await loadPricingRecords(pricingSearchTerm);
@@ -470,6 +535,19 @@ const PricingManagement: React.FC = () => {
     alert('Settings saved successfully!');
   };
 
+  // ✅ ENHANCED: Manual recalculate function that resets manual flag
+  const recalculateListPrice = () => {
+    if (formData.cost && formData.markup_percentage) {
+      const newListPrice = calculateListPrice(formData.cost, formData.markup_percentage);
+      setFormData(prev => ({
+        ...prev,
+        list_price: newListPrice
+      }));
+      setPriceManuallySet(false); // ✅ NEW: Reset manual flag when user explicitly recalculates
+      lastCalculatedPrice.current = newListPrice;
+    }
+  };
+
   // Load settings on component mount
   useEffect(() => {
     const savedSettings = localStorage.getItem('pricingSettings');
@@ -504,7 +582,10 @@ const PricingManagement: React.FC = () => {
   const debugInfo = {
     formDataValid: validateFormData(formData).length === 0,
     hasRequiredFields: !!(formData.keystone_vcpn && formData.part_name && formData.cost && formData.list_price),
-    formDataPreview: prepareDataForDatabase(formData)
+    formDataPreview: prepareDataForDatabase(formData),
+    calculatedPrice: formData.cost && formData.markup_percentage ? calculateListPrice(formData.cost, formData.markup_percentage) : 0,
+    priceManuallySet: priceManuallySet,
+    lastCalculatedPrice: lastCalculatedPrice.current
   };
 
   return (
@@ -596,7 +677,19 @@ const PricingManagement: React.FC = () => {
           <AlertDescription>
             <strong>Debug Info:</strong> Form Valid: {debugInfo.formDataValid ? '✅' : '❌'} | 
             Required Fields: {debugInfo.hasRequiredFields ? '✅' : '❌'} | 
-            Records: {pricingRecords.length}
+            Records: {pricingRecords.length} | 
+            Calculated: ${debugInfo.calculatedPrice.toFixed(2)} | 
+            Manual: {debugInfo.priceManuallySet ? '🔒' : '🔄'}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* ✅ NEW: Price calculation status indicator */}
+      {priceManuallySet && (
+        <Alert className="border-blue-300 bg-blue-50">
+          <DollarSign className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-blue-800">
+            <strong>Manual Price Set:</strong> Auto-calculation is disabled. Use the calculator button to recalculate based on cost and markup.
           </AlertDescription>
         </Alert>
       )}
@@ -718,6 +811,7 @@ const PricingManagement: React.FC = () => {
                                   onClick={() => {
                                     setEditingRecord(record);
                                     setFormData(record);
+                                    setPriceManuallySet(true); // ✅ NEW: Mark as manual when editing existing record
                                     setIsCreateDialogOpen(true);
                                   }}
                                 >
@@ -779,14 +873,18 @@ const PricingManagement: React.FC = () => {
                           }`}
                           onClick={() => {
                             setSelectedInventoryPart(part);
+                            const calculatedPrice = calculateListPrice(part.cost, pricingSettings.defaultMarkupPercent);
                             setFormData(prev => ({
                               ...prev,
                               keystone_vcpn: part.keystone_vcpn || '',
                               part_name: part.name,
                               part_sku: part.sku,
                               cost: part.cost,
-                              list_price: part.list_price
+                              list_price: calculatedPrice, // ✅ Auto-calculate on selection
+                              markup_percentage: pricingSettings.defaultMarkupPercent
                             }));
+                            resetPriceManualFlag(); // ✅ NEW: Reset manual flag when selecting new item
+                            lastCalculatedPrice.current = calculatedPrice;
                           }}
                         >
                           <div className="font-medium">{part.name}</div>
@@ -832,17 +930,38 @@ const PricingManagement: React.FC = () => {
                   </div>
                   <div>
                     <Label htmlFor="listPrice">List Price *</Label>
-                    <Input
-                      id="listPrice"
-                      type="number"
-                      step="0.01"
-                      value={formData.list_price}
-                      onChange={(e) => setFormData(prev => ({ ...prev, list_price: Number(e.target.value) }))}
-                      className={!formData.list_price || formData.list_price <= 0 ? 'border-red-300' : ''}
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        id="listPrice"
+                        type="number"
+                        step="0.01"
+                        value={formData.list_price}
+                        onChange={(e) => handlePriceChange(Number(e.target.value))} // ✅ NEW: Use smart handler
+                        className={!formData.list_price || formData.list_price <= 0 ? 'border-red-300' : ''}
+                      />
+                      {/* ✅ ENHANCED: Manual recalculate button with better tooltip */}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={recalculateListPrice}
+                        disabled={!formData.cost || !formData.markup_percentage}
+                        title={priceManuallySet ? "Recalculate and enable auto-calculation" : "Recalculate list price based on cost and markup"}
+                      >
+                        <Calculator className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    {/* ✅ ENHANCED: Show calculated price info with manual status */}
+                    {formData.cost && formData.markup_percentage && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Auto-calculated: ${calculateListPrice(formData.cost, formData.markup_percentage).toFixed(2)} 
+                        (${formData.cost} × {(1 + formData.markup_percentage / 100).toFixed(2)})
+                        {priceManuallySet && <span className="text-blue-600 ml-2">🔒 Manual override active</span>}
+                      </div>
+                    )}
                   </div>
                   <div>
-                    <Label htmlFor="markup">Markup %</Label>
+                    <Label htmlFor="markup">Markup % *</Label>
                     <Input
                       id="markup"
                       type="number"
@@ -927,6 +1046,7 @@ const PricingManagement: React.FC = () => {
                         minimum_markup_percentage: 15
                       });
                       setSelectedInventoryPart(null);
+                      resetPriceManualFlag(); // ✅ NEW: Reset manual flag when clearing form
                     }}
                   >
                     <X className="w-4 h-4 mr-2" />
@@ -1007,13 +1127,35 @@ const PricingManagement: React.FC = () => {
               </div>
               <div>
                 <Label htmlFor="dialogListPrice">List Price *</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="dialogListPrice"
+                    type="number"
+                    step="0.01"
+                    value={formData.list_price}
+                    onChange={(e) => handlePriceChange(Number(e.target.value))} // ✅ NEW: Use smart handler in dialog too
+                    className={!formData.list_price || formData.list_price <= 0 ? 'border-red-300' : ''}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={recalculateListPrice}
+                    disabled={!formData.cost || !formData.markup_percentage}
+                    title="Recalculate list price"
+                  >
+                    <Calculator className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="dialogMarkup">Markup % *</Label>
                 <Input
-                  id="dialogListPrice"
+                  id="dialogMarkup"
                   type="number"
-                  step="0.01"
-                  value={formData.list_price}
-                  onChange={(e) => setFormData(prev => ({ ...prev, list_price: Number(e.target.value) }))}
-                  className={!formData.list_price || formData.list_price <= 0 ? 'border-red-300' : ''}
+                  step="0.1"
+                  value={formData.markup_percentage}
+                  onChange={(e) => setFormData(prev => ({ ...prev, markup_percentage: Number(e.target.value) }))}
                 />
               </div>
             </div>
