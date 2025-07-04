@@ -582,6 +582,9 @@ export default function Parts() {
   // Filter and sort parts
   const filteredParts = useMemo(() => {
     let filtered = mockParts.filter(part => {
+      // ✅ NEW: Only show items that have prices set (greater than 0)
+      const hasPrice = part.price && part.price > 0;
+      
       // Search filter
       const searchMatch = !searchTerm || 
         part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -598,7 +601,7 @@ export default function Parts() {
       // Favorites filter
       const favoritesMatch = !showFavoritesOnly || favorites.has(part.id);
 
-      return searchMatch && categoryMatch && priceMatch && favoritesMatch;
+      return hasPrice && searchMatch && categoryMatch && priceMatch && favoritesMatch;
     });
 
     // Sort parts
@@ -1217,9 +1220,14 @@ export default function Parts() {
 
           {/* Results summary */}
           <div className="flex justify-between items-center">
-            <p className="text-sm text-muted-foreground">
-              Showing {filteredParts.length} of {mockParts.length} parts
-            </p>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">
+                Showing {filteredParts.length} of {mockParts.length} parts
+              </p>
+              <p className="text-xs text-muted-foreground">
+                ✅ Only showing items with prices set (excluding items without pricing)
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">
                 Page {currentPage} of {totalPages}
