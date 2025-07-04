@@ -40,11 +40,10 @@ import {
   Percent,
   Calculator,
   Car,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
-import { useCart } from '@/lib/minimal_cart_context';
-import { CartWidget } from '@/components/minimal_cart_components';
 
 // ===== INTERFACES =====
 interface InventoryPart {
@@ -72,6 +71,16 @@ interface InventoryPart {
   vehicleModel?: string;
 }
 
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  maxQuantity: number;
+  sku?: string;
+  vcpn?: string;
+}
+
 interface VehicleCategory {
   id: string;
   name: string;
@@ -79,6 +88,7 @@ interface VehicleCategory {
   description: string;
   color: string;
   keywords: string[];
+  models: string[];
 }
 
 // ===== CATEGORIZATION LOGIC FROM JSON =====
@@ -106,7 +116,7 @@ const PART_CATEGORY_MAP = {
   "Kits & Bundles": ["KIT", "SET", "BUNDLE"]
 };
 
-// ===== VEHICLE-BASED CATEGORIES =====
+// ===== VEHICLE-BASED CATEGORIES WITH BRAND-SPECIFIC MODELS =====
 const VEHICLE_CATEGORIES: VehicleCategory[] = [
   {
     id: 'ford',
@@ -114,7 +124,8 @@ const VEHICLE_CATEGORIES: VehicleCategory[] = [
     icon: Car,
     description: 'F-150, F-250, F-350, and other Ford truck parts',
     color: 'bg-blue-600',
-    keywords: ['FORD', 'F150', 'F250', 'F350']
+    keywords: ['FORD', 'F150', 'F250', 'F350'],
+    models: ['F150', 'F250', 'F350']
   },
   {
     id: 'chevy',
@@ -122,7 +133,8 @@ const VEHICLE_CATEGORIES: VehicleCategory[] = [
     icon: Car,
     description: 'Silverado, Colorado, and other Chevy truck parts',
     color: 'bg-yellow-600',
-    keywords: ['CHEVY', 'CHEVROLET', 'SILVERADO']
+    keywords: ['CHEVY', 'CHEVROLET', 'SILVERADO'],
+    models: ['SILVERADO', 'COLORADO']
   },
   {
     id: 'ram',
@@ -130,7 +142,8 @@ const VEHICLE_CATEGORIES: VehicleCategory[] = [
     icon: Car,
     description: 'RAM 1500, 2500, 3500, and Dodge truck parts',
     color: 'bg-red-600',
-    keywords: ['RAM', 'DODGE']
+    keywords: ['RAM', 'DODGE'],
+    models: ['RAM']
   },
   {
     id: 'gmc',
@@ -138,7 +151,8 @@ const VEHICLE_CATEGORIES: VehicleCategory[] = [
     icon: Car,
     description: 'Sierra, Canyon, and other GMC truck parts',
     color: 'bg-gray-600',
-    keywords: ['GMC']
+    keywords: ['GMC'],
+    models: ['SIERRA', 'CANYON']
   },
   {
     id: 'toyota',
@@ -146,7 +160,8 @@ const VEHICLE_CATEGORIES: VehicleCategory[] = [
     icon: Car,
     description: 'Tundra, Tacoma, and other Toyota truck parts',
     color: 'bg-red-500',
-    keywords: ['TOYOTA', 'TUNDRA', 'TACOMA']
+    keywords: ['TOYOTA', 'TUNDRA', 'TACOMA'],
+    models: ['TUNDRA', 'TACOMA']
   },
   {
     id: 'jeep',
@@ -154,7 +169,8 @@ const VEHICLE_CATEGORIES: VehicleCategory[] = [
     icon: Car,
     description: 'Wrangler, Gladiator, and other Jeep parts',
     color: 'bg-green-600',
-    keywords: ['JEEP', 'WRANGLER', 'GLADIATOR']
+    keywords: ['JEEP', 'WRANGLER', 'GLADIATOR'],
+    models: ['WRANGLER', 'GLADIATOR']
   },
   {
     id: 'nissan',
@@ -162,7 +178,8 @@ const VEHICLE_CATEGORIES: VehicleCategory[] = [
     icon: Car,
     description: 'Frontier, Titan, and other Nissan truck parts',
     color: 'bg-slate-600',
-    keywords: ['NISSAN', 'FRONTIER', 'TITAN']
+    keywords: ['NISSAN', 'FRONTIER', 'TITAN'],
+    models: ['FRONTIER', 'TITAN']
   },
   {
     id: 'honda',
@@ -170,7 +187,8 @@ const VEHICLE_CATEGORIES: VehicleCategory[] = [
     icon: Car,
     description: 'Ridgeline and other Honda truck parts',
     color: 'bg-purple-600',
-    keywords: ['HONDA', 'RIDGELINE']
+    keywords: ['HONDA', 'RIDGELINE'],
+    models: ['RIDGELINE']
   }
 ];
 
@@ -252,6 +270,168 @@ const getRegionalAvailability = (): string[] => {
 const calculateMargin = (cost: number, listPrice: number): number => {
   if (!cost || !listPrice || listPrice === 0) return 0;
   return ((listPrice - cost) / listPrice) * 100;
+};
+
+// ===== SIMPLE CART HOOK =====
+const useSimpleCart = () => {
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
+
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    const savedCart = localStorage.getItem('simple-cart');
+    if (savedCart) {
+      try {
+        setCartItems(JSON.parse(savedCart));
+      } catch (error) {
+        console.error('Error loading cart:', error);
+      }
+    }
+  }, []);
+
+  // Save cart to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('simple-cart', JSON.stringify(cartItems));
+  }, [cartItems]);
+
+  const addToCart = useCallback(async (part: InventoryPart) => {
+    setIsLoading(true);
+    
+    try {
+      // Simulate async operation
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      if (part.stockStatus === 'Out of Stock') {
+        toast({
+          title: "Out of Stock",
+          description: "This item is currently out of stock.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const cartItem: CartItem = {
+        id: part.keystone_vcpn || part.sku || part.id,
+        name: part.name,
+        price: part.list_price,
+        quantity: 1,
+        maxQuantity: part.quantity_on_hand,
+        sku: part.sku,
+        vcpn: part.keystone_vcpn
+      };
+
+      setCartItems(prev => {
+        const existingIndex = prev.findIndex(item => item.id === cartItem.id);
+        
+        if (existingIndex >= 0) {
+          const existing = prev[existingIndex];
+          const newQuantity = existing.quantity + 1;
+          
+          if (newQuantity > existing.maxQuantity) {
+            toast({
+              title: "Stock Limit Reached",
+              description: `Only ${existing.maxQuantity} units available.`,
+              variant: "destructive"
+            });
+            return prev;
+          }
+          
+          const updated = [...prev];
+          updated[existingIndex] = { ...existing, quantity: newQuantity };
+          
+          toast({
+            title: "Quantity Updated",
+            description: `${part.name} quantity increased to ${newQuantity}.`
+          });
+          
+          return updated;
+        } else {
+          toast({
+            title: "Added to Cart",
+            description: `${part.name} has been added to your cart.`
+          });
+          
+          return [...prev, cartItem];
+        }
+      });
+      
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add item to cart",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  const removeFromCart = useCallback((id: string) => {
+    setCartItems(prev => {
+      const item = prev.find(item => item.id === id);
+      const updated = prev.filter(item => item.id !== id);
+      
+      if (item) {
+        toast({
+          title: "Removed from Cart",
+          description: `${item.name} removed from cart.`
+        });
+      }
+      
+      return updated;
+    });
+  }, [toast]);
+
+  const updateQuantity = useCallback((id: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeFromCart(id);
+      return;
+    }
+
+    setCartItems(prev => prev.map(item => {
+      if (item.id === id) {
+        if (quantity > item.maxQuantity) {
+          toast({
+            title: "Stock Limit",
+            description: `Maximum quantity for this item is ${item.maxQuantity}`,
+            variant: "destructive"
+          });
+          return item;
+        }
+        return { ...item, quantity };
+      }
+      return item;
+    }));
+  }, [removeFromCart, toast]);
+
+  const clearCart = useCallback(() => {
+    setCartItems([]);
+    toast({
+      title: "Cart Cleared",
+      description: "All items removed from cart."
+    });
+  }, [toast]);
+
+  const total = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  }, [cartItems]);
+
+  const itemCount = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  }, [cartItems]);
+
+  return {
+    cartItems,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    total,
+    itemCount,
+    isLoading
+  };
 };
 
 // ===== PROGRESSIVE LOADING HOOK =====
@@ -458,7 +638,17 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
 const Parts: React.FC = () => {
   // ===== ALL HOOKS DECLARED AT TOP LEVEL =====
   const { toast } = useToast();
-  const { addItem, isLoading: cartLoading } = useCart();
+  const { 
+    cartItems, 
+    addToCart, 
+    removeFromCart, 
+    updateQuantity, 
+    clearCart, 
+    total, 
+    itemCount, 
+    isLoading: cartLoading 
+  } = useSimpleCart();
+  
   const { 
     parts, 
     loading: partsLoading, 
@@ -491,6 +681,7 @@ const Parts: React.FC = () => {
   // Dialog state
   const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [showCartDialog, setShowCartDialog] = useState(false);
   
   // Category view state
   const [showCategoryView, setShowCategoryView] = useState(true);
@@ -511,10 +702,28 @@ const Parts: React.FC = () => {
     return years.sort((a, b) => parseInt(b) - parseInt(a)); // Newest first
   }, [parts]);
 
+  // Brand-specific vehicle models
   const availableVehicleModels = useMemo(() => {
-    const models = [...new Set(parts.map(part => part.vehicleModel).filter(Boolean))];
-    return models.sort();
-  }, [parts]);
+    if (selectedVehicleCategory === 'all') {
+      const models = [...new Set(parts.map(part => part.vehicleModel).filter(Boolean))];
+      return models.sort();
+    }
+    
+    // Get models specific to selected brand
+    const selectedCategory = VEHICLE_CATEGORIES.find(cat => cat.id === selectedVehicleCategory);
+    if (selectedCategory) {
+      // Filter parts by selected vehicle category and extract models
+      const categoryParts = parts.filter(part => {
+        const vehicleCatId = getVehicleCategoryId(part.vehicleCategory || '');
+        return vehicleCatId === selectedVehicleCategory;
+      });
+      
+      const models = [...new Set(categoryParts.map(part => part.vehicleModel).filter(Boolean))];
+      return models.sort();
+    }
+    
+    return [];
+  }, [parts, selectedVehicleCategory]);
 
   const vehicleCategoryStats = useMemo(() => {
     const stats: Record<string, number> = {};
@@ -623,32 +832,8 @@ const Parts: React.FC = () => {
   // ===== CART FUNCTIONS =====
   const handleAddToCart = useCallback(async (part: InventoryPart) => {
     console.log('🛒 Add to cart clicked for:', part.name);
-    
-    if (part.stockStatus === 'Out of Stock') {
-      toast({
-        title: "Out of Stock",
-        description: "This item is currently out of stock.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      await addItem({
-        id: part.keystone_vcpn || part.sku || part.id,
-        name: part.name,
-        price: part.list_price,
-        maxQuantity: part.quantity_on_hand
-      });
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-      toast({
-        title: "Error",
-        description: "Failed to add item to cart",
-        variant: "destructive"
-      });
-    }
-  }, [addItem, toast]);
+    await addToCart(part);
+  }, [addToCart]);
 
   const handleViewDetail = useCallback((part: InventoryPart) => {
     console.log('👁️ View detail clicked for:', part.name);
@@ -659,6 +844,7 @@ const Parts: React.FC = () => {
   // ===== CATEGORY FUNCTIONS =====
   const handleVehicleCategorySelect = useCallback((categoryId: string) => {
     setSelectedVehicleCategory(categoryId);
+    setSelectedVehicleModel('all'); // Reset model when brand changes
     setShowCategoryView(false);
     setCurrentPage(1);
   }, []);
@@ -675,6 +861,18 @@ const Parts: React.FC = () => {
     setPriceRange([0, 1000]);
     setCurrentPage(1);
   }, []);
+
+  // Reset filters when navigating back to category view
+  useEffect(() => {
+    if (showCategoryView) {
+      resetFilters();
+    }
+  }, [showCategoryView, resetFilters]);
+
+  // Reset vehicle model when vehicle category changes
+  useEffect(() => {
+    setSelectedVehicleModel('all');
+  }, [selectedVehicleCategory]);
 
   // ===== EFFECTS =====
   useEffect(() => {
@@ -845,7 +1043,7 @@ const Parts: React.FC = () => {
           </Select>
         </div>
 
-        {/* Vehicle Model Filter */}
+        {/* Vehicle Model Filter - Brand Specific */}
         <div>
           <Label className="text-sm font-medium">Vehicle Model</Label>
           <Select value={selectedVehicleModel} onValueChange={setSelectedVehicleModel}>
@@ -1082,7 +1280,7 @@ const Parts: React.FC = () => {
               <Button 
                 onClick={() => handleAddToCart(part)}
                 disabled={part.stockStatus === 'Out of Stock' || cartLoading}
-                className="flex-1 bg-blue-800 hover:bg-blue-900 text-white"
+                className="flex-1 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
                 size="sm"
               >
                 {cartLoading ? (
@@ -1188,7 +1386,7 @@ const Parts: React.FC = () => {
                   <Button 
                     onClick={() => handleAddToCart(part)}
                     disabled={part.stockStatus === 'Out of Stock' || cartLoading}
-                    className="bg-blue-800 hover:bg-blue-900 text-white"
+                    className="bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
                     size="sm"
                   >
                     {cartLoading ? (
@@ -1291,7 +1489,92 @@ const Parts: React.FC = () => {
         </div>
 
         {/* Cart Widget */}
-        <CartWidget />
+        <Dialog open={showCartDialog} onOpenChange={setShowCartDialog}>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="relative">
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Cart
+              {itemCount > 0 && (
+                <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                  {itemCount}
+                </Badge>
+              )}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Shopping Cart ({itemCount} items)</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {cartItems.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  Your cart is empty
+                </p>
+              ) : (
+                cartItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between p-3 border rounded">
+                    <div className="flex-1">
+                      <h4 className="font-medium">{item.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        ${item.price.toFixed(2)} each
+                      </p>
+                      {item.sku && (
+                        <p className="text-xs text-muted-foreground">
+                          SKU: {item.sku}
+                        </p>
+                      )}
+                      {item.vcpn && (
+                        <p className="text-xs text-muted-foreground">
+                          VCPN: {item.vcpn}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <span className="w-8 text-center">{item.quantity}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                        disabled={item.quantity >= item.maxQuantity}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => removeFromCart(item.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            {cartItems.length > 0 && (
+              <div className="border-t pt-4">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-lg font-semibold">
+                    Total: ${total.toFixed(2)}
+                  </span>
+                  <Button variant="outline" onClick={clearCart}>
+                    Clear Cart
+                  </Button>
+                </div>
+                <Button className="w-full">
+                  Proceed to Checkout
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Category Overview or Parts List */}
@@ -1469,7 +1752,7 @@ const Parts: React.FC = () => {
                 <Button 
                   onClick={() => handleAddToCart(selectedPart)}
                   disabled={selectedPart.stockStatus === 'Out of Stock' || cartLoading}
-                  className="flex-1 bg-blue-800 hover:bg-blue-900 text-white"
+                  className="flex-1 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
                 >
                   {cartLoading ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
