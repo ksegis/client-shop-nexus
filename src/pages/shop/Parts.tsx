@@ -318,7 +318,7 @@ const calculateMargin = (cost: number, listPrice: number): number => {
   return ((priceNum - costNum) / priceNum) * 100;
 };
 
-// ===== CART HOOK USING CART DRAWER LOGIC =====
+// ===== FIXED CART HOOK - REMOVED DUPLICATE addToCart =====
 const useCart = () => {
   const [cart, setCart] = useState<{ [key: string]: number }>({});
   const { toast } = useToast();
@@ -340,30 +340,28 @@ const useCart = () => {
     localStorage.setItem('parts-cart', JSON.stringify(cart));
   }, [cart]);
 
+  // SINGLE addToCart function - no duplicates
   const addToCart = useCallback((part: InventoryPart, quantity: number = 1) => {
-  const partId = part.id;
-  const currentQuantity = cart[partId] || 0;
-  const newQuantity = currentQuantity + quantity;
+    console.log('🛒 Adding to cart:', part.name, 'quantity:', quantity);
+    
+    const partId = part.id;
+    const maxQuantity = Number(part.quantity_on_hand) || 0;
+    const currentQuantity = cart[partId] || 0;
+    const newQuantity = currentQuantity + quantity;
 
-  setCart(prev => ({
-    ...prev,
-    [partId]: newQuantity
-  }));
-
-  toast({
-    title: currentQuantity > 0 ? "Quantity Updated" : "Added to Cart",
-    description: currentQuantity > 0 
-      ? `${part.name} quantity increased to ${newQuantity}.`
-      : `${part.name} has been added to your cart.`,
-    variant: "default"
-  });
-}, [cart, toast]);
-
+    if (part.stockStatus === 'Out of Stock' || maxQuantity === 0) {
+      toast({
+        title: "Out of Stock",
+        description: "This item is currently out of stock.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (newQuantity > maxQuantity) {
       toast({
         title: "Stock Limit",
-        description: `Only ${maxQuantity} availouable in stock`,
+        description: `Only ${maxQuantity} available in stock`,
         variant: "destructive",
       });
       return;
@@ -999,6 +997,7 @@ const Parts: React.FC = () => {
     refetch 
   } = useProgressiveInventoryData();
 
+  // FIXED: Single cart hook usage - no duplicates
   const {
     cart,
     addToCart,
@@ -1227,7 +1226,7 @@ const Parts: React.FC = () => {
 
   const totalPages = Math.ceil(searchAndFilterParts.length / itemsPerPage);
 
-  // ===== CART FUNCTIONS =====
+  // ===== CART FUNCTIONS - FIXED: Single handleAddToCart function =====
   const handleAddToCart = useCallback((part: InventoryPart) => {
     console.log('🛒 Add to cart clicked for:', part.name);
     addToCart(part);
