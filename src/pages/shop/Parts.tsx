@@ -521,7 +521,7 @@ const Parts: React.FC = () => {
     refetch 
   } = useProgressiveInventoryData();
 
-  // ===== SIMPLE CART STATE - NO COMPLEX HOOKS =====
+  // ===== SIMPLE CART STATE - NO STOCK CHECKING =====
   const [cart, setCart] = useState<{ [key: string]: number }>({});
   const [showCartDrawer, setShowCartDrawer] = useState(false);
   const [cartMessage, setCartMessage] = useState<string>('');
@@ -551,43 +551,23 @@ const Parts: React.FC = () => {
     localStorage.setItem('parts-cart', JSON.stringify(cart));
   }, [cart]);
 
-  // ===== SIMPLE ADD TO CART FUNCTION - ALWAYS WORKS =====
+  // ===== SIMPLE ADD TO CART FUNCTION - NO STOCK CHECKING =====
   const addToCart = (part: InventoryPart) => {
     console.log('🛒 ===== ADD TO CART FUNCTION CALLED =====');
     console.log('🛒 Part:', part.name);
     console.log('🛒 Part ID:', part.id);
-    console.log('🛒 Stock status:', part.stockStatus);
-    console.log('🛒 Quantity on hand:', part.quantity_on_hand);
     console.log('🛒 Current cart state:', cart);
     
     const partId = part.id;
-    const maxQuantity = Number(part.quantity_on_hand) || 0;
     const currentQuantity = cart[partId] || 0;
     const newQuantity = currentQuantity + 1;
 
     console.log('🛒 Part ID:', partId);
-    console.log('🛒 Max quantity:', maxQuantity);
     console.log('🛒 Current quantity in cart:', currentQuantity);
-    console.log('🛒 New quantity would be:', newQuantity);
+    console.log('🛒 New quantity will be:', newQuantity);
 
-    // Check stock status but DON'T prevent the action
-    if (part.stockStatus === 'Out of Stock' || maxQuantity === 0) {
-      const message = `❌ ${part.name} is currently out of stock`;
-      console.log('🛒 Out of stock message:', message);
-      setCartMessage(message);
-      setTimeout(() => setCartMessage(''), 3000);
-      return; // Don't add to cart, but button was still clickable
-    }
-
-    if (newQuantity > maxQuantity) {
-      const message = `❌ Only ${maxQuantity} available in stock`;
-      console.log('🛒 Quantity limit message:', message);
-      setCartMessage(message);
-      setTimeout(() => setCartMessage(''), 3000);
-      return; // Don't add to cart, but button was still clickable
-    }
-
-    console.log('🛒 All checks passed, updating cart...');
+    // NO STOCK CHECKING - ALWAYS ADD TO CART
+    console.log('🛒 Adding to cart without stock checks...');
 
     // Update cart state
     const newCart = {
@@ -959,9 +939,6 @@ const Parts: React.FC = () => {
   const renderPartCard = (part: InventoryPart) => {
     console.log('🎨 Rendering part card for:', part.name);
     const isKit = part.isKit || false;
-    const isOutOfStock = part.stockStatus === 'Out of Stock';
-    
-    console.log('🎨 Part card - isOutOfStock:', isOutOfStock, 'stockStatus:', part.stockStatus);
     
     return (
       <Card key={part.id} className="h-full flex flex-col hover:shadow-lg transition-shadow">
@@ -1063,25 +1040,20 @@ const Parts: React.FC = () => {
           
           <div className="mt-auto space-y-2">
             <div className="flex gap-2">
-              {/* ALWAYS ENABLED BUTTON - NEVER DISABLED */}
+              {/* ALWAYS ENABLED BUTTON - ALWAYS SAYS "ADD TO CART" */}
               <Button 
                 onClick={() => {
                   console.log('🔥 BUTTON CLICKED! Part:', part.name);
-                  console.log('🔥 BUTTON CLICKED! Stock status:', part.stockStatus);
                   addToCart(part);
                 }}
                 onMouseEnter={() => console.log('🖱️ Mouse entered button for:', part.name)}
                 onMouseLeave={() => console.log('🖱️ Mouse left button for:', part.name)}
-                className={`flex-1 text-white ${
-                  isOutOfStock 
-                    ? 'bg-gray-500 hover:bg-gray-600' 
-                    : 'bg-[#6B7FE8] hover:bg-[#5A6FD7]'
-                }`}
+                className="flex-1 text-white bg-[#0820a1] hover:bg-[#5A6FD7]"
                 size="sm"
                 // NEVER DISABLED - ALWAYS CLICKABLE
               >
                 <Plus className="h-4 w-4 mr-2" />
-                {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
+                Add to Cart
               </Button>
               <Button 
                 variant="outline" 
@@ -1706,7 +1678,6 @@ const Parts: React.FC = () => {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => updateCartQuantity(partId, quantity + 1)}
-                                    disabled={quantity >= (Number(part.quantity_on_hand) || 0)}
                                     className="h-8 w-8 p-0"
                                   >
                                     <Plus className="h-3 w-3" />
@@ -1871,15 +1842,11 @@ const Parts: React.FC = () => {
                     console.log('🔥 DIALOG BUTTON CLICKED!');
                     addToCart(selectedPart);
                   }}
-                  className={`flex-1 text-white ${
-                    selectedPart.stockStatus === 'Out of Stock'
-                      ? 'bg-gray-500 hover:bg-gray-600'
-                      : 'bg-[#6B7FE8] hover:bg-[#5A6FD7]'
-                  }`}
+                  className="flex-1 text-white bg-[#0820a1] hover:bg-[#5A6FD7]"
                   // NEVER DISABLED - ALWAYS CLICKABLE
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  {selectedPart.stockStatus === 'Out of Stock' ? 'Out of Stock' : 'Add to Cart'}
+                  Add to Cart
                 </Button>
                 <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
                   Close
