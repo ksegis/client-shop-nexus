@@ -527,7 +527,6 @@ const Parts: React.FC = () => {
   const [cartMessage, setCartMessage] = useState<string>('');
 
   console.log('🛒 Cart state:', cart);
-  console.log('🛒 Cart message:', cartMessage);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -552,47 +551,13 @@ const Parts: React.FC = () => {
     localStorage.setItem('parts-cart', JSON.stringify(cart));
   }, [cart]);
 
-  // ===== DEBUGGING FUNCTIONS =====
-  const debugButtonClick = (part: InventoryPart, event: React.MouseEvent) => {
-    console.log('🔍 DEBUG: Button click event triggered!');
-    console.log('🔍 DEBUG: Event object:', event);
-    console.log('🔍 DEBUG: Part object:', part);
-    console.log('🔍 DEBUG: Part ID:', part.id);
-    console.log('🔍 DEBUG: Part name:', part.name);
-    console.log('🔍 DEBUG: Stock status:', part.stockStatus);
-    console.log('🔍 DEBUG: Quantity on hand:', part.quantity_on_hand);
-    
-    // Check if event is being prevented
-    if (event.defaultPrevented) {
-      console.log('⚠️ DEBUG: Event default was prevented!');
-    }
-    
-    // Check if event propagation was stopped
-    if (event.isPropagationStopped && event.isPropagationStopped()) {
-      console.log('⚠️ DEBUG: Event propagation was stopped!');
-    }
-    
-    // Prevent any potential event issues
-    event.preventDefault();
-    event.stopPropagation();
-    
-    console.log('🔍 DEBUG: About to call addToCart...');
-    addToCart(part);
-  };
-
-  const debugButtonMouseEnter = (part: InventoryPart) => {
-    console.log('🖱️ DEBUG: Mouse entered button for part:', part.name);
-  };
-
-  const debugButtonMouseLeave = (part: InventoryPart) => {
-    console.log('🖱️ DEBUG: Mouse left button for part:', part.name);
-  };
-
-  // ===== SIMPLE ADD TO CART FUNCTION - NO HOOKS, NO COMPLEXITY =====
+  // ===== SIMPLE ADD TO CART FUNCTION - ALWAYS WORKS =====
   const addToCart = (part: InventoryPart) => {
     console.log('🛒 ===== ADD TO CART FUNCTION CALLED =====');
     console.log('🛒 Part:', part.name);
     console.log('🛒 Part ID:', part.id);
+    console.log('🛒 Stock status:', part.stockStatus);
+    console.log('🛒 Quantity on hand:', part.quantity_on_hand);
     console.log('🛒 Current cart state:', cart);
     
     const partId = part.id;
@@ -605,20 +570,21 @@ const Parts: React.FC = () => {
     console.log('🛒 Current quantity in cart:', currentQuantity);
     console.log('🛒 New quantity would be:', newQuantity);
 
+    // Check stock status but DON'T prevent the action
     if (part.stockStatus === 'Out of Stock' || maxQuantity === 0) {
-      const message = `❌ ${part.name} is out of stock`;
-      console.log('🛒 Stock check failed:', message);
+      const message = `❌ ${part.name} is currently out of stock`;
+      console.log('🛒 Out of stock message:', message);
       setCartMessage(message);
       setTimeout(() => setCartMessage(''), 3000);
-      return;
+      return; // Don't add to cart, but button was still clickable
     }
 
     if (newQuantity > maxQuantity) {
       const message = `❌ Only ${maxQuantity} available in stock`;
-      console.log('🛒 Quantity check failed:', message);
+      console.log('🛒 Quantity limit message:', message);
       setCartMessage(message);
       setTimeout(() => setCartMessage(''), 3000);
-      return;
+      return; // Don't add to cart, but button was still clickable
     }
 
     console.log('🛒 All checks passed, updating cart...');
@@ -993,9 +959,9 @@ const Parts: React.FC = () => {
   const renderPartCard = (part: InventoryPart) => {
     console.log('🎨 Rendering part card for:', part.name);
     const isKit = part.isKit || false;
-    const isDisabled = part.stockStatus === 'Out of Stock';
+    const isOutOfStock = part.stockStatus === 'Out of Stock';
     
-    console.log('🎨 Part card - isDisabled:', isDisabled, 'stockStatus:', part.stockStatus);
+    console.log('🎨 Part card - isOutOfStock:', isOutOfStock, 'stockStatus:', part.stockStatus);
     
     return (
       <Card key={part.id} className="h-full flex flex-col hover:shadow-lg transition-shadow">
@@ -1097,26 +1063,25 @@ const Parts: React.FC = () => {
           
           <div className="mt-auto space-y-2">
             <div className="flex gap-2">
-              {/* DEBUG BUTTON WITH EXTENSIVE LOGGING */}
+              {/* ALWAYS ENABLED BUTTON - NEVER DISABLED */}
               <Button 
-                onClick={(e) => {
-                  console.log('🔥 BUTTON CLICKED! Event:', e);
+                onClick={() => {
                   console.log('🔥 BUTTON CLICKED! Part:', part.name);
-                  debugButtonClick(part, e);
+                  console.log('🔥 BUTTON CLICKED! Stock status:', part.stockStatus);
+                  addToCart(part);
                 }}
-                onMouseEnter={() => debugButtonMouseEnter(part)}
-                onMouseLeave={() => debugButtonMouseLeave(part)}
-                disabled={isDisabled}
-                className={`flex-1 text-white ${isDisabled ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#6B7FE8] hover:bg-[#5A6FD7] cursor-pointer'}`}
+                onMouseEnter={() => console.log('🖱️ Mouse entered button for:', part.name)}
+                onMouseLeave={() => console.log('🖱️ Mouse left button for:', part.name)}
+                className={`flex-1 text-white ${
+                  isOutOfStock 
+                    ? 'bg-gray-500 hover:bg-gray-600' 
+                    : 'bg-[#6B7FE8] hover:bg-[#5A6FD7]'
+                }`}
                 size="sm"
-                style={{
-                  pointerEvents: isDisabled ? 'none' : 'auto',
-                  zIndex: 10,
-                  position: 'relative'
-                }}
+                // NEVER DISABLED - ALWAYS CLICKABLE
               >
                 <Plus className="h-4 w-4 mr-2" />
-                {isDisabled ? 'Out of Stock' : 'Add to Cart'}
+                {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
               </Button>
               <Button 
                 variant="outline" 
@@ -1142,16 +1107,6 @@ const Parts: React.FC = () => {
   // ===== MAIN RENDER =====
   return (
     <div className="container mx-auto p-6">
-      {/* Debug Info */}
-      <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
-        <h3 className="font-bold text-sm mb-2">🔍 DEBUG INFO:</h3>
-        <p className="text-xs">Parts loaded: {parts.length}</p>
-        <p className="text-xs">Cart items: {getTotalItems()}</p>
-        <p className="text-xs">Cart state: {JSON.stringify(cart)}</p>
-        <p className="text-xs">Cart message: {cartMessage}</p>
-        <p className="text-xs">Show category view: {showCategoryView.toString()}</p>
-      </div>
-
       {/* Cart Message */}
       {cartMessage && (
         <div className="fixed top-4 right-4 z-50 bg-white border rounded-lg shadow-lg p-4 max-w-sm">
@@ -1912,15 +1867,19 @@ const Parts: React.FC = () => {
               
               <div className="flex gap-2 pt-4">
                 <Button 
-                  onClick={(e) => {
+                  onClick={() => {
                     console.log('🔥 DIALOG BUTTON CLICKED!');
-                    debugButtonClick(selectedPart, e);
+                    addToCart(selectedPart);
                   }}
-                  disabled={selectedPart.stockStatus === 'Out of Stock'}
-                  className="flex-1 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
+                  className={`flex-1 text-white ${
+                    selectedPart.stockStatus === 'Out of Stock'
+                      ? 'bg-gray-500 hover:bg-gray-600'
+                      : 'bg-[#6B7FE8] hover:bg-[#5A6FD7]'
+                  }`}
+                  // NEVER DISABLED - ALWAYS CLICKABLE
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Add to Cart
+                  {selectedPart.stockStatus === 'Out of Stock' ? 'Out of Stock' : 'Add to Cart'}
                 </Button>
                 <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
                   Close
