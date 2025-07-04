@@ -19,9 +19,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // Import the ProductPriceCheck component
 import ProductPriceCheck from '@/components/product_price_check_component';
 
-// Import enhanced cart system with shipping
-import { useCart } from '@/lib/minimal_cart_context';
-import { AddToCartButton, CartWidget } from '@/components/minimal_cart_components';
+// ✅ REMOVED: Problematic cart imports - we'll create our own working cart
+// import { useCart } from '@/lib/minimal_cart_context';
+// import { AddToCartButton, CartWidget } from '@/components/minimal_cart_components';
 
 // Import existing services - FIXED: Import singleton instances instead of classes
 import { shippingQuoteService } from '@/services/shipping_quote_service';
@@ -41,6 +41,259 @@ import {
 // ✅ NEW: Import Supabase for real data
 import { getSupabaseClient } from "@/lib/supabase";
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+
+// ✅ NEW: Simple cart item interface
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  sku: string;
+  maxQuantity: number;
+}
+
+// ✅ NEW: Simple cart context
+const CartContext = React.createContext<{
+  items: CartItem[];
+  addItem: (item: Omit<CartItem, 'quantity'>) => void;
+  removeItem: (id: string) => void;
+  updateQuantity: (id: string, quantity: number) => void;
+  clearCart: () => void;
+  totalItems: number;
+  totalPrice: number;
+}>({
+  items: [],
+  addItem: () => {},
+  removeItem: () => {},
+  updateQuantity: () => {},
+  clearCart: () => {},
+  totalItems: 0,
+  totalPrice: 0
+});
+
+// ✅ NEW: Simple cart provider
+const CartProvider = ({ children }: { children: React.ReactNode }) => {
+  const [items, setItems] = useState<CartItem[]>([]);
+  const { toast } = useToast();
+
+  const addItem = useCallback((newItem: Omit<CartItem, 'quantity'>) => {
+    setItems(prev => {
+      const existing = prev.find(item => item.id === newItem.id);
+      if (existing) {
+        if (existing.quantity < existing.maxQuantity) {
+          toast({
+            title: "Updated Cart",
+            description: `Increased ${newItem.name} quantity to ${existing.quantity + 1}`
+          });
+          return prev.map(item => 
+            item.id === newItem.id 
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          );
+        } else {
+          toast({
+            title: "Maximum Quantity",
+            description: `Cannot add more ${newItem.name} - maximum stock reached`,
+            variant: "destructive"
+          });
+          return prev;
+        }
+      } else {
+        toast({
+          title: "Added to Cart",
+          description: `${newItem.name} has been added to your cart`
+        });
+        return [...prev, { ...newItem, quantity: 1 }];
+      }
+    });
+  }, [toast]);
+
+  const removeItem = useCallback((id: string) => {
+    setItems(prev => prev.filter(item => item.id !== id));
+  }, []);
+
+  const updateQuantity = useCallback((id: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeItem(id);
+      return;
+    }
+    setItems(prev => prev.map(item => 
+      item.id === id ? { ...item, quantity: Math.min(quantity, item.maxQuantity) } : item
+    ));
+  }, [removeItem]);
+
+  const clearCart = useCallback(() => {
+    setItems([]);
+  }, []);
+
+  const totalItems = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
+  const totalPrice = useMemo(() => items.reduce((sum, item) => sum + (item.price * item.quantity), 0), [items]);
+
+  return (
+    <CartContext.Provider value={{
+      items,
+      addItem,
+      removeItem,
+      updateQuantity,
+      clearCart,
+      totalItems,
+      totalPrice
+    }}>
+      {children}
+    </CartContext.Provider>
+  );
+};
+
+// ✅ NEW: Simple cart hook
+const useCart = () => {
+  const context = React.useContext(CartContext);
+  if (!context) {
+    throw new Error('useCart must be used within CartProvider');
+  }
+  return context;
+};
+
+// ✅ NEW: Working Add to Cart Button
+const WorkingAddToCartButton = ({ 
+  product, 
+  className = "", 
+  disabled = false 
+}: {
+  product: {
+    id: string;
+    name: string;
+    price: number;
+    sku: string;
+    maxQuantity: number;
+  };
+  className?: string;
+  disabled?: boolean;
+}) => {
+  const { addItem } = useCart();
+
+  const handleAddToCart = () => {
+    if (!disabled) {
+      addItem({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        sku: product.sku,
+        maxQuantity: product.maxQuantity
+      });
+    }
+  };
+
+  return (
+    <Button 
+      onClick={handleAddToCart}
+      disabled={disabled}
+      className={className}
+    >
+      <Plus className="h-4 w-4 mr-2" />
+      Add to Cart
+    </Button>
+  );
+};
+
+// ✅ NEW: Simple Cart Widget
+const SimpleCartWidget = () => {
+  const { totalItems, totalPrice, items, removeItem, updateQuantity, clearCart } = useCart();
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <>
+      <Button 
+        variant="outline" 
+        onClick={() => setIsOpen(true)}
+        className="relative"
+      >
+        <ShoppingCart className="h-4 w-4 mr-2" />
+        Cart ({totalItems})
+        {totalItems > 0 && (
+          <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center">
+            {totalItems}
+          </Badge>
+        )}
+      </Button>
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Shopping Cart</DialogTitle>
+            <DialogDescription>
+              {totalItems} items - ${totalPrice.toFixed(2)} total
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {items.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Your cart is empty</p>
+            ) : (
+              <>
+                <ScrollArea className="max-h-60">
+                  <div className="space-y-2">
+                    {items.map(item => (
+                      <div key={item.id} className="flex items-center justify-between p-2 border rounded">
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">{item.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            ${item.price.toFixed(2)} each
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            className="h-6 w-6 p-0"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="text-sm w-8 text-center">{item.quantity}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            disabled={item.quantity >= item.maxQuantity}
+                            className="h-6 w-6 p-0"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeItem(item.id)}
+                            className="h-6 w-6 p-0 text-red-500"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+                
+                <Separator />
+                
+                <div className="flex justify-between items-center font-semibold">
+                  <span>Total: ${totalPrice.toFixed(2)}</span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={clearCart}>
+                      Clear
+                    </Button>
+                    <Button size="sm">
+                      Checkout
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+};
 
 // Customer search result interface
 interface CustomerSearchResult {
@@ -527,8 +780,8 @@ const useInventoryData = () => {
   return { parts, isLoading, error, refreshData: loadInventoryData };
 };
 
-// Main Parts component
-export default function Parts() {
+// Main Parts component wrapped with CartProvider
+function PartsContent() {
   const { toast } = useToast();
   
   // ✅ UPDATED: Use real inventory data instead of mock data
@@ -766,15 +1019,13 @@ export default function Parts() {
         </div>
 
         <div className="flex gap-2">
-          <AddToCartButton 
+          {/* ✅ FIXED: Use working Add to Cart button */}
+          <WorkingAddToCartButton 
             product={{
               id: part.id,
               name: part.name,
               price: part.price,
               sku: part.sku || '',
-              image: '',
-              category: part.category || '',
-              inStock: part.quantity > 0,
               maxQuantity: part.quantity
             }}
             className="flex-1"
@@ -842,15 +1093,13 @@ export default function Parts() {
           </div>
           
           <div className="flex gap-2">
-            <AddToCartButton 
+            {/* ✅ FIXED: Use working Add to Cart button */}
+            <WorkingAddToCartButton 
               product={{
                 id: part.id,
                 name: part.name,
                 price: part.price,
                 sku: part.sku || '',
-                image: '',
-                category: part.category || '',
-                inStock: part.quantity > 0,
                 maxQuantity: part.quantity
               }}
               disabled={part.quantity === 0}
@@ -1074,7 +1323,8 @@ export default function Parts() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <CartWidget />
+          {/* ✅ FIXED: Use working cart widget */}
+          <SimpleCartWidget />
           <Button variant="outline" onClick={refreshDataHandler} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
@@ -1554,6 +1804,15 @@ export default function Parts() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// ✅ NEW: Main component wrapped with CartProvider
+export default function Parts() {
+  return (
+    <CartProvider>
+      <PartsContent />
+    </CartProvider>
   );
 }
 
