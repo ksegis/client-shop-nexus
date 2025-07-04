@@ -38,7 +38,9 @@ import {
   MapPin,
   DollarSign,
   Percent,
-  Calculator
+  Calculator,
+  Car,
+  Loader2
 } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 
@@ -71,13 +73,13 @@ interface CartItem {
   quantity: number;
 }
 
-interface TruckCategory {
+interface VehicleCategory {
   id: string;
   name: string;
   icon: React.ComponentType<any>;
   description: string;
-  subcategories: string[];
   color: string;
+  keywords: string[];
 }
 
 // ===== CATEGORIZATION LOGIC FROM JSON =====
@@ -99,6 +101,74 @@ const PART_CATEGORY_MAP = {
   "Electrical": ["BATTERY", "ALTERNATOR", "WIRING", "SWITCH"],
   "Kits & Bundles": ["KIT", "SET", "BUNDLE"]
 };
+
+// ===== VEHICLE-BASED CATEGORIES =====
+const VEHICLE_CATEGORIES: VehicleCategory[] = [
+  {
+    id: 'ford',
+    name: 'Ford',
+    icon: Car,
+    description: 'F-150, F-250, F-350, and other Ford truck parts',
+    color: 'bg-blue-600',
+    keywords: ['FORD', 'F150', 'F250', 'F350']
+  },
+  {
+    id: 'chevy',
+    name: 'Chevrolet',
+    icon: Car,
+    description: 'Silverado, Colorado, and other Chevy truck parts',
+    color: 'bg-yellow-600',
+    keywords: ['CHEVY', 'CHEVROLET', 'SILVERADO']
+  },
+  {
+    id: 'ram',
+    name: 'RAM',
+    icon: Car,
+    description: 'RAM 1500, 2500, 3500, and Dodge truck parts',
+    color: 'bg-red-600',
+    keywords: ['RAM', 'DODGE']
+  },
+  {
+    id: 'gmc',
+    name: 'GMC',
+    icon: Car,
+    description: 'Sierra, Canyon, and other GMC truck parts',
+    color: 'bg-gray-600',
+    keywords: ['GMC']
+  },
+  {
+    id: 'toyota',
+    name: 'Toyota',
+    icon: Car,
+    description: 'Tundra, Tacoma, and other Toyota truck parts',
+    color: 'bg-red-500',
+    keywords: ['TOYOTA', 'TUNDRA', 'TACOMA']
+  },
+  {
+    id: 'jeep',
+    name: 'Jeep',
+    icon: Car,
+    description: 'Wrangler, Gladiator, and other Jeep parts',
+    color: 'bg-green-600',
+    keywords: ['JEEP', 'WRANGLER', 'GLADIATOR']
+  },
+  {
+    id: 'nissan',
+    name: 'Nissan',
+    icon: Car,
+    description: 'Frontier, Titan, and other Nissan truck parts',
+    color: 'bg-slate-600',
+    keywords: ['NISSAN', 'FRONTIER', 'TITAN']
+  },
+  {
+    id: 'honda',
+    name: 'Honda',
+    icon: Car,
+    description: 'Ridgeline and other Honda truck parts',
+    color: 'bg-purple-600',
+    keywords: ['HONDA', 'RIDGELINE']
+  }
+];
 
 const categorizeVehicle = (longDescription: string): string => {
   if (!longDescription) return "Universal/Other";
@@ -128,81 +198,20 @@ const categorizePart = (longDescription: string): string => {
   return "Uncategorized";
 };
 
-// ===== TRUCK-SPECIFIC CATEGORIES =====
-const TRUCK_CATEGORIES: TruckCategory[] = [
-  {
-    id: 'exterior',
-    name: 'Exterior',
-    icon: Truck,
-    description: 'Bumpers, running boards, bed accessories, lighting, grilles',
-    subcategories: ['Bumpers', 'Running Boards', 'Bed Accessories', 'Lighting', 'Grilles', 'Fender Flares', 'Side Steps', 'Tonneau Covers'],
-    color: 'bg-blue-500'
-  },
-  {
-    id: 'performance',
-    name: 'Performance',
-    icon: Zap,
-    description: 'Air intake, exhaust, suspension, brakes, engine components',
-    subcategories: ['Air Intake', 'Exhaust', 'Suspension', 'Brakes', 'Engine Components', 'Turbo', 'Intercooler', 'Performance Chips'],
-    color: 'bg-red-500'
-  },
-  {
-    id: 'interior',
-    name: 'Interior',
-    icon: Home,
-    description: 'Seat covers, floor mats, dashboard, storage solutions',
-    subcategories: ['Seat Covers', 'Floor Mats', 'Dashboard', 'Storage Solutions', 'Organizers', 'Console', 'Trim Kits'],
-    color: 'bg-green-500'
-  },
-  {
-    id: 'electrical',
-    name: 'Electrical',
-    icon: Zap,
-    description: 'Wiring, switches, batteries, audio & electronics',
-    subcategories: ['Wiring', 'Switches', 'Batteries', 'Audio & Electronics', 'LED Lights', 'Inverters', 'Chargers'],
-    color: 'bg-yellow-500'
-  },
-  {
-    id: 'hardware',
-    name: 'Hardware',
-    icon: Settings,
-    description: 'Fasteners, tools, maintenance items',
-    subcategories: ['Fasteners', 'Tools', 'Maintenance Items', 'Fluids', 'Filters', 'Belts', 'Gaskets'],
-    color: 'bg-purple-500'
+const getVehicleCategoryId = (vehicleCategory: string): string => {
+  const upperVehicle = vehicleCategory.toUpperCase();
+  
+  for (const category of VEHICLE_CATEGORIES) {
+    if (category.keywords.some(keyword => upperVehicle.includes(keyword))) {
+      return category.id;
+    }
   }
-];
+  return 'universal';
+};
 
 // ===== UTILITY FUNCTIONS =====
 const checkIfKit = (partId: string): boolean => {
   return partId?.includes('kit') || partId?.includes('set') || false;
-};
-
-const inferCategory = (part: InventoryPart): string => {
-  const name = part.name?.toLowerCase() || '';
-  const description = part.description?.toLowerCase() || '';
-  const text = `${name} ${description}`;
-
-  if (text.match(/bumper|grille|fender|running board|side step|bed|tonneau|lighting|led|headlight|taillight/)) {
-    return 'exterior';
-  }
-  
-  if (text.match(/exhaust|intake|suspension|brake|turbo|intercooler|performance|engine|chip/)) {
-    return 'performance';
-  }
-  
-  if (text.match(/seat|floor mat|dashboard|console|trim|organizer|storage/)) {
-    return 'interior';
-  }
-  
-  if (text.match(/wiring|switch|battery|audio|electronic|inverter|charger|electrical/)) {
-    return 'electrical';
-  }
-  
-  if (text.match(/fastener|tool|maintenance|fluid|filter|belt|gasket|hardware/)) {
-    return 'hardware';
-  }
-
-  return 'other';
 };
 
 const getStockStatus = (quantity: number): 'In Stock' | 'Low Stock' | 'Out of Stock' => {
@@ -221,98 +230,158 @@ const calculateMargin = (cost: number, listPrice: number): number => {
   return ((listPrice - cost) / listPrice) * 100;
 };
 
-// ===== CUSTOM HOOKS =====
-const useInventoryData = () => {
+// ===== PROGRESSIVE LOADING HOOK =====
+const useProgressiveInventoryData = () => {
   const [parts, setParts] = useState<InventoryPart[]>([]);
   const [loading, setLoading] = useState(true);
+  const [backgroundLoading, setBackgroundLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadedCount, setLoadedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔍 Fetching ALL inventory data from Supabase...');
+      console.log('🔍 Starting progressive inventory loading...');
       
       const supabase = getSupabaseClient();
       
-      // Fetch ALL records without pagination limits
-      let allParts: any[] = [];
-      let from = 0;
-      const batchSize = 1000; // Process in batches to avoid memory issues
+      // First, get total count
+      const { count } = await supabase
+        .from('inventory')
+        .select('*', { count: 'exact', head: true });
       
-      while (true) {
-        const { data, error: fetchError } = await supabase
-          .from('inventory')
-          .select('*')
-          .range(from, from + batchSize - 1)
-          .order('name');
+      setTotalCount(count || 0);
+      console.log(`📊 Total parts in database: ${count?.toLocaleString()}`);
+      
+      // Load first batch immediately for UI rendering
+      const firstBatchSize = 500;
+      const { data: firstBatch, error: firstError } = await supabase
+        .from('inventory')
+        .select('*')
+        .range(0, firstBatchSize - 1)
+        .order('name');
 
-        if (fetchError) {
-          console.error('❌ Error fetching inventory:', fetchError);
-          setError(fetchError.message);
-          return;
-        }
-
-        if (!data || data.length === 0) {
-          break; // No more data
-        }
-
-        allParts = [...allParts, ...data];
-        from += batchSize;
-        
-        console.log(`📦 Loaded ${allParts.length} parts so far...`);
-        
-        // Break if we got less than batch size (last batch)
-        if (data.length < batchSize) {
-          break;
-        }
+      if (firstError) {
+        console.error('❌ Error fetching first batch:', firstError);
+        setError(firstError.message);
+        setLoading(false);
+        return;
       }
 
-      console.log(`✅ Total inventory data fetched: ${allParts.length} items`);
-
-      // Map database fields to component interface with categorization
-      const mappedParts: InventoryPart[] = allParts.map(item => {
-        const longDesc = item.LongDescription || item.description || '';
-        
-        return {
-          id: item.id,
-          name: item.name || 'Unnamed Part',
-          sku: item.sku,
-          keystone_vcpn: item.keystone_vcpn,
-          cost: Number(item.cost) || 0,
-          list_price: Number(item.list_price) || 0,
-          quantity_on_hand: Number(item.quantity_on_hand) || 0,
-          location: item.location,
-          description: item.description,
-          LongDescription: longDesc,
-          manufacturer_part_no: item.manufacturer_part_no,
-          compatibility: item.compatibility,
-          brand: item.brand || 'Unknown',
-          category: item.category || inferCategory(item),
-          isKit: checkIfKit(item.id),
-          margin: calculateMargin(Number(item.cost) || 0, Number(item.list_price) || 0),
-          stockStatus: getStockStatus(Number(item.quantity_on_hand) || 0),
-          regionalAvailability: getRegionalAvailability(),
-          // NEW CATEGORIZATION FIELDS FROM JSON
-          vehicleCategory: categorizeVehicle(longDesc),
-          partCategory: categorizePart(longDesc)
-        };
-      });
-
-      setParts(mappedParts);
+      // Process and set first batch
+      const processedFirstBatch = processPartsBatch(firstBatch || []);
+      setParts(processedFirstBatch);
+      setLoadedCount(processedFirstBatch.length);
+      setLoading(false); // UI can render now!
+      
+      console.log(`✅ First batch loaded: ${processedFirstBatch.length} parts - UI ready!`);
+      
+      // Continue loading in background
+      if ((count || 0) > firstBatchSize) {
+        setBackgroundLoading(true);
+        loadRemainingBatches(firstBatchSize, count || 0);
+      } else {
+        setIsComplete(true);
+      }
+      
     } catch (err) {
       console.error('❌ Error in fetchData:', err);
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
-    } finally {
       setLoading(false);
     }
   }, []);
+
+  const processPartsBatch = (batch: any[]): InventoryPart[] => {
+    return batch.map(item => {
+      const longDesc = item.LongDescription || item.description || '';
+      
+      return {
+        id: item.id,
+        name: item.name || 'Unnamed Part',
+        sku: item.sku,
+        keystone_vcpn: item.keystone_vcpn,
+        cost: Number(item.cost) || 0,
+        list_price: Number(item.list_price) || 0,
+        quantity_on_hand: Number(item.quantity_on_hand) || 0,
+        location: item.location,
+        description: item.description,
+        LongDescription: longDesc,
+        manufacturer_part_no: item.manufacturer_part_no,
+        compatibility: item.compatibility,
+        brand: item.brand || 'Unknown',
+        category: item.category,
+        isKit: checkIfKit(item.id),
+        margin: calculateMargin(Number(item.cost) || 0, Number(item.list_price) || 0),
+        stockStatus: getStockStatus(Number(item.quantity_on_hand) || 0),
+        regionalAvailability: getRegionalAvailability(),
+        vehicleCategory: categorizeVehicle(longDesc),
+        partCategory: categorizePart(longDesc)
+      };
+    });
+  };
+
+  const loadRemainingBatches = async (startFrom: number, total: number) => {
+    const supabase = getSupabaseClient();
+    const batchSize = 1000;
+    let currentOffset = startFrom;
+    
+    while (currentOffset < total) {
+      try {
+        const { data, error } = await supabase
+          .from('inventory')
+          .select('*')
+          .range(currentOffset, currentOffset + batchSize - 1)
+          .order('name');
+
+        if (error) {
+          console.error('❌ Error loading batch:', error);
+          break;
+        }
+
+        if (!data || data.length === 0) {
+          break;
+        }
+
+        const processedBatch = processPartsBatch(data);
+        
+        setParts(prev => [...prev, ...processedBatch]);
+        setLoadedCount(prev => prev + processedBatch.length);
+        
+        console.log(`📦 Background loaded: ${currentOffset + data.length}/${total} parts`);
+        
+        currentOffset += batchSize;
+        
+        // Small delay to prevent overwhelming the browser
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (err) {
+        console.error('❌ Error in background loading:', err);
+        break;
+      }
+    }
+    
+    setBackgroundLoading(false);
+    setIsComplete(true);
+    console.log('🎉 All parts loaded successfully!');
+  };
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  return { parts, loading, error, refetch: fetchData };
+  return { 
+    parts, 
+    loading, 
+    backgroundLoading,
+    error, 
+    loadedCount,
+    totalCount,
+    isComplete,
+    refetch: fetchData 
+  };
 };
 
 // ===== NATIVE FUZZY SEARCH =====
@@ -361,17 +430,25 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
 const Parts: React.FC = () => {
   // ===== ALL HOOKS DECLARED AT TOP LEVEL =====
   const { toast } = useToast();
-  const { parts, loading: partsLoading, error: partsError, refetch } = useInventoryData();
+  const { 
+    parts, 
+    loading: partsLoading, 
+    backgroundLoading,
+    error: partsError, 
+    loadedCount,
+    totalCount,
+    isComplete,
+    refetch 
+  } = useProgressiveInventoryData();
   
   // State hooks
   const [filteredParts, setFilteredParts] = useState<InventoryPart[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedVehicleCategory, setSelectedVehicleCategory] = useState<string>('all');
+  const [selectedPartCategory, setSelectedPartCategory] = useState<string>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [selectedStockStatus, setSelectedStockStatus] = useState<string>('all');
   const [selectedRegion, setSelectedRegion] = useState<string>('all');
-  const [selectedVehicleCategory, setSelectedVehicleCategory] = useState<string>('all');
-  const [selectedPartCategory, setSelectedPartCategory] = useState<string>('all');
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
@@ -397,22 +474,27 @@ const Parts: React.FC = () => {
     return brands.sort();
   }, [parts]);
 
-  const availableVehicleCategories = useMemo(() => {
-    const categories = [...new Set(parts.map(part => part.vehicleCategory).filter(Boolean))];
-    return categories.sort();
-  }, [parts]);
-
   const availablePartCategories = useMemo(() => {
     const categories = [...new Set(parts.map(part => part.partCategory).filter(Boolean))];
     return categories.sort();
   }, [parts]);
 
-  const categoryStats = useMemo(() => {
+  const vehicleCategoryStats = useMemo(() => {
     const stats: Record<string, number> = {};
-    TRUCK_CATEGORIES.forEach(cat => {
-      stats[cat.id] = parts.filter(part => part.category === cat.id).length;
+    
+    VEHICLE_CATEGORIES.forEach(cat => {
+      stats[cat.id] = parts.filter(part => {
+        const vehicleCatId = getVehicleCategoryId(part.vehicleCategory || '');
+        return vehicleCatId === cat.id;
+      }).length;
     });
-    stats.other = parts.filter(part => !TRUCK_CATEGORIES.some(cat => cat.id === part.category)).length;
+    
+    // Universal/Other category
+    stats.universal = parts.filter(part => {
+      const vehicleCatId = getVehicleCategoryId(part.vehicleCategory || '');
+      return vehicleCatId === 'universal';
+    }).length;
+    
     return stats;
   }, [parts]);
 
@@ -425,9 +507,24 @@ const Parts: React.FC = () => {
       result = fuzzySearch(searchTerm, result);
     }
 
-    // Apply filters
-    if (selectedCategory !== 'all') {
-      result = result.filter(part => part.category === selectedCategory);
+    // Apply vehicle category filter
+    if (selectedVehicleCategory !== 'all') {
+      if (selectedVehicleCategory === 'universal') {
+        result = result.filter(part => {
+          const vehicleCatId = getVehicleCategoryId(part.vehicleCategory || '');
+          return vehicleCatId === 'universal';
+        });
+      } else {
+        result = result.filter(part => {
+          const vehicleCatId = getVehicleCategoryId(part.vehicleCategory || '');
+          return vehicleCatId === selectedVehicleCategory;
+        });
+      }
+    }
+
+    // Apply other filters
+    if (selectedPartCategory !== 'all') {
+      result = result.filter(part => part.partCategory === selectedPartCategory);
     }
 
     if (selectedBrand !== 'all') {
@@ -440,14 +537,6 @@ const Parts: React.FC = () => {
 
     if (selectedRegion !== 'all') {
       result = result.filter(part => part.regionalAvailability?.includes(selectedRegion));
-    }
-
-    if (selectedVehicleCategory !== 'all') {
-      result = result.filter(part => part.vehicleCategory === selectedVehicleCategory);
-    }
-
-    if (selectedPartCategory !== 'all') {
-      result = result.filter(part => part.partCategory === selectedPartCategory);
     }
 
     // Apply price range
@@ -466,7 +555,7 @@ const Parts: React.FC = () => {
           comparison = a.list_price - b.list_price;
           break;
         case 'category':
-          comparison = (a.category || '').localeCompare(b.category || '');
+          comparison = (a.partCategory || '').localeCompare(b.partCategory || '');
           break;
         case 'stock':
           comparison = a.quantity_on_hand - b.quantity_on_hand;
@@ -476,7 +565,7 @@ const Parts: React.FC = () => {
     });
 
     return result;
-  }, [parts, searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, selectedVehicleCategory, selectedPartCategory, priceRange, sortBy, sortOrder]);
+  }, [parts, searchTerm, selectedVehicleCategory, selectedPartCategory, selectedBrand, selectedStockStatus, selectedRegion, priceRange, sortBy, sortOrder]);
 
   // ===== PAGINATION =====
   const paginatedParts = useMemo(() => {
@@ -577,20 +666,19 @@ const Parts: React.FC = () => {
   }, [cartItems]);
 
   // ===== CATEGORY FUNCTIONS =====
-  const handleCategorySelect = useCallback((categoryId: string) => {
-    setSelectedCategory(categoryId);
+  const handleVehicleCategorySelect = useCallback((categoryId: string) => {
+    setSelectedVehicleCategory(categoryId);
     setShowCategoryView(false);
     setCurrentPage(1);
   }, []);
 
   const resetFilters = useCallback(() => {
     setSearchTerm('');
-    setSelectedCategory('all');
+    setSelectedVehicleCategory('all');
+    setSelectedPartCategory('all');
     setSelectedBrand('all');
     setSelectedStockStatus('all');
     setSelectedRegion('all');
-    setSelectedVehicleCategory('all');
-    setSelectedPartCategory('all');
     setPriceRange([0, 1000]);
     setCurrentPage(1);
   }, []);
@@ -602,7 +690,7 @@ const Parts: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, selectedVehicleCategory, selectedPartCategory, priceRange]);
+  }, [searchTerm, selectedVehicleCategory, selectedPartCategory, selectedBrand, selectedStockStatus, selectedRegion, priceRange]);
 
   // ===== EARLY RETURNS AFTER ALL HOOKS =====
   if (partsLoading) {
@@ -611,8 +699,8 @@ const Parts: React.FC = () => {
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p className="text-lg">Loading inventory...</p>
-            <p className="text-sm text-muted-foreground">This may take a moment for 120k+ parts</p>
+            <p className="text-lg">Loading initial inventory...</p>
+            <p className="text-sm text-muted-foreground">Preparing first batch of parts</p>
           </div>
         </div>
       </div>
@@ -642,25 +730,47 @@ const Parts: React.FC = () => {
   }
 
   // ===== RENDER FUNCTIONS =====
-  const renderCategoryOverview = () => (
+  const renderLoadingProgress = () => {
+    if (!backgroundLoading && isComplete) return null;
+    
+    return (
+      <div className="mb-4">
+        <Alert>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <AlertDescription>
+            {backgroundLoading ? (
+              <>Loading parts in background: {loadedCount.toLocaleString()} of {totalCount.toLocaleString()} loaded</>
+            ) : (
+              <>Loading complete: {loadedCount.toLocaleString()} parts available</>
+            )}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  };
+
+  const renderVehicleCategoryOverview = () => (
     <div className="space-y-6">
       <div className="text-center">
-        <h1 className="text-3xl font-bold mb-2">Truck Parts Catalog</h1>
+        <h1 className="text-3xl font-bold mb-2">Vehicle Parts Catalog</h1>
         <p className="text-muted-foreground">
-          Browse our comprehensive selection of {parts.length.toLocaleString()} truck customization parts organized by category
+          Browse our comprehensive selection of {loadedCount.toLocaleString()} truck parts organized by vehicle brand
+          {backgroundLoading && <span className="ml-2">(Loading more in background...)</span>}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {TRUCK_CATEGORIES.map((category) => {
+      {renderLoadingProgress()}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {VEHICLE_CATEGORIES.map((category) => {
           const Icon = category.icon;
-          const count = categoryStats[category.id] || 0;
+          const count = vehicleCategoryStats[category.id] || 0;
           
           return (
             <Card 
               key={category.id}
               className="cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => handleCategorySelect(category.id)}
+              onClick={() => handleVehicleCategorySelect(category.id)}
             >
               <CardHeader className="pb-3">
                 <div className="flex items-center space-x-3">
@@ -674,50 +784,39 @@ const Parts: React.FC = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">
+                <p className="text-sm text-muted-foreground">
                   {category.description}
                 </p>
-                <div className="flex flex-wrap gap-1">
-                  {category.subcategories.slice(0, 3).map((sub) => (
-                    <Badge key={sub} variant="secondary" className="text-xs">
-                      {sub}
-                    </Badge>
-                  ))}
-                  {category.subcategories.length > 3 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{category.subcategories.length - 3} more
-                    </Badge>
-                  )}
-                </div>
               </CardContent>
             </Card>
           );
         })}
-      </div>
 
-      {categoryStats.other > 0 && (
-        <Card 
-          className="cursor-pointer hover:shadow-lg transition-shadow"
-          onClick={() => handleCategorySelect('other')}
-        >
-          <CardHeader>
-            <div className="flex items-center space-x-3">
-              <div className="p-3 rounded-lg bg-gray-500 text-white">
-                <Package className="h-6 w-6" />
+        {/* Universal/Other Category */}
+        {vehicleCategoryStats.universal > 0 && (
+          <Card 
+            className="cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => handleVehicleCategorySelect('universal')}
+          >
+            <CardHeader className="pb-3">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 rounded-lg bg-gray-500 text-white">
+                  <Package className="h-6 w-6" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Universal/Other</CardTitle>
+                  <p className="text-sm text-muted-foreground">{vehicleCategoryStats.universal.toLocaleString()} parts</p>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-lg">Other Parts</CardTitle>
-                <p className="text-sm text-muted-foreground">{categoryStats.other.toLocaleString()} parts</p>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Miscellaneous parts and accessories not categorized above
-            </p>
-          </CardContent>
-        </Card>
-      )}
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Universal parts and accessories that fit multiple vehicles
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 
@@ -732,41 +831,23 @@ const Parts: React.FC = () => {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Category Filter */}
-        <div>
-          <Label className="text-sm font-medium">Category</Label>
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {TRUCK_CATEGORIES.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name} ({(categoryStats[cat.id] || 0).toLocaleString()})
-                </SelectItem>
-              ))}
-              {categoryStats.other > 0 && (
-                <SelectItem value="other">Other ({categoryStats.other.toLocaleString()})</SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* Vehicle Category Filter */}
         <div>
-          <Label className="text-sm font-medium">Vehicle</Label>
+          <Label className="text-sm font-medium">Vehicle Brand</Label>
           <Select value={selectedVehicleCategory} onValueChange={setSelectedVehicleCategory}>
             <SelectTrigger>
               <SelectValue placeholder="All Vehicles" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Vehicles</SelectItem>
-              {availableVehicleCategories.map((vehicle) => (
-                <SelectItem key={vehicle} value={vehicle}>
-                  {vehicle}
+              {VEHICLE_CATEGORIES.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.name} ({(vehicleCategoryStats[cat.id] || 0).toLocaleString()})
                 </SelectItem>
               ))}
+              {vehicleCategoryStats.universal > 0 && (
+                <SelectItem value="universal">Universal/Other ({vehicleCategoryStats.universal.toLocaleString()})</SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -1080,6 +1161,7 @@ const Parts: React.FC = () => {
     <div className="flex items-center justify-between">
       <div className="text-sm text-muted-foreground">
         Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, searchAndFilterParts.length)} of {searchAndFilterParts.length.toLocaleString()} parts
+        {backgroundLoading && <span className="ml-2">(Loading more...)</span>}
       </div>
       
       <div className="flex items-center space-x-2">
@@ -1132,15 +1214,16 @@ const Parts: React.FC = () => {
               onClick={() => setShowCategoryView(true)}
             >
               <ChevronRight className="h-4 w-4 mr-2" />
-              Back to Categories
+              Back to Vehicle Categories
             </Button>
           )}
           
           <div className="flex items-center space-x-2">
             <h1 className="text-2xl font-bold">
-              {showCategoryView ? 'Parts Catalog' : 
-               selectedCategory === 'all' ? 'All Parts' :
-               TRUCK_CATEGORIES.find(cat => cat.id === selectedCategory)?.name || 'Parts'}
+              {showCategoryView ? 'Vehicle Parts Catalog' : 
+               selectedVehicleCategory === 'all' ? 'All Parts' :
+               selectedVehicleCategory === 'universal' ? 'Universal/Other Parts' :
+               VEHICLE_CATEGORIES.find(cat => cat.id === selectedVehicleCategory)?.name + ' Parts' || 'Parts'}
             </h1>
             {!showCategoryView && (
               <Badge variant="secondary">
@@ -1231,7 +1314,7 @@ const Parts: React.FC = () => {
 
       {/* Category Overview or Parts List */}
       {showCategoryView ? (
-        renderCategoryOverview()
+        renderVehicleCategoryOverview()
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Filters Sidebar */}
@@ -1241,6 +1324,8 @@ const Parts: React.FC = () => {
 
           {/* Main Content */}
           <div className="lg:col-span-3 space-y-6">
+            {renderLoadingProgress()}
+
             {/* Search and Controls */}
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1 relative">
