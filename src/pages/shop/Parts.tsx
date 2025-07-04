@@ -507,6 +507,8 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
 
 // ===== MAIN COMPONENT =====
 const Parts: React.FC = () => {
+  console.log('🚀 Parts component rendering...');
+
   // ===== DATA LOADING =====
   const { 
     parts, 
@@ -524,54 +526,118 @@ const Parts: React.FC = () => {
   const [showCartDrawer, setShowCartDrawer] = useState(false);
   const [cartMessage, setCartMessage] = useState<string>('');
 
+  console.log('🛒 Cart state:', cart);
+  console.log('🛒 Cart message:', cartMessage);
+
   // Load cart from localStorage on mount
   useEffect(() => {
+    console.log('🔄 Loading cart from localStorage...');
     const savedCart = localStorage.getItem('parts-cart');
     if (savedCart) {
       try {
-        setCart(JSON.parse(savedCart));
+        const parsedCart = JSON.parse(savedCart);
+        console.log('✅ Cart loaded from localStorage:', parsedCart);
+        setCart(parsedCart);
       } catch (error) {
-        console.error('Error loading cart:', error);
+        console.error('❌ Error loading cart from localStorage:', error);
       }
+    } else {
+      console.log('ℹ️ No saved cart found in localStorage');
     }
   }, []);
 
   // Save cart to localStorage whenever it changes
   useEffect(() => {
+    console.log('💾 Saving cart to localStorage:', cart);
     localStorage.setItem('parts-cart', JSON.stringify(cart));
   }, [cart]);
 
+  // ===== DEBUGGING FUNCTIONS =====
+  const debugButtonClick = (part: InventoryPart, event: React.MouseEvent) => {
+    console.log('🔍 DEBUG: Button click event triggered!');
+    console.log('🔍 DEBUG: Event object:', event);
+    console.log('🔍 DEBUG: Part object:', part);
+    console.log('🔍 DEBUG: Part ID:', part.id);
+    console.log('🔍 DEBUG: Part name:', part.name);
+    console.log('🔍 DEBUG: Stock status:', part.stockStatus);
+    console.log('🔍 DEBUG: Quantity on hand:', part.quantity_on_hand);
+    
+    // Check if event is being prevented
+    if (event.defaultPrevented) {
+      console.log('⚠️ DEBUG: Event default was prevented!');
+    }
+    
+    // Check if event propagation was stopped
+    if (event.isPropagationStopped && event.isPropagationStopped()) {
+      console.log('⚠️ DEBUG: Event propagation was stopped!');
+    }
+    
+    // Prevent any potential event issues
+    event.preventDefault();
+    event.stopPropagation();
+    
+    console.log('🔍 DEBUG: About to call addToCart...');
+    addToCart(part);
+  };
+
+  const debugButtonMouseEnter = (part: InventoryPart) => {
+    console.log('🖱️ DEBUG: Mouse entered button for part:', part.name);
+  };
+
+  const debugButtonMouseLeave = (part: InventoryPart) => {
+    console.log('🖱️ DEBUG: Mouse left button for part:', part.name);
+  };
+
   // ===== SIMPLE ADD TO CART FUNCTION - NO HOOKS, NO COMPLEXITY =====
   const addToCart = (part: InventoryPart) => {
-    console.log('🛒 SIMPLE ADD TO CART CALLED:', part.name);
+    console.log('🛒 ===== ADD TO CART FUNCTION CALLED =====');
+    console.log('🛒 Part:', part.name);
+    console.log('🛒 Part ID:', part.id);
+    console.log('🛒 Current cart state:', cart);
     
     const partId = part.id;
     const maxQuantity = Number(part.quantity_on_hand) || 0;
     const currentQuantity = cart[partId] || 0;
     const newQuantity = currentQuantity + 1;
 
+    console.log('🛒 Part ID:', partId);
+    console.log('🛒 Max quantity:', maxQuantity);
+    console.log('🛒 Current quantity in cart:', currentQuantity);
+    console.log('🛒 New quantity would be:', newQuantity);
+
     if (part.stockStatus === 'Out of Stock' || maxQuantity === 0) {
-      setCartMessage(`❌ ${part.name} is out of stock`);
+      const message = `❌ ${part.name} is out of stock`;
+      console.log('🛒 Stock check failed:', message);
+      setCartMessage(message);
       setTimeout(() => setCartMessage(''), 3000);
       return;
     }
 
     if (newQuantity > maxQuantity) {
-      setCartMessage(`❌ Only ${maxQuantity} available in stock`);
+      const message = `❌ Only ${maxQuantity} available in stock`;
+      console.log('🛒 Quantity check failed:', message);
+      setCartMessage(message);
       setTimeout(() => setCartMessage(''), 3000);
       return;
     }
 
-    // Update cart state
-    setCart(prev => ({
-      ...prev,
-      [partId]: newQuantity
-    }));
+    console.log('🛒 All checks passed, updating cart...');
 
-    setCartMessage(`✅ ${part.name} added to cart!`);
+    // Update cart state
+    const newCart = {
+      ...cart,
+      [partId]: newQuantity
+    };
+    
+    console.log('🛒 New cart state will be:', newCart);
+    setCart(newCart);
+
+    const successMessage = `✅ ${part.name} added to cart!`;
+    console.log('🛒 Success:', successMessage);
+    setCartMessage(successMessage);
     setTimeout(() => setCartMessage(''), 3000);
     
-    console.log('🛒 Cart updated:', { ...cart, [partId]: newQuantity });
+    console.log('🛒 ===== ADD TO CART FUNCTION COMPLETED =====');
   };
 
   // ===== OTHER STATE =====
@@ -757,17 +823,22 @@ const Parts: React.FC = () => {
 
   // ===== CART FUNCTIONS =====
   const getTotalItems = () => {
-    return Object.values(cart).reduce((total, quantity) => total + quantity, 0);
+    const total = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
+    console.log('🛒 Total items in cart:', total);
+    return total;
   };
 
   const getTotalValue = () => {
-    return Object.entries(cart).reduce((total, [partId, quantity]) => {
+    const total = Object.entries(cart).reduce((total, [partId, quantity]) => {
       const part = parts.find(p => p.id === partId);
       return total + (Number(part?.list_price) || 0) * quantity;
     }, 0);
+    console.log('🛒 Total cart value:', total);
+    return total;
   };
 
   const updateCartQuantity = (partId: string, quantity: number) => {
+    console.log('🛒 Updating cart quantity:', partId, quantity);
     if (quantity <= 0) {
       setCart(prev => {
         const newCart = { ...prev };
@@ -783,6 +854,7 @@ const Parts: React.FC = () => {
   };
 
   const removeFromCart = (partId: string) => {
+    console.log('🛒 Removing from cart:', partId);
     setCart(prev => {
       const newCart = { ...prev };
       delete newCart[partId];
@@ -791,6 +863,7 @@ const Parts: React.FC = () => {
   };
 
   const clearCart = () => {
+    console.log('🛒 Clearing cart');
     setCart({});
     setCartMessage('🗑️ Cart cleared');
     setTimeout(() => setCartMessage(''), 3000);
@@ -918,7 +991,11 @@ const Parts: React.FC = () => {
   };
 
   const renderPartCard = (part: InventoryPart) => {
+    console.log('🎨 Rendering part card for:', part.name);
     const isKit = part.isKit || false;
+    const isDisabled = part.stockStatus === 'Out of Stock';
+    
+    console.log('🎨 Part card - isDisabled:', isDisabled, 'stockStatus:', part.stockStatus);
     
     return (
       <Card key={part.id} className="h-full flex flex-col hover:shadow-lg transition-shadow">
@@ -1020,20 +1097,33 @@ const Parts: React.FC = () => {
           
           <div className="mt-auto space-y-2">
             <div className="flex gap-2">
+              {/* DEBUG BUTTON WITH EXTENSIVE LOGGING */}
               <Button 
-                onClick={() => addToCart(part)}
-                disabled={part.stockStatus === 'Out of Stock'}
-                className="flex-1 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
+                onClick={(e) => {
+                  console.log('🔥 BUTTON CLICKED! Event:', e);
+                  console.log('🔥 BUTTON CLICKED! Part:', part.name);
+                  debugButtonClick(part, e);
+                }}
+                onMouseEnter={() => debugButtonMouseEnter(part)}
+                onMouseLeave={() => debugButtonMouseLeave(part)}
+                disabled={isDisabled}
+                className={`flex-1 text-white ${isDisabled ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#6B7FE8] hover:bg-[#5A6FD7] cursor-pointer'}`}
                 size="sm"
+                style={{
+                  pointerEvents: isDisabled ? 'none' : 'auto',
+                  zIndex: 10,
+                  position: 'relative'
+                }}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add to Cart
+                {isDisabled ? 'Out of Stock' : 'Add to Cart'}
               </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
                 className="px-3"
                 onClick={() => {
+                  console.log('👁️ View details clicked for:', part.name);
                   setSelectedPart(part);
                   setShowDetailDialog(true);
                 }}
@@ -1047,9 +1137,21 @@ const Parts: React.FC = () => {
     );
   };
 
+  console.log('🎨 About to render main component...');
+
   // ===== MAIN RENDER =====
   return (
     <div className="container mx-auto p-6">
+      {/* Debug Info */}
+      <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
+        <h3 className="font-bold text-sm mb-2">🔍 DEBUG INFO:</h3>
+        <p className="text-xs">Parts loaded: {parts.length}</p>
+        <p className="text-xs">Cart items: {getTotalItems()}</p>
+        <p className="text-xs">Cart state: {JSON.stringify(cart)}</p>
+        <p className="text-xs">Cart message: {cartMessage}</p>
+        <p className="text-xs">Show category view: {showCategoryView.toString()}</p>
+      </div>
+
       {/* Cart Message */}
       {cartMessage && (
         <div className="fixed top-4 right-4 z-50 bg-white border rounded-lg shadow-lg p-4 max-w-sm">
@@ -1089,7 +1191,10 @@ const Parts: React.FC = () => {
         <Button 
           variant="outline" 
           className="relative"
-          onClick={() => setShowCartDrawer(true)}
+          onClick={() => {
+            console.log('🛒 Cart button clicked');
+            setShowCartDrawer(true);
+          }}
         >
           <ShoppingCart className="h-4 w-4 mr-2" />
           Cart ({getTotalItems()})
@@ -1807,7 +1912,10 @@ const Parts: React.FC = () => {
               
               <div className="flex gap-2 pt-4">
                 <Button 
-                  onClick={() => addToCart(selectedPart)}
+                  onClick={(e) => {
+                    console.log('🔥 DIALOG BUTTON CLICKED!');
+                    debugButtonClick(selectedPart, e);
+                  }}
                   disabled={selectedPart.stockStatus === 'Out of Stock'}
                   className="flex-1 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white"
                 >
