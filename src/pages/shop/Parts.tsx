@@ -1,5 +1,6 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, Truck, MapPin, Clock, Shield, Edit, CheckCircle, Timer, User, CreditCard, FileText, Star, Zap, UserSearch, UserPlus, Box } from "lucide-react";
+import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, Clock, Shield, Star, Zap, UserPlus, Box, Truck, Wrench, Lightbulb, Car, Settings, Filter } from "lucide-react";
+import { ArrowRight, DollarSign, TrendingUp, TrendingDown, MapPin, User, CreditCard, Edit, CheckCircle, Timer, User2, CreditCard2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // Import the ProductPriceCheck component
 import ProductPriceCheck from '@/components/product_price_check_component';
@@ -27,16 +29,19 @@ import { DropshipOrderService } from '@/services/dropship_order_service';
 import { CustomerSearchService } from '@/services/customer_search_service';
 
 // Import kit components
-import { 
-  KitBadge, 
-  KitComponentsDisplay, 
-  CompactKitDisplay, 
-  useKitCheck 
+import {
+  KitBadge,
+  KitComponentsDisplay,
+  CompactKitDisplay,
+  useKitCheck
 } from '@/components/kit_components_display';
 
 // Import Supabase for real data
 import { getSupabaseClient } from "@/lib/supabase";
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+
+// Import Fuse.js for fuzzy search
+import Fuse from 'fuse.js';
 
 // Customer search result interface
 interface CustomerSearchResult {
@@ -48,540 +53,500 @@ interface CustomerSearchResult {
   display_name: string;
 }
 
-// Enhanced interface for real inventory parts
+// Enhanced interfaces for redesigned catalog
 interface InventoryPart {
   id: string;
   name: string;
-  description?: string;
-  sku?: string;
-  quantity: number;
+  sku: string;
+  category: string;
   price: number;
   cost?: number;
-  category?: string;
-  supplier?: string;
-  reorder_level?: number;
-  created_at: string;
-  updated_at: string;
-  core_charge?: number;
-  keystone_vcpn?: string;
-  keystone_synced?: boolean;
-  keystone_last_sync?: string;
-  
-  // Optional additional columns
-  warehouse?: string;
-  location?: string;
+  quantity: number;
+  description?: string;
   brand?: string;
-  weight?: number;
-  dimensions?: string;
-  warranty?: string;
-  list_price?: number;
-  discount_percentage?: number;
-  
-  // Kit support
+  manufacturer_part_no?: string;
+  compatibility?: string;
+  region?: string;
+  margin?: number;
+  location?: string;
+  status?: 'active' | 'inactive';
   is_kit?: boolean;
-  kit_component_count?: number;
-
-  // Map real inventory fields to expected interface
-  quantity_on_hand?: number; // Maps to quantity
+  kit_components?: any[];
+  // New fields for enhanced display
+  stock_status?: 'in_stock' | 'low_stock' | 'out_of_stock';
+  regional_availability?: string[];
 }
 
-// Customer interface for special orders
-interface Customer {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  company?: string;
+interface CartItem extends InventoryPart {
+  quantity: number;
 }
 
-// Shipping address interface
-interface ShippingAddress {
-  street: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  country: string;
-}
-
-// Shipping option interface
-interface ShippingOption {
-  id: string;
-  carrier: string;
-  service: string;
-  cost: number;
-  estimatedDays: number;
-  deliveryDate: string;
-}
-
-// Grouped shipping options interface
-interface GroupedShippingOptions {
-  bestValue: ShippingOption | null;
-  fastest: ShippingOption | null;
-  others: ShippingOption[];
-}
-
-// Loading wrapper component
-const LoadingWrapper = ({ isLoading, children, message = "Loading..." }) => {
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm text-muted-foreground">{message}</span>
-        </div>
-      </div>
-    );
+// Truck-specific category system with hierarchical structure
+const TRUCK_CATEGORIES = {
+  'exterior': {
+    name: 'Exterior',
+    icon: Truck,
+    color: 'bg-blue-500',
+    subcategories: {
+      'bumpers': 'Bumpers & Guards',
+      'running_boards': 'Running Boards & Steps',
+      'bed_accessories': 'Bed Accessories',
+      'lighting': 'Lighting & LED',
+      'grilles': 'Grilles & Mesh',
+      'fender_flares': 'Fender Flares',
+      'tonneau_covers': 'Tonneau Covers',
+      'side_steps': 'Side Steps',
+      'nerf_bars': 'Nerf Bars'
+    }
+  },
+  'performance': {
+    name: 'Performance',
+    icon: Zap,
+    color: 'bg-red-500',
+    subcategories: {
+      'air_intake': 'Air Filters & Intake',
+      'exhaust': 'Exhaust Systems',
+      'suspension': 'Suspension & Lift Kits',
+      'brakes': 'Brakes & Rotors',
+      'engine': 'Engine Components',
+      'turbo': 'Turbo & Supercharger',
+      'cooling': 'Cooling Systems'
+    }
+  },
+  'interior': {
+    name: 'Interior',
+    icon: Car,
+    color: 'bg-green-500',
+    subcategories: {
+      'seat_covers': 'Seat Covers & Upholstery',
+      'floor_mats': 'Floor Mats & Liners',
+      'dashboard': 'Dashboard Accessories',
+      'storage': 'Storage Solutions',
+      'console': 'Center Console',
+      'trim': 'Interior Trim'
+    }
+  },
+  'electrical': {
+    name: 'Electrical',
+    icon: Lightbulb,
+    color: 'bg-yellow-500',
+    subcategories: {
+      'wiring': 'Wiring Harnesses',
+      'switches': 'Switches & Controls',
+      'batteries': 'Batteries & Charging',
+      'audio': 'Audio & Electronics',
+      'navigation': 'GPS & Navigation',
+      'security': 'Security Systems'
+    }
+  },
+  'hardware': {
+    name: 'Hardware & Tools',
+    icon: Wrench,
+    color: 'bg-gray-500',
+    subcategories: {
+      'fasteners': 'Fasteners & Hardware',
+      'tools': 'Tools & Equipment',
+      'maintenance': 'Maintenance Items',
+      'fluids': 'Fluids & Chemicals',
+      'gaskets': 'Gaskets & Seals'
+    }
   }
-  return children;
 };
 
-// Customer Search Component
-const CustomerSearchComponent = ({ 
-  onCustomerSelect, 
-  selectedCustomer 
-}: {
-  onCustomerSelect: (customer: CustomerSearchResult | null) => void;
-  selectedCustomer: CustomerSearchResult | null;
-}) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<CustomerSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-  const { toast } = useToast();
-
-  // Debounced search function
-  const searchCustomers = useCallback(async (query: string) => {
-    if (!query.trim() || query.length < 2) {
-      setSearchResults([]);
-      setShowResults(false);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const results = await CustomerSearchService.searchCustomers(query);
-      setSearchResults(results);
-      setShowResults(true);
-    } catch (error) {
-      console.error('Customer search error:', error);
-      toast({
-        title: "Search Error",
-        description: "Failed to search customers. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSearching(false);
-    }
-  }, [toast]);
-
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      searchCustomers(searchQuery);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery, searchCustomers]);
-
-  const handleCustomerSelect = (customer: CustomerSearchResult) => {
-    onCustomerSelect(customer);
-    setSearchQuery(customer.display_name);
-    setShowResults(false);
-    setSearchResults([]); // Clear search results after selection
-  };
-
-  const clearSelection = () => {
-    onCustomerSelect(null);
-    setSearchQuery('');
-    setShowResults(false);
-    setSearchResults([]);
-  };
-
-  return (
-    <div className="relative">
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <UserSearch className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search customers by name, email, or phone..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-          {isSearching && (
-            <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
-          )}
-        </div>
-        {selectedCustomer && (
-          <Button variant="outline" onClick={clearSelection}>
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-
-      {/* Search Results Dropdown */}
-      {showResults && searchResults.length > 0 && (
-        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-          {searchResults.map((customer) => (
-            <div
-              key={customer.id}
-              className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-              onClick={() => handleCustomerSelect(customer)}
-            >
-              <div className="font-medium">{customer.display_name}</div>
-              <div className="text-sm text-muted-foreground">{customer.email}</div>
-              {customer.phone && (
-                <div className="text-sm text-muted-foreground">{customer.phone}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Selected Customer Display */}
-      {selectedCustomer && (
-        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="font-medium text-blue-900">{selectedCustomer.display_name}</div>
-              <div className="text-sm text-blue-700">{selectedCustomer.email}</div>
-              {selectedCustomer.phone && (
-                <div className="text-sm text-blue-700">{selectedCustomer.phone}</div>
-              )}
-            </div>
-            <Button variant="ghost" size="sm" onClick={clearSelection}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Price display component with cost margin calculation
-const PriceDisplay = ({ part }: { part: InventoryPart }) => {
-  const [showPriceCheck, setShowPriceCheck] = useState(false);
+// Enhanced category inference function with subcategory support
+const inferCategory = (name: string, description: string = ''): { category: string; subcategory?: string } => {
+  const text = `${name} ${description}`.toLowerCase();
   
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        <span className="text-2xl font-bold text-green-600">
-          ${part.price.toFixed(2)}
-        </span>
-        {part.keystone_vcpn && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowPriceCheck(!showPriceCheck)}
-            className="h-6 px-2 text-xs"
-          >
-            <DollarSign className="h-3 w-3 mr-1" />
-            Check Price
-          </Button>
-        )}
-      </div>
-      
-      {part.cost && (
-        <div className="text-xs text-muted-foreground">
-          Cost: ${part.cost} | Margin: {((part.price - part.cost) / part.cost * 100).toFixed(1)}%
-        </div>
-      )}
-      
-      {part.list_price && part.list_price > part.price && (
-        <div className="text-xs text-muted-foreground line-through">
-          List: ${part.list_price}
-        </div>
-      )}
-
-      {showPriceCheck && part.keystone_vcpn && (
-        <div className="mt-2 p-2 border rounded-lg bg-gray-50">
-          <ProductPriceCheck vcpn={part.keystone_vcpn} />
-        </div>
-      )}
-    </div>
-  );
+  // Exterior - Bumpers & Guards
+  if (text.match(/bumper|guard|bull bar|push bar|grille guard/)) {
+    return { category: 'exterior', subcategory: 'bumpers' };
+  }
+  
+  // Exterior - Running Boards & Steps
+  if (text.match(/running board|step|side step|nerf bar|rock slider/)) {
+    return { category: 'exterior', subcategory: 'running_boards' };
+  }
+  
+  // Exterior - Bed Accessories
+  if (text.match(/bed|tonneau|cover|liner|rail|tailgate|bedliner/)) {
+    return { category: 'exterior', subcategory: 'bed_accessories' };
+  }
+  
+  // Exterior - Lighting
+  if (text.match(/light|led|headlight|taillight|fog|work light|light bar/)) {
+    return { category: 'exterior', subcategory: 'lighting' };
+  }
+  
+  // Exterior - Grilles
+  if (text.match(/grille|grill|mesh|honeycomb/)) {
+    return { category: 'exterior', subcategory: 'grilles' };
+  }
+  
+  // Exterior - Fender Flares
+  if (text.match(/fender|flare|wheel well|arch/)) {
+    return { category: 'exterior', subcategory: 'fender_flares' };
+  }
+  
+  // Performance - Air Intake
+  if (text.match(/filter|air|intake|cold air|performance filter/)) {
+    return { category: 'performance', subcategory: 'air_intake' };
+  }
+  
+  // Performance - Exhaust
+  if (text.match(/exhaust|muffler|pipe|cat back|header|downpipe/)) {
+    return { category: 'performance', subcategory: 'exhaust' };
+  }
+  
+  // Performance - Suspension
+  if (text.match(/suspension|lift|shock|strut|spring|coilover|leveling/)) {
+    return { category: 'performance', subcategory: 'suspension' };
+  }
+  
+  // Performance - Brakes
+  if (text.match(/brake|rotor|pad|caliper|disc/)) {
+    return { category: 'performance', subcategory: 'brakes' };
+  }
+  
+  // Performance - Engine
+  if (text.match(/engine|turbo|supercharger|intercooler|manifold/)) {
+    return { category: 'performance', subcategory: 'engine' };
+  }
+  
+  // Interior - Seat Covers
+  if (text.match(/seat|cover|upholstery|leather|fabric/)) {
+    return { category: 'interior', subcategory: 'seat_covers' };
+  }
+  
+  // Interior - Floor Mats
+  if (text.match(/mat|floor|liner|carpet|rubber mat|all weather/)) {
+    return { category: 'interior', subcategory: 'floor_mats' };
+  }
+  
+  // Interior - Dashboard
+  if (text.match(/dashboard|dash|gauge|instrument|cluster/)) {
+    return { category: 'interior', subcategory: 'dashboard' };
+  }
+  
+  // Interior - Storage
+  if (text.match(/storage|console|organizer|box|compartment/)) {
+    return { category: 'interior', subcategory: 'storage' };
+  }
+  
+  // Electrical - Wiring
+  if (text.match(/wire|wiring|harness|connector|cable/)) {
+    return { category: 'electrical', subcategory: 'wiring' };
+  }
+  
+  // Electrical - Switches
+  if (text.match(/switch|button|control|rocker|toggle/)) {
+    return { category: 'electrical', subcategory: 'switches' };
+  }
+  
+  // Electrical - Batteries
+  if (text.match(/battery|charger|alternator|starter/)) {
+    return { category: 'electrical', subcategory: 'batteries' };
+  }
+  
+  // Electrical - Audio
+  if (text.match(/audio|radio|speaker|amplifier|subwoofer|stereo/)) {
+    return { category: 'electrical', subcategory: 'audio' };
+  }
+  
+  // Hardware - Fasteners
+  if (text.match(/bolt|screw|nut|washer|fastener|hardware/)) {
+    return { category: 'hardware', subcategory: 'fasteners' };
+  }
+  
+  // Hardware - Tools
+  if (text.match(/tool|wrench|socket|ratchet|screwdriver/)) {
+    return { category: 'hardware', subcategory: 'tools' };
+  }
+  
+  // Hardware - Maintenance
+  if (text.match(/oil|fluid|coolant|brake fluid|transmission|maintenance/)) {
+    return { category: 'hardware', subcategory: 'maintenance' };
+  }
+  
+  // Default fallback
+  return { category: 'uncategorized' };
 };
 
-// Enhanced Shipping Options Component with Amazon-style grouping
-const ShippingOptionsDisplay = ({ 
-  shippingOptions, 
-  selectedShipping, 
-  onShippingSelect 
-}: {
-  shippingOptions: ShippingOption[];
-  selectedShipping: string;
-  onShippingSelect: (optionId: string) => void;
-}) => {
-  // State for collapsible "Other Options" section
-  const [showOtherOptions, setShowOtherOptions] = useState(false);
-
-  // Group shipping options by best value and fastest delivery
-  const groupedOptions = useMemo((): GroupedShippingOptions => {
-    if (shippingOptions.length === 0) {
-      return { bestValue: null, fastest: null, others: [] };
-    }
-
-    // Find best value (lowest cost)
-    const bestValue = shippingOptions.reduce((prev, current) => 
-      prev.cost < current.cost ? prev : current
-    );
-
-    // Find fastest delivery (lowest estimated days)
-    const fastest = shippingOptions.reduce((prev, current) => 
-      prev.estimatedDays < current.estimatedDays ? prev : current
-    );
-
-    // Get remaining options (excluding best value and fastest if they're different)
-    const others = shippingOptions.filter(option => 
-      option.id !== bestValue.id && option.id !== fastest.id
-    );
-
-    return { bestValue, fastest, others };
-  }, [shippingOptions]);
-
-  const ShippingOptionCard = ({ 
-    option, 
-    isRecommended = false, 
-    recommendationType = '',
-    icon = null 
-  }: {
-    option: ShippingOption;
-    isRecommended?: boolean;
-    recommendationType?: string;
-    icon?: React.ReactNode;
-  }) => (
-    <div className={`border rounded-lg p-4 transition-all hover:shadow-md ${
-      selectedShipping === option.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-    } ${isRecommended ? 'border-green-500' : ''}`}>
-      <label className="flex items-center space-x-3 cursor-pointer">
-        <input
-          type="radio"
-          name="shipping"
-          value={option.id}
-          checked={selectedShipping === option.id}
-          onChange={(e) => onShippingSelect(e.target.value)}
-          className="text-blue-600"
-        />
-        <div className="flex-1">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              {isRecommended && (
-                <div className="flex items-center gap-1 mb-1">
-                  {icon}
-                  <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
-                    {recommendationType}
-                  </Badge>
-                </div>
-              )}
-              <div className="font-medium">{option.carrier} {option.service}</div>
-              <div className="text-sm text-muted-foreground">
-                Estimated delivery: {option.deliveryDate} ({option.estimatedDays} business days)
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="font-bold text-lg">${option.cost.toFixed(2)}</div>
-            </div>
-          </div>
-        </div>
-      </label>
-    </div>
-  );
-
-  return (
-    <div className="space-y-3">
-      {/* Best Value Option */}
-      {groupedOptions.bestValue && (
-        <ShippingOptionCard
-          option={groupedOptions.bestValue}
-          isRecommended={true}
-          recommendationType="Best Value"
-          icon={<DollarSign className="h-3 w-3 text-green-600" />}
-        />
-      )}
-
-      {/* Fastest Option (if different from best value) */}
-      {groupedOptions.fastest && groupedOptions.fastest.id !== groupedOptions.bestValue?.id && (
-        <ShippingOptionCard
-          option={groupedOptions.fastest}
-          isRecommended={true}
-          recommendationType="Fastest"
-          icon={<Zap className="h-3 w-3 text-green-600" />}
-        />
-      )}
-
-      {/* Other Options (Collapsible) */}
-      {groupedOptions.others.length > 0 && (
-        <div>
-          <Button
-            variant="ghost"
-            onClick={() => setShowOtherOptions(!showOtherOptions)}
-            className="w-full justify-between p-2 h-auto"
-          >
-            <span className="text-sm font-medium">
-              Other shipping options ({groupedOptions.others.length})
-            </span>
-            <ArrowRight className={`h-4 w-4 transition-transform ${showOtherOptions ? 'rotate-90' : ''}`} />
-          </Button>
-          
-          {showOtherOptions && (
-            <div className="space-y-2 mt-2">
-              {groupedOptions.others.map(option => (
-                <ShippingOptionCard key={option.id} option={option} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+// Stock status determination
+const getStockStatus = (quantity: number): 'in_stock' | 'low_stock' | 'out_of_stock' => {
+  if (quantity === 0) return 'out_of_stock';
+  if (quantity <= 5) return 'low_stock';
+  return 'in_stock';
 };
 
-// Real inventory data hook
+// Stock status badge configuration
+const getStockBadge = (status: string) => {
+  switch (status) {
+    case 'in_stock':
+      return { variant: 'default' as const, text: 'In Stock', color: 'bg-green-500' };
+    case 'low_stock':
+      return { variant: 'secondary' as const, text: 'Low Stock', color: 'bg-yellow-500' };
+    case 'out_of_stock':
+      return { variant: 'destructive' as const, text: 'Out of Stock', color: 'bg-red-500' };
+    default:
+      return { variant: 'outline' as const, text: 'Unknown', color: 'bg-gray-500' };
+  }
+};
+
+// Fuzzy search configuration
+const fuseOptions = {
+  keys: [
+    { name: 'name', weight: 0.3 },
+    { name: 'sku', weight: 0.2 },
+    { name: 'description', weight: 0.2 },
+    { name: 'manufacturer_part_no', weight: 0.15 },
+    { name: 'compatibility', weight: 0.1 },
+    { name: 'brand', weight: 0.05 }
+  ],
+  threshold: 0.4,
+  includeScore: true,
+  includeMatches: true
+};
+
+// Enhanced hook to load real inventory data with categorization
 const useInventoryData = () => {
   const [parts, setParts] = useState<InventoryPart[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const supabase = getSupabaseClient();
-
-  const loadInventoryData = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      console.log('🔄 Loading real inventory data from database...');
-      
-      const { data, error: fetchError } = await supabase
-        .from('inventory')
-        .select('*')
-        .order('name');
-
-      if (fetchError) {
-        console.error('❌ Error loading inventory:', fetchError);
-        throw fetchError;
-      }
-
-      console.log(`✅ Loaded ${data?.length || 0} real inventory items`);
-      
-      // Map real inventory data to expected interface
-      const mappedParts: InventoryPart[] = (data || []).map(item => ({
-        id: item.id,
-        name: item.name || 'Unnamed Part',
-        description: item.description || '',
-        sku: item.sku || '',
-        quantity: item.quantity_on_hand || 0,
-        price: item.list_price || item.cost || 0,
-        cost: item.cost || 0,
-        category: item.category || 'Uncategorized',
-        supplier: item.supplier || '',
-        reorder_level: item.reorder_level || 5,
-        created_at: item.created_at || new Date().toISOString(),
-        updated_at: item.updated_at || new Date().toISOString(),
-        core_charge: item.core_charge || 0,
-        keystone_vcpn: item.keystone_vcpn || '',
-        keystone_synced: item.keystone_synced || false,
-        keystone_last_sync: item.keystone_last_sync || '',
-        warehouse: item.warehouse || item.location || 'Main',
-        location: item.location || '',
-        brand: item.brand || item.manufacturer || '',
-        weight: item.weight || 0,
-        dimensions: item.dimensions || '',
-        warranty: item.warranty || '',
-        list_price: item.list_price || item.cost || 0,
-        discount_percentage: item.discount_percentage || 0,
-        is_kit: item.is_kit || false,
-        kit_component_count: item.kit_component_count || 0,
-        quantity_on_hand: item.quantity_on_hand || 0
-      }));
-
-      setParts(mappedParts);
-      
-    } catch (err) {
-      console.error('❌ Failed to load inventory data:', err);
-      setError('Failed to load inventory data. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [supabase]);
 
   useEffect(() => {
-    loadInventoryData();
-  }, [loadInventoryData]);
+    const loadInventory = async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from('inventory')
+          .select('*')
+          .order('name');
 
-  return { parts, isLoading, error, refreshData: loadInventoryData };
+        if (error) throw error;
+
+        // Map database fields to expected interface with enhanced categorization
+        const mappedParts: InventoryPart[] = (data || []).map(item => {
+          const categoryInfo = inferCategory(item.name || '', item.description || '');
+          const stockStatus = getStockStatus(item.quantity_on_hand || 0);
+          
+          return {
+            id: item.id,
+            name: item.name || 'Unknown Part',
+            sku: item.sku || 'N/A',
+            category: categoryInfo.category,
+            price: item.list_price || 0,
+            cost: item.cost || 0,
+            quantity: item.quantity_on_hand || 0,
+            description: item.description || '',
+            brand: item.brand || 'Unknown',
+            manufacturer_part_no: item.manufacturer_part_no || '',
+            compatibility: item.compatibility || '',
+            region: item.region || 'All',
+            margin: item.list_price && item.cost ? 
+              ((item.list_price - item.cost) / item.list_price * 100) : 0,
+            location: item.location || 'Unknown',
+            status: 'active',
+            is_kit: item.is_kit || false,
+            kit_components: item.kit_components || [],
+            stock_status: stockStatus,
+            regional_availability: ['east', 'midwest', 'west'] // Default for now
+          };
+        });
+
+        setParts(mappedParts);
+      } catch (err) {
+        console.error('Error loading inventory:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load inventory');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInventory();
+  }, []);
+
+  return { parts, loading, error, refetch: () => window.location.reload() };
 };
 
-// Main Parts component
-export default function Parts() {
-  const { toast } = useToast();
-  
-  // Use real inventory data instead of mock data
-  const { parts: inventoryParts, isLoading: isLoadingParts, error: partsError, refreshData } = useInventoryData();
-  
-  // State management
-  const [currentTab, setCurrentTab] = useState('parts');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [priceRange, setPriceRange] = useState([0, 1000]);
-  const [sortBy, setSortBy] = useState('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(12);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+// Enhanced Part Card Component
+const EnhancedPartCard = ({ part, onAddToCart, onViewDetail }: {
+  part: InventoryPart;
+  onAddToCart: (part: InventoryPart) => void;
+  onViewDetail: (part: InventoryPart) => void;
+}) => {
+  const stockBadge = getStockBadge(part.stock_status || 'out_of_stock');
+  const categoryInfo = TRUCK_CATEGORIES[part.category as keyof typeof TRUCK_CATEGORIES];
+  const CategoryIcon = categoryInfo?.icon || Package;
 
-  // ✅ NEW: Ultra-simple cart state
-  const [cartItems, setCartItems] = useState<{id: string, name: string, price: number, quantity: number}[]>([]);
+  return (
+    <Card className="hover:shadow-lg transition-all duration-200 hover:scale-[1.02] group">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 space-y-2">
+            <div className="flex items-center gap-2">
+              <CategoryIcon className="h-4 w-4 text-muted-foreground" />
+              <Badge variant="outline" className="text-xs">
+                {categoryInfo?.name || part.category}
+              </Badge>
+            </div>
+            <CardTitle className="text-lg line-clamp-2 group-hover:text-primary transition-colors">
+              {part.name}
+            </CardTitle>
+            <CardDescription className="text-sm space-y-1">
+              <div className="font-mono text-xs">SKU: {part.sku}</div>
+              {part.brand && part.brand !== 'Unknown' && (
+                <div className="text-xs">Brand: {part.brand}</div>
+              )}
+            </CardDescription>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Badge {...stockBadge} className="text-xs">
+              {stockBadge.text}
+            </Badge>
+            {part.is_kit && (
+              <Badge variant="secondary" className="text-xs">
+                <Box className="h-3 w-3 mr-1" />
+                Kit
+              </Badge>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      
+      <CardContent className="space-y-4">
+        {/* Price and Margin Display */}
+        <div className="space-y-2">
+          <div className="flex items-baseline justify-between">
+            <div className="text-2xl font-bold text-green-600">
+              ${part.price.toFixed(2)}
+            </div>
+            <div className="text-right text-sm">
+              <div className="font-medium">{part.quantity} units</div>
+              <div className="text-xs text-muted-foreground">{part.location}</div>
+            </div>
+          </div>
+          
+          {part.cost && part.cost > 0 && (
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>Cost: ${part.cost.toFixed(2)}</span>
+              <span className="font-medium text-blue-600">
+                {part.margin?.toFixed(1)}% margin
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Regional Availability */}
+        {part.regional_availability && part.regional_availability.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {part.regional_availability.map(region => (
+              <Badge key={region} variant="outline" className="text-xs">
+                <MapPin className="h-3 w-3 mr-1" />
+                {region}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        {/* Description Preview */}
+        {part.description && (
+          <p className="text-sm text-muted-foreground line-clamp-2">
+            {part.description}
+          </p>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex gap-2 pt-2">
+          <Button 
+            onClick={() => onAddToCart(part)}
+            disabled={part.stock_status === 'out_of_stock'}
+            className="flex-1"
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add to Cart
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="px-3"
+            onClick={() => onViewDetail(part)}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="px-3"
+          >
+            <Heart className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default function Parts() {
+  // State management
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [showCartDialog, setShowCartDialog] = useState(false);
   const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  
+  // Enhanced search and filter state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedBrand, setSelectedBrand] = useState('all');
+  const [selectedStockStatus, setSelectedStockStatus] = useState('all');
+  const [selectedRegion, setSelectedRegion] = useState('all');
+  const [priceRange, setPriceRange] = useState([0, 1000]);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [sortBy, setSortBy] = useState('name');
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
+  
+  const { toast } = useToast();
+  const { parts, loading, error } = useInventoryData();
 
-  // Special orders state
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerSearchResult | null>(null);
-  const [specialOrderItems, setSpecialOrderItems] = useState<InventoryPart[]>([]);
-  const [orderNotes, setOrderNotes] = useState('');
-  const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
-    street: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    country: 'US'
-  });
-  const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
-  const [selectedShipping, setSelectedShipping] = useState('');
-  const [isGettingShippingQuotes, setIsGettingShippingQuotes] = useState(false);
+  // Initialize Fuse.js for fuzzy search
+  const fuse = useMemo(() => {
+    return new Fuse(parts, fuseOptions);
+  }, [parts]);
 
-  // ✅ NEW: Ultra-simple button handlers
+  // Event handlers
   const handleAddToCart = (part: InventoryPart) => {
     console.log('🛒 Add to cart clicked for:', part.name);
     
+    if (part.stock_status === 'out_of_stock') {
+      toast({
+        title: "Out of Stock",
+        description: "This item is currently out of stock.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setCartItems(prev => {
       const existing = prev.find(item => item.id === part.id);
       if (existing) {
-        const updated = prev.map(item => 
-          item.id === part.id 
+        return prev.map(item =>
+          item.id === part.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
-        toast({
-          title: "Cart Updated",
-          description: `Increased ${part.name} quantity to ${existing.quantity + 1}`
-        });
-        return updated;
       } else {
-        toast({
-          title: "Added to Cart",
-          description: `${part.name} has been added to your cart`
-        });
-        return [...prev, {
-          id: part.id,
-          name: part.name,
-          price: part.price,
-          quantity: 1
-        }];
+        return [...prev, { ...part, quantity: 1 }];
       }
+    });
+
+    toast({
+      title: "Added to Cart",
+      description: `${part.name} has been added to your cart.`,
     });
   };
 
@@ -591,692 +556,370 @@ export default function Parts() {
     setShowDetailDialog(true);
   };
 
-  const removeFromCart = (id: string) => {
-    setCartItems(prev => prev.filter(item => item.id !== id));
+  const removeFromCart = (partId: string) => {
+    setCartItems(prev => prev.filter(item => item.id !== partId));
+    toast({
+      title: "Removed from Cart",
+      description: "Item has been removed from your cart.",
+    });
   };
 
-  const updateCartQuantity = (id: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(id);
+  const updateCartQuantity = (partId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      removeFromCart(partId);
       return;
     }
-    setCartItems(prev => prev.map(item => 
-      item.id === id ? { ...item, quantity } : item
-    ));
+
+    setCartItems(prev =>
+      prev.map(item =>
+        item.id === partId
+          ? { ...item, quantity: newQuantity }
+          : item
+      )
+    );
   };
 
-  const cartTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  // Enhanced filtering and sorting with fuzzy search
+  const filteredAndSortedParts = useMemo(() => {
+    let filtered: InventoryPart[] = [];
 
-  // Update URL when tab changes
-  useEffect(() => {
-    const url = new URL(window.location);
-    url.searchParams.set('tab', currentTab);
-    window.history.replaceState({}, '', url);
-  }, [currentTab]);
+    // Apply fuzzy search if search term exists
+    if (searchTerm.trim()) {
+      const searchResults = fuse.search(searchTerm);
+      filtered = searchResults.map(result => result.item);
+    } else {
+      filtered = [...parts];
+    }
 
-  // Use real inventory data instead of mock data
-  const mockParts = inventoryParts; // Use real data
-
-  // Get unique categories
-  const categories = useMemo(() => {
-    const cats = Array.from(new Set(mockParts.map(part => part.category).filter(Boolean)));
-    return ['all', ...cats.sort()];
-  }, [mockParts]);
-
-  // Filter and sort parts
-  const filteredParts = useMemo(() => {
-    let filtered = mockParts.filter(part => {
-      // Only show items that have prices set (greater than 0)
+    // Apply additional filters
+    filtered = filtered.filter(part => {
+      // Only show items with prices
       const hasPrice = part.price && part.price > 0;
       
-      // Search filter
-      const searchMatch = !searchTerm || 
-        part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        part.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        part.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        part.brand?.toLowerCase().includes(searchTerm.toLowerCase());
-
-      // Category filter
       const categoryMatch = selectedCategory === 'all' || part.category === selectedCategory;
-
-      // Price filter
+      const brandMatch = selectedBrand === 'all' || part.brand === selectedBrand;
+      const stockMatch = selectedStockStatus === 'all' || part.stock_status === selectedStockStatus;
+      const regionMatch = selectedRegion === 'all' || 
+        (part.regional_availability && part.regional_availability.includes(selectedRegion));
       const priceMatch = part.price >= priceRange[0] && part.price <= priceRange[1];
+      const favoritesMatch = !showFavoritesOnly; // Simplified for now
 
-      // Favorites filter
-      const favoritesMatch = !showFavoritesOnly || favorites.has(part.id);
-
-      return hasPrice && searchMatch && categoryMatch && priceMatch && favoritesMatch;
+      return hasPrice && categoryMatch && brandMatch && stockMatch && regionMatch && priceMatch && favoritesMatch;
     });
 
-    // Sort parts
+    // Sort
     filtered.sort((a, b) => {
-      let aValue, bValue;
-      
       switch (sortBy) {
-        case 'name':
-          aValue = a.name;
-          bValue = b.name;
-          break;
         case 'price':
-          aValue = a.price;
-          bValue = b.price;
-          break;
-        case 'quantity':
-          aValue = a.quantity;
-          bValue = b.quantity;
-          break;
+          return a.price - b.price;
+        case 'price_desc':
+          return b.price - a.price;
+        case 'name':
+          return a.name.localeCompare(b.name);
         case 'category':
-          aValue = a.category || '';
-          bValue = b.category || '';
-          break;
-        case 'updated':
-          aValue = new Date(a.updated_at).getTime();
-          bValue = new Date(b.updated_at).getTime();
-          break;
+          return a.category.localeCompare(b.category);
+        case 'brand':
+          return (a.brand || '').localeCompare(b.brand || '');
+        case 'stock':
+          return b.quantity - a.quantity;
+        case 'margin':
+          return (b.margin || 0) - (a.margin || 0);
         default:
-          aValue = a.name;
-          bValue = b.name;
-      }
-      
-      if (typeof aValue === 'string') {
-        return sortOrder === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-      } else {
-        return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+          return 0;
       }
     });
 
     return filtered;
-  }, [mockParts, searchTerm, selectedCategory, priceRange, sortBy, sortOrder, favorites, showFavoritesOnly]);
+  }, [parts, fuse, searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, priceRange, showFavoritesOnly, sortBy]);
 
   // Pagination
-  const totalPages = Math.ceil(filteredParts.length / itemsPerPage);
-  const paginatedParts = filteredParts.slice(
+  const totalPages = Math.ceil(filteredAndSortedParts.length / itemsPerPage);
+  const paginatedParts = filteredAndSortedParts.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
-  // Reset page when filters change
+  // Get unique values for filters
+  const categories = useMemo(() => Object.keys(TRUCK_CATEGORIES), []);
+  const brands = useMemo(() => {
+    const brandSet = new Set(parts.map(part => part.brand).filter(brand => brand && brand !== 'Unknown'));
+    return Array.from(brandSet);
+  }, [parts]);
+  const regions = useMemo(() => ['east', 'midwest', 'west'], []);
+
+  // Cart totals
+  const cartTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCategory, priceRange, sortBy, sortOrder, showFavoritesOnly]);
+  }, [searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, priceRange, showFavoritesOnly]);
 
-  // Toggle favorite
-  const toggleFavorite = (partId: string) => {
-    setFavorites(prev => {
-      const newFavorites = new Set(prev);
-      if (newFavorites.has(partId)) {
-        newFavorites.delete(partId);
-      } else {
-        newFavorites.add(partId);
-      }
-      return newFavorites;
-    });
-  };
-
-  // Refresh data function now uses real data
-  const refreshDataHandler = async () => {
-    setIsLoading(true);
-    try {
-      await refreshData(); // Use real data refresh
-      toast({
-        title: "Data Refreshed",
-        description: "Parts inventory has been updated from database."
-      });
-    } catch (error) {
-      toast({
-        title: "Refresh Failed",
-        description: "Failed to refresh inventory data. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ✅ NEW: Ultra-simple Part card component
-  const PartCard = ({ part }: { part: InventoryPart }) => (
-    <Card className="group hover:shadow-lg transition-all duration-200 border-gray-200 hover:border-gray-300">
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex-1">
-            <h3 className="font-semibold text-lg mb-1 group-hover:text-blue-600 transition-colors">
-              {part.name}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-              {part.description}
-            </p>
-            <div className="flex items-center gap-2 mb-2">
-              <Badge variant="secondary" className="text-xs">
-                {part.category}
-              </Badge>
-              {part.is_kit && <KitBadge />}
-              {part.keystone_synced && (
-                <Badge variant="outline" className="text-xs text-green-600 border-green-200">
-                  Synced
-                </Badge>
-              )}
-              {part.quantity <= (part.reorder_level || 5) && (
-                <Badge variant="destructive" className="text-xs">
-                  Low Stock
-                </Badge>
-              )}
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => toggleFavorite(part.id)}
-            className="opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <Heart className={`h-4 w-4 ${favorites.has(part.id) ? 'fill-red-500 text-red-500' : ''}`} />
-          </Button>
-        </div>
-
-        <div className="space-y-2 mb-4">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">SKU:</span>
-            <span className="font-mono">{part.sku}</span>
-          </div>
-          {part.keystone_vcpn && (
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">VCPN:</span>
-              <span className="font-mono">{part.keystone_vcpn}</span>
-            </div>
-          )}
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Stock:</span>
-            <span className={`font-medium ${part.quantity <= (part.reorder_level || 5) ? 'text-red-600' : 'text-green-600'}`}>
-              {part.quantity} units
-            </span>
-          </div>
-          {part.location && (
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Location:</span>
-              <span>{part.location}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="mb-4">
-          <PriceDisplay part={part} />
-        </div>
-
-        <div className="flex gap-2">
-          {/* ✅ ULTRA-SIMPLE: Direct button with inline onClick */}
-          <Button 
-            onClick={() => handleAddToCart(part)}
-            disabled={part.quantity === 0}
-            className="flex-1"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add to Cart
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="px-3"
-            onClick={() => handleViewDetail(part)}
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  // ✅ NEW: Ultra-simple List view component
-  const PartListItem = ({ part }: { part: InventoryPart }) => (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-lg">{part.name}</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleFavorite(part.id)}
-                className="p-1"
-              >
-                <Heart className={`h-4 w-4 ${favorites.has(part.id) ? 'fill-red-500 text-red-500' : ''}`} />
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground mb-2">{part.description}</p>
-            <div className="flex gap-4 text-sm text-muted-foreground">
-              <span>SKU: {part.sku}</span>
-              {part.keystone_vcpn && <span>VCPN: {part.keystone_vcpn}</span>}
-              <span>Category: {part.category}</span>
-              {part.location && <span>Location: {part.location}</span>}
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <Badge variant="secondary" className="text-xs">
-                {part.category}
-              </Badge>
-              {part.is_kit && <KitBadge />}
-              {part.keystone_synced && (
-                <Badge variant="outline" className="text-xs text-green-600 border-green-200">
-                  Synced
-                </Badge>
-              )}
-              {part.quantity <= (part.reorder_level || 5) && (
-                <Badge variant="destructive" className="text-xs">
-                  Low Stock
-                </Badge>
-              )}
-            </div>
-          </div>
-          
-          <div className="text-right">
-            <PriceDisplay part={part} />
-          </div>
-          
-          <div className="text-center">
-            <div className={`text-lg font-bold ${part.quantity <= (part.reorder_level || 5) ? 'text-red-600' : 'text-green-600'}`}>
-              {part.quantity}
-            </div>
-            <div className="text-sm text-muted-foreground">units</div>
-          </div>
-          
-          <div className="flex gap-2">
-            {/* ✅ ULTRA-SIMPLE: Direct button with inline onClick */}
-            <Button 
-              onClick={() => handleAddToCart(part)}
-              disabled={part.quantity === 0}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add to Cart
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="px-3"
-              onClick={() => handleViewDetail(part)}
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  // Add item to special order
-  const addToSpecialOrder = (part: InventoryPart) => {
-    setSpecialOrderItems(prev => {
-      const existing = prev.find(item => item.id === part.id);
-      if (existing) {
-        return prev; // Don't add duplicates
-      }
-      return [...prev, part];
-    });
-    toast({
-      title: "Added to Special Order",
-      description: `${part.name} has been added to your special order.`
-    });
-  };
-
-  // Remove item from special order
-  const removeFromSpecialOrder = (partId: string) => {
-    setSpecialOrderItems(prev => prev.filter(item => item.id !== partId));
-  };
-
-  // Get shipping quotes
-  const getShippingQuotes = async () => {
-    if (!shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode) {
-      toast({
-        title: "Incomplete Address",
-        description: "Please fill in all shipping address fields.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (specialOrderItems.length === 0) {
-      toast({
-        title: "No Items",
-        description: "Please add items to your special order first.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsGettingShippingQuotes(true);
-    try {
-      // Calculate total weight and value
-      const totalWeight = specialOrderItems.reduce((sum, item) => sum + (item.weight || 1), 0);
-      const totalValue = specialOrderItems.reduce((sum, item) => sum + item.price, 0);
-
-      const quotes = await shippingQuoteService.getShippingQuotes({
-        origin: {
-          street: '123 Warehouse St',
-          city: 'Distribution City',
-          state: 'CA',
-          zipCode: '90210',
-          country: 'US'
-        },
-        destination: shippingAddress,
-        packages: [{
-          weight: Math.max(totalWeight, 1),
-          dimensions: { length: 12, width: 12, height: 6 },
-          value: totalValue
-        }]
-      });
-
-      setShippingOptions(quotes);
-      if (quotes.length > 0) {
-        setSelectedShipping(quotes[0].id); // Select first option by default
-      }
-
-      toast({
-        title: "Shipping Quotes Retrieved",
-        description: `Found ${quotes.length} shipping options.`
-      });
-    } catch (error) {
-      console.error('Shipping quote error:', error);
-      toast({
-        title: "Shipping Quote Error",
-        description: "Failed to get shipping quotes. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsGettingShippingQuotes(false);
-    }
-  };
-
-  // Submit special order
-  const submitSpecialOrder = async () => {
-    if (!selectedCustomer) {
-      toast({
-        title: "No Customer Selected",
-        description: "Please select a customer for this special order.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (specialOrderItems.length === 0) {
-      toast({
-        title: "No Items",
-        description: "Please add items to your special order.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!selectedShipping) {
-      toast({
-        title: "No Shipping Selected",
-        description: "Please select a shipping option.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      const selectedShippingOption = shippingOptions.find(opt => opt.id === selectedShipping);
-      const totalValue = specialOrderItems.reduce((sum, item) => sum + item.price, 0);
-      const shippingCost = selectedShippingOption?.cost || 0;
-
-      const orderData = {
-        customerId: selectedCustomer.id,
-        customerEmail: selectedCustomer.email,
-        items: specialOrderItems.map(item => ({
-          partId: item.id,
-          name: item.name,
-          sku: item.sku,
-          price: item.price,
-          quantity: 1 // Default quantity for special orders
-        })),
-        shippingAddress,
-        shippingOption: selectedShippingOption,
-        notes: orderNotes,
-        subtotal: totalValue,
-        shippingCost,
-        total: totalValue + shippingCost
-      };
-
-      await DropshipOrderService.createOrder(orderData);
-
-      toast({
-        title: "Special Order Submitted",
-        description: "Your special order has been submitted successfully."
-      });
-
-      // Reset form
-      setSpecialOrderItems([]);
-      setOrderNotes('');
-      setShippingOptions([]);
-      setSelectedShipping('');
-      setSelectedCustomer(null);
-      setShippingAddress({
-        street: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        country: 'US'
-      });
-
-    } catch (error) {
-      console.error('Special order submission error:', error);
-      toast({
-        title: "Submission Error",
-        description: "Failed to submit special order. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  // Show loading state for real data
-  if (isLoadingParts) {
+  if (loading) {
     return (
-      <div className="container mx-auto p-6">
-        <LoadingWrapper isLoading={true} message="Loading inventory from database..." />
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading parts catalog...</span>
       </div>
     );
   }
 
-  // Show error state for real data
-  if (partsError) {
+  if (error) {
     return (
-      <div className="container mx-auto p-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error Loading Inventory</AlertTitle>
-          <AlertDescription>
-            {partsError}
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={refreshDataHandler}
-              className="ml-2"
-            >
-              <RefreshCw className="h-4 w-4 mr-1" />
-              Retry
-            </Button>
-          </AlertDescription>
-        </Alert>
-      </div>
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error Loading Parts</AlertTitle>
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
     );
   }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Parts & Special Orders</h1>
-          <p className="text-muted-foreground">
-            Browse parts inventory and place special orders
-          </p>
+          <p className="text-muted-foreground">Browse truck customization parts and place special orders</p>
         </div>
-        <div className="flex items-center gap-4">
-          {/* ✅ ULTRA-SIMPLE: Cart button */}
-          <Button 
-            variant="outline" 
-            onClick={() => setShowCartDialog(true)}
-            className="relative"
-          >
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            Cart ({cartItemCount})
-            {cartItemCount > 0 && (
-              <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center">
-                {cartItemCount}
-              </Badge>
-            )}
-          </Button>
-          <Button variant="outline" onClick={refreshDataHandler} disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
+        
+        {/* Cart Widget */}
+        <Button 
+          variant="outline" 
+          onClick={() => setShowCartDialog(true)}
+          className="relative"
+        >
+          <ShoppingCart className="h-4 w-4 mr-2" />
+          Cart
+          {cartItemCount > 0 && (
+            <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+              {cartItemCount}
+            </Badge>
+          )}
+        </Button>
       </div>
 
-      {/* Show real data count */}
-      {inventoryParts.length > 0 && (
-        <Alert>
-          <Package className="h-4 w-4" />
-          <AlertTitle>Real Inventory Data Loaded</AlertTitle>
-          <AlertDescription>
-            Showing {inventoryParts.length} parts from your inventory database instead of mock data.
-          </AlertDescription>
-        </Alert>
-      )}
+      {/* Category Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {Object.entries(TRUCK_CATEGORIES).map(([key, category]) => {
+          const Icon = category.icon;
+          const categoryCount = parts.filter(part => part.category === key && part.price > 0).length;
+          
+          return (
+            <Card 
+              key={key} 
+              className={`cursor-pointer hover:shadow-lg transition-all duration-200 ${
+                selectedCategory === key ? 'ring-2 ring-primary' : ''
+              }`}
+              onClick={() => setSelectedCategory(selectedCategory === key ? 'all' : key)}
+            >
+              <CardContent className="p-4 text-center space-y-2">
+                <div className={`w-12 h-12 rounded-full ${category.color} flex items-center justify-center mx-auto`}>
+                  <Icon className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <div className="font-semibold">{category.name}</div>
+                  <div className="text-sm text-muted-foreground">{categoryCount} parts</div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
 
-      <Tabs value={currentTab} onValueChange={setCurrentTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="parts" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
+      {/* Tabs */}
+      <Tabs defaultValue="catalog" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="catalog">
+            <Package className="h-4 w-4 mr-2" />
             Parts Catalog
           </TabsTrigger>
-          <TabsTrigger value="special-orders" className="flex items-center gap-2">
-            <ShoppingCart className="h-4 w-4" />
+          <TabsTrigger value="special-orders">
+            <Plus className="h-4 w-4 mr-2" />
             Special Orders
           </TabsTrigger>
         </TabsList>
 
-        {/* Parts Catalog Tab */}
-        <TabsContent value="parts" className="space-y-6">
-          {/* Filters */}
+        <TabsContent value="catalog" className="space-y-6">
+          {/* Enhanced Search and Filters */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="h-5 w-5" />
-                Search & Filter
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Search & Filter Parts</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowFilters(!showFilters)}
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  {showFilters ? 'Hide Filters' : 'Show Filters'}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Search and basic filters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              {/* Search Bar */}
+              <div className="flex gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search parts..."
+                    placeholder="Fuzzy search: name, SKU, description, part number, compatibility..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
                   />
                 </div>
-                
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map(category => (
-                      <SelectItem key={category} value={category}>
-                        {category === 'all' ? 'All Categories' : category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-48">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="name">Name</SelectItem>
-                    <SelectItem value="price">Price</SelectItem>
-                    <SelectItem value="quantity">Stock</SelectItem>
+                    <SelectItem value="name">Name A-Z</SelectItem>
+                    <SelectItem value="price">Price Low-High</SelectItem>
+                    <SelectItem value="price_desc">Price High-Low</SelectItem>
                     <SelectItem value="category">Category</SelectItem>
-                    <SelectItem value="updated">Last Updated</SelectItem>
+                    <SelectItem value="brand">Brand</SelectItem>
+                    <SelectItem value="stock">Stock Level</SelectItem>
+                    <SelectItem value="margin">Margin %</SelectItem>
                   </SelectContent>
                 </Select>
-
                 <div className="flex gap-2">
                   <Button
-                    variant={sortOrder === 'asc' ? 'default' : 'outline'}
+                    variant={viewMode === 'grid' ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => setSortOrder('asc')}
-                    className="flex-1"
+                    onClick={() => setViewMode('grid')}
                   >
-                    <TrendingUp className="h-4 w-4" />
+                    <Grid className="h-4 w-4" />
                   </Button>
                   <Button
-                    variant={sortOrder === 'desc' ? 'default' : 'outline'}
+                    variant={viewMode === 'table' ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => setSortOrder('desc')}
-                    className="flex-1"
+                    onClick={() => setViewMode('table')}
                   >
-                    <TrendingDown className="h-4 w-4" />
+                    <List className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
 
-              {/* Advanced filters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
-                  <Slider
-                    value={priceRange}
-                    onValueChange={setPriceRange}
-                    max={1000}
-                    step={10}
-                    className="w-full"
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="favorites-only"
-                      checked={showFavoritesOnly}
-                      onCheckedChange={setShowFavoritesOnly}
+              {/* Collapsible Filters */}
+              <Collapsible open={showFilters} onOpenChange={setShowFilters}>
+                <CollapsibleContent className="space-y-4">
+                  {/* Filter Row */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {categories.map(category => (
+                          <SelectItem key={category} value={category}>
+                            {TRUCK_CATEGORIES[category as keyof typeof TRUCK_CATEGORIES]?.name || category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedBrand} onValueChange={setSelectedBrand}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Brand" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Brands</SelectItem>
+                        {brands.map(brand => (
+                          <SelectItem key={brand} value={brand}>
+                            {brand}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedStockStatus} onValueChange={setSelectedStockStatus}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Stock Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Stock</SelectItem>
+                        <SelectItem value="in_stock">In Stock</SelectItem>
+                        <SelectItem value="low_stock">Low Stock</SelectItem>
+                        <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedRegion} onValueChange={setSelectedRegion}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Region" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Regions</SelectItem>
+                        {regions.map(region => (
+                          <SelectItem key={region} value={region}>
+                            {region.charAt(0).toUpperCase() + region.slice(1)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="favorites"
+                        checked={showFavoritesOnly}
+                        onCheckedChange={setShowFavoritesOnly}
+                      />
+                      <Label htmlFor="favorites" className="text-sm">Favorites</Label>
+                    </div>
+                  </div>
+
+                  {/* Price Range */}
+                  <div className="space-y-2">
+                    <Label>Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
+                    <Slider
+                      value={priceRange}
+                      onValueChange={setPriceRange}
+                      max={1000}
+                      step={10}
+                      className="w-full"
                     />
-                    <Label htmlFor="favorites-only">Favorites only</Label>
                   </div>
-                  
-                  <div className="flex gap-2">
+
+                  {/* Clear Filters */}
+                  <div className="flex justify-end">
                     <Button
-                      variant={viewMode === 'grid' ? 'default' : 'outline'}
+                      variant="outline"
                       size="sm"
-                      onClick={() => setViewMode('grid')}
+                      onClick={() => {
+                        setSearchTerm('');
+                        setSelectedCategory('all');
+                        setSelectedBrand('all');
+                        setSelectedStockStatus('all');
+                        setSelectedRegion('all');
+                        setPriceRange([0, 1000]);
+                        setShowFavoritesOnly(false);
+                      }}
                     >
-                      <Grid className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant={viewMode === 'list' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setViewMode('list')}
-                    >
-                      <List className="h-4 w-4" />
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Clear All Filters
                     </Button>
                   </div>
-                </div>
-              </div>
+                </CollapsibleContent>
+              </Collapsible>
             </CardContent>
           </Card>
 
           {/* Results summary */}
-          <div className="flex justify-between items-center">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredParts.length} of {mockParts.length} parts
-              </p>
-              <p className="text-xs text-muted-foreground">
-                ✅ Only showing items with prices set (excluding items without pricing)
-              </p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">
+                Showing {paginatedParts.length} of {filteredAndSortedParts.length} parts
+              </Badge>
+              <Badge variant="outline" className="text-green-600">
+                ✅ Only showing items with prices set
+              </Badge>
+              {searchTerm && (
+                <Badge variant="outline" className="text-blue-600">
+                  🔍 Fuzzy search active
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">
@@ -1285,332 +928,154 @@ export default function Parts() {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => prev - 1)}
               >
                 Previous
               </Button>
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(prev => prev + 1)}
               >
                 Next
               </Button>
             </div>
           </div>
 
-          {/* Parts display */}
-          <LoadingWrapper isLoading={isLoading}>
-            {filteredParts.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <Package className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No parts found</h3>
-                  <p className="text-muted-foreground text-center mb-4">
-                    Try adjusting your search criteria or filters
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSearchTerm('');
-                      setSelectedCategory('all');
-                      setPriceRange([0, 1000]);
-                      setShowFavoritesOnly(false);
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className={viewMode === 'grid' 
-                ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                : "space-y-4"
-              }>
-                {paginatedParts.map(part => 
-                  viewMode === 'grid' 
-                    ? <PartCard key={part.id} part={part} />
-                    : <PartListItem key={part.id} part={part} />
-                )}
-              </div>
-            )}
-          </LoadingWrapper>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center gap-2">
-              <Button
-                variant="outline"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(1)}
-              >
-                First
-              </Button>
-              <Button
-                variant="outline"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => prev - 1)}
-              >
-                Previous
-              </Button>
-              <span className="flex items-center px-4">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(prev => prev + 1)}
-              >
-                Next
-              </Button>
-              <Button
-                variant="outline"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(totalPages)}
-              >
-                Last
-              </Button>
+          {/* Parts Display */}
+          {viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {paginatedParts.map(part => (
+                <EnhancedPartCard
+                  key={part.id}
+                  part={part}
+                  onAddToCart={handleAddToCart}
+                  onViewDetail={handleViewDetail}
+                />
+              ))}
             </div>
+          ) : (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Brand</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Cost</TableHead>
+                    <TableHead>Margin</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedParts.map(part => {
+                    const stockBadge = getStockBadge(part.stock_status || 'out_of_stock');
+                    return (
+                      <TableRow key={part.id}>
+                        <TableCell className="font-medium">{part.name}</TableCell>
+                        <TableCell className="font-mono text-sm">{part.sku}</TableCell>
+                        <TableCell>{part.brand}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {TRUCK_CATEGORIES[part.category as keyof typeof TRUCK_CATEGORIES]?.name || part.category}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-bold text-green-600">
+                          ${part.price.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {part.cost ? `$${part.cost.toFixed(2)}` : 'N/A'}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {part.margin ? `${part.margin.toFixed(1)}%` : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge {...stockBadge} className="text-xs">
+                            {part.quantity} units
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm"
+                              onClick={() => handleAddToCart(part)}
+                              disabled={part.stock_status === 'out_of_stock'}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleViewDetail(part)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+
+          {/* Empty State */}
+          {filteredAndSortedParts.length === 0 && (
+            <Card>
+              <CardContent className="text-center py-12">
+                <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No parts found</h3>
+                <p className="text-muted-foreground mb-4">
+                  Try adjusting your search terms or filters to find what you're looking for.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedCategory('all');
+                    setSelectedBrand('all');
+                    setSelectedStockStatus('all');
+                    setSelectedRegion('all');
+                    setPriceRange([0, 1000]);
+                    setShowFavoritesOnly(false);
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Clear All Filters
+                </Button>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 
-        {/* Special Orders Tab */}
-        <TabsContent value="special-orders" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Customer Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Customer Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CustomerSearchComponent
-                  onCustomerSelect={setSelectedCustomer}
-                  selectedCustomer={selectedCustomer}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Order Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ShoppingCart className="h-5 w-5" />
-                  Order Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {specialOrderItems.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">
-                    No items added to special order yet
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {specialOrderItems.map(item => (
-                      <div key={item.id} className="flex justify-between items-center p-2 border rounded">
-                        <div>
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-sm text-muted-foreground">${item.price.toFixed(2)}</div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeFromSpecialOrder(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Separator />
-                    <div className="flex justify-between font-semibold">
-                      <span>Subtotal:</span>
-                      <span>${specialOrderItems.reduce((sum, item) => sum + item.price, 0).toFixed(2)}</span>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Parts Selection for Special Orders */}
+        <TabsContent value="special-orders">
           <Card>
             <CardHeader>
-              <CardTitle>Add Parts to Special Order</CardTitle>
+              <CardTitle>Special Orders</CardTitle>
+              <CardDescription>
+                Request parts that are not in our current inventory
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {/* Search for parts */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search parts to add to special order..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-
-                {/* Parts grid for special orders */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-                  {filteredParts.slice(0, 12).map(part => (
-                    <Card key={part.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-3">
-                        <h4 className="font-medium mb-1">{part.name}</h4>
-                        <p className="text-sm text-muted-foreground mb-2">{part.description}</p>
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-green-600">${part.price.toFixed(2)}</span>
-                          <Button
-                            size="sm"
-                            onClick={() => addToSpecialOrder(part)}
-                            disabled={specialOrderItems.some(item => item.id === part.id)}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
+              <p className="text-muted-foreground">Special orders functionality coming soon...</p>
             </CardContent>
           </Card>
-
-          {/* Shipping Information */}
-          {specialOrderItems.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Truck className="h-5 w-5" />
-                  Shipping Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Shipping Address */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="street">Street Address</Label>
-                    <Input
-                      id="street"
-                      value={shippingAddress.street}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, street: e.target.value }))}
-                      placeholder="123 Main St"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="city">City</Label>
-                    <Input
-                      id="city"
-                      value={shippingAddress.city}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, city: e.target.value }))}
-                      placeholder="Anytown"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="state">State</Label>
-                    <Input
-                      id="state"
-                      value={shippingAddress.state}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, state: e.target.value }))}
-                      placeholder="CA"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="zipCode">ZIP Code</Label>
-                    <Input
-                      id="zipCode"
-                      value={shippingAddress.zipCode}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, zipCode: e.target.value }))}
-                      placeholder="12345"
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  onClick={getShippingQuotes}
-                  disabled={isGettingShippingQuotes}
-                  className="w-full"
-                >
-                  {isGettingShippingQuotes ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Getting Quotes...
-                    </>
-                  ) : (
-                    <>
-                      <Truck className="h-4 w-4 mr-2" />
-                      Get Shipping Quotes
-                    </>
-                  )}
-                </Button>
-
-                {/* Shipping Options */}
-                {shippingOptions.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="font-medium">Shipping Options</h4>
-                    <ShippingOptionsDisplay
-                      shippingOptions={shippingOptions}
-                      selectedShipping={selectedShipping}
-                      onShippingSelect={setSelectedShipping}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Order Notes */}
-          {specialOrderItems.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Order Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Textarea
-                  placeholder="Add any special instructions or notes for this order..."
-                  value={orderNotes}
-                  onChange={(e) => setOrderNotes(e.target.value)}
-                  rows={4}
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Submit Order */}
-          {specialOrderItems.length > 0 && selectedCustomer && (
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-semibold">Ready to Submit Order</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Order for {selectedCustomer.display_name} with {specialOrderItems.length} items
-                    </p>
-                  </div>
-                  <Button onClick={submitSpecialOrder} size="lg">
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Submit Special Order
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
       </Tabs>
 
-      {/* ✅ ULTRA-SIMPLE: Cart Dialog */}
+      {/* Cart Dialog */}
       <Dialog open={showCartDialog} onOpenChange={setShowCartDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Shopping Cart</DialogTitle>
+            <DialogTitle>Shopping Cart ({cartItemCount} items)</DialogTitle>
             <DialogDescription>
-              {cartItemCount} items - ${cartTotal.toFixed(2)} total
+              Total: ${cartTotal.toFixed(2)}
             </DialogDescription>
           </DialogHeader>
           
@@ -1680,51 +1145,113 @@ export default function Parts() {
         </DialogContent>
       </Dialog>
 
-      {/* ✅ ULTRA-SIMPLE: Detail Dialog */}
+      {/* Enhanced Detail Dialog */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{selectedPart?.name}</DialogTitle>
-            <DialogDescription>Part Details</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedPart?.name}
+              {selectedPart?.is_kit && (
+                <Badge variant="secondary">
+                  <Box className="h-3 w-3 mr-1" />
+                  Kit
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>Part Details & Specifications</DialogDescription>
           </DialogHeader>
           
           {selectedPart && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <Label>SKU</Label>
                   <p className="font-mono">{selectedPart.sku}</p>
                 </div>
                 <div>
                   <Label>Category</Label>
-                  <p>{selectedPart.category}</p>
+                  <div className="flex items-center gap-2">
+                    {TRUCK_CATEGORIES[selectedPart.category as keyof typeof TRUCK_CATEGORIES] && (
+                      <div className={`w-4 h-4 rounded ${TRUCK_CATEGORIES[selectedPart.category as keyof typeof TRUCK_CATEGORIES].color}`} />
+                    )}
+                    <span>{TRUCK_CATEGORIES[selectedPart.category as keyof typeof TRUCK_CATEGORIES]?.name || selectedPart.category}</span>
+                  </div>
+                </div>
+                <div>
+                  <Label>Brand</Label>
+                  <p>{selectedPart.brand}</p>
                 </div>
                 <div>
                   <Label>Price</Label>
                   <p className="text-2xl font-bold text-green-600">${selectedPart.price.toFixed(2)}</p>
                 </div>
                 <div>
-                  <Label>Stock</Label>
-                  <p className={selectedPart.quantity > 0 ? 'text-green-600' : 'text-red-600'}>
+                  <Label>Stock Status</Label>
+                  <Badge {...getStockBadge(selectedPart.stock_status || 'out_of_stock')}>
                     {selectedPart.quantity} units
-                  </p>
+                  </Badge>
+                </div>
+                <div>
+                  <Label>Location</Label>
+                  <p>{selectedPart.location}</p>
                 </div>
               </div>
+
+              {selectedPart.cost && (
+                <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
+                  <div>
+                    <Label>Cost</Label>
+                    <p className="font-semibold">${selectedPart.cost.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <Label>Margin</Label>
+                    <p className="font-semibold text-blue-600">{selectedPart.margin?.toFixed(1)}%</p>
+                  </div>
+                </div>
+              )}
+
+              {selectedPart.regional_availability && selectedPart.regional_availability.length > 0 && (
+                <div>
+                  <Label>Regional Availability</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {selectedPart.regional_availability.map(region => (
+                      <Badge key={region} variant="outline">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {region.charAt(0).toUpperCase() + region.slice(1)}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               {selectedPart.description && (
                 <div>
                   <Label>Description</Label>
-                  <p>{selectedPart.description}</p>
+                  <p className="mt-2">{selectedPart.description}</p>
+                </div>
+              )}
+
+              {selectedPart.manufacturer_part_no && (
+                <div>
+                  <Label>Manufacturer Part Number</Label>
+                  <p className="font-mono">{selectedPart.manufacturer_part_no}</p>
+                </div>
+              )}
+
+              {selectedPart.compatibility && (
+                <div>
+                  <Label>Compatibility</Label>
+                  <p>{selectedPart.compatibility}</p>
                 </div>
               )}
               
-              <div className="flex gap-2">
+              <div className="flex gap-2 pt-4">
                 <Button 
                   onClick={() => {
                     handleAddToCart(selectedPart);
                     setShowDetailDialog(false);
                   }}
-                  disabled={selectedPart.quantity === 0}
+                  disabled={selectedPart.stock_status === 'out_of_stock'}
                   className="flex-1"
                 >
                   <Plus className="h-4 w-4 mr-2" />
