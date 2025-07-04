@@ -355,14 +355,15 @@ const useCart = () => {
     description: currentQuantity > 0 
       ? `${part.name} quantity increased to ${newQuantity}.`
       : `${part.name} has been added to your cart.`,
-    variant: "default",
+    variant: "default"
   });
 }, [cart, toast]);
+
 
     if (newQuantity > maxQuantity) {
       toast({
         title: "Stock Limit",
-        description: `Only ${maxQuantity} available in stock`,
+        description: `Only ${maxQuantity} availouable in stock`,
         variant: "destructive",
       });
       return;
