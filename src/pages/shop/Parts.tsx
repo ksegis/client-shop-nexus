@@ -91,6 +91,29 @@ interface VehicleCategory {
   models: string[];
 }
 
+// ===== UTILITY FUNCTION FOR SAFE STRING CONVERSION =====
+const safeString = (value: any): string => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return value.toString();
+  }
+  if (typeof value === 'boolean') {
+    return value.toString();
+  }
+  if (Array.isArray(value)) {
+    return value.join(' ');
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
+
 // ===== CATEGORIZATION LOGIC FROM JSON =====
 const VEHICLE_KEYWORDS = [
   "FORD", "F150", "F250", "F350", "DODGE", "RAM", "CHEVY", "CHEVROLET", "SILVERADO",
@@ -193,9 +216,10 @@ const VEHICLE_CATEGORIES: VehicleCategory[] = [
 ];
 
 const categorizeVehicle = (longDescription: string): string => {
-  if (!longDescription) return "Universal/Other";
+  const desc = safeString(longDescription);
+  if (!desc) return "Universal/Other";
   
-  const upperDesc = longDescription.toUpperCase();
+  const upperDesc = desc.toUpperCase();
   for (const keyword of VEHICLE_KEYWORDS) {
     if (upperDesc.includes(keyword)) {
       return keyword;
@@ -205,9 +229,10 @@ const categorizeVehicle = (longDescription: string): string => {
 };
 
 const categorizePart = (longDescription: string): string => {
-  if (!longDescription) return "Uncategorized";
+  const desc = safeString(longDescription);
+  if (!desc) return "Uncategorized";
   
-  const upperDesc = longDescription.toUpperCase();
+  const upperDesc = desc.toUpperCase();
   const tokens = upperDesc.split(/\s+/);
   
   for (const [categoryName, keywords] of Object.entries(PART_CATEGORY_MAP)) {
@@ -221,14 +246,15 @@ const categorizePart = (longDescription: string): string => {
 };
 
 const extractModelYear = (longDescription: string): string => {
-  if (!longDescription) return "";
+  const desc = safeString(longDescription);
+  if (!desc) return "";
   
   // Look for realistic vehicle model years (1990-2024)
   // Vehicle model years typically don't exceed current calendar year
   const currentYear = new Date().getFullYear();
   const maxYear = Math.min(currentYear, 2024); // Cap at 2024 for vehicle parts
   
-  const yearMatch = longDescription.match(/\b(19[9]\d|20[0-2]\d)\b/);
+  const yearMatch = desc.match(/\b(19[9]\d|20[0-2]\d)\b/);
   if (yearMatch) {
     const year = parseInt(yearMatch[1]);
     // Only return years that make sense for vehicle parts (1990-2024)
@@ -240,9 +266,10 @@ const extractModelYear = (longDescription: string): string => {
 };
 
 const extractVehicleModel = (longDescription: string): string => {
-  if (!longDescription) return "";
+  const desc = safeString(longDescription);
+  if (!desc) return "";
   
-  const upperDesc = longDescription.toUpperCase();
+  const upperDesc = desc.toUpperCase();
   for (const model of MODEL_KEYWORDS) {
     if (upperDesc.includes(model)) {
       return model;
@@ -252,11 +279,12 @@ const extractVehicleModel = (longDescription: string): string => {
 };
 
 const getVehicleCategoryId = (vehicleCategory: string): string => {
-  const upperVehicle = vehicleCategory.toUpperCase();
+  const category = safeString(vehicleCategory);
+  const upperVehicle = category.toUpperCase();
   
-  for (const category of VEHICLE_CATEGORIES) {
-    if (category.keywords.some(keyword => upperVehicle.includes(keyword))) {
-      return category.id;
+  for (const cat of VEHICLE_CATEGORIES) {
+    if (cat.keywords.some(keyword => upperVehicle.includes(keyword))) {
+      return cat.id;
     }
   }
   return 'universal';
@@ -264,12 +292,14 @@ const getVehicleCategoryId = (vehicleCategory: string): string => {
 
 // ===== UTILITY FUNCTIONS =====
 const checkIfKit = (partId: string): boolean => {
-  return partId?.includes('kit') || partId?.includes('set') || false;
+  const id = safeString(partId);
+  return id.toLowerCase().includes('kit') || id.toLowerCase().includes('set') || false;
 };
 
 const getStockStatus = (quantity: number): 'In Stock' | 'Low Stock' | 'Out of Stock' => {
-  if (quantity === 0) return 'Out of Stock';
-  if (quantity <= 5) return 'Low Stock';
+  const qty = Number(quantity) || 0;
+  if (qty === 0) return 'Out of Stock';
+  if (qty <= 5) return 'Low Stock';
   return 'In Stock';
 };
 
@@ -279,8 +309,10 @@ const getRegionalAvailability = (): string[] => {
 };
 
 const calculateMargin = (cost: number, listPrice: number): number => {
-  if (!cost || !listPrice || listPrice === 0) return 0;
-  return ((listPrice - cost) / listPrice) * 100;
+  const costNum = Number(cost) || 0;
+  const priceNum = Number(listPrice) || 0;
+  if (!costNum || !priceNum || priceNum === 0) return 0;
+  return ((priceNum - costNum) / priceNum) * 100;
 };
 
 // ===== SIMPLE CART HOOK =====
@@ -323,13 +355,13 @@ const useSimpleCart = () => {
       }
 
       const cartItem: CartItem = {
-        id: part.keystone_vcpn || part.sku || part.id,
-        name: part.name,
-        price: part.list_price,
+        id: safeString(part.keystone_vcpn || part.sku || part.id),
+        name: safeString(part.name),
+        price: Number(part.list_price) || 0,
         quantity: 1,
-        maxQuantity: part.quantity_on_hand,
-        sku: part.sku,
-        vcpn: part.keystone_vcpn
+        maxQuantity: Number(part.quantity_on_hand) || 0,
+        sku: safeString(part.sku),
+        vcpn: safeString(part.keystone_vcpn)
       };
 
       setCartItems(prev => {
@@ -511,23 +543,23 @@ const useProgressiveInventoryData = () => {
 
   const processPartsBatch = (batch: any[]): InventoryPart[] => {
     return batch.map(item => {
-      const longDesc = item.LongDescription || item.description || '';
+      const longDesc = safeString(item.LongDescription || item.description || '');
       
       return {
-        id: item.id,
-        name: item.name || 'Unnamed Part',
-        sku: item.sku,
-        keystone_vcpn: item.keystone_vcpn,
+        id: safeString(item.id),
+        name: safeString(item.name || 'Unnamed Part'),
+        sku: safeString(item.sku),
+        keystone_vcpn: safeString(item.keystone_vcpn),
         cost: Number(item.cost) || 0,
         list_price: Number(item.list_price) || 0,
         quantity_on_hand: Number(item.quantity_on_hand) || 0,
-        location: item.location,
-        description: item.description,
+        location: safeString(item.location),
+        description: safeString(item.description),
         LongDescription: longDesc,
-        manufacturer_part_no: item.manufacturer_part_no,
-        compatibility: item.compatibility,
-        brand: item.brand || 'Unknown',
-        category: item.category,
+        manufacturer_part_no: safeString(item.manufacturer_part_no),
+        compatibility: safeString(item.compatibility),
+        brand: safeString(item.brand || 'Unknown'),
+        category: safeString(item.category),
         isKit: checkIfKit(item.id),
         margin: calculateMargin(Number(item.cost) || 0, Number(item.list_price) || 0),
         stockStatus: getStockStatus(Number(item.quantity_on_hand) || 0),
@@ -601,14 +633,15 @@ const useProgressiveInventoryData = () => {
   };
 };
 
-// ===== FIXED FUZZY SEARCH =====
+// ===== COMPLETELY FIXED FUZZY SEARCH WITH SAFE STRING HANDLING =====
 const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[] => {
-  if (!searchTerm || !searchTerm.trim()) {
+  const term = safeString(searchTerm);
+  if (!term || !term.trim()) {
     console.log('🔍 Empty search term, returning all parts');
     return parts;
   }
 
-  const searchWords = searchTerm.toLowerCase().split(' ').filter(word => word.length > 0);
+  const searchWords = term.toLowerCase().split(' ').filter(word => word.length > 0);
   console.log('🔍 Search words:', searchWords);
   
   if (searchWords.length === 0) {
@@ -618,19 +651,23 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
   
   const scorePart = (part: InventoryPart): number => {
     let score = 0;
+    
+    // All fields are now safely converted to strings
     const fields = {
-      name: { value: part.name?.toLowerCase() || '', weight: 30 },
-      sku: { value: part.sku?.toLowerCase() || '', weight: 20 },
-      description: { value: part.description?.toLowerCase() || '', weight: 20 },
-      LongDescription: { value: part.LongDescription?.toLowerCase() || '', weight: 25 },
-      manufacturer_part_no: { value: part.manufacturer_part_no?.toLowerCase() || '', weight: 15 },
-      compatibility: { value: part.compatibility?.toLowerCase() || '', weight: 10 },
-      brand: { value: part.brand?.toLowerCase() || '', weight: 5 },
-      vehicleCategory: { value: part.vehicleCategory?.toLowerCase() || '', weight: 15 },
-      partCategory: { value: part.partCategory?.toLowerCase() || '', weight: 10 },
-      modelYear: { value: part.modelYear?.toLowerCase() || '', weight: 12 },
-      vehicleModel: { value: part.vehicleModel?.toLowerCase() || '', weight: 18 },
-      keystone_vcpn: { value: part.keystone_vcpn?.toLowerCase() || '', weight: 20 }
+      name: { value: safeString(part.name).toLowerCase(), weight: 30 },
+      sku: { value: safeString(part.sku).toLowerCase(), weight: 20 },
+      description: { value: safeString(part.description).toLowerCase(), weight: 20 },
+      LongDescription: { value: safeString(part.LongDescription).toLowerCase(), weight: 25 },
+      manufacturer_part_no: { value: safeString(part.manufacturer_part_no).toLowerCase(), weight: 15 },
+      compatibility: { value: safeString(part.compatibility).toLowerCase(), weight: 10 },
+      brand: { value: safeString(part.brand).toLowerCase(), weight: 5 },
+      vehicleCategory: { value: safeString(part.vehicleCategory).toLowerCase(), weight: 15 },
+      partCategory: { value: safeString(part.partCategory).toLowerCase(), weight: 10 },
+      modelYear: { value: safeString(part.modelYear).toLowerCase(), weight: 12 },
+      vehicleModel: { value: safeString(part.vehicleModel).toLowerCase(), weight: 18 },
+      keystone_vcpn: { value: safeString(part.keystone_vcpn).toLowerCase(), weight: 20 },
+      category: { value: safeString(part.category).toLowerCase(), weight: 8 },
+      location: { value: safeString(part.location).toLowerCase(), weight: 5 }
     };
 
     searchWords.forEach(word => {
@@ -648,15 +685,20 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
     return score;
   };
 
-  const results = parts
-    .map(part => ({ part, score: scorePart(part) }))
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score)
-    .map(({ part }) => part);
+  try {
+    const results = parts
+      .map(part => ({ part, score: scorePart(part) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(({ part }) => part);
 
-  console.log(`🔍 Search for "${searchTerm}" returned ${results.length} results from ${parts.length} total parts`);
-  
-  return results;
+    console.log(`🔍 Search for "${term}" returned ${results.length} results from ${parts.length} total parts`);
+    
+    return results;
+  } catch (error) {
+    console.error('❌ Error in fuzzy search:', error);
+    return parts; // Return all parts if search fails
+  }
 };
 
 // ===== MAIN COMPONENT =====
@@ -714,18 +756,18 @@ const Parts: React.FC = () => {
 
   // ===== MEMOIZED VALUES =====
   const availableBrands = useMemo(() => {
-    const brands = [...new Set(parts.map(part => part.brand).filter(Boolean))];
+    const brands = [...new Set(parts.map(part => safeString(part.brand)).filter(Boolean))];
     return brands.sort();
   }, [parts]);
 
   const availablePartCategories = useMemo(() => {
-    const categories = [...new Set(parts.map(part => part.partCategory).filter(Boolean))];
+    const categories = [...new Set(parts.map(part => safeString(part.partCategory)).filter(Boolean))];
     return categories.sort();
   }, [parts]);
 
   // Realistic model years only (1990-2024)
   const availableModelYears = useMemo(() => {
-    const years = [...new Set(parts.map(part => part.modelYear).filter(year => {
+    const years = [...new Set(parts.map(part => safeString(part.modelYear)).filter(year => {
       if (!year) return false;
       const yearNum = parseInt(year);
       // Only include realistic vehicle model years
@@ -737,7 +779,7 @@ const Parts: React.FC = () => {
   // Brand-specific vehicle models
   const availableVehicleModels = useMemo(() => {
     if (selectedVehicleCategory === 'all') {
-      const models = [...new Set(parts.map(part => part.vehicleModel).filter(Boolean))];
+      const models = [...new Set(parts.map(part => safeString(part.vehicleModel)).filter(Boolean))];
       return models.sort();
     }
     
@@ -746,11 +788,11 @@ const Parts: React.FC = () => {
     if (selectedCategory) {
       // Filter parts by selected vehicle category and extract models
       const categoryParts = parts.filter(part => {
-        const vehicleCatId = getVehicleCategoryId(part.vehicleCategory || '');
+        const vehicleCatId = getVehicleCategoryId(safeString(part.vehicleCategory));
         return vehicleCatId === selectedVehicleCategory;
       });
       
-      const models = [...new Set(categoryParts.map(part => part.vehicleModel).filter(Boolean))];
+      const models = [...new Set(categoryParts.map(part => safeString(part.vehicleModel)).filter(Boolean))];
       return models.sort();
     }
     
@@ -762,14 +804,14 @@ const Parts: React.FC = () => {
     
     VEHICLE_CATEGORIES.forEach(cat => {
       stats[cat.id] = parts.filter(part => {
-        const vehicleCatId = getVehicleCategoryId(part.vehicleCategory || '');
+        const vehicleCatId = getVehicleCategoryId(safeString(part.vehicleCategory));
         return vehicleCatId === cat.id;
       }).length;
     });
     
     // Universal/Other category
     stats.universal = parts.filter(part => {
-      const vehicleCatId = getVehicleCategoryId(part.vehicleCategory || '');
+      const vehicleCatId = getVehicleCategoryId(safeString(part.vehicleCategory));
       return vehicleCatId === 'universal';
     }).length;
     
@@ -788,8 +830,13 @@ const Parts: React.FC = () => {
     // Apply search FIRST - this is the critical fix
     if (searchTerm && searchTerm.trim()) {
       console.log('🔍 Applying search...');
-      result = fuzzySearch(searchTerm.trim(), result);
-      console.log('🔍 After search:', result.length, 'parts');
+      try {
+        result = fuzzySearch(searchTerm.trim(), result);
+        console.log('🔍 After search:', result.length, 'parts');
+      } catch (error) {
+        console.error('❌ Search error:', error);
+        // If search fails, continue with all parts
+      }
     }
 
     // Apply vehicle category filter
@@ -797,70 +844,74 @@ const Parts: React.FC = () => {
       console.log('🔍 Applying vehicle category filter...');
       if (selectedVehicleCategory === 'universal') {
         result = result.filter(part => {
-          const vehicleCatId = getVehicleCategoryId(part.vehicleCategory || '');
+          const vehicleCatId = getVehicleCategoryId(safeString(part.vehicleCategory));
           return vehicleCatId === 'universal';
         });
       } else {
         result = result.filter(part => {
-          const vehicleCatId = getVehicleCategoryId(part.vehicleCategory || '');
+          const vehicleCatId = getVehicleCategoryId(safeString(part.vehicleCategory));
           return vehicleCatId === selectedVehicleCategory;
         });
       }
       console.log('🔍 After vehicle category filter:', result.length, 'parts');
     }
 
-    // Apply other filters
+    // Apply other filters with safe string handling
     if (selectedPartCategory !== 'all') {
-      result = result.filter(part => part.partCategory === selectedPartCategory);
+      result = result.filter(part => safeString(part.partCategory) === selectedPartCategory);
       console.log('🔍 After part category filter:', result.length, 'parts');
     }
 
     if (selectedBrand !== 'all') {
-      result = result.filter(part => part.brand === selectedBrand);
+      result = result.filter(part => safeString(part.brand) === selectedBrand);
       console.log('🔍 After brand filter:', result.length, 'parts');
     }
 
     if (selectedStockStatus !== 'all') {
-      result = result.filter(part => part.stockStatus === selectedStockStatus);
+      result = result.filter(part => safeString(part.stockStatus) === selectedStockStatus);
       console.log('🔍 After stock status filter:', result.length, 'parts');
     }
 
     if (selectedRegion !== 'all') {
-      result = result.filter(part => part.regionalAvailability?.includes(selectedRegion));
+      result = result.filter(part => {
+        const availability = part.regionalAvailability || [];
+        return availability.includes(selectedRegion);
+      });
       console.log('🔍 After region filter:', result.length, 'parts');
     }
 
     if (selectedModelYear !== 'all') {
-      result = result.filter(part => part.modelYear === selectedModelYear);
+      result = result.filter(part => safeString(part.modelYear) === selectedModelYear);
       console.log('🔍 After model year filter:', result.length, 'parts');
     }
 
     if (selectedVehicleModel !== 'all') {
-      result = result.filter(part => part.vehicleModel === selectedVehicleModel);
+      result = result.filter(part => safeString(part.vehicleModel) === selectedVehicleModel);
       console.log('🔍 After vehicle model filter:', result.length, 'parts');
     }
 
     // Apply price range
-    result = result.filter(part => 
-      part.list_price >= priceRange[0] && part.list_price <= priceRange[1]
-    );
+    result = result.filter(part => {
+      const price = Number(part.list_price) || 0;
+      return price >= priceRange[0] && price <= priceRange[1];
+    });
     console.log('🔍 After price range filter:', result.length, 'parts');
 
-    // Apply sorting
+    // Apply sorting with safe string handling
     result.sort((a, b) => {
       let comparison = 0;
       switch (sortBy) {
         case 'name':
-          comparison = a.name.localeCompare(b.name);
+          comparison = safeString(a.name).localeCompare(safeString(b.name));
           break;
         case 'price':
-          comparison = a.list_price - b.list_price;
+          comparison = (Number(a.list_price) || 0) - (Number(b.list_price) || 0);
           break;
         case 'category':
-          comparison = (a.partCategory || '').localeCompare(b.partCategory || '');
+          comparison = safeString(a.partCategory).localeCompare(safeString(b.partCategory));
           break;
         case 'stock':
-          comparison = a.quantity_on_hand - b.quantity_on_hand;
+          comparison = (Number(a.quantity_on_hand) || 0) - (Number(b.quantity_on_hand) || 0);
           break;
       }
       return sortOrder === 'asc' ? comparison : -comparison;
@@ -872,14 +923,20 @@ const Parts: React.FC = () => {
 
   // ===== GLOBAL SEARCH FOR CATEGORY VIEW =====
   const globalSearchResults = useMemo(() => {
-    if (!globalSearchTerm || !globalSearchTerm.trim()) {
+    const term = safeString(globalSearchTerm);
+    if (!term || !term.trim()) {
       return [];
     }
     
-    console.log('🌍 Global search for:', globalSearchTerm);
-    const results = fuzzySearch(globalSearchTerm.trim(), parts);
-    console.log('🌍 Global search results:', results.length);
-    return results;
+    console.log('🌍 Global search for:', term);
+    try {
+      const results = fuzzySearch(term.trim(), parts);
+      console.log('🌍 Global search results:', results.length);
+      return results;
+    } catch (error) {
+      console.error('❌ Global search error:', error);
+      return [];
+    }
   }, [globalSearchTerm, parts]);
 
   // ===== PAGINATION =====
@@ -926,12 +983,13 @@ const Parts: React.FC = () => {
 
   // ===== GLOBAL SEARCH FUNCTIONS =====
   const handleGlobalSearch = useCallback((searchValue: string) => {
-    console.log('🌍 Global search triggered:', searchValue);
-    setGlobalSearchTerm(searchValue);
+    const value = safeString(searchValue);
+    console.log('🌍 Global search triggered:', value);
+    setGlobalSearchTerm(value);
     
-    if (searchValue.trim()) {
+    if (value.trim()) {
       // Switch to parts view and set search term
-      setSearchTerm(searchValue);
+      setSearchTerm(value);
       setShowCategoryView(false);
       setCurrentPage(1);
     }
@@ -1041,7 +1099,7 @@ const Parts: React.FC = () => {
           <Input
             placeholder="Search all parts by name, SKU, description, vehicle, model, year..."
             value={globalSearchTerm}
-            onChange={(e) => setGlobalSearchTerm(e.target.value)}
+            onChange={(e) => setGlobalSearchTerm(safeString(e.target.value))}
             className="pl-10 pr-4 py-3 text-lg"
           />
           {globalSearchTerm && (
@@ -1082,14 +1140,14 @@ const Parts: React.FC = () => {
                     onClick={() => handleGlobalSearch(globalSearchTerm)}
                   >
                     <div>
-                      <h4 className="font-medium text-sm">{part.name}</h4>
+                      <h4 className="font-medium text-sm">{safeString(part.name)}</h4>
                       <p className="text-xs text-muted-foreground">
-                        {part.sku && `SKU: ${part.sku} • `}
-                        {part.brand} • ${part.list_price.toFixed(2)}
+                        {part.sku && `SKU: ${safeString(part.sku)} • `}
+                        {safeString(part.brand)} • ${(Number(part.list_price) || 0).toFixed(2)}
                       </p>
                     </div>
                     <Badge variant="outline" className="text-xs">
-                      {part.vehicleCategory}
+                      {safeString(part.vehicleCategory)}
                     </Badge>
                   </div>
                 ))}
@@ -1349,36 +1407,36 @@ const Parts: React.FC = () => {
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h3 className="font-semibold text-sm leading-tight mb-1">{part.name}</h3>
+              <h3 className="font-semibold text-sm leading-tight mb-1">{safeString(part.name)}</h3>
               <div className="flex flex-wrap gap-1 mb-2">
                 {part.sku && (
                   <Badge variant="outline" className="text-xs">
-                    SKU: {part.sku}
+                    SKU: {safeString(part.sku)}
                   </Badge>
                 )}
                 {part.keystone_vcpn && (
                   <Badge variant="outline" className="text-xs">
-                    VCPN: {part.keystone_vcpn}
+                    VCPN: {safeString(part.keystone_vcpn)}
                   </Badge>
                 )}
                 {part.vehicleCategory && part.vehicleCategory !== 'Universal/Other' && (
                   <Badge variant="secondary" className="text-xs">
-                    {part.vehicleCategory}
+                    {safeString(part.vehicleCategory)}
                   </Badge>
                 )}
                 {part.partCategory && part.partCategory !== 'Uncategorized' && (
                   <Badge variant="outline" className="text-xs">
-                    {part.partCategory}
+                    {safeString(part.partCategory)}
                   </Badge>
                 )}
                 {part.modelYear && (
                   <Badge variant="outline" className="text-xs">
-                    {part.modelYear}
+                    {safeString(part.modelYear)}
                   </Badge>
                 )}
                 {part.vehicleModel && (
                   <Badge variant="secondary" className="text-xs">
-                    {part.vehicleModel}
+                    {safeString(part.vehicleModel)}
                   </Badge>
                 )}
               </div>
@@ -1395,39 +1453,39 @@ const Parts: React.FC = () => {
           <div className="space-y-2 mb-4">
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Brand:</span>
-              <span className="text-sm font-medium">{part.brand}</span>
+              <span className="text-sm font-medium">{safeString(part.brand)}</span>
             </div>
             
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Price:</span>
               <span className="text-lg font-bold text-green-600">
-                ${part.list_price.toFixed(2)}
+                ${(Number(part.list_price) || 0).toFixed(2)}
               </span>
             </div>
             
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Cost:</span>
-              <span className="text-sm">${part.cost.toFixed(2)}</span>
+              <span className="text-sm">${(Number(part.cost) || 0).toFixed(2)}</span>
             </div>
             
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Margin:</span>
               <span className="text-sm font-medium text-blue-600">
-                {part.margin?.toFixed(1)}%
+                {(Number(part.margin) || 0).toFixed(1)}%
               </span>
             </div>
             
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Stock:</span>
-              <Badge className={getStockBadgeColor(part.stockStatus || 'Out of Stock')}>
-                {part.stockStatus} ({part.quantity_on_hand})
+              <Badge className={getStockBadgeColor(safeString(part.stockStatus))}>
+                {safeString(part.stockStatus)} ({Number(part.quantity_on_hand) || 0})
               </Badge>
             </div>
             
             {part.location && (
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Location:</span>
-                <span className="text-sm">{part.location}</span>
+                <span className="text-sm">{safeString(part.location)}</span>
               </div>
             )}
             
@@ -1435,7 +1493,7 @@ const Parts: React.FC = () => {
               <div className="flex flex-wrap gap-1">
                 {part.regionalAvailability.map((region) => (
                   <Badge key={region} variant="secondary" className="text-xs">
-                    {region}
+                    {safeString(region)}
                   </Badge>
                 ))}
               </div>
@@ -1482,11 +1540,11 @@ const Parts: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex-1 grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
                 <div>
-                  <h3 className="font-semibold">{part.name}</h3>
+                  <h3 className="font-semibold">{safeString(part.name)}</h3>
                   <div className="flex gap-2 mt-1">
                     {part.sku && (
                       <Badge variant="outline" className="text-xs">
-                        {part.sku}
+                        {safeString(part.sku)}
                       </Badge>
                     )}
                     {isKit && (
@@ -1496,56 +1554,56 @@ const Parts: React.FC = () => {
                     )}
                     {part.vehicleCategory && part.vehicleCategory !== 'Universal/Other' && (
                       <Badge variant="secondary" className="text-xs">
-                        {part.vehicleCategory}
+                        {safeString(part.vehicleCategory)}
                       </Badge>
                     )}
                     {part.modelYear && (
                       <Badge variant="outline" className="text-xs">
-                        {part.modelYear}
+                        {safeString(part.modelYear)}
                       </Badge>
                     )}
                   </div>
                 </div>
                 
                 <div className="text-sm">
-                  <div className="font-medium">{part.brand}</div>
+                  <div className="font-medium">{safeString(part.brand)}</div>
                   <div className="text-muted-foreground">
-                    {part.keystone_vcpn && `VCPN: ${part.keystone_vcpn}`}
+                    {part.keystone_vcpn && `VCPN: ${safeString(part.keystone_vcpn)}`}
                   </div>
                   <div className="text-muted-foreground">
-                    {part.partCategory && part.partCategory !== 'Uncategorized' && part.partCategory}
+                    {part.partCategory && part.partCategory !== 'Uncategorized' && safeString(part.partCategory)}
                   </div>
                   {part.vehicleModel && (
                     <div className="text-muted-foreground">
-                      {part.vehicleModel}
+                      {safeString(part.vehicleModel)}
                     </div>
                   )}
                 </div>
                 
                 <div className="text-sm">
                   <div className="font-bold text-green-600">
-                    ${part.list_price.toFixed(2)}
+                    ${(Number(part.list_price) || 0).toFixed(2)}
                   </div>
                   <div className="text-muted-foreground">
-                    Cost: ${part.cost.toFixed(2)}
+                    Cost: ${(Number(part.cost) || 0).toFixed(2)}
                   </div>
                 </div>
                 
                 <div className="text-sm">
                   <div className="font-medium text-blue-600">
-                    {part.margin?.toFixed(1)}% margin
+                    {(Number(part.margin) || 0).toFixed(1)}% margin
                   </div>
                   <div className="text-muted-foreground">
-                    {part.location}
+                    {safeString(part.location)}
                   </div>
                 </div>
                 
                 <div>
-                  <Badge className={getStockBadgeColor(part.stockStatus || 'Out of Stock')}>
-                    {part.stockStatus}
+                  <Badge className={getStockBadgeColor(safeString(part.stockStatus))}>
+                    {safeString(part.stockStatus)}
                   </Badge>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {part.quantity_on_hand} units
+                    {Number(part.quantity_on_hand) || 0} units
                   </div>
                 </div>
                 
@@ -1681,18 +1739,18 @@ const Parts: React.FC = () => {
                 cartItems.map((item) => (
                   <div key={item.id} className="flex items-center justify-between p-3 border rounded">
                     <div className="flex-1">
-                      <h4 className="font-medium">{item.name}</h4>
+                      <h4 className="font-medium">{safeString(item.name)}</h4>
                       <p className="text-sm text-muted-foreground">
-                        ${item.price.toFixed(2)} each
+                        ${(Number(item.price) || 0).toFixed(2)} each
                       </p>
                       {item.sku && (
                         <p className="text-xs text-muted-foreground">
-                          SKU: {item.sku}
+                          SKU: {safeString(item.sku)}
                         </p>
                       )}
                       {item.vcpn && (
                         <p className="text-xs text-muted-foreground">
-                          VCPN: {item.vcpn}
+                          VCPN: {safeString(item.vcpn)}
                         </p>
                       )}
                     </div>
@@ -1766,8 +1824,9 @@ const Parts: React.FC = () => {
                   placeholder="Search parts by name, SKU, description, vehicle, model, year..."
                   value={searchTerm}
                   onChange={(e) => {
-                    console.log('🔍 Search input changed:', e.target.value);
-                    setSearchTerm(e.target.value);
+                    const value = safeString(e.target.value);
+                    console.log('🔍 Search input changed:', value);
+                    setSearchTerm(value);
                   }}
                   className="pl-10"
                 />
@@ -1860,53 +1919,53 @@ const Parts: React.FC = () => {
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{selectedPart?.name}</DialogTitle>
+            <DialogTitle>{safeString(selectedPart?.name)}</DialogTitle>
           </DialogHeader>
           {selectedPart && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium">SKU</Label>
-                  <p className="text-sm">{selectedPart.sku || 'N/A'}</p>
+                  <p className="text-sm">{safeString(selectedPart.sku) || 'N/A'}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">VCPN</Label>
-                  <p className="text-sm">{selectedPart.keystone_vcpn || 'N/A'}</p>
+                  <p className="text-sm">{safeString(selectedPart.keystone_vcpn) || 'N/A'}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Brand</Label>
-                  <p className="text-sm">{selectedPart.brand}</p>
+                  <p className="text-sm">{safeString(selectedPart.brand)}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Category</Label>
-                  <p className="text-sm">{selectedPart.category}</p>
+                  <p className="text-sm">{safeString(selectedPart.category)}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Vehicle</Label>
-                  <p className="text-sm">{selectedPart.vehicleCategory || 'N/A'}</p>
+                  <p className="text-sm">{safeString(selectedPart.vehicleCategory) || 'N/A'}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Part Type</Label>
-                  <p className="text-sm">{selectedPart.partCategory || 'N/A'}</p>
+                  <p className="text-sm">{safeString(selectedPart.partCategory) || 'N/A'}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Model</Label>
-                  <p className="text-sm">{selectedPart.vehicleModel || 'N/A'}</p>
+                  <p className="text-sm">{safeString(selectedPart.vehicleModel) || 'N/A'}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Year</Label>
-                  <p className="text-sm">{selectedPart.modelYear || 'N/A'}</p>
+                  <p className="text-sm">{safeString(selectedPart.modelYear) || 'N/A'}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Price</Label>
                   <p className="text-lg font-bold text-green-600">
-                    ${selectedPart.list_price.toFixed(2)}
+                    ${(Number(selectedPart.list_price) || 0).toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Stock</Label>
-                  <Badge className={getStockBadgeColor(selectedPart.stockStatus || 'Out of Stock')}>
-                    {selectedPart.stockStatus} ({selectedPart.quantity_on_hand})
+                  <Badge className={getStockBadgeColor(safeString(selectedPart.stockStatus))}>
+                    {safeString(selectedPart.stockStatus)} ({Number(selectedPart.quantity_on_hand) || 0})
                   </Badge>
                 </div>
               </div>
@@ -1914,7 +1973,7 @@ const Parts: React.FC = () => {
               {selectedPart.LongDescription && (
                 <div>
                   <Label className="text-sm font-medium">Description</Label>
-                  <p className="text-sm mt-1">{selectedPart.LongDescription}</p>
+                  <p className="text-sm mt-1">{safeString(selectedPart.LongDescription)}</p>
                 </div>
               )}
               
