@@ -1,46 +1,48 @@
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, MapPin, Clock, Shield, Edit, CheckCircle, Timer, User, CreditCard, FileText, Star, Zap, UserSearch, UserPlus, Box } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-// Import the ProductPriceCheck component
-import ProductPriceCheck from '@/components/product_price_check_component';
-
-// Import existing services - FIXED: Import singleton instances instead of classes
-import { shippingQuoteService } from '@/services/shipping_quote_service';
-import { DropshipOrderService } from '@/services/dropship_order_service';
-
-// Import customer search service
-import { CustomerSearchService } from '@/services/customer_search_service';
-
-// ✅ FIXED: Import Supabase for real data connection
-import { getSupabaseClient } from "@/lib/supabase";
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { 
+  Search, 
+  Filter, 
+  Grid3X3, 
+  List, 
+  Plus, 
+  Minus, 
+  Eye, 
+  ShoppingCart, 
+  Star, 
+  Package, 
+  Truck, 
+  Wrench, 
+  Zap, 
+  Home, 
+  Settings,
+  ChevronRight,
+  ChevronDown,
+  X,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  MapPin,
+  DollarSign,
+  Percent,
+  Calculator
+} from 'lucide-react';
+import { getSupabaseClient } from '@/lib/supabase';
 
-// Customer search result interface
-interface CustomerSearchResult {
-  id: string;
-  email: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  display_name: string;
-}
-
-// ✅ FIXED: Define the InventoryPart interface to match real database structure
+// ===== INTERFACES =====
 interface InventoryPart {
   id: string;
   name: string;
@@ -55,447 +57,380 @@ interface InventoryPart {
   compatibility?: string;
   category?: string;
   brand?: string;
-  weight?: number;
-  dimensions?: string;
-  notes?: string;
-  image_url?: string;
-  regional_availability?: string[];
-  dropship_available?: boolean;
-  keystone_part_number?: string;
-  core_charge?: number;
-  hazmat?: boolean;
-  freight_required?: boolean;
-  special_order?: boolean;
-  discontinued?: boolean;
-  superseded_by?: string | null;
-  supersedes?: string | null;
-  created_at?: string;
-  updated_at?: string;
-  // Computed fields for compatibility
-  price: number;
-  quantity: number;
-  margin: number;
-  // ✅ FIXED: Add isKit field to avoid hook calls in render
   isKit?: boolean;
+  margin?: number;
+  stockStatus?: 'In Stock' | 'Low Stock' | 'Out of Stock';
+  regionalAvailability?: string[];
 }
 
-// Cart item interface
-interface CartItem extends InventoryPart {
-  cartQuantity: number;
-}
-
-// Shipping quote interface
-interface ShippingQuote {
-  carrier: string;
-  service: string;
-  cost: number;
-  transit_days: number;
-  delivery_date: string;
-}
-
-// Special order interface
-interface SpecialOrder {
-  id: string;
-  customer_id: string;
-  part_description: string;
-  manufacturer: string;
-  part_number: string;
+interface CartItem {
+  part: InventoryPart;
   quantity: number;
-  estimated_cost: number;
-  notes: string;
-  status: 'pending' | 'quoted' | 'ordered' | 'received' | 'cancelled';
-  created_at: string;
-  updated_at: string;
 }
 
-// ✅ FIXED: Simple kit check function (no hook)
+interface TruckCategory {
+  id: string;
+  name: string;
+  icon: React.ComponentType<any>;
+  description: string;
+  subcategories: string[];
+  color: string;
+}
+
+// ===== TRUCK-SPECIFIC CATEGORIES =====
+const TRUCK_CATEGORIES: TruckCategory[] = [
+  {
+    id: 'exterior',
+    name: 'Exterior',
+    icon: Truck,
+    description: 'Bumpers, running boards, bed accessories, lighting, grilles',
+    subcategories: ['Bumpers', 'Running Boards', 'Bed Accessories', 'Lighting', 'Grilles', 'Fender Flares', 'Side Steps', 'Tonneau Covers'],
+    color: 'bg-blue-500'
+  },
+  {
+    id: 'performance',
+    name: 'Performance',
+    icon: Zap,
+    description: 'Air intake, exhaust, suspension, brakes, engine components',
+    subcategories: ['Air Intake', 'Exhaust', 'Suspension', 'Brakes', 'Engine Components', 'Turbo', 'Intercooler', 'Performance Chips'],
+    color: 'bg-red-500'
+  },
+  {
+    id: 'interior',
+    name: 'Interior',
+    icon: Home,
+    description: 'Seat covers, floor mats, dashboard, storage solutions',
+    subcategories: ['Seat Covers', 'Floor Mats', 'Dashboard', 'Storage Solutions', 'Organizers', 'Console', 'Trim Kits'],
+    color: 'bg-green-500'
+  },
+  {
+    id: 'electrical',
+    name: 'Electrical',
+    icon: Zap,
+    description: 'Wiring, switches, batteries, audio & electronics',
+    subcategories: ['Wiring', 'Switches', 'Batteries', 'Audio & Electronics', 'LED Lights', 'Inverters', 'Chargers'],
+    color: 'bg-yellow-500'
+  },
+  {
+    id: 'hardware',
+    name: 'Hardware',
+    icon: Settings,
+    description: 'Fasteners, tools, maintenance items',
+    subcategories: ['Fasteners', 'Tools', 'Maintenance Items', 'Fluids', 'Filters', 'Belts', 'Gaskets'],
+    color: 'bg-purple-500'
+  }
+];
+
+// ===== UTILITY FUNCTIONS =====
 const checkIfKit = (partId: string): boolean => {
-  // Simple kit detection logic - can be enhanced later
-  // For now, just return false to avoid hook issues
-  return false;
+  // Simple kit detection logic - no hooks
+  return partId?.includes('kit') || partId?.includes('set') || false;
 };
 
-// ✅ FIXED: Custom hook to fetch real inventory data from Supabase
+const inferCategory = (part: InventoryPart): string => {
+  const name = part.name?.toLowerCase() || '';
+  const description = part.description?.toLowerCase() || '';
+  const text = `${name} ${description}`;
+
+  // Exterior category keywords
+  if (text.match(/bumper|grille|fender|running board|side step|bed|tonneau|lighting|led|headlight|taillight/)) {
+    return 'exterior';
+  }
+  
+  // Performance category keywords
+  if (text.match(/exhaust|intake|suspension|brake|turbo|intercooler|performance|engine|chip/)) {
+    return 'performance';
+  }
+  
+  // Interior category keywords
+  if (text.match(/seat|floor mat|dashboard|console|trim|organizer|storage/)) {
+    return 'interior';
+  }
+  
+  // Electrical category keywords
+  if (text.match(/wiring|switch|battery|audio|electronic|inverter|charger|electrical/)) {
+    return 'electrical';
+  }
+  
+  // Hardware category keywords
+  if (text.match(/fastener|tool|maintenance|fluid|filter|belt|gasket|hardware/)) {
+    return 'hardware';
+  }
+
+  return 'other';
+};
+
+const getStockStatus = (quantity: number): 'In Stock' | 'Low Stock' | 'Out of Stock' => {
+  if (quantity === 0) return 'Out of Stock';
+  if (quantity <= 5) return 'Low Stock';
+  return 'In Stock';
+};
+
+const getRegionalAvailability = (): string[] => {
+  // Mock regional availability - in real app this would come from database
+  const regions = ['East', 'Midwest', 'West'];
+  return regions.filter(() => Math.random() > 0.3);
+};
+
+const calculateMargin = (cost: number, listPrice: number): number => {
+  if (!cost || !listPrice || listPrice === 0) return 0;
+  return ((listPrice - cost) / listPrice) * 100;
+};
+
+// ===== CUSTOM HOOKS =====
 const useInventoryData = () => {
   const [parts, setParts] = useState<InventoryPart[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchInventoryData = async () => {
-      console.log('🔍 Fetching inventory data from Supabase...');
+  const fetchData = useCallback(async () => {
+    try {
       setLoading(true);
       setError(null);
+      console.log('🔍 Fetching inventory data from Supabase...');
+      
+      const supabase = getSupabaseClient();
+      const { data, error: fetchError } = await supabase
+        .from('inventory')
+        .select('*')
+        .order('name');
 
-      try {
-        const supabase = getSupabaseClient();
-        const { data, error: fetchError } = await supabase
-          .from('inventory')
-          .select('*')
-          .order('name');
-
-        if (fetchError) {
-          console.error('❌ Error fetching inventory:', fetchError);
-          setError(fetchError.message);
-          return;
-        }
-
-        console.log('✅ Inventory data fetched:', data?.length || 0, 'items');
-
-        // ✅ FIXED: Map database fields to expected interface
-        const mappedParts: InventoryPart[] = (data || []).map(item => ({
-          id: item.id,
-          name: item.name || 'Unknown Part',
-          sku: item.sku || '',
-          keystone_vcpn: item.keystone_vcpn || '',
-          cost: Number(item.cost) || 0,
-          list_price: Number(item.list_price) || 0,
-          quantity_on_hand: Number(item.quantity_on_hand) || 0,
-          location: item.location || '',
-          description: item.description || '',
-          manufacturer_part_no: item.manufacturer_part_no || '',
-          compatibility: item.compatibility || '',
-          category: item.category || 'Uncategorized',
-          brand: item.brand || 'Unknown',
-          weight: Number(item.weight) || 0,
-          dimensions: item.dimensions || '',
-          notes: item.notes || '',
-          image_url: item.image_url || '/api/placeholder/300/200',
-          regional_availability: item.regional_availability || ['East', 'Midwest', 'West'],
-          dropship_available: Boolean(item.dropship_available),
-          keystone_part_number: item.keystone_part_number || '',
-          core_charge: Number(item.core_charge) || 0,
-          hazmat: Boolean(item.hazmat),
-          freight_required: Boolean(item.freight_required),
-          special_order: Boolean(item.special_order),
-          discontinued: Boolean(item.discontinued),
-          superseded_by: item.superseded_by,
-          supersedes: item.supersedes,
-          created_at: item.created_at,
-          updated_at: item.updated_at,
-          // Computed fields for compatibility
-          price: Number(item.list_price) || 0,
-          quantity: Number(item.quantity_on_hand) || 0,
-          margin: item.cost && item.list_price ? 
-            ((Number(item.list_price) - Number(item.cost)) / Number(item.list_price)) * 100 : 0,
-          // ✅ FIXED: Pre-compute kit status to avoid hook calls in render
-          isKit: checkIfKit(item.id)
-        }));
-
-        setParts(mappedParts);
-      } catch (err) {
-        console.error('❌ Error in fetchInventoryData:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error occurred');
-      } finally {
-        setLoading(false);
+      if (fetchError) {
+        console.error('❌ Error fetching inventory:', fetchError);
+        setError(fetchError.message);
+        return;
       }
-    };
 
-    fetchInventoryData();
+      console.log(`✅ Inventory data fetched: ${data?.length || 0} items`);
+
+      // Map database fields to component interface
+      const mappedParts: InventoryPart[] = (data || []).map(item => ({
+        id: item.id,
+        name: item.name || 'Unnamed Part',
+        sku: item.sku,
+        keystone_vcpn: item.keystone_vcpn,
+        cost: Number(item.cost) || 0,
+        list_price: Number(item.list_price) || 0,
+        quantity_on_hand: Number(item.quantity_on_hand) || 0,
+        location: item.location,
+        description: item.description,
+        manufacturer_part_no: item.manufacturer_part_no,
+        compatibility: item.compatibility,
+        brand: item.brand || 'Unknown',
+        category: item.category || inferCategory(item),
+        isKit: checkIfKit(item.id),
+        margin: calculateMargin(Number(item.cost) || 0, Number(item.list_price) || 0),
+        stockStatus: getStockStatus(Number(item.quantity_on_hand) || 0),
+        regionalAvailability: getRegionalAvailability()
+      }));
+
+      setParts(mappedParts);
+    } catch (err) {
+      console.error('❌ Error in fetchData:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { parts, loading, error, refetch: () => window.location.reload() };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { parts, loading, error, refetch: fetchData };
 };
 
-export default function Parts() {
-  // ✅ FIXED: All hooks must be called at the top level, in the same order every time
+// ===== NATIVE FUZZY SEARCH =====
+const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[] => {
+  if (!searchTerm.trim()) return parts;
+
+  const searchWords = searchTerm.toLowerCase().split(' ').filter(word => word.length > 0);
+  
+  const scorePart = (part: InventoryPart): number => {
+    let score = 0;
+    const fields = {
+      name: { value: part.name?.toLowerCase() || '', weight: 30 },
+      sku: { value: part.sku?.toLowerCase() || '', weight: 20 },
+      description: { value: part.description?.toLowerCase() || '', weight: 20 },
+      manufacturer_part_no: { value: part.manufacturer_part_no?.toLowerCase() || '', weight: 15 },
+      compatibility: { value: part.compatibility?.toLowerCase() || '', weight: 10 },
+      brand: { value: part.brand?.toLowerCase() || '', weight: 5 }
+    };
+
+    searchWords.forEach(word => {
+      Object.entries(fields).forEach(([fieldName, field]) => {
+        if (field.value.includes(word)) {
+          if (field.value.startsWith(word)) {
+            score += field.weight * 2; // Starts with bonus
+          } else {
+            score += field.weight;
+          }
+        }
+      });
+    });
+
+    return score;
+  };
+
+  return parts
+    .map(part => ({ part, score: scorePart(part) }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(({ part }) => part);
+};
+
+// ===== MAIN COMPONENT =====
+const Parts: React.FC = () => {
+  // ===== ALL HOOKS DECLARED AT TOP LEVEL =====
   const { toast } = useToast();
+  const { parts, loading: partsLoading, error: partsError, refetch } = useInventoryData();
   
-  // ✅ FIXED: Use real inventory data instead of mock data
-  const { parts, loading: partsLoading, error: partsError } = useInventoryData();
-  
-  // ✅ FIXED: All state hooks declared at top level
+  // State hooks
   const [filteredParts, setFilteredParts] = useState<InventoryPart[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [priceRange, setPriceRange] = useState([0, 3000]);
-  const [sortBy, setSortBy] = useState("name");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [showFavorites, setShowFavorites] = useState(false);
-  const [favorites, setFavorites] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedBrand, setSelectedBrand] = useState<string>('all');
+  const [selectedStockStatus, setSelectedStockStatus] = useState<string>('all');
+  const [selectedRegion, setSelectedRegion] = useState<string>('all');
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(12);
+  const [sortBy, setSortBy] = useState<'name' | 'price' | 'category' | 'stock'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   
   // Cart state
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [showCart, setShowCart] = useState(false);
+  const [showCartDialog, setShowCartDialog] = useState(false);
   
-  // Customer search state
-  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
-  const [customerSearchResults, setCustomerSearchResults] = useState<CustomerSearchResult[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerSearchResult | null>(null);
-  const [showCustomerSearch, setShowCustomerSearch] = useState(false);
-  const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
-  
-  // Special order state
-  const [showSpecialOrderDialog, setShowSpecialOrderDialog] = useState(false);
-  const [specialOrderForm, setSpecialOrderForm] = useState({
-    part_description: "",
-    manufacturer: "",
-    part_number: "",
-    quantity: 1,
-    notes: ""
-  });
-  
-  // Shipping state
-  const [showShippingDialog, setShowShippingDialog] = useState(false);
-  const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
-  const [selectedShippingAddress, setSelectedShippingAddress] = useState({
-    street: "",
-    city: "",
-    state: "",
-    zip: "",
-    country: "US"
-  });
-  const [isLoadingShipping, setIsLoadingShipping] = useState(false);
-  
-  // Dropship order state
-  const [showDropshipDialog, setShowDropshipDialog] = useState(false);
-  const [selectedDropshipPart, setSelectedDropshipPart] = useState<InventoryPart | null>(null);
-  const [dropshipQuantity, setDropshipQuantity] = useState(1);
-  const [isProcessingDropship, setIsProcessingDropship] = useState(false);
-
-  // Product price check state
-  const [showPriceCheckDialog, setShowPriceCheckDialog] = useState(false);
-  const [selectedPriceCheckPart, setSelectedPriceCheckPart] = useState<InventoryPart | null>(null);
-
-  // Detail dialog state
+  // Dialog state
   const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  
+  // Category view state
+  const [showCategoryView, setShowCategoryView] = useState(true);
 
-  // ✅ FIXED: All useMemo and useCallback hooks at top level
-  // Get unique categories
-  const categories = useMemo(() => {
-    const uniqueCategories = [...new Set(parts.map(part => part.category || 'Uncategorized'))];
-    return uniqueCategories.sort();
+  // ===== MEMOIZED VALUES =====
+  const availableBrands = useMemo(() => {
+    const brands = [...new Set(parts.map(part => part.brand).filter(Boolean))];
+    return brands.sort();
   }, [parts]);
 
-  // Calculate cart total
-  const cartTotal = useMemo(() => {
-    return cartItems.reduce((total, item) => total + (item.price * item.cartQuantity), 0);
-  }, [cartItems]);
+  const categoryStats = useMemo(() => {
+    const stats: Record<string, number> = {};
+    TRUCK_CATEGORIES.forEach(cat => {
+      stats[cat.id] = parts.filter(part => part.category === cat.id).length;
+    });
+    stats.other = parts.filter(part => !TRUCK_CATEGORIES.some(cat => cat.id === part.category)).length;
+    return stats;
+  }, [parts]);
 
-  const cartItemCount = useMemo(() => {
-    return cartItems.reduce((total, item) => total + item.cartQuantity, 0);
-  }, [cartItems]);
+  // ===== SEARCH AND FILTERING =====
+  const searchAndFilterParts = useMemo(() => {
+    let result = parts;
 
-  // Pagination
-  const totalPages = Math.ceil(filteredParts.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentParts = filteredParts.slice(startIndex, endIndex);
+    // Apply search
+    if (searchTerm.trim()) {
+      result = fuzzySearch(searchTerm, result);
+    }
 
-  // ✅ FIXED: All callback functions defined at top level
-  const addToCart = useCallback((part: InventoryPart, quantity: number = 1) => {
+    // Apply filters
+    if (selectedCategory !== 'all') {
+      result = result.filter(part => part.category === selectedCategory);
+    }
+
+    if (selectedBrand !== 'all') {
+      result = result.filter(part => part.brand === selectedBrand);
+    }
+
+    if (selectedStockStatus !== 'all') {
+      result = result.filter(part => part.stockStatus === selectedStockStatus);
+    }
+
+    if (selectedRegion !== 'all') {
+      result = result.filter(part => part.regionalAvailability?.includes(selectedRegion));
+    }
+
+    // Apply price range
+    result = result.filter(part => 
+      part.list_price >= priceRange[0] && part.list_price <= priceRange[1]
+    );
+
+    // Apply sorting
+    result.sort((a, b) => {
+      let comparison = 0;
+      switch (sortBy) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'price':
+          comparison = a.list_price - b.list_price;
+          break;
+        case 'category':
+          comparison = (a.category || '').localeCompare(b.category || '');
+          break;
+        case 'stock':
+          comparison = a.quantity_on_hand - b.quantity_on_hand;
+          break;
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    return result;
+  }, [parts, searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, priceRange, sortBy, sortOrder]);
+
+  // ===== PAGINATION =====
+  const paginatedParts = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return searchAndFilterParts.slice(startIndex, startIndex + itemsPerPage);
+  }, [searchAndFilterParts, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(searchAndFilterParts.length / itemsPerPage);
+
+  // ===== CART FUNCTIONS =====
+  const handleAddToCart = useCallback((part: InventoryPart) => {
+    console.log('🛒 Add to cart clicked for:', part.name);
+    
+    if (part.stockStatus === 'Out of Stock') {
+      toast({
+        title: "Out of Stock",
+        description: "This item is currently out of stock.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setCartItems(prev => {
-      const existingItem = prev.find(item => item.id === part.id);
+      const existingItem = prev.find(item => item.part.id === part.id);
       if (existingItem) {
+        const newQuantity = existingItem.quantity + 1;
+        if (newQuantity > part.quantity_on_hand) {
+          toast({
+            title: "Stock Limit Reached",
+            description: `Only ${part.quantity_on_hand} units available.`,
+            variant: "destructive"
+          });
+          return prev;
+        }
+        toast({
+          title: "Quantity Updated",
+          description: `${part.name} quantity increased to ${newQuantity}.`
+        });
         return prev.map(item =>
-          item.id === part.id
-            ? { ...item, cartQuantity: Math.min(item.cartQuantity + quantity, item.quantity) }
+          item.part.id === part.id
+            ? { ...item, quantity: newQuantity }
             : item
         );
       } else {
-        return [...prev, { ...part, cartQuantity: Math.min(quantity, part.quantity) }];
+        toast({
+          title: "Added to Cart",
+          description: `${part.name} has been added to your cart.`
+        });
+        return [...prev, { part, quantity: 1 }];
       }
     });
-    
-    toast({
-      title: "Added to cart",
-      description: `${part.name} has been added to your cart.`,
-    });
   }, [toast]);
-
-  const removeFromCart = useCallback((partId: string) => {
-    setCartItems(prev => prev.filter(item => item.id !== partId));
-  }, []);
-
-  const updateCartQuantity = useCallback((partId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeFromCart(partId);
-      return;
-    }
-    
-    setCartItems(prev =>
-      prev.map(item =>
-        item.id === partId
-          ? { ...item, cartQuantity: Math.min(newQuantity, item.quantity) }
-          : item
-      )
-    );
-  }, [removeFromCart]);
-
-  const clearCart = useCallback(() => {
-    setCartItems([]);
-  }, []);
-
-  const toggleFavorite = useCallback((partId: string) => {
-    setFavorites(prev => 
-      prev.includes(partId) 
-        ? prev.filter(id => id !== partId)
-        : [...prev, partId]
-    );
-  }, []);
-
-  const searchCustomers = useCallback(async (searchTerm: string) => {
-    if (!searchTerm.trim()) {
-      setCustomerSearchResults([]);
-      return;
-    }
-
-    setIsSearchingCustomers(true);
-    try {
-      const results = await CustomerSearchService.searchCustomers(searchTerm);
-      setCustomerSearchResults(results);
-    } catch (error) {
-      console.error('Error searching customers:', error);
-      toast({
-        title: "Search Error",
-        description: "Failed to search customers. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSearchingCustomers(false);
-    }
-  }, [toast]);
-
-  const submitSpecialOrder = useCallback(async () => {
-    if (!selectedCustomer) {
-      toast({
-        title: "Customer Required",
-        description: "Please select a customer for this special order.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!specialOrderForm.part_description.trim()) {
-      toast({
-        title: "Description Required",
-        description: "Please provide a part description.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      console.log('Creating special order:', {
-        customer_id: selectedCustomer.id,
-        ...specialOrderForm
-      });
-
-      toast({
-        title: "Special Order Created",
-        description: "Your special order has been submitted successfully.",
-      });
-
-      setSpecialOrderForm({
-        part_description: "",
-        manufacturer: "",
-        part_number: "",
-        quantity: 1,
-        notes: ""
-      });
-      setShowSpecialOrderDialog(false);
-    } catch (error) {
-      console.error('Error creating special order:', error);
-      toast({
-        title: "Order Error",
-        description: "Failed to create special order. Please try again.",
-        variant: "destructive",
-      });
-    }
-  }, [selectedCustomer, specialOrderForm, toast]);
-
-  const getShippingQuotes = useCallback(async () => {
-    if (!selectedShippingAddress.street || !selectedShippingAddress.city || 
-        !selectedShippingAddress.state || !selectedShippingAddress.zip) {
-      toast({
-        title: "Address Required",
-        description: "Please provide a complete shipping address.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (cartItems.length === 0) {
-      toast({
-        title: "Cart Empty",
-        description: "Please add items to your cart before getting shipping quotes.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoadingShipping(true);
-    try {
-      const quotes = await shippingQuoteService.getQuotes({
-        items: cartItems.map(item => ({
-          weight: item.weight || 1,
-          dimensions: item.dimensions || '12x8x4',
-          quantity: item.cartQuantity,
-          value: item.price
-        })),
-        destination: selectedShippingAddress
-      });
-      
-      setShippingQuotes(quotes);
-    } catch (error) {
-      console.error('Error getting shipping quotes:', error);
-      toast({
-        title: "Shipping Error",
-        description: "Failed to get shipping quotes. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingShipping(false);
-    }
-  }, [selectedShippingAddress, cartItems, toast]);
-
-  const processDropshipOrder = useCallback(async () => {
-    if (!selectedDropshipPart || !selectedCustomer) {
-      toast({
-        title: "Missing Information",
-        description: "Please select both a part and customer for dropship order.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsProcessingDropship(true);
-    try {
-      const dropshipService = new DropshipOrderService();
-      await dropshipService.createOrder({
-        part_id: selectedDropshipPart.id,
-        customer_id: selectedCustomer.id,
-        quantity: dropshipQuantity,
-        shipping_address: selectedShippingAddress
-      });
-
-      toast({
-        title: "Dropship Order Created",
-        description: "Your dropship order has been submitted successfully.",
-      });
-
-      setShowDropshipDialog(false);
-      setSelectedDropshipPart(null);
-      setDropshipQuantity(1);
-    } catch (error) {
-      console.error('Error creating dropship order:', error);
-      toast({
-        title: "Dropship Error",
-        description: "Failed to create dropship order. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessingDropship(false);
-    }
-  }, [selectedDropshipPart, selectedCustomer, dropshipQuantity, selectedShippingAddress, toast]);
-
-  const handleAddToCart = useCallback((part: InventoryPart) => {
-    console.log('🛒 Add to cart clicked for:', part.name);
-    addToCart(part);
-  }, [addToCart]);
 
   const handleViewDetail = useCallback((part: InventoryPart) => {
     console.log('👁️ View detail clicked for:', part.name);
@@ -503,92 +438,80 @@ export default function Parts() {
     setShowDetailDialog(true);
   }, []);
 
-  // ✅ FIXED: All useEffect hooks at top level
-  // Filter and sort parts
-  useEffect(() => {
-    let filtered = parts;
-
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(part =>
-        part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (part.sku && part.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (part.description && part.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (part.manufacturer_part_no && part.manufacturer_part_no.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (part.compatibility && part.compatibility.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+  const updateCartQuantity = useCallback((partId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      setCartItems(prev => prev.filter(item => item.part.id !== partId));
+      return;
     }
 
-    // Category filter
-    if (selectedCategory !== "all") {
-      filtered = filtered.filter(part => part.category === selectedCategory);
-    }
-
-    // Price range filter
-    filtered = filtered.filter(part => 
-      part.price >= priceRange[0] && part.price <= priceRange[1]
-    );
-
-    // Favorites filter
-    if (showFavorites) {
-      filtered = filtered.filter(part => favorites.includes(part.id));
-    }
-
-    // Sort
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "name":
-          return a.name.localeCompare(b.name);
-        case "price-low":
-          return a.price - b.price;
-        case "price-high":
-          return b.price - a.price;
-        case "quantity":
-          return b.quantity - a.quantity;
-        case "margin":
-          return b.margin - a.margin;
-        default:
-          return 0;
+    setCartItems(prev => prev.map(item => {
+      if (item.part.id === partId) {
+        const maxQuantity = item.part.quantity_on_hand;
+        const quantity = Math.min(newQuantity, maxQuantity);
+        return { ...item, quantity };
       }
+      return item;
+    }));
+  }, []);
+
+  const removeFromCart = useCallback((partId: string) => {
+    setCartItems(prev => prev.filter(item => item.part.id !== partId));
+    toast({
+      title: "Removed from Cart",
+      description: "Item has been removed from your cart."
     });
+  }, [toast]);
 
-    setFilteredParts(filtered);
+  const clearCart = useCallback(() => {
+    setCartItems([]);
+    toast({
+      title: "Cart Cleared",
+      description: "All items have been removed from your cart."
+    });
+  }, [toast]);
+
+  const cartTotal = useMemo(() => {
+    return cartItems.reduce((total, item) => total + (item.part.list_price * item.quantity), 0);
+  }, [cartItems]);
+
+  const cartItemCount = useMemo(() => {
+    return cartItems.reduce((total, item) => total + item.quantity, 0);
+  }, [cartItems]);
+
+  // ===== CATEGORY FUNCTIONS =====
+  const handleCategorySelect = useCallback((categoryId: string) => {
+    setSelectedCategory(categoryId);
+    setShowCategoryView(false);
     setCurrentPage(1);
-  }, [parts, searchTerm, selectedCategory, priceRange, sortBy, showFavorites, favorites]);
+  }, []);
 
-  // Debounced customer search
+  const resetFilters = useCallback(() => {
+    setSearchTerm('');
+    setSelectedCategory('all');
+    setSelectedBrand('all');
+    setSelectedStockStatus('all');
+    setSelectedRegion('all');
+    setPriceRange([0, 1000]);
+    setCurrentPage(1);
+  }, []);
+
+  // ===== EFFECTS =====
   useEffect(() => {
-    const timer = setTimeout(() => {
-      searchCustomers(customerSearchTerm);
-    }, 300);
+    setFilteredParts(searchAndFilterParts);
+  }, [searchAndFilterParts]);
 
-    return () => clearTimeout(timer);
-  }, [customerSearchTerm, searchCustomers]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, priceRange]);
 
-  // Helper functions
-  const getStockStatus = (quantity: number) => {
-    if (quantity === 0) return { status: "out-of-stock", color: "destructive", label: "Out of Stock" };
-    if (quantity <= 5) return { status: "low-stock", color: "warning", label: "Low Stock" };
-    return { status: "in-stock", color: "success", label: "In Stock" };
-  };
-
-  const getRegionalBadgeColor = (region: string) => {
-    const colors = {
-      "East": "bg-blue-500",
-      "Midwest": "bg-green-500", 
-      "West": "bg-purple-500"
-    };
-    return colors[region as keyof typeof colors] || "bg-gray-500";
-  };
-
-  // ✅ FIXED: Early returns after all hooks are called
+  // ===== EARLY RETURNS AFTER ALL HOOKS =====
   if (partsLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto p-6">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading inventory data...</p>
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-lg">Loading inventory...</p>
           </div>
         </div>
       </div>
@@ -597,17 +520,16 @@ export default function Parts() {
 
   if (partsError) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto p-6">
         <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Database Connection Error</AlertTitle>
+          <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            Failed to load inventory data: {partsError}
+            Error loading inventory: {partsError}
             <Button 
               variant="outline" 
               size="sm" 
-              className="ml-2"
-              onClick={() => window.location.reload()}
+              onClick={refetch}
+              className="ml-4"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Retry
@@ -618,937 +540,696 @@ export default function Parts() {
     );
   }
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Parts & Special Orders</h1>
-          <p className="text-muted-foreground">Browse parts inventory and place special orders</p>
-        </div>
-        <div className="flex items-center gap-4">
-          {/* Customer Search */}
-          <Button
-            variant="outline"
-            onClick={() => setShowCustomerSearch(true)}
-            className="flex items-center gap-2"
-          >
-            <UserSearch className="h-4 w-4" />
-            {selectedCustomer ? selectedCustomer.display_name : "Select Customer"}
-          </Button>
-          
-          {/* Cart */}
-          <Button
-            variant="outline"
-            onClick={() => setShowCart(true)}
-            className="flex items-center gap-2"
-          >
-            <ShoppingCart className="h-4 w-4" />
-            Cart ({cartItemCount})
-          </Button>
-        </div>
+  // ===== RENDER FUNCTIONS =====
+  const renderCategoryOverview = () => (
+    <div className="space-y-6">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold mb-2">Truck Parts Catalog</h1>
+        <p className="text-muted-foreground">
+          Browse our comprehensive selection of truck customization parts organized by category
+        </p>
       </div>
 
-      <Tabs defaultValue="catalog" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="catalog">Parts Catalog</TabsTrigger>
-          <TabsTrigger value="special-orders">Special Orders</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="catalog" className="space-y-6">
-          {/* Search and Filters */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Search & Filter</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Search Bar */}
-              <div className="flex gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Search parts by name, SKU, description, part number, or compatibility..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {TRUCK_CATEGORIES.map((category) => {
+          const Icon = category.icon;
+          const count = categoryStats[category.id] || 0;
+          
+          return (
+            <Card 
+              key={category.id}
+              className="cursor-pointer hover:shadow-lg transition-shadow"
+              onClick={() => handleCategorySelect(category.id)}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center space-x-3">
+                  <div className={`p-3 rounded-lg ${category.color} text-white`}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">{category.name}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{count} parts</p>
+                  </div>
                 </div>
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="name">Name A-Z</SelectItem>
-                    <SelectItem value="price-low">Price: Low to High</SelectItem>
-                    <SelectItem value="price-high">Price: High to Low</SelectItem>
-                    <SelectItem value="quantity">Stock Level</SelectItem>
-                    <SelectItem value="margin">Margin %</SelectItem>
-                  </SelectContent>
-                </Select>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">
+                  {category.description}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {category.subcategories.slice(0, 3).map((sub) => (
+                    <Badge key={sub} variant="secondary" className="text-xs">
+                      {sub}
+                    </Badge>
+                  ))}
+                  {category.subcategories.length > 3 && (
+                    <Badge variant="outline" className="text-xs">
+                      +{category.subcategories.length - 3} more
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {categoryStats.other > 0 && (
+        <Card 
+          className="cursor-pointer hover:shadow-lg transition-shadow"
+          onClick={() => handleCategorySelect('other')}
+        >
+          <CardHeader>
+            <div className="flex items-center space-x-3">
+              <div className="p-3 rounded-lg bg-gray-500 text-white">
+                <Package className="h-6 w-6" />
               </div>
+              <div>
+                <CardTitle className="text-lg">Other Parts</CardTitle>
+                <p className="text-sm text-muted-foreground">{categoryStats.other} parts</p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Miscellaneous parts and accessories not categorized above
+            </p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 
-              {/* Filters Row */}
-              <div className="flex flex-wrap gap-4 items-center">
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="All Categories" />
+  const renderFilters = () => (
+    <Card className={`${showFilters ? 'block' : 'hidden'} lg:block`}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg">Filters</CardTitle>
+          <Button variant="ghost" size="sm" onClick={resetFilters}>
+            Reset
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Category Filter */}
+        <div>
+          <Label className="text-sm font-medium">Category</Label>
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {TRUCK_CATEGORIES.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.name} ({categoryStats[cat.id] || 0})
+                </SelectItem>
+              ))}
+              {categoryStats.other > 0 && (
+                <SelectItem value="other">Other ({categoryStats.other})</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Brand Filter */}
+        <div>
+          <Label className="text-sm font-medium">Brand</Label>
+          <Select value={selectedBrand} onValueChange={setSelectedBrand}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Brands" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Brands</SelectItem>
+              {availableBrands.map((brand) => (
+                <SelectItem key={brand} value={brand}>
+                  {brand}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Stock Status Filter */}
+        <div>
+          <Label className="text-sm font-medium">Stock Status</Label>
+          <Select value={selectedStockStatus} onValueChange={setSelectedStockStatus}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Stock Levels" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Stock Levels</SelectItem>
+              <SelectItem value="In Stock">In Stock</SelectItem>
+              <SelectItem value="Low Stock">Low Stock</SelectItem>
+              <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Regional Availability Filter */}
+        <div>
+          <Label className="text-sm font-medium">Region</Label>
+          <Select value={selectedRegion} onValueChange={setSelectedRegion}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Regions" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Regions</SelectItem>
+              <SelectItem value="East">East</SelectItem>
+              <SelectItem value="Midwest">Midwest</SelectItem>
+              <SelectItem value="West">West</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Price Range Filter */}
+        <div>
+          <Label className="text-sm font-medium">
+            Price Range: ${priceRange[0]} - ${priceRange[1]}
+          </Label>
+          <Slider
+            value={priceRange}
+            onValueChange={setPriceRange}
+            max={1000}
+            min={0}
+            step={10}
+            className="mt-2"
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const getStockBadgeColor = (status: string) => {
+    switch (status) {
+      case 'In Stock': return 'bg-green-100 text-green-800';
+      case 'Low Stock': return 'bg-yellow-100 text-yellow-800';
+      case 'Out of Stock': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const renderPartCard = (part: InventoryPart) => {
+    const isKit = part.isKit || false; // ✅ No hook call - using pre-computed value
+    
+    return (
+      <Card key={part.id} className="h-full flex flex-col hover:shadow-lg transition-shadow">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h3 className="font-semibold text-sm leading-tight mb-1">{part.name}</h3>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {part.sku && (
+                  <Badge variant="outline" className="text-xs">
+                    SKU: {part.sku}
+                  </Badge>
+                )}
+                {part.keystone_vcpn && (
+                  <Badge variant="outline" className="text-xs">
+                    VCPN: {part.keystone_vcpn}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            {isKit && (
+              <Badge className="bg-purple-100 text-purple-800 text-xs">
+                Kit
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        
+        <CardContent className="flex-1 flex flex-col">
+          <div className="space-y-2 mb-4">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Brand:</span>
+              <span className="text-sm font-medium">{part.brand}</span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Price:</span>
+              <span className="text-lg font-bold text-green-600">
+                ${part.list_price.toFixed(2)}
+              </span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Cost:</span>
+              <span className="text-sm">${part.cost.toFixed(2)}</span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Margin:</span>
+              <span className="text-sm font-medium text-blue-600">
+                {part.margin?.toFixed(1)}%
+              </span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Stock:</span>
+              <Badge className={getStockBadgeColor(part.stockStatus || 'Out of Stock')}>
+                {part.stockStatus} ({part.quantity_on_hand})
+              </Badge>
+            </div>
+            
+            {part.location && (
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Location:</span>
+                <span className="text-sm">{part.location}</span>
+              </div>
+            )}
+            
+            {part.regionalAvailability && part.regionalAvailability.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {part.regionalAvailability.map((region) => (
+                  <Badge key={region} variant="secondary" className="text-xs">
+                    {region}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-auto space-y-2">
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => handleAddToCart(part)}
+                disabled={part.stockStatus === 'Out of Stock'}
+                className="flex-1"
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add to Cart
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="px-3"
+                onClick={() => handleViewDetail(part)}
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderListView = () => (
+    <div className="space-y-2">
+      {paginatedParts.map((part) => {
+        const isKit = part.isKit || false; // ✅ No hook call - using pre-computed value
+        
+        return (
+          <Card key={part.id} className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
+                <div>
+                  <h3 className="font-semibold">{part.name}</h3>
+                  <div className="flex gap-2 mt-1">
+                    {part.sku && (
+                      <Badge variant="outline" className="text-xs">
+                        {part.sku}
+                      </Badge>
+                    )}
+                    {isKit && (
+                      <Badge className="bg-purple-100 text-purple-800 text-xs">
+                        Kit
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="text-sm">
+                  <div className="font-medium">{part.brand}</div>
+                  <div className="text-muted-foreground">
+                    {part.keystone_vcpn && `VCPN: ${part.keystone_vcpn}`}
+                  </div>
+                </div>
+                
+                <div className="text-sm">
+                  <div className="font-bold text-green-600">
+                    ${part.list_price.toFixed(2)}
+                  </div>
+                  <div className="text-muted-foreground">
+                    Cost: ${part.cost.toFixed(2)}
+                  </div>
+                </div>
+                
+                <div className="text-sm">
+                  <div className="font-medium text-blue-600">
+                    {part.margin?.toFixed(1)}% margin
+                  </div>
+                  <div className="text-muted-foreground">
+                    {part.location}
+                  </div>
+                </div>
+                
+                <div>
+                  <Badge className={getStockBadgeColor(part.stockStatus || 'Out of Stock')}>
+                    {part.stockStatus}
+                  </Badge>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {part.quantity_on_hand} units
+                  </div>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={() => handleAddToCart(part)}
+                    disabled={part.stockStatus === 'Out of Stock'}
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewDetail(part)}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+
+  const renderPagination = () => (
+    <div className="flex items-center justify-between">
+      <div className="text-sm text-muted-foreground">
+        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, searchAndFilterParts.length)} of {searchAndFilterParts.length} parts
+      </div>
+      
+      <div className="flex items-center space-x-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+          disabled={currentPage === 1}
+        >
+          Previous
+        </Button>
+        
+        <div className="flex items-center space-x-1">
+          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+            const page = i + 1;
+            return (
+              <Button
+                key={page}
+                variant={currentPage === page ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </Button>
+            );
+          })}
+        </div>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+          disabled={currentPage === totalPages}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+
+  // ===== MAIN RENDER =====
+  return (
+    <div className="container mx-auto p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-4">
+          {!showCategoryView && (
+            <Button
+              variant="outline"
+              onClick={() => setShowCategoryView(true)}
+            >
+              <ChevronRight className="h-4 w-4 mr-2" />
+              Back to Categories
+            </Button>
+          )}
+          
+          <div className="flex items-center space-x-2">
+            <h1 className="text-2xl font-bold">
+              {showCategoryView ? 'Parts Catalog' : 
+               selectedCategory === 'all' ? 'All Parts' :
+               TRUCK_CATEGORIES.find(cat => cat.id === selectedCategory)?.name || 'Parts'}
+            </h1>
+            {!showCategoryView && (
+              <Badge variant="secondary">
+                {searchAndFilterParts.length} parts
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {/* Cart Widget */}
+        <Dialog open={showCartDialog} onOpenChange={setShowCartDialog}>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="relative">
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Cart
+              {cartItemCount > 0 && (
+                <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                  {cartItemCount}
+                </Badge>
+              )}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Shopping Cart ({cartItemCount} items)</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {cartItems.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  Your cart is empty
+                </p>
+              ) : (
+                cartItems.map((item) => (
+                  <div key={item.part.id} className="flex items-center justify-between p-3 border rounded">
+                    <div className="flex-1">
+                      <h4 className="font-medium">{item.part.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        ${item.part.list_price.toFixed(2)} each
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => updateCartQuantity(item.part.id, item.quantity - 1)}
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <span className="w-8 text-center">{item.quantity}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => updateCartQuantity(item.part.id, item.quantity + 1)}
+                        disabled={item.quantity >= item.part.quantity_on_hand}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => removeFromCart(item.part.id)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            {cartItems.length > 0 && (
+              <div className="border-t pt-4">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-lg font-semibold">
+                    Total: ${cartTotal.toFixed(2)}
+                  </span>
+                  <Button variant="outline" onClick={clearCart}>
+                    Clear Cart
+                  </Button>
+                </div>
+                <Button className="w-full">
+                  Proceed to Checkout
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Category Overview or Parts List */}
+      {showCategoryView ? (
+        renderCategoryOverview()
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Filters Sidebar */}
+          <div className="lg:col-span-1">
+            {renderFilters()}
+          </div>
+
+          {/* Main Content */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Search and Controls */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search parts by name, SKU, description..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="lg:hidden"
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filters
+                </Button>
+                
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {categories.map(category => (
-                      <SelectItem key={category} value={category}>{category}</SelectItem>
-                    ))}
+                    <SelectItem value="name">Name</SelectItem>
+                    <SelectItem value="price">Price</SelectItem>
+                    <SelectItem value="category">Category</SelectItem>
+                    <SelectItem value="stock">Stock</SelectItem>
                   </SelectContent>
                 </Select>
-
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="favorites"
-                    checked={showFavorites}
-                    onCheckedChange={setShowFavorites}
-                  />
-                  <Label htmlFor="favorites">Favorites only</Label>
-                </div>
-
-                <div className="flex items-center gap-2">
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                >
+                  {sortOrder === 'asc' ? '↑' : '↓'}
+                </Button>
+                
+                <div className="flex border rounded">
                   <Button
-                    variant={viewMode === "grid" ? "default" : "outline"}
+                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
                     size="sm"
-                    onClick={() => setViewMode("grid")}
+                    onClick={() => setViewMode('grid')}
                   >
-                    <Grid className="h-4 w-4" />
+                    <Grid3X3 className="h-4 w-4" />
                   </Button>
                   <Button
-                    variant={viewMode === "list" ? "default" : "outline"}
+                    variant={viewMode === 'list' ? 'default' : 'ghost'}
                     size="sm"
-                    onClick={() => setViewMode("list")}
+                    onClick={() => setViewMode('list')}
                   >
                     <List className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
-
-              {/* Price Range */}
-              <div className="space-y-2">
-                <Label>Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
-                <Slider
-                  value={priceRange}
-                  onValueChange={setPriceRange}
-                  max={3000}
-                  step={50}
-                  className="w-full"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Results Summary */}
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Showing {startIndex + 1}-{Math.min(endIndex, filteredParts.length)} of {filteredParts.length} parts
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              <span className="text-sm">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </Button>
             </div>
-          </div>
 
-          {/* Parts Display */}
-          {viewMode === "grid" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {currentParts.map((part) => {
-                const stockStatus = getStockStatus(part.quantity);
-                // ✅ FIXED: Use pre-computed isKit field instead of hook call
-                const isKit = part.isKit || false;
-                
-                return (
-                  <Card key={part.id} className="group hover:shadow-lg transition-shadow">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg font-semibold line-clamp-2 group-hover:text-blue-600 transition-colors">
-                            {part.name}
-                          </CardTitle>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            SKU: {part.sku || 'N/A'}
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleFavorite(part.id)}
-                          className={favorites.includes(part.id) ? "text-red-500" : ""}
-                        >
-                          <Heart className={`h-4 w-4 ${favorites.includes(part.id) ? "fill-current" : ""}`} />
-                        </Button>
-                      </div>
-                      
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        <Badge variant="secondary">{part.category}</Badge>
-                        <Badge variant={stockStatus.color as any}>{stockStatus.label}</Badge>
-                        {isKit && <Badge variant="outline" className="bg-purple-100 text-purple-800">Kit</Badge>}
-                        {part.regional_availability?.map(region => (
-                          <Badge 
-                            key={region} 
-                            variant="outline" 
-                            className={`${getRegionalBadgeColor(region)} text-white border-0`}
-                          >
-                            {region}
-                          </Badge>
-                        ))}
-                      </div>
-                    </CardHeader>
-                    
-                    <CardContent className="pt-0">
-                      <div className="space-y-3">
-                        {/* Price Information */}
-                        <div className="bg-gray-50 rounded-lg p-3">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-2xl font-bold text-green-600">
-                              ${part.price.toFixed(2)}
-                            </span>
-                            <div className="text-right text-sm">
-                              <div className="text-muted-foreground">Cost: ${part.cost.toFixed(2)}</div>
-                              <div className="text-blue-600 font-semibold">{part.margin.toFixed(1)}% margin</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Part Details */}
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Brand:</span>
-                            <span>{part.brand || 'Unknown'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Stock:</span>
-                            <span className={stockStatus.status === 'out-of-stock' ? 'text-red-600' : ''}>{part.quantity} units</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Location:</span>
-                            <span>{part.location || 'N/A'}</span>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex gap-2 pt-2">
-                          <Button 
-                            onClick={() => handleAddToCart(part)}
-                            disabled={part.quantity === 0}
-                            className="flex-1"
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add to Cart
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="px-3"
-                            onClick={() => handleViewDetail(part)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="px-3"
-                            onClick={() => {
-                              setSelectedPriceCheckPart(part);
-                              setShowPriceCheckDialog(true);
-                            }}
-                          >
-                            <DollarSign className="h-4 w-4" />
-                          </Button>
-                          {part.dropship_available && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="px-3"
-                              onClick={() => {
-                                setSelectedDropshipPart(part);
-                                setShowDropshipDialog(true);
-                              }}
-                            >
-                              <ArrowRight className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          ) : (
-            /* List View */
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Part</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Cost</TableHead>
-                    <TableHead>Margin</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {currentParts.map((part) => {
-                    const stockStatus = getStockStatus(part.quantity);
-                    // ✅ FIXED: Use pre-computed isKit field instead of hook call
-                    const isKit = part.isKit || false;
-                    
-                    return (
-                      <TableRow key={part.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div>
-                              <div className="font-medium">{part.name}</div>
-                              <div className="text-sm text-muted-foreground">{part.brand || 'Unknown'}</div>
-                              {isKit && <Badge variant="outline" className="bg-purple-100 text-purple-800">Kit</Badge>}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono">{part.sku || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{part.category}</Badge>
-                        </TableCell>
-                        <TableCell className="font-semibold text-green-600">
-                          ${part.price.toFixed(2)}
-                        </TableCell>
-                        <TableCell>${part.cost.toFixed(2)}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-blue-600">
-                            {part.margin.toFixed(1)}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={stockStatus.color as any}>{stockStatus.label}</Badge>
-                            <span className="text-sm">{part.quantity}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleFavorite(part.id)}
-                              className={favorites.includes(part.id) ? "text-red-500" : ""}
-                            >
-                              <Heart className={`h-4 w-4 ${favorites.includes(part.id) ? "fill-current" : ""}`} />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleAddToCart(part)}
-                              disabled={part.quantity === 0}
-                            >
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewDetail(part)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedPriceCheckPart(part);
-                                setShowPriceCheckDialog(true);
-                              }}
-                            >
-                              <DollarSign className="h-4 w-4" />
-                            </Button>
-                            {part.dropship_available && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedDropshipPart(part);
-                                  setShowDropshipDialog(true);
-                                }}
-                              >
-                                <ArrowRight className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="special-orders" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Create Special Order</CardTitle>
-              <CardDescription>
-                Request parts that are not currently in our inventory
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                onClick={() => setShowSpecialOrderDialog(true)}
-                className="w-full"
-                disabled={!selectedCustomer}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Special Order
-              </Button>
-              {!selectedCustomer && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Please select a customer first to create special orders.
+            {/* Results */}
+            {searchAndFilterParts.length === 0 ? (
+              <Card className="p-8 text-center">
+                <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">No parts found</h3>
+                <p className="text-muted-foreground mb-4">
+                  Try adjusting your search terms or filters
                 </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* All Dialogs */}
-      {/* Customer Search Dialog */}
-      <Dialog open={showCustomerSearch} onOpenChange={setShowCustomerSearch}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Select Customer</DialogTitle>
-            <DialogDescription>
-              Search and select a customer for orders and quotes
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search customers by name, email, or phone..."
-                value={customerSearchTerm}
-                onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            
-            {isSearchingCustomers && (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            )}
-            
-            <ScrollArea className="max-h-60">
-              <div className="space-y-2">
-                {customerSearchResults.map(customer => (
-                  <div
-                    key={customer.id}
-                    className="flex items-center justify-between p-3 border rounded cursor-pointer hover:bg-gray-50"
-                    onClick={() => {
-                      setSelectedCustomer(customer);
-                      setShowCustomerSearch(false);
-                      setCustomerSearchTerm("");
-                      setCustomerSearchResults([]);
-                    }}
-                  >
-                    <div>
-                      <div className="font-medium">{customer.display_name}</div>
-                      <div className="text-sm text-muted-foreground">{customer.email}</div>
-                      {customer.phone && (
-                        <div className="text-sm text-muted-foreground">{customer.phone}</div>
-                      )}
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      Select
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-            
-            {customerSearchTerm && !isSearchingCustomers && customerSearchResults.length === 0 && (
-              <div className="text-center py-4 text-muted-foreground">
-                No customers found. Try a different search term.
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Special Order Dialog */}
-      <Dialog open={showSpecialOrderDialog} onOpenChange={setShowSpecialOrderDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Create Special Order</DialogTitle>
-            <DialogDescription>
-              Request a part that's not currently in inventory
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            {selectedCustomer && (
-              <Alert>
-                <User className="h-4 w-4" />
-                <AlertDescription>
-                  Order for: {selectedCustomer.display_name} ({selectedCustomer.email})
-                </AlertDescription>
-              </Alert>
-            )}
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="part_description">Part Description *</Label>
-                <Textarea
-                  id="part_description"
-                  placeholder="Describe the part you need..."
-                  value={specialOrderForm.part_description}
-                  onChange={(e) => setSpecialOrderForm(prev => ({
-                    ...prev,
-                    part_description: e.target.value
-                  }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="manufacturer">Manufacturer</Label>
-                <Input
-                  id="manufacturer"
-                  placeholder="e.g., Ford, Chevrolet, etc."
-                  value={specialOrderForm.manufacturer}
-                  onChange={(e) => setSpecialOrderForm(prev => ({
-                    ...prev,
-                    manufacturer: e.target.value
-                  }))}
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="part_number">Part Number</Label>
-                <Input
-                  id="part_number"
-                  placeholder="Manufacturer part number"
-                  value={specialOrderForm.part_number}
-                  onChange={(e) => setSpecialOrderForm(prev => ({
-                    ...prev,
-                    part_number: e.target.value
-                  }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  value={specialOrderForm.quantity}
-                  onChange={(e) => setSpecialOrderForm(prev => ({
-                    ...prev,
-                    quantity: parseInt(e.target.value) || 1
-                  }))}
-                />
-              </div>
-            </div>
-            
-            <div>
-              <Label htmlFor="notes">Additional Notes</Label>
-              <Textarea
-                id="notes"
-                placeholder="Any additional information or requirements..."
-                value={specialOrderForm.notes}
-                onChange={(e) => setSpecialOrderForm(prev => ({
-                  ...prev,
-                  notes: e.target.value
-                }))}
-              />
-            </div>
-            
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowSpecialOrderDialog(false)}>
-                Cancel
-              </Button>
-              <Button onClick={submitSpecialOrder}>
-                Submit Special Order
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Shipping Dialog */}
-      <Dialog open={showShippingDialog} onOpenChange={setShowShippingDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Get Shipping Quotes</DialogTitle>
-            <DialogDescription>
-              Enter shipping address to get quotes for your cart items
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <Label htmlFor="street">Street Address</Label>
-                <Input
-                  id="street"
-                  placeholder="123 Main St"
-                  value={selectedShippingAddress.street}
-                  onChange={(e) => setSelectedShippingAddress(prev => ({
-                    ...prev,
-                    street: e.target.value
-                  }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="city">City</Label>
-                <Input
-                  id="city"
-                  placeholder="City"
-                  value={selectedShippingAddress.city}
-                  onChange={(e) => setSelectedShippingAddress(prev => ({
-                    ...prev,
-                    city: e.target.value
-                  }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="state">State</Label>
-                <Input
-                  id="state"
-                  placeholder="State"
-                  value={selectedShippingAddress.state}
-                  onChange={(e) => setSelectedShippingAddress(prev => ({
-                    ...prev,
-                    state: e.target.value
-                  }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="zip">ZIP Code</Label>
-                <Input
-                  id="zip"
-                  placeholder="12345"
-                  value={selectedShippingAddress.zip}
-                  onChange={(e) => setSelectedShippingAddress(prev => ({
-                    ...prev,
-                    zip: e.target.value
-                  }))}
-                />
-              </div>
-            </div>
-            
-            <Button 
-              onClick={getShippingQuotes} 
-              disabled={isLoadingShipping}
-              className="w-full"
-            >
-              {isLoadingShipping ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Getting Quotes...
-                </>
-              ) : (
-                "Get Shipping Quotes"
-              )}
-            </Button>
-            
-            {shippingQuotes.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold">Available Shipping Options:</h4>
-                {shippingQuotes.map((quote, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border rounded">
-                    <div>
-                      <div className="font-medium">{quote.carrier} - {quote.service}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {quote.transit_days} business days • Delivery by {quote.delivery_date}
-                      </div>
-                    </div>
-                    <div className="text-lg font-semibold">
-                      ${quote.cost.toFixed(2)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dropship Order Dialog */}
-      <Dialog open={showDropshipDialog} onOpenChange={setShowDropshipDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Create Dropship Order</DialogTitle>
-            <DialogDescription>
-              Order this part to be shipped directly to the customer
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedDropshipPart && (
-            <div className="space-y-4">
-              <Alert>
-                <Package className="h-4 w-4" />
-                <AlertDescription>
-                  {selectedDropshipPart.name} - ${selectedDropshipPart.price.toFixed(2)}
-                </AlertDescription>
-              </Alert>
-              
-              {selectedCustomer && (
-                <Alert>
-                  <User className="h-4 w-4" />
-                  <AlertDescription>
-                    Customer: {selectedCustomer.display_name} ({selectedCustomer.email})
-                  </AlertDescription>
-                </Alert>
-              )}
-              
-              <div>
-                <Label htmlFor="dropship_quantity">Quantity</Label>
-                <Input
-                  id="dropship_quantity"
-                  type="number"
-                  min="1"
-                  max={selectedDropshipPart.quantity}
-                  value={dropshipQuantity}
-                  onChange={(e) => setDropshipQuantity(parseInt(e.target.value) || 1)}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <Label htmlFor="dropship_street">Shipping Address</Label>
-                  <Input
-                    id="dropship_street"
-                    placeholder="123 Main St"
-                    value={selectedShippingAddress.street}
-                    onChange={(e) => setSelectedShippingAddress(prev => ({
-                      ...prev,
-                      street: e.target.value
-                    }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="dropship_city">City</Label>
-                  <Input
-                    id="dropship_city"
-                    placeholder="City"
-                    value={selectedShippingAddress.city}
-                    onChange={(e) => setSelectedShippingAddress(prev => ({
-                      ...prev,
-                      city: e.target.value
-                    }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="dropship_state">State</Label>
-                  <Input
-                    id="dropship_state"
-                    placeholder="State"
-                    value={selectedShippingAddress.state}
-                    onChange={(e) => setSelectedShippingAddress(prev => ({
-                      ...prev,
-                      state: e.target.value
-                    }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="dropship_zip">ZIP Code</Label>
-                  <Input
-                    id="dropship_zip"
-                    placeholder="12345"
-                    value={selectedShippingAddress.zip}
-                    onChange={(e) => setSelectedShippingAddress(prev => ({
-                      ...prev,
-                      zip: e.target.value
-                    }))}
-                  />
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowDropshipDialog(false)}>
-                  Cancel
+                <Button variant="outline" onClick={resetFilters}>
+                  Reset Filters
                 </Button>
-                <Button 
-                  onClick={processDropshipOrder}
-                  disabled={isProcessingDropship || !selectedCustomer}
-                >
-                  {isProcessingDropship ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    "Create Dropship Order"
-                  )}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Product Price Check Dialog */}
-      <Dialog open={showPriceCheckDialog} onOpenChange={setShowPriceCheckDialog}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Price Check</DialogTitle>
-            <DialogDescription>
-              Check pricing and availability from multiple sources
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedPriceCheckPart && (
-            <ProductPriceCheck 
-              part={selectedPriceCheckPart}
-              onClose={() => setShowPriceCheckDialog(false)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Cart Dialog */}
-      <Dialog open={showCart} onOpenChange={setShowCart}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Shopping Cart ({cartItemCount} items)</DialogTitle>
-            <DialogDescription>Review your selected parts</DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            {cartItems.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">Your cart is empty</p>
+              </Card>
             ) : (
               <>
-                <ScrollArea className="max-h-60">
-                  <div className="space-y-2">
-                    {cartItems.map(item => (
-                      <div key={item.id} className="flex items-center justify-between p-2 border rounded">
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">{item.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            ${item.price.toFixed(2)} each
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateCartQuantity(item.id, item.cartQuantity - 1)}
-                            className="h-6 w-6 p-0"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="text-sm w-8 text-center">{item.cartQuantity}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateCartQuantity(item.id, item.cartQuantity + 1)}
-                            className="h-6 w-6 p-0"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeFromCart(item.id)}
-                            className="h-6 w-6 p-0 text-red-500"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {paginatedParts.map(renderPartCard)}
                   </div>
-                </ScrollArea>
+                ) : (
+                  renderListView()
+                )}
                 
-                <Separator />
-                
-                <div className="flex justify-between items-center font-semibold">
-                  <span>Total: ${cartTotal.toFixed(2)}</span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={clearCart}>
-                      Clear
-                    </Button>
-                    <Button size="sm">
-                      Checkout
-                    </Button>
+                {totalPages > 1 && (
+                  <div className="mt-6">
+                    {renderPagination()}
                   </div>
-                </div>
+                )}
               </>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
-      {/* Detail Dialog */}
+      {/* Part Detail Dialog */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{selectedPart?.name}</DialogTitle>
-            <DialogDescription>Part Details</DialogDescription>
           </DialogHeader>
-          
           {selectedPart && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>SKU</Label>
-                  <p className="font-mono">{selectedPart.sku || 'N/A'}</p>
+                  <Label className="text-sm font-medium">SKU</Label>
+                  <p className="text-sm">{selectedPart.sku || 'N/A'}</p>
                 </div>
                 <div>
-                  <Label>Category</Label>
-                  <p>{selectedPart.category}</p>
+                  <Label className="text-sm font-medium">VCPN</Label>
+                  <p className="text-sm">{selectedPart.keystone_vcpn || 'N/A'}</p>
                 </div>
                 <div>
-                  <Label>Price</Label>
-                  <p className="text-2xl font-bold text-green-600">${selectedPart.price.toFixed(2)}</p>
+                  <Label className="text-sm font-medium">Brand</Label>
+                  <p className="text-sm">{selectedPart.brand}</p>
                 </div>
                 <div>
-                  <Label>Stock</Label>
-                  <p className={selectedPart.quantity > 0 ? 'text-green-600' : 'text-red-600'}>
-                    {selectedPart.quantity} units
+                  <Label className="text-sm font-medium">Category</Label>
+                  <p className="text-sm">{selectedPart.category}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Price</Label>
+                  <p className="text-lg font-bold text-green-600">
+                    ${selectedPart.list_price.toFixed(2)}
                   </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Stock</Label>
+                  <Badge className={getStockBadgeColor(selectedPart.stockStatus || 'Out of Stock')}>
+                    {selectedPart.stockStatus} ({selectedPart.quantity_on_hand})
+                  </Badge>
                 </div>
               </div>
               
               {selectedPart.description && (
                 <div>
-                  <Label>Description</Label>
-                  <p>{selectedPart.description}</p>
+                  <Label className="text-sm font-medium">Description</Label>
+                  <p className="text-sm mt-1">{selectedPart.description}</p>
                 </div>
               )}
               
-              <div className="flex gap-2">
+              <div className="flex gap-2 pt-4">
                 <Button 
-                  onClick={() => {
-                    handleAddToCart(selectedPart);
-                    setShowDetailDialog(false);
-                  }}
-                  disabled={selectedPart.quantity === 0}
+                  onClick={() => handleAddToCart(selectedPart)}
+                  disabled={selectedPart.stockStatus === 'Out of Stock'}
                   className="flex-1"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -1564,5 +1245,7 @@ export default function Parts() {
       </Dialog>
     </div>
   );
-}
+};
+
+export default Parts;
 
