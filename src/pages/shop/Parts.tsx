@@ -40,9 +40,6 @@ import {
 import { getSupabaseClient } from "@/lib/supabase";
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
-// Import Fuse.js for fuzzy search
-import Fuse from 'fuse.js';
-
 // Customer search result interface
 interface CustomerSearchResult {
   id: string;
@@ -292,19 +289,60 @@ const getStockBadge = (status: string) => {
   }
 };
 
-// Fuzzy search configuration
-const fuseOptions = {
-  keys: [
-    { name: 'name', weight: 0.3 },
-    { name: 'sku', weight: 0.2 },
-    { name: 'description', weight: 0.2 },
-    { name: 'manufacturer_part_no', weight: 0.15 },
-    { name: 'compatibility', weight: 0.1 },
-    { name: 'brand', weight: 0.05 }
-  ],
-  threshold: 0.4,
-  includeScore: true,
-  includeMatches: true
+// Native fuzzy search implementation (no external dependencies)
+const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[] => {
+  if (!searchTerm.trim()) return parts;
+  
+  const term = searchTerm.toLowerCase();
+  
+  // Score each part based on relevance
+  const scoredParts = parts.map(part => {
+    let score = 0;
+    
+    // Exact matches get highest score
+    const fields = [
+      { value: part.name, weight: 30 },
+      { value: part.sku, weight: 20 },
+      { value: part.description || '', weight: 20 },
+      { value: part.manufacturer_part_no || '', weight: 15 },
+      { value: part.compatibility || '', weight: 10 },
+      { value: part.brand || '', weight: 5 }
+    ];
+    
+    fields.forEach(field => {
+      const fieldValue = field.value.toLowerCase();
+      
+      // Exact match
+      if (fieldValue === term) {
+        score += field.weight * 10;
+      }
+      // Starts with search term
+      else if (fieldValue.startsWith(term)) {
+        score += field.weight * 5;
+      }
+      // Contains search term
+      else if (fieldValue.includes(term)) {
+        score += field.weight * 2;
+      }
+      // Fuzzy match (allows for typos)
+      else {
+        const words = term.split(' ');
+        words.forEach(word => {
+          if (word.length > 2 && fieldValue.includes(word)) {
+            score += field.weight * 0.5;
+          }
+        });
+      }
+    });
+    
+    return { part, score };
+  });
+  
+  // Filter out parts with no relevance and sort by score
+  return scoredParts
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(item => item.part);
 };
 
 // Enhanced hook to load real inventory data with categorization
@@ -513,11 +551,6 @@ export default function Parts() {
   const { toast } = useToast();
   const { parts, loading, error } = useInventoryData();
 
-  // Initialize Fuse.js for fuzzy search
-  const fuse = useMemo(() => {
-    return new Fuse(parts, fuseOptions);
-  }, [parts]);
-
   // Event handlers
   const handleAddToCart = (part: InventoryPart) => {
     console.log('🛒 Add to cart clicked for:', part.name);
@@ -579,14 +612,13 @@ export default function Parts() {
     );
   };
 
-  // Enhanced filtering and sorting with fuzzy search
+  // Enhanced filtering and sorting with native fuzzy search
   const filteredAndSortedParts = useMemo(() => {
     let filtered: InventoryPart[] = [];
 
-    // Apply fuzzy search if search term exists
+    // Apply native fuzzy search if search term exists
     if (searchTerm.trim()) {
-      const searchResults = fuse.search(searchTerm);
-      filtered = searchResults.map(result => result.item);
+      filtered = fuzzySearch(searchTerm, parts);
     } else {
       filtered = [...parts];
     }
@@ -630,7 +662,7 @@ export default function Parts() {
     });
 
     return filtered;
-  }, [parts, fuse, searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, priceRange, showFavoritesOnly, sortBy]);
+  }, [parts, searchTerm, selectedCategory, selectedBrand, selectedStockStatus, selectedRegion, priceRange, showFavoritesOnly, sortBy]);
 
   // Pagination
   const totalPages = Math.ceil(filteredAndSortedParts.length / itemsPerPage);
@@ -763,7 +795,7 @@ export default function Parts() {
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Fuzzy search: name, SKU, description, part number, compatibility..."
+                    placeholder="Smart search: name, SKU, description, part number, compatibility..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
@@ -917,7 +949,7 @@ export default function Parts() {
               </Badge>
               {searchTerm && (
                 <Badge variant="outline" className="text-blue-600">
-                  🔍 Fuzzy search active
+                  🔍 Smart search active
                 </Badge>
               )}
             </div>
