@@ -1807,7 +1807,7 @@ function PartsContent() {
   );
 }
 
-// ✅ NEW: Main component wrapped with CartProvider
+// ✅ NEW: Main componentwrapped with CartProvider
 export default function Parts() {
   return (
     <CartProvider>
