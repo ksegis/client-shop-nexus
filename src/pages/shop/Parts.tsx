@@ -38,8 +38,9 @@ interface InventoryPart {
   sku?: string;
   keystone_vcpn?: string;
   cost: number;
-  list_price: number;
+  list_price: number; // This will come from pricing management table
   quantity_on_hand: number;
+  in_stock: boolean; // Use this for stock status
   location?: string;
   description?: string;
   LongDescription?: string;
@@ -49,12 +50,13 @@ interface InventoryPart {
   brand?: string;
   isKit?: boolean;
   margin?: number;
-  stockStatus?: 'In Stock' | 'Low Stock' | 'Out of Stock';
+  stockStatus?: 'In Stock' | 'Out of Stock';
   regionalAvailability?: string[];
   vehicleCategory?: string;
   partCategory?: string;
   modelYear?: string;
   vehicleModel?: string;
+  pricing_status?: string; // From pricing table
 }
 
 interface VehicleCategory {
@@ -268,11 +270,9 @@ const checkIfKit = (partId: string): boolean => {
   return id.toLowerCase().includes('kit') || id.toLowerCase().includes('set') || false;
 };
 
-const getStockStatus = (quantity: number): 'In Stock' | 'Low Stock' | 'Out of Stock' => {
-  const qty = Number(quantity) || 0;
-  if (qty === 0) return 'Out of Stock';
-  if (qty <= 5) return 'Low Stock';
-  return 'In Stock';
+// Updated to use in_stock boolean
+const getStockStatus = (inStock: boolean): 'In Stock' | 'Out of Stock' => {
+  return inStock ? 'In Stock' : 'Out of Stock';
 };
 
 const getRegionalAvailability = (): string[] => {
@@ -301,11 +301,11 @@ const useProgressiveInventoryData = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔍 Starting progressive inventory loading...');
+      console.log('🔍 Starting progressive inventory loading with pricing...');
       
       const supabase = getSupabaseClient();
       
-      // First, get total count
+      // First, get total count from inventory
       const { count } = await supabase
         .from('inventory')
         .select('*', { count: 'exact', head: true });
@@ -317,7 +317,15 @@ const useProgressiveInventoryData = () => {
       const firstBatchSize = 500;
       const { data: firstBatch, error: firstError } = await supabase
         .from('inventory')
-        .select('*')
+        .select(`
+          *,
+          pricing_records (
+            list_price,
+            cost,
+            markup,
+            status
+          )
+        `)
         .range(0, firstBatchSize - 1)
         .order('name');
 
@@ -355,14 +363,22 @@ const useProgressiveInventoryData = () => {
     return batch.map(item => {
       const longDesc = safeString(item.LongDescription || item.description || '');
       
+      // Get pricing data from joined pricing_records table
+      const pricingRecord = item.pricing_records?.[0]; // Assuming one pricing record per part
+      const listPrice = Number(pricingRecord?.list_price) || Number(item.list_price) || 0;
+      const cost = Number(pricingRecord?.cost) || Number(item.cost) || 0;
+      
+      console.log(`💰 Part: ${item.name} - List Price: $${listPrice} (from ${pricingRecord ? 'pricing table' : 'inventory table'})`);
+      
       return {
         id: safeString(item.id),
         name: safeString(item.name || 'Unnamed Part'),
         sku: safeString(item.sku),
         keystone_vcpn: safeString(item.keystone_vcpn),
-        cost: Number(item.cost) || 0,
-        list_price: Number(item.list_price) || 0,
+        cost: cost,
+        list_price: listPrice, // Use pricing table list_price
         quantity_on_hand: Number(item.quantity_on_hand) || 0,
+        in_stock: Boolean(item.in_stock), // Use in_stock boolean
         location: safeString(item.location),
         description: safeString(item.description),
         LongDescription: longDesc,
@@ -371,13 +387,14 @@ const useProgressiveInventoryData = () => {
         brand: safeString(item.brand || 'Unknown'),
         category: safeString(item.category),
         isKit: checkIfKit(item.id),
-        margin: calculateMargin(Number(item.cost) || 0, Number(item.list_price) || 0),
-        stockStatus: getStockStatus(Number(item.quantity_on_hand) || 0),
+        margin: calculateMargin(cost, listPrice),
+        stockStatus: getStockStatus(Boolean(item.in_stock)), // Use in_stock boolean
         regionalAvailability: getRegionalAvailability(),
         vehicleCategory: categorizeVehicle(longDesc),
         partCategory: categorizePart(longDesc),
         modelYear: extractModelYear(longDesc),
-        vehicleModel: extractVehicleModel(longDesc)
+        vehicleModel: extractVehicleModel(longDesc),
+        pricing_status: safeString(pricingRecord?.status)
       };
     });
   };
@@ -391,7 +408,15 @@ const useProgressiveInventoryData = () => {
       try {
         const { data, error } = await supabase
           .from('inventory')
-          .select('*')
+          .select(`
+            *,
+            pricing_records (
+              list_price,
+              cost,
+              markup,
+              status
+            )
+          `)
           .range(currentOffset, currentOffset + batchSize - 1)
           .order('name');
 
@@ -556,6 +581,8 @@ const Parts: React.FC = () => {
     console.log('🛒 ===== ADD TO CART FUNCTION CALLED =====');
     console.log('🛒 Part:', part.name);
     console.log('🛒 Part ID:', part.id);
+    console.log('🛒 In Stock:', part.in_stock);
+    console.log('🛒 List Price:', part.list_price);
     console.log('🛒 Current cart state:', cart);
     
     const partId = part.id;
@@ -736,7 +763,7 @@ const Parts: React.FC = () => {
           comparison = safeString(a.partCategory).localeCompare(safeString(b.partCategory));
           break;
         case 'stock':
-          comparison = (Number(a.quantity_on_hand) || 0) - (Number(b.quantity_on_hand) || 0);
+          comparison = (a.in_stock ? 1 : 0) - (b.in_stock ? 1 : 0);
           break;
       }
       return sortOrder === 'asc' ? comparison : -comparison;
@@ -878,7 +905,7 @@ const Parts: React.FC = () => {
           <div className="text-center">
             <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
             <p className="text-lg">Loading initial inventory...</p>
-            <p className="text-sm text-muted-foreground">Preparing first batch of parts</p>
+            <p className="text-sm text-muted-foreground">Preparing first batch of parts with pricing</p>
           </div>
         </div>
       </div>
@@ -930,14 +957,13 @@ const Parts: React.FC = () => {
   const getStockBadgeColor = (status: string) => {
     switch (status) {
       case 'In Stock': return 'bg-green-100 text-green-800';
-      case 'Low Stock': return 'bg-yellow-100 text-yellow-800';
       case 'Out of Stock': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const renderPartCard = (part: InventoryPart) => {
-    console.log('🎨 Rendering part card for:', part.name);
+    console.log('🎨 Rendering part card for:', part.name, 'In Stock:', part.in_stock, 'List Price:', part.list_price);
     const isKit = part.isKit || false;
     
     return (
@@ -1048,7 +1074,7 @@ const Parts: React.FC = () => {
                 }}
                 onMouseEnter={() => console.log('🖱️ Mouse entered button for:', part.name)}
                 onMouseLeave={() => console.log('🖱️ Mouse left button for:', part.name)}
-                className="flex-1 text-white bg-[#0820a1] hover:bg-[#5A6FD7]"
+                className="flex-1 text-white bg-[#6B7FE8] hover:bg-[#5A6FD7]"
                 size="sm"
                 // NEVER DISABLED - ALWAYS CLICKABLE
               >
@@ -1410,7 +1436,6 @@ const Parts: React.FC = () => {
                     <SelectContent>
                       <SelectItem value="all">All Stock Levels</SelectItem>
                       <SelectItem value="In Stock">In Stock</SelectItem>
-                      <SelectItem value="Low Stock">Low Stock</SelectItem>
                       <SelectItem value="Out of Stock">Out of Stock</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1655,7 +1680,7 @@ const Parts: React.FC = () => {
                                   ${(Number(part.list_price) || 0).toFixed(2)}
                                 </span>
                                 <span className="text-xs text-green-600">
-                                  {Number(part.quantity_on_hand) || 0} in stock
+                                  {part.in_stock ? 'In Stock' : 'Out of Stock'}
                                 </span>
                               </div>
 
@@ -1816,7 +1841,7 @@ const Parts: React.FC = () => {
                   <p className="text-sm">{safeString(selectedPart.modelYear) || 'N/A'}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">Price</Label>
+                  <Label className="text-sm font-medium">Price (from Pricing Management)</Label>
                   <p className="text-lg font-bold text-green-600">
                     ${(Number(selectedPart.list_price) || 0).toFixed(2)}
                   </p>
@@ -1842,7 +1867,7 @@ const Parts: React.FC = () => {
                     console.log('🔥 DIALOG BUTTON CLICKED!');
                     addToCart(selectedPart);
                   }}
-                  className="flex-1 text-white bg-[#0820a1] hover:bg-[#5A6FD7]"
+                  className="flex-1 text-white bg-[#6B7FE8] hover:bg-[#5A6FD7]"
                   // NEVER DISABLED - ALWAYS CLICKABLE
                 >
                   <Plus className="h-4 w-4 mr-2" />
