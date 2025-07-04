@@ -1,4 +1,4 @@
-// Fixed version of PricingManagement with smart auto-calculation that respects manual changes
+// Fixed version of PricingManagement with auto-clearing search results
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -107,7 +107,10 @@ const PricingManagement: React.FC = () => {
   const [selectedInventoryPart, setSelectedInventoryPart] = useState<InventoryPart | null>(null);
   const [priceRecommendations, setPriceRecommendations] = useState<{ [vcpn: string]: PriceRecommendation }>({});
   
-  // ✅ NEW: Track if price was manually set by user
+  // ✅ Track current tab for auto-clearing
+  const [currentTab, setCurrentTab] = useState('pricing');
+  
+  // ✅ Track if price was manually set by user
   const [priceManuallySet, setPriceManuallySet] = useState(false);
   const lastCalculatedPrice = useRef<number>(0);
   
@@ -155,6 +158,48 @@ const PricingManagement: React.FC = () => {
     const calculatedPrice = cost * (1 + markupPercent / 100);
     return Math.round(calculatedPrice * 100) / 100; // Round to 2 decimal places
   }, []);
+
+  // ✅ NEW: Clear search results and reset form
+  const clearSearchResults = useCallback(() => {
+    setInventorySearchTerm('');
+    setInventoryParts([]);
+    setSelectedInventoryPart(null);
+  }, []);
+
+  // ✅ NEW: Reset form to initial state
+  const resetForm = useCallback(() => {
+    setFormData({
+      keystone_vcpn: '',
+      part_name: '',
+      part_sku: '',
+      cost: 0,
+      list_price: 0,
+      markup_percentage: 30,
+      core_charge: 0,
+      minimum_price: 0,
+      maximum_discount_percentage: 0,
+      currency: 'USD',
+      effective_start_date: new Date().toISOString().split('T')[0],
+      status: 'active',
+      notes: '',
+      reason_for_change: '',
+      auto_update_enabled: true,
+      minimum_markup_percentage: 15
+    });
+    setPriceManuallySet(false);
+    lastCalculatedPrice.current = 0;
+    clearSearchResults();
+  }, [clearSearchResults]);
+
+  // ✅ NEW: Handle tab changes with cleanup
+  const handleTabChange = (newTab: string) => {
+    setCurrentTab(newTab);
+    
+    // Clear search results when navigating away from create tab
+    if (currentTab === 'create' && newTab !== 'create') {
+      clearSearchResults();
+    }
+  };
 
   // ✅ IMPROVED: Smart auto-calculation that respects manual changes
   useEffect(() => {
@@ -399,29 +444,10 @@ const PricingManagement: React.FC = () => {
         console.log('✅ Insert successful:', insertResult);
       }
 
-      // Reset form and close dialog
-      setFormData({
-        keystone_vcpn: '',
-        part_name: '',
-        part_sku: '',
-        cost: 0,
-        list_price: 0,
-        markup_percentage: 30,
-        core_charge: 0,
-        minimum_price: 0,
-        maximum_discount_percentage: 0,
-        currency: 'USD',
-        effective_start_date: new Date().toISOString().split('T')[0],
-        status: 'active',
-        notes: '',
-        reason_for_change: '',
-        auto_update_enabled: true,
-        minimum_markup_percentage: 15
-      });
+      // ✅ ENHANCED: Reset form and clear search results after save
+      resetForm();
       setEditingRecord(null);
       setIsCreateDialogOpen(false);
-      setSelectedInventoryPart(null);
-      resetPriceManualFlag(); // ✅ NEW: Reset manual flag
 
       // Reload records
       await loadPricingRecords(pricingSearchTerm);
@@ -548,6 +574,28 @@ const PricingManagement: React.FC = () => {
     }
   };
 
+  // ✅ ENHANCED: Handle inventory item selection with auto-clear
+  const handleInventorySelection = (part: InventoryPart) => {
+    setSelectedInventoryPart(part);
+    const calculatedPrice = calculateListPrice(part.cost, pricingSettings.defaultMarkupPercent);
+    setFormData(prev => ({
+      ...prev,
+      keystone_vcpn: part.keystone_vcpn || '',
+      part_name: part.name,
+      part_sku: part.sku,
+      cost: part.cost,
+      list_price: calculatedPrice,
+      markup_percentage: pricingSettings.defaultMarkupPercent
+    }));
+    resetPriceManualFlag();
+    lastCalculatedPrice.current = calculatedPrice;
+    
+    // ✅ NEW: Clear search results after selection
+    setTimeout(() => {
+      clearSearchResults();
+    }, 500); // Small delay to show selection feedback
+  };
+
   // Load settings on component mount
   useEffect(() => {
     const savedSettings = localStorage.getItem('pricingSettings');
@@ -571,6 +619,9 @@ const PricingManagement: React.FC = () => {
         loadInventoryParts(inventorySearchTerm);
       }, 300);
       return () => clearTimeout(timeoutId);
+    } else {
+      // ✅ NEW: Clear results when search term is empty
+      setInventoryParts([]);
     }
   }, [inventorySearchTerm]);
 
@@ -585,7 +636,9 @@ const PricingManagement: React.FC = () => {
     formDataPreview: prepareDataForDatabase(formData),
     calculatedPrice: formData.cost && formData.markup_percentage ? calculateListPrice(formData.cost, formData.markup_percentage) : 0,
     priceManuallySet: priceManuallySet,
-    lastCalculatedPrice: lastCalculatedPrice.current
+    lastCalculatedPrice: lastCalculatedPrice.current,
+    searchResultsCount: inventoryParts.length,
+    currentTab: currentTab
   };
 
   return (
@@ -679,7 +732,9 @@ const PricingManagement: React.FC = () => {
             Required Fields: {debugInfo.hasRequiredFields ? '✅' : '❌'} | 
             Records: {pricingRecords.length} | 
             Calculated: ${debugInfo.calculatedPrice.toFixed(2)} | 
-            Manual: {debugInfo.priceManuallySet ? '🔒' : '🔄'}
+            Manual: {debugInfo.priceManuallySet ? '🔒' : '🔄'} | 
+            Search Results: {debugInfo.searchResultsCount} | 
+            Tab: {debugInfo.currentTab}
           </AlertDescription>
         </Alert>
       )}
@@ -725,7 +780,7 @@ const PricingManagement: React.FC = () => {
       )}
 
       {/* Main Content */}
-      <Tabs defaultValue="pricing" className="space-y-4">
+      <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList>
           <TabsTrigger value="pricing">Pricing Records</TabsTrigger>
           <TabsTrigger value="create">Create Pricing</TabsTrigger>
@@ -860,10 +915,20 @@ const PricingManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Inventory Results */}
-                {inventoryParts.length > 0 && (
+                {/* ✅ ENHANCED: Inventory Results with auto-clear */}
+                {inventoryParts.length > 0 && inventorySearchTerm && (
                   <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
-                    <h4 className="font-medium mb-2">Select a part:</h4>
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-medium">Select a part:</h4>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearSearchResults}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
                     <div className="space-y-2">
                       {inventoryParts.map((part) => (
                         <div
@@ -871,21 +936,7 @@ const PricingManagement: React.FC = () => {
                           className={`p-2 border rounded cursor-pointer hover:bg-gray-50 ${
                             selectedInventoryPart?.id === part.id ? 'bg-blue-50 border-blue-300' : ''
                           }`}
-                          onClick={() => {
-                            setSelectedInventoryPart(part);
-                            const calculatedPrice = calculateListPrice(part.cost, pricingSettings.defaultMarkupPercent);
-                            setFormData(prev => ({
-                              ...prev,
-                              keystone_vcpn: part.keystone_vcpn || '',
-                              part_name: part.name,
-                              part_sku: part.sku,
-                              cost: part.cost,
-                              list_price: calculatedPrice, // ✅ Auto-calculate on selection
-                              markup_percentage: pricingSettings.defaultMarkupPercent
-                            }));
-                            resetPriceManualFlag(); // ✅ NEW: Reset manual flag when selecting new item
-                            lastCalculatedPrice.current = calculatedPrice;
-                          }}
+                          onClick={() => handleInventorySelection(part)}
                         >
                           <div className="font-medium">{part.name}</div>
                           <div className="text-sm text-gray-600">
@@ -1026,28 +1077,7 @@ const PricingManagement: React.FC = () => {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setFormData({
-                        keystone_vcpn: '',
-                        part_name: '',
-                        part_sku: '',
-                        cost: 0,
-                        list_price: 0,
-                        markup_percentage: 30,
-                        core_charge: 0,
-                        minimum_price: 0,
-                        maximum_discount_percentage: 0,
-                        currency: 'USD',
-                        effective_start_date: new Date().toISOString().split('T')[0],
-                        status: 'active',
-                        notes: '',
-                        reason_for_change: '',
-                        auto_update_enabled: true,
-                        minimum_markup_percentage: 15
-                      });
-                      setSelectedInventoryPart(null);
-                      resetPriceManualFlag(); // ✅ NEW: Reset manual flag when clearing form
-                    }}
+                    onClick={resetForm} // ✅ ENHANCED: Use resetForm function
                   >
                     <X className="w-4 h-4 mr-2" />
                     Clear Form
