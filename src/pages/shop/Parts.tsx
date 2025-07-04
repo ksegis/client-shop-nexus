@@ -341,19 +341,23 @@ const useCart = () => {
   }, [cart]);
 
   const addToCart = useCallback((part: InventoryPart, quantity: number = 1) => {
-    const partId = part.id;
-    const maxQuantity = Number(part.quantity_on_hand) || 0;
-    const currentQuantity = cart[partId] || 0;
-    const newQuantity = currentQuantity + quantity;
+  const partId = part.id;
+  const currentQuantity = cart[partId] || 0;
+  const newQuantity = currentQuantity + quantity;
 
-    if (part.stockStatus === 'Out of Stock' || maxQuantity === 0) {
-      toast({
-        title: "Out of Stock",
-        description: "This item is currently out of stock.",
-        variant: "destructive",
-      });
-      return;
-    }
+  setCart(prev => ({
+    ...prev,
+    [partId]: newQuantity
+  }));
+
+  toast({
+    title: currentQuantity > 0 ? "Quantity Updated" : "Added to Cart",
+    description: currentQuantity > 0 
+      ? `${part.name} quantity increased to ${newQuantity}.`
+      : `${part.name} has been added to your cart.`,
+    variant: "default",
+  });
+}, [cart, toast]);
 
     if (newQuantity > maxQuantity) {
       toast({
