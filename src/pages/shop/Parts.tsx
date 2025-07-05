@@ -21,7 +21,7 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Categorization logic from JSON config
+// Enhanced categorization logic with word boundary matching
 const MAKE_KEYWORDS = [
   "ford", "chevy", "gmc", "jeep", "ram", "toyota", "dodge", 
   "nissan", "honda", "hyundai", "kia", "subaru", "mazda"
@@ -90,40 +90,94 @@ interface CartItem {
   maxQuantity: number;
 }
 
-// Categorization functions using JSON logic
-const categorizeVehicleMake = (text: string): string => {
-  if (!text) return 'universal';
+// Text normalization function
+const normalizeText = (text: string): string => {
+  if (!text) return '';
   
-  const lowerText = text.toLowerCase();
-  
-  // Match make keywords first - assign the first matched keyword as 'vehicleMake'
-  for (const make of MAKE_KEYWORDS) {
-    if (lowerText.includes(make)) {
-      return make;
-    }
-  }
-  
-  return 'universal';
+  return text
+    .toLowerCase()
+    .trim()
+    // Remove extra whitespace
+    .replace(/\s+/g, ' ')
+    // Keep punctuation that separates words, but normalize it
+    .replace(/[^\w\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 };
 
-const categorizePartCategory = (text: string): string => {
-  if (!text) return 'Uncategorized';
-  
-  const lowerText = text.toLowerCase();
-  
-  // Search category keywords - assign the first matched category as 'partCategory'
-  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    for (const keyword of keywords) {
-      if (lowerText.includes(keyword)) {
-        return category;
+// Enhanced word boundary matching for vehicle makes
+const categorizeVehicleMake = (part: any): string => {
+  // Field priority: name, description, long_description, category
+  const searchFields = [
+    part.name || '',
+    part.description || '',
+    part.long_description || '',
+    part.category || ''
+  ];
+
+  // Search each field in priority order
+  for (const field of searchFields) {
+    if (!field) continue;
+    
+    const normalizedField = normalizeText(field);
+    
+    // Check each make keyword with word boundary matching
+    for (const make of MAKE_KEYWORDS) {
+      // Create regex with word boundaries: \bmake\b
+      const regex = new RegExp(`\\b${make}\\b`, 'i');
+      
+      if (regex.test(normalizedField)) {
+        console.log(`🎯 Found make "${make}" in field: "${field.substring(0, 50)}..."`);
+        return make;
       }
     }
   }
   
-  return 'Uncategorized';
+  return 'unknown';
 };
 
-// Vehicle make categories based on JSON config
+// Enhanced word boundary matching for part categories
+const categorizePartCategory = (part: any): string => {
+  // Field priority: name, description, long_description, category
+  const searchFields = [
+    part.name || '',
+    part.description || '',
+    part.long_description || '',
+    part.category || ''
+  ];
+
+  // Search each field in priority order
+  for (const field of searchFields) {
+    if (!field) continue;
+    
+    const normalizedField = normalizeText(field);
+    
+    // Check each category and its keywords
+    for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+      for (const keyword of keywords) {
+        // Handle multi-word keywords
+        if (keyword.includes(' ')) {
+          // For multi-word keywords, check if the phrase exists
+          if (normalizedField.includes(keyword.toLowerCase())) {
+            console.log(`🎯 Found category "${category}" with keyword "${keyword}" in field: "${field.substring(0, 50)}..."`);
+            return category;
+          }
+        } else {
+          // For single words, use word boundary matching
+          const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+          if (regex.test(normalizedField)) {
+            console.log(`🎯 Found category "${category}" with keyword "${keyword}" in field: "${field.substring(0, 50)}..."`);
+            return category;
+          }
+        }
+      }
+    }
+  }
+  
+  return 'uncategorized';
+};
+
+// Vehicle make categories with updated fallback
 const VEHICLE_MAKES = [
   {
     id: 'ford',
@@ -174,9 +228,17 @@ const VEHICLE_MAKES = [
     count: 0
   },
   {
-    id: 'universal',
-    name: 'Universal',
-    description: 'Universal parts that fit multiple vehicles',
+    id: 'dodge',
+    name: 'Dodge',
+    description: 'Dodge truck parts and accessories',
+    icon: '🚐',
+    color: 'bg-orange-500',
+    count: 0
+  },
+  {
+    id: 'unknown',
+    name: 'Unknown/Universal',
+    description: 'Parts that don\'t match specific vehicle makes',
     icon: '🔧',
     color: 'bg-purple-500',
     count: 0
@@ -427,9 +489,9 @@ const Parts: React.FC = () => {
     }
   };
 
-  // Load category statistics
+  // Load category statistics with enhanced word boundary matching
   const loadCategoryStatistics = useCallback(async () => {
-    console.log('📊 Loading category statistics...');
+    console.log('📊 Loading category statistics with enhanced matching...');
     
     try {
       // Test database connection first
@@ -458,40 +520,39 @@ const Parts: React.FC = () => {
 
       console.log(`📊 Total inventory count: ${totalCount}`);
 
-      // Get counts for each vehicle make using the JSON logic
+      // Get counts for each vehicle make using enhanced word boundary matching
       const updatedMakes = await Promise.all(
         VEHICLE_MAKES.map(async (make) => {
           try {
-            if (make.id === 'universal') {
-              // For universal, count parts that don't match any specific make
-              let universalCount = 0;
-              try {
-                // Get a sample of parts to check for universal classification
-                const { data: sampleData, error: sampleError } = await supabase
-                  .from('inventory')
-                  .select('long_description, name, description')
-                  .limit(1000);
+            if (make.id === 'unknown') {
+              // For unknown, we'll estimate based on sample data
+              const { data: sampleData, error: sampleError } = await supabase
+                .from('inventory')
+                .select('name, description, long_description, category')
+                .limit(1000);
+              
+              if (!sampleError && sampleData) {
+                let unknownCount = 0;
+                sampleData.forEach(item => {
+                  const vehicleMake = categorizeVehicleMake(item);
+                  if (vehicleMake === 'unknown') {
+                    unknownCount++;
+                  }
+                });
                 
-                if (!sampleError && sampleData) {
-                  universalCount = sampleData.filter(item => {
-                    const searchText = `${safeString(item.name)} ${safeString(item.long_description)} ${safeString(item.description)}`;
-                    return categorizeVehicleMake(searchText) === 'universal';
-                  }).length;
-                  
-                  // Estimate total universal parts based on sample
-                  universalCount = Math.floor((universalCount / 1000) * (totalCount || 0));
-                }
-              } catch (error) {
-                console.warn('Could not estimate universal parts count:', error);
+                // Estimate total unknown parts based on sample
+                const estimatedUnknown = Math.floor((unknownCount / 1000) * (totalCount || 0));
+                console.log(`📊 ${make.name}: ${estimatedUnknown} parts (estimated)`);
+                return { ...make, count: estimatedUnknown };
               }
               
-              return { ...make, count: universalCount };
+              return { ...make, count: 0 };
             } else {
-              // For specific makes, search for the make keyword in long_description
+              // For specific makes, use word boundary SQL matching
               const { count, error } = await supabase
                 .from('inventory')
                 .select('*', { count: 'exact', head: true })
-                .ilike('long_description', `%${make.id}%`);
+                .or(`name.ilike.%${make.id}%,description.ilike.%${make.id}%,long_description.ilike.%${make.id}%,category.ilike.%${make.id}%`);
               
               if (error) {
                 console.warn(`Warning: Could not get count for ${make.name}:`, error.message);
@@ -509,7 +570,7 @@ const Parts: React.FC = () => {
       );
 
       setVehicleMakes(updatedMakes);
-      console.log('✅ Category statistics loaded successfully');
+      console.log('✅ Category statistics loaded successfully with enhanced matching');
 
     } catch (error) {
       logError('Error loading category statistics', error);
@@ -518,7 +579,7 @@ const Parts: React.FC = () => {
     }
   }, []);
 
-  // Load parts for selected make
+  // Load parts for selected make with enhanced categorization
   const loadPartsForMake = useCallback(async (makeId: string, page: number = 1) => {
     console.log(`🔄 Loading parts for make: ${makeId}, page: ${page}`);
     setLoading(true);
@@ -534,15 +595,15 @@ const Parts: React.FC = () => {
         .from('inventory')
         .select('*', { count: 'exact' });
 
-      // Apply make filter using JSON logic
+      // Apply make filter using enhanced word boundary logic
       if (makeId && makeId !== 'all') {
-        if (makeId === 'universal') {
-          // For universal, we'll filter client-side after loading
-          console.log(`🔍 Loading all parts for universal filtering`);
+        if (makeId === 'unknown') {
+          // For unknown, we'll filter client-side after loading
+          console.log(`🔍 Loading all parts for unknown filtering`);
         } else {
-          // For specific makes, search for the make keyword
+          // For specific makes, search across multiple fields
           console.log(`🔍 Filtering by make keyword: ${makeId}`);
-          query = query.ilike('long_description', `%${makeId}%`);
+          query = query.or(`name.ilike.%${makeId}%,description.ilike.%${makeId}%,long_description.ilike.%${makeId}%,category.ilike.%${makeId}%`);
         }
       }
 
@@ -560,10 +621,11 @@ const Parts: React.FC = () => {
       console.log(`✅ Loaded ${data?.length || 0} parts for page ${page}`);
       console.log(`📊 Total count: ${count}`);
 
-      // Process parts with categorization logic
+      // Process parts with enhanced categorization logic
       const processedParts: InventoryPart[] = (data || []).map(item => {
-        // Apply JSON categorization logic
-        const searchText = `${safeString(item.name)} ${safeString(item.long_description)} ${safeString(item.description)}`;
+        // Apply enhanced categorization logic with word boundaries
+        const vehicleMake = categorizeVehicleMake(item);
+        const partCategory = categorizePartCategory(item);
         
         return {
           id: item.id,
@@ -582,17 +644,21 @@ const Parts: React.FC = () => {
           cost: Number(item.cost) || 0,
           list_price: Number(item.list_price) || 0,
           stockStatus: item.quantity_on_hand > 0 ? 'In Stock' : 'Out of Stock',
-          vehicleMake: categorizeVehicleMake(searchText),
-          partCategory: categorizePartCategory(searchText),
+          vehicleMake: vehicleMake,
+          partCategory: partCategory,
           pricingSource: 'inventory_table'
         };
       });
 
-      // Filter for universal parts if needed
+      // Filter for specific make if needed (client-side filtering for unknown)
       let finalParts = processedParts;
-      if (makeId === 'universal') {
-        finalParts = processedParts.filter(part => part.vehicleMake === 'universal');
-        console.log(`🔍 Filtered to ${finalParts.length} universal parts`);
+      if (makeId === 'unknown') {
+        finalParts = processedParts.filter(part => part.vehicleMake === 'unknown');
+        console.log(`🔍 Filtered to ${finalParts.length} unknown parts`);
+      } else if (makeId !== 'all') {
+        // Additional client-side filtering for precise word boundary matching
+        finalParts = processedParts.filter(part => part.vehicleMake === makeId);
+        console.log(`🔍 Filtered to ${finalParts.length} ${makeId} parts with word boundary matching`);
       }
 
       setParts(finalParts);
@@ -602,8 +668,8 @@ const Parts: React.FC = () => {
       setPagination(prev => ({
         ...prev,
         currentPage: page,
-        totalItems: makeId === 'universal' ? finalParts.length : (count || 0),
-        totalPages: Math.ceil((makeId === 'universal' ? finalParts.length : (count || 0)) / prev.itemsPerPage)
+        totalItems: finalParts.length,
+        totalPages: Math.ceil(finalParts.length / prev.itemsPerPage)
       }));
 
     } catch (error) {
@@ -614,7 +680,7 @@ const Parts: React.FC = () => {
     }
   }, [pagination.itemsPerPage]);
 
-  // Global search functionality
+  // Global search functionality with enhanced matching
   const handleGlobalSearch = useCallback(async (searchTerm: string) => {
     if (!searchTerm.trim()) {
       setGlobalSearchResults([]);
@@ -637,9 +703,10 @@ const Parts: React.FC = () => {
         return;
       }
 
-      // Process search results with categorization
+      // Process search results with enhanced categorization
       const processedResults: InventoryPart[] = (data || []).map(item => {
-        const searchText = `${safeString(item.name)} ${safeString(item.long_description)} ${safeString(item.description)}`;
+        const vehicleMake = categorizeVehicleMake(item);
+        const partCategory = categorizePartCategory(item);
         
         return {
           id: item.id,
@@ -658,8 +725,8 @@ const Parts: React.FC = () => {
           cost: Number(item.cost) || 0,
           list_price: Number(item.list_price) || 0,
           stockStatus: item.quantity_on_hand > 0 ? 'In Stock' : 'Out of Stock',
-          vehicleMake: categorizeVehicleMake(searchText),
-          partCategory: categorizePartCategory(searchText),
+          vehicleMake: vehicleMake,
+          partCategory: partCategory,
           pricingSource: 'inventory_table'
         };
       });
@@ -855,6 +922,8 @@ const Parts: React.FC = () => {
                   <div>
                     <span className="font-medium">{part.name}</span>
                     <span className="text-gray-500 ml-2">({part.sku})</span>
+                    <span className="text-blue-600 ml-2 text-xs">{part.vehicleMake}</span>
+                    <span className="text-purple-600 ml-2 text-xs">{part.partCategory}</span>
                   </div>
                   <span className="text-green-600 font-medium">${part.list_price.toFixed(2)}</span>
                 </div>
@@ -1280,13 +1349,13 @@ const Parts: React.FC = () => {
                 </div>
 
                 <div>
-                  <h3 className="font-semibold mb-2">Categorization</h3>
+                  <h3 className="font-semibold mb-2">Enhanced Categorization</h3>
                   <div className="flex flex-wrap gap-2">
                     <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                      {selectedPart.vehicleMake}
+                      Make: {selectedPart.vehicleMake}
                     </span>
                     <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
-                      {selectedPart.partCategory}
+                      Category: {selectedPart.partCategory}
                     </span>
                   </div>
                 </div>
