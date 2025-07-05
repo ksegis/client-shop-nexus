@@ -751,7 +751,7 @@ export default function Inventory() {
           <Button onClick={() => fetchInventory(pagination.currentPage, pagination.pageSize, searchTerm)} variant="outline">
             Refresh
           </Button>
-          <InventoryFileUploadEnhanced />
+          <InventoryFileUpload />
           <Button variant="outline" onClick={handleUploadClick}>
             <Upload className="w-4 h-4 mr-2" />
             Upload CSV (Legacy)
