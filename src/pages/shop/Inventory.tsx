@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Edit, Trash2, Upload, AlertTriangle, FileText, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { InventoryFileUploadEnhanced } from './InventoryFileUploadEnhanced';
+import { InventoryFileUploadEnhanced } from './InventoryFileUpload';
 
 // Basic inventory item type
 interface BasicInventoryItem {
