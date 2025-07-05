@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { dropshipOrderService } from '../../../services/dropship_order_service';
 import { shippingQuoteService } from '../../../services/shipping_quote_service';
 
 // Initialize Supabase client
@@ -78,6 +79,42 @@ interface GroupedShippingOptions {
   other: ShippingOption[];
 }
 
+// Helper function to extract detailed error information
+const getErrorMessage = (error: any): string => {
+  console.log('Full error object:', error);
+  
+  if (typeof error === 'string') {
+    return error;
+  }
+  
+  if (error?.message) {
+    return error.message;
+  }
+  
+  if (error?.error?.message) {
+    return error.error.message;
+  }
+  
+  if (error?.details) {
+    return error.details;
+  }
+  
+  if (error?.hint) {
+    return `Database error: ${error.hint}`;
+  }
+  
+  if (error?.code) {
+    return `Error code ${error.code}: ${error.message || 'Unknown database error'}`;
+  }
+  
+  // Try to stringify the error for debugging
+  try {
+    return JSON.stringify(error, null, 2);
+  } catch {
+    return 'Unknown error occurred';
+  }
+};
+
 export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
   cart,
   totalPrice,
@@ -126,6 +163,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
   // Order confirmation state
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [orderSubmitted, setOrderSubmitted] = useState(false);
+  const [orderResult, setOrderResult] = useState<any>(null);
 
   // Load shop addresses on component mount
   useEffect(() => {
@@ -159,6 +197,13 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
       setGroupedShippingOptions({ fastest: null, cheapest: null, other: [] });
     }
   }, [shippingOptions]);
+
+  // Load shipping quotes when custom address is complete
+  useEffect(() => {
+    if (shippingType === 'custom' && isAddressComplete(customAddress)) {
+      loadShippingQuotes();
+    }
+  }, [shippingType, customAddress]);
 
   // Group shipping options by category
   const groupShippingOptions = (options: ShippingOption[]): GroupedShippingOptions => {
@@ -199,7 +244,10 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         .order('is_default', { ascending: false })
         .order('name');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Shop addresses error:', error);
+        throw error;
+      }
 
       setShopAddresses(data || []);
       
@@ -214,7 +262,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
       
     } catch (err) {
       console.error('Error loading shop addresses:', err);
-      setError('Failed to load shop addresses');
+      setError(`Failed to load shop addresses: ${getErrorMessage(err)}`);
     } finally {
       setLoading(false);
     }
@@ -233,7 +281,10 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         .or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
         .limit(10);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Customer search error:', error);
+        throw error;
+      }
 
       const results: CustomerSearchResult[] = data.map(profile => ({
         id: profile.id,
@@ -248,7 +299,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
       
     } catch (err) {
       console.error('Error searching customers:', err);
-      setError('Failed to search customers');
+      setError(`Failed to search customers: ${getErrorMessage(err)}`);
     } finally {
       setSearchLoading(false);
     }
@@ -263,87 +314,92 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         .eq('id', customerId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching customer:', error);
+        throw error;
+      }
 
       setSelectedCustomer(data);
-      setCustomerResults([]);
-      setCustomerSearch('');
+      setCustomerResults([]); // Clear search results
+      setCustomerSearch(''); // Clear search input
       
     } catch (err) {
       console.error('Error selecting customer:', err);
-      setError('Failed to load customer details');
+      setError(`Failed to select customer: ${getErrorMessage(err)}`);
     }
   };
 
-  // Get shipping quotes using existing shipping service
-  const getShippingQuotes = async () => {
-    if (shippingType === 'shop') {
-      // For ship to shop, no shipping quotes needed
-      setShippingOptions([]);
-      setSelectedShippingOption('');
+  // Check if address is complete
+  const isAddressComplete = (address: any): boolean => {
+    return address.street_address && 
+           address.city && 
+           address.state && 
+           address.zip_code && 
+           address.country;
+  };
+
+  // Load shipping quotes for custom address
+  const loadShippingQuotes = async () => {
+    if (!isAddressComplete(customAddress)) {
       return;
     }
 
     try {
       setShippingQuoteLoading(true);
       setShippingQuoteError(null);
-      setShippingOptions([]);
-      setSelectedShippingOption('');
-
-      // Determine shipping address
-      let shippingAddress;
-      if (shippingType === 'custom') {
-        shippingAddress = {
-          address1: customAddress.street_address,
-          city: customAddress.city,
-          state: customAddress.state,
-          zipCode: customAddress.zip_code,
-          country: customAddress.country
-        };
-      } else {
-        // Customer address - would need to get from customer_accounts table
-        setShippingQuoteError('Customer addresses not available. Please use custom address.');
-        return;
+      
+      console.log('Loading shipping quotes for address:', customAddress);
+      
+      // Get VCPNs from cart items
+      const vcpns = cart.map(item => item.vcpn || item.sku || item.id).filter(Boolean);
+      
+      if (vcpns.length === 0) {
+        throw new Error('No valid part numbers found in cart');
       }
 
-      // Prepare items for shipping quote
-      const shippingItems = cart.map(item => ({
-        vcpn: item.vcpn || item.sku || item.id,
-        quantity: item.quantity
-      }));
-
-      // Get shipping quotes using existing service
-      const quoteResponse = await shippingQuoteService.getShippingQuotes({
-        items: shippingItems,
-        shippingAddress
+      const result = await shippingQuoteService.getShippingQuotes(vcpns, {
+        address1: customAddress.street_address,
+        city: customAddress.city,
+        state: customAddress.state,
+        zipCode: customAddress.zip_code,
+        country: customAddress.country
       });
 
-      if (quoteResponse.success) {
-        setShippingOptions(quoteResponse.shippingOptions);
-      } else {
-        setShippingQuoteError(quoteResponse.message);
-      }
+      console.log('Shipping quote result:', result);
 
+      if (result.success && result.data) {
+        setShippingOptions(result.data);
+        setShippingQuoteError(null);
+      } else {
+        throw new Error(result.error || 'Failed to get shipping quotes');
+      }
+      
     } catch (err) {
-      console.error('Error getting shipping quotes:', err);
-      setShippingQuoteError('Failed to get shipping quotes');
+      console.error('Error loading shipping quotes:', err);
+      setShippingQuoteError(getErrorMessage(err));
+      setShippingOptions([]);
     } finally {
       setShippingQuoteLoading(false);
     }
   };
 
-  // Trigger shipping quotes when shipping type or address changes
-  useEffect(() => {
-    if (shippingType === 'custom' && 
-        customAddress.street_address && 
-        customAddress.city && 
-        customAddress.state && 
-        customAddress.zip_code) {
-      getShippingQuotes();
+  // Calculate total including shipping
+  const calculateTotal = () => {
+    let total = totalPrice;
+    
+    if (shippingType === 'custom' && selectedShippingOption) {
+      const selectedShipping = shippingOptions.find(opt => 
+        `${opt.carrierId}-${opt.serviceCode}` === selectedShippingOption
+      );
+      if (selectedShipping) {
+        total += selectedShipping.cost;
+      }
     }
-  }, [shippingType, customAddress, cart]);
+    
+    return total;
+  };
 
-  // Submit order to your existing special_orders table
+  // Submit order using existing dropship service
   const submitOrder = async () => {
     if (!selectedCustomer) {
       setError('Please select a customer');
@@ -354,10 +410,13 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
       setLoading(true);
       setError(null);
 
-      // Prepare shipping address and cost
+      console.log('Starting order submission with dropship service...');
+      console.log('Selected customer:', selectedCustomer);
+      console.log('Shipping type:', shippingType);
+      console.log('Cart:', cart);
+
+      // Prepare shipping address
       let shippingAddress;
-      let shippingCost = 0;
-      let selectedShipping = null;
       
       if (shippingType === 'shop') {
         const shopAddr = shopAddresses.find(addr => addr.id === selectedShopAddress);
@@ -365,19 +424,20 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         
         shippingAddress = {
           name: shopAddr.name,
-          street_address: shopAddr.street_address,
+          company: shopAddr.name,
+          address1: shopAddr.street_address,
           city: shopAddr.city,
           state: shopAddr.state,
-          zip_code: shopAddr.zip_code,
+          zipCode: shopAddr.zip_code,
           country: shopAddr.country
         };
-        shippingCost = 0; // No shipping cost for shop pickup
+        console.log('Using shop address:', shippingAddress);
       } else if (shippingType === 'custom') {
         if (!selectedShippingOption) {
           throw new Error('Please select a shipping option');
         }
         
-        selectedShipping = shippingOptions.find(opt => 
+        const selectedShipping = shippingOptions.find(opt => 
           `${opt.carrierId}-${opt.serviceCode}` === selectedShippingOption
         );
         
@@ -386,33 +446,134 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         }
         
         shippingAddress = {
+          name: `${selectedCustomer.first_name || ''} ${selectedCustomer.last_name || ''}`.trim(),
+          address1: customAddress.street_address,
+          city: customAddress.city,
+          state: customAddress.state,
+          zipCode: customAddress.zip_code,
+          country: customAddress.country,
+          email: selectedCustomer.email
+        };
+        console.log('Using custom address:', shippingAddress);
+      } else {
+        throw new Error('Customer addresses not supported. Please use custom address.');
+      }
+
+      // Prepare order items for dropship service
+      const orderItems = cart.map(item => ({
+        vcpn: item.vcpn || item.sku || item.id,
+        quantity: item.quantity,
+        unitPrice: item.price,
+        description: item.name
+      }));
+
+      // Prepare customer info for dropship service
+      const customerInfo = {
+        firstName: selectedCustomer.first_name || '',
+        lastName: selectedCustomer.last_name || '',
+        email: selectedCustomer.email || '',
+        phone: selectedCustomer.phone || ''
+      };
+
+      // Get shipping method name
+      let shippingMethod = 'standard';
+      if (shippingType === 'shop') {
+        shippingMethod = 'pickup';
+      } else if (selectedShippingOption) {
+        const selectedShipping = shippingOptions.find(opt => 
+          `${opt.carrierId}-${opt.serviceCode}` === selectedShippingOption
+        );
+        if (selectedShipping) {
+          shippingMethod = selectedShipping.serviceName;
+        }
+      }
+
+      // Use existing dropship order service
+      const orderRequest = {
+        orderReference: '', // Will be generated by service
+        customerInfo,
+        shippingAddress,
+        items: orderItems,
+        shippingMethod,
+        specialInstructions: orderNotes,
+        poNumber: undefined
+      };
+
+      console.log('Submitting order with dropship service:', orderRequest);
+
+      const result = await dropshipOrderService.placeDropshipOrder(orderRequest);
+
+      console.log('Dropship order result:', result);
+
+      if (result.success) {
+        // Also create order in local database for tracking
+        await createLocalOrder(result);
+        
+        setOrderResult(result);
+        setOrderNumber(result.orderReference);
+        setOrderSubmitted(true);
+        setCurrentStep(5); // Move to confirmation step
+        onClearCart(); // Clear the cart
+      } else {
+        throw new Error(result.message);
+      }
+
+    } catch (err) {
+      console.error('Error submitting order:', err);
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Create local order record for tracking
+  const createLocalOrder = async (dropshipResult: any) => {
+    try {
+      const selectedShipping = shippingType === 'custom' && selectedShippingOption ? 
+        shippingOptions.find(opt => `${opt.carrierId}-${opt.serviceCode}` === selectedShippingOption) : null;
+
+      const shippingCost = selectedShipping ? selectedShipping.cost : 0;
+      const totalWithShipping = totalPrice + shippingCost;
+
+      // Prepare shipping address
+      let shippingAddress;
+      if (shippingType === 'shop') {
+        const shopAddr = shopAddresses.find(addr => addr.id === selectedShopAddress);
+        shippingAddress = shopAddr ? {
+          name: shopAddr.name,
+          street_address: shopAddr.street_address,
+          city: shopAddr.city,
+          state: shopAddr.state,
+          zip_code: shopAddr.zip_code,
+          country: shopAddr.country
+        } : null;
+      } else {
+        shippingAddress = {
           street_address: customAddress.street_address,
           city: customAddress.city,
           state: customAddress.state,
           zip_code: customAddress.zip_code,
           country: customAddress.country
         };
-        shippingCost = selectedShipping.cost;
-      } else {
-        throw new Error('Customer addresses not supported. Please use custom address.');
       }
-
-      // Calculate total with shipping
-      const totalWithShipping = totalPrice + shippingCost;
 
       // Create order in special_orders table
       const orderData = {
-        customer_id: selectedCustomer.id,
+        customer_id: selectedCustomer!.id,
         order_type: 'parts',
-        status: 'pending',
+        status: 'submitted',
         total_amount: totalWithShipping,
         shipping_type: shippingType,
         shipping_address: JSON.stringify(shippingAddress),
         shipping_cost: shippingCost,
         shipping_method: selectedShipping ? `${selectedShipping.carrierName} ${selectedShipping.serviceName}` : 'Ship to Shop',
         payment_method: paymentMethod,
-        notes: orderNotes
+        notes: orderNotes,
+        external_order_id: dropshipResult.keystoneOrderId,
+        external_order_reference: dropshipResult.orderReference
       };
+
+      console.log('Creating local order record:', orderData);
 
       const { data: order, error: orderError } = await supabase
         .from('special_orders')
@@ -420,12 +581,18 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         .select()
         .single();
 
-      if (orderError) throw orderError;
+      if (orderError) {
+        console.error('Local order creation error:', orderError);
+        // Don't throw here - the dropship order was successful
+        return;
+      }
+
+      console.log('Local order created successfully:', order);
 
       // Create order items in order_items table
       const orderItems = cart.map(item => ({
         order_id: order.id,
-        part_number: item.sku || item.vcpn || item.id,
+        part_number: item.vcpn || item.sku || item.id,
         description: item.name,
         quantity: item.quantity,
         unit_price: item.price,
@@ -436,27 +603,20 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         .from('order_items')
         .insert(orderItems);
 
-      if (itemsError) throw itemsError;
+      if (itemsError) {
+        console.error('Order items creation error:', itemsError);
+        // Don't throw here - the main order was successful
+      } else {
+        console.log('Order items created successfully');
+      }
 
-      // Generate order number
-      const orderNum = `PO-${order.id.slice(-8).toUpperCase()}`;
-      
-      setOrderNumber(orderNum);
-      setOrderSubmitted(true);
-      setCurrentStep(5);
-      
-      // Clear cart after successful order
-      onClearCart();
-      
     } catch (err) {
-      console.error('Error submitting order:', err);
-      setError(err instanceof Error ? err.message : 'Failed to submit order');
-    } finally {
-      setLoading(false);
+      console.error('Error creating local order record:', err);
+      // Don't throw here - the dropship order was successful
     }
   };
 
-  // Navigation functions
+  // Step navigation
   const nextStep = () => {
     if (currentStep < 4) {
       setCurrentStep(currentStep + 1);
@@ -469,24 +629,18 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
     }
   };
 
-  // Validation functions
-  const canProceedFromStep = (step: number): boolean => {
-    switch (step) {
+  // Validation for step progression
+  const canProceedToNextStep = () => {
+    switch (currentStep) {
       case 1:
         return selectedCustomer !== null;
       case 2:
         if (shippingType === 'shop') {
           return selectedShopAddress !== '';
-        } else if (shippingType === 'customer') {
-          return false; // Customer addresses not supported
-        } else {
-          const addressValid = customAddress.street_address !== '' && 
-                              customAddress.city !== '' && 
-                              customAddress.state !== '' && 
-                              customAddress.zip_code !== '';
-          const shippingValid = shippingOptions.length === 0 || selectedShippingOption !== '';
-          return addressValid && shippingValid;
+        } else if (shippingType === 'custom') {
+          return isAddressComplete(customAddress) && selectedShippingOption !== '';
         }
+        return false;
       case 3:
         return paymentMethod !== '';
       default:
@@ -494,647 +648,629 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
     }
   };
 
-  // Get selected shipping option details
-  const getSelectedShippingDetails = () => {
-    if (shippingType === 'shop') {
-      const shop = shopAddresses.find(addr => addr.id === selectedShopAddress);
-      return shop ? {
-        method: 'Ship to Shop',
-        cost: 0,
-        details: `${shop.name} - ${shop.street_address}, ${shop.city}, ${shop.state}`
-      } : null;
-    } else if (shippingType === 'custom' && selectedShippingOption) {
-      const shipping = shippingOptions.find(opt => 
-        `${opt.carrierId}-${opt.serviceCode}` === selectedShippingOption
-      );
-      return shipping ? {
-        method: `${shipping.carrierName} ${shipping.serviceName}`,
-        cost: shipping.cost,
-        details: `${shipping.estimatedDeliveryDays} business days`
-      } : null;
-    }
-    return null;
-  };
+  // Render step indicator
+  const renderStepIndicator = () => (
+    <div className="flex items-center justify-center mb-8">
+      {[1, 2, 3, 4].map((step) => (
+        <React.Fragment key={step}>
+          <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
+            currentStep >= step ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'
+          }`}>
+            {step}
+          </div>
+          {step < 4 && (
+            <div className={`w-16 h-1 ${
+              currentStep > step ? 'bg-blue-600' : 'bg-gray-300'
+            }`} />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
 
-  // Render shipping option card
-  const renderShippingOptionCard = (option: ShippingOption, label?: string, isRecommended?: boolean) => {
-    const optionKey = `${option.carrierId}-${option.serviceCode}`;
-    const isSelected = selectedShippingOption === optionKey;
-    
-    return (
-      <label 
-        key={optionKey} 
-        className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-all ${
-          isSelected 
-            ? 'border-blue-500 bg-blue-50' 
-            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-        } ${isRecommended ? 'ring-2 ring-green-200' : ''}`}
-      >
-        <div className="flex items-center space-x-3">
-          <input
-            type="radio"
-            name="shippingOption"
-            value={optionKey}
-            checked={isSelected}
-            onChange={(e) => setSelectedShippingOption(e.target.value)}
-            className="text-blue-600"
-          />
-          <div>
-            <div className="flex items-center space-x-2">
-              <div className="font-medium text-gray-900">
-                {option.carrierName} {option.serviceName}
-              </div>
-              {label && (
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                  label === 'Fastest' ? 'bg-orange-100 text-orange-800' :
-                  label === 'Cheapest' ? 'bg-green-100 text-green-800' :
-                  'bg-blue-100 text-blue-800'
-                }`}>
-                  {label}
-                </span>
+  // Render customer selection step
+  const renderCustomerStep = () => (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold">Customer Information</h3>
+      
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Search Customer
+        </label>
+        <input
+          type="text"
+          value={customerSearch}
+          onChange={(e) => setCustomerSearch(e.target.value)}
+          placeholder="Search by name or email..."
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      {searchLoading && (
+        <div className="text-center py-4">
+          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <p className="mt-2 text-sm text-gray-600">Searching customers...</p>
+        </div>
+      )}
+
+      {customerResults.length > 0 && (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Select Customer
+          </label>
+          {customerResults.map((customer) => (
+            <div
+              key={customer.id}
+              onClick={() => selectCustomer(customer.id)}
+              className="p-3 border border-gray-300 rounded-md cursor-pointer hover:border-gray-400 hover:bg-gray-50"
+            >
+              <div className="font-medium">{customer.display_name}</div>
+              {customer.email && (
+                <div className="text-sm text-gray-600">{customer.email}</div>
+              )}
+              {customer.phone && (
+                <div className="text-sm text-gray-600">{customer.phone}</div>
               )}
             </div>
-            <div className="text-sm text-gray-600">
-              {option.estimatedDeliveryDays} business day{option.estimatedDeliveryDays !== 1 ? 's' : ''}
-            </div>
-            <div className="text-xs text-gray-500">
-              {option.warehouseName} • {option.warehouseLocation}
-            </div>
-          </div>
+          ))}
         </div>
-        <div className="text-right">
-          <div className="font-medium text-gray-900">
-            ${option.cost.toFixed(2)}
-          </div>
-          {option.trackingAvailable && (
-            <div className="text-xs text-gray-500">Tracking included</div>
-          )}
-        </div>
-      </label>
-    );
-  };
+      )}
 
-  // Render step content
-  const renderStepContent = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Customer Information</h2>
-            
-            {/* Customer Search */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Search for Customer
-                </label>
+      {selectedCustomer && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+          <h4 className="font-medium text-green-800">Selected Customer:</h4>
+          <p className="text-green-700">
+            {selectedCustomer.first_name} {selectedCustomer.last_name}
+          </p>
+          <p className="text-sm text-green-600">{selectedCustomer.email}</p>
+        </div>
+      )}
+
+      <div className="flex justify-between">
+        <button
+          onClick={onBackToShopping}
+          className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          Back to Shopping
+        </button>
+        <button
+          onClick={nextStep}
+          disabled={!canProceedToNextStep()}
+          className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+
+  // Render shipping selection step
+  const renderShippingStep = () => (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold">Shipping Information</h3>
+
+      <div className="space-y-4">
+        {/* Ship to Shop Option */}
+        <div>
+          <label className="flex items-center space-x-3">
+            <input
+              type="radio"
+              value="shop"
+              checked={shippingType === 'shop'}
+              onChange={(e) => setShippingType(e.target.value as 'shop' | 'customer' | 'custom')}
+              className="form-radio"
+            />
+            <span className="font-medium">Ship to Shop (Free)</span>
+          </label>
+        </div>
+
+        {shippingType === 'shop' && (
+          <div className="ml-6 space-y-3">
+            {shopAddresses.map((address) => (
+              <label key={address.id} className="flex items-start space-x-3">
+                <input
+                  type="radio"
+                  value={address.id}
+                  checked={selectedShopAddress === address.id}
+                  onChange={(e) => setSelectedShopAddress(e.target.value)}
+                  className="form-radio mt-1"
+                />
+                <div>
+                  <div className="font-medium">{address.name}</div>
+                  <div className="text-sm text-gray-600">
+                    {address.street_address}<br />
+                    {address.city}, {address.state} {address.zip_code}
+                  </div>
+                  {address.is_default && (
+                    <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                      Default
+                    </span>
+                  )}
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {/* Ship to Custom Address Option */}
+        <div>
+          <label className="flex items-center space-x-3">
+            <input
+              type="radio"
+              value="custom"
+              checked={shippingType === 'custom'}
+              onChange={(e) => setShippingType(e.target.value as 'shop' | 'customer' | 'custom')}
+              className="form-radio"
+            />
+            <span className="font-medium">Ship to Custom Address</span>
+          </label>
+        </div>
+
+        {shippingType === 'custom' && (
+          <div className="ml-6 space-y-4">
+            <div className="grid grid-cols-1 gap-4">
+              <input
+                type="text"
+                placeholder="Street Address"
+                value={customAddress.street_address}
+                onChange={(e) => setCustomAddress({...customAddress, street_address: e.target.value})}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              
+              <div className="grid grid-cols-3 gap-4">
                 <input
                   type="text"
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                  placeholder="Search by name or email..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="City"
+                  value={customAddress.city}
+                  onChange={(e) => setCustomAddress({...customAddress, city: e.target.value})}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                {searchLoading && (
-                  <p className="text-sm text-gray-500 mt-1">Searching...</p>
-                )}
-              </div>
-
-              {/* Search Results */}
-              {customerResults.length > 0 && (
-                <div className="border border-gray-200 rounded-md max-h-60 overflow-y-auto">
-                  {customerResults.map((customer) => (
-                    <div
-                      key={customer.id}
-                      onClick={() => selectCustomer(customer.id)}
-                      className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                    >
-                      <div className="font-medium text-gray-900">{customer.display_name}</div>
-                      {customer.email && (
-                        <div className="text-sm text-gray-600">{customer.email}</div>
-                      )}
-                      {customer.phone && (
-                        <div className="text-sm text-gray-600">{customer.phone}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Selected Customer */}
-              {selectedCustomer && (
-                <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium text-green-900">Selected Customer</h3>
-                      <p className="text-green-700">
-                        {`${selectedCustomer.first_name || ''} ${selectedCustomer.last_name || ''}`.trim()}
-                      </p>
-                      {selectedCustomer.email && (
-                        <p className="text-sm text-green-600">{selectedCustomer.email}</p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => setSelectedCustomer(null)}
-                      className="text-green-600 hover:text-green-800"
-                    >
-                      Change
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-
-      case 2:
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Shipping Information</h2>
-            
-            {/* Shipping Options */}
-            <div className="space-y-4">
-              <div className="space-y-3">
-                {/* Ship to Shop */}
-                <label className="flex items-start space-x-3 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="shipping"
-                    value="shop"
-                    checked={shippingType === 'shop'}
-                    onChange={(e) => setShippingType(e.target.value as 'shop')}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">Ship to Shop (Free)</div>
-                    <div className="text-sm text-gray-600">
-                      Parts will be delivered to the shop for customer pickup
-                    </div>
-                  </div>
-                </label>
-
-                {/* Shop Address Selection */}
-                {shippingType === 'shop' && (
-                  <div className="ml-6 space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Select Shop Location
-                    </label>
-                    <select
-                      value={selectedShopAddress}
-                      onChange={(e) => setSelectedShopAddress(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select a shop location...</option>
-                      {shopAddresses.map((address) => (
-                        <option key={address.id} value={address.id}>
-                          {address.name} - {address.street_address}, {address.city}, {address.state}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Ship to Customer Address */}
-                <label className="flex items-start space-x-3 cursor-pointer opacity-50">
-                  <input
-                    type="radio"
-                    name="shipping"
-                    value="customer"
-                    checked={shippingType === 'customer'}
-                    onChange={(e) => setShippingType(e.target.value as 'customer')}
-                    className="mt-1"
-                    disabled
-                  />
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">Ship to Customer Address</div>
-                    <div className="text-sm text-gray-600">
-                      Customer addresses not available - use custom address instead
-                    </div>
-                  </div>
-                </label>
-
-                {/* Custom Address */}
-                <label className="flex items-start space-x-3 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="shipping"
-                    value="custom"
-                    checked={shippingType === 'custom'}
-                    onChange={(e) => setShippingType(e.target.value as 'custom')}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">Ship to Custom Address</div>
-                    <div className="text-sm text-gray-600">
-                      Specify a different shipping address
-                    </div>
-                  </div>
-                </label>
-
-                {/* Custom Address Form */}
-                {shippingType === 'custom' && (
-                  <div className="ml-6 space-y-4">
-                    <input
-                      type="text"
-                      placeholder="Street Address"
-                      value={customAddress.street_address}
-                      onChange={(e) => setCustomAddress({...customAddress, street_address: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <div className="grid grid-cols-2 gap-3">
-                      <input
-                        type="text"
-                        placeholder="City"
-                        value={customAddress.city}
-                        onChange={(e) => setCustomAddress({...customAddress, city: e.target.value})}
-                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <input
-                        type="text"
-                        placeholder="State"
-                        value={customAddress.state}
-                        onChange={(e) => setCustomAddress({...customAddress, state: e.target.value})}
-                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <input
-                        type="text"
-                        placeholder="ZIP Code"
-                        value={customAddress.zip_code}
-                        onChange={(e) => setCustomAddress({...customAddress, zip_code: e.target.value})}
-                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <select
-                        value={customAddress.country}
-                        onChange={(e) => setCustomAddress({...customAddress, country: e.target.value})}
-                        className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="US">United States</option>
-                        <option value="CA">Canada</option>
-                      </select>
-                    </div>
-
-                    {/* Shipping Quote Loading */}
-                    {shippingQuoteLoading && (
-                      <div className="text-center py-6">
-                        <div className="inline-flex items-center space-x-2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                          <span className="text-sm text-gray-600">Getting shipping quotes...</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Shipping Quote Error */}
-                    {shippingQuoteError && (
-                      <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                        <p className="text-red-800 text-sm">{shippingQuoteError}</p>
-                      </div>
-                    )}
-
-                    {/* Grouped Shipping Options */}
-                    {!shippingQuoteLoading && !shippingQuoteError && shippingOptions.length > 0 && (
-                      <div className="space-y-4">
-                        <h4 className="font-medium text-gray-900">Select Shipping Method</h4>
-                        
-                        {/* Recommended Options */}
-                        <div className="space-y-3">
-                          {/* Cheapest Option */}
-                          {groupedShippingOptions.cheapest && (
-                            <div>
-                              <h5 className="text-sm font-medium text-gray-700 mb-2">💰 Best Value</h5>
-                              {renderShippingOptionCard(groupedShippingOptions.cheapest, 'Cheapest', true)}
-                            </div>
-                          )}
-                          
-                          {/* Fastest Option (if different from cheapest) */}
-                          {groupedShippingOptions.fastest && 
-                           groupedShippingOptions.fastest !== groupedShippingOptions.cheapest && (
-                            <div>
-                              <h5 className="text-sm font-medium text-gray-700 mb-2">⚡ Fastest Delivery</h5>
-                              {renderShippingOptionCard(groupedShippingOptions.fastest, 'Fastest')}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Other Options (Collapsible) */}
-                        {groupedShippingOptions.other.length > 0 && (
-                          <div>
-                            <button
-                              onClick={() => setShowOtherOptions(!showOtherOptions)}
-                              className="flex items-center justify-between w-full p-3 text-left bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 transition-colors"
-                            >
-                              <span className="font-medium text-gray-700">
-                                Other Options ({groupedShippingOptions.other.length})
-                              </span>
-                              <svg 
-                                className={`w-5 h-5 text-gray-500 transition-transform ${showOtherOptions ? 'rotate-180' : ''}`}
-                                fill="none" 
-                                stroke="currentColor" 
-                                viewBox="0 0 24 24"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
-                            
-                            {showOtherOptions && (
-                              <div className="mt-3 space-y-2">
-                                {groupedShippingOptions.other.map((option) => 
-                                  renderShippingOptionCard(option)
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-
-      case 3:
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Payment & Notes</h2>
-            
-            {/* Payment Method */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Method
-                </label>
-                <div className="space-y-2">
-                  <label className="flex items-center space-x-3 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="payment"
-                      value="account"
-                      checked={paymentMethod === 'account'}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                    />
-                    <span>Charge to Customer Account</span>
-                  </label>
-                  <label className="flex items-center space-x-3 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="payment"
-                      value="cash"
-                      checked={paymentMethod === 'cash'}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                    />
-                    <span>Cash</span>
-                  </label>
-                  <label className="flex items-center space-x-3 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="payment"
-                      value="check"
-                      checked={paymentMethod === 'check'}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                    />
-                    <span>Check</span>
-                  </label>
-                  <label className="flex items-center space-x-3 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="payment"
-                      value="card"
-                      checked={paymentMethod === 'card'}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                    />
-                    <span>Credit/Debit Card</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Order Notes */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Order Notes (Optional)
-                </label>
-                <textarea
-                  value={orderNotes}
-                  onChange={(e) => setOrderNotes(e.target.value)}
-                  placeholder="Add any special instructions or notes for this order..."
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <input
+                  type="text"
+                  placeholder="State"
+                  value={customAddress.state}
+                  onChange={(e) => setCustomAddress({...customAddress, state: e.target.value})}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  type="text"
+                  placeholder="ZIP Code"
+                  value={customAddress.zip_code}
+                  onChange={(e) => setCustomAddress({...customAddress, zip_code: e.target.value})}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
-          </div>
-        );
 
-      case 4:
-        const shippingDetails = getSelectedShippingDetails();
-        const finalTotal = totalPrice + (shippingDetails?.cost || 0);
-        
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Order Review</h2>
-            
-            {/* Customer Info */}
-            <div className="bg-gray-50 p-4 rounded-md">
-              <h3 className="font-medium text-gray-900 mb-2">Customer</h3>
-              <p>{`${selectedCustomer?.first_name || ''} ${selectedCustomer?.last_name || ''}`.trim()}</p>
-              {selectedCustomer?.email && <p className="text-sm text-gray-600">{selectedCustomer.email}</p>}
-            </div>
-
-            {/* Shipping Info */}
-            <div className="bg-gray-50 p-4 rounded-md">
-              <h3 className="font-medium text-gray-900 mb-2">Shipping</h3>
-              {shippingDetails && (
-                <>
-                  <p className="font-medium">{shippingDetails.method}</p>
-                  <p className="text-sm text-gray-600">{shippingDetails.details}</p>
-                  <p className="text-sm font-medium text-gray-900 mt-1">
-                    Shipping Cost: ${shippingDetails.cost.toFixed(2)}
-                  </p>
-                </>
-              )}
-            </div>
-
-            {/* Payment Info */}
-            <div className="bg-gray-50 p-4 rounded-md">
-              <h3 className="font-medium text-gray-900 mb-2">Payment</h3>
-              <p className="capitalize">{paymentMethod.replace('_', ' ')}</p>
-              {orderNotes && (
-                <div className="mt-2">
-                  <p className="text-sm font-medium text-gray-700">Notes:</p>
-                  <p className="text-sm text-gray-600">{orderNotes}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Order Items */}
-            <div className="bg-gray-50 p-4 rounded-md">
-              <h3 className="font-medium text-gray-900 mb-2">Order Items</h3>
-              <div className="space-y-2">
-                {cart.map((item) => (
-                  <div key={item.id} className="flex justify-between text-sm">
-                    <span>{item.name} (x{item.quantity})</span>
-                    <span>${(item.price * item.quantity).toFixed(2)}</span>
-                  </div>
-                ))}
-                <div className="border-t pt-2 space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>Subtotal</span>
-                    <span>${totalPrice.toFixed(2)}</span>
-                  </div>
-                  {shippingDetails && shippingDetails.cost > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span>Shipping</span>
-                      <span>${shippingDetails.cost.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-medium">
-                    <span>Total</span>
-                    <span>${finalTotal.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 5:
-        return (
-          <div className="text-center space-y-6">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900">Order Confirmed!</h2>
-            <p className="text-gray-600">
-              Your order has been successfully submitted.
-            </p>
-            {orderNumber && (
-              <div className="bg-blue-50 p-4 rounded-md">
-                <p className="font-medium text-blue-900">Order Number: {orderNumber}</p>
-                <p className="text-sm text-blue-700">
-                  You can use this number to track your order status.
-                </p>
+            {shippingQuoteLoading && (
+              <div className="text-center py-4">
+                <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <p className="mt-2 text-sm text-gray-600">Loading shipping options...</p>
               </div>
             )}
-            <button
-              onClick={onBackToShopping}
-              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Continue Shopping
-            </button>
-          </div>
-        );
 
-      default:
-        return null;
-    }
-  };
+            {shippingQuoteError && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-red-700">{shippingQuoteError}</p>
+              </div>
+            )}
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        {/* Header */}
-        <div className="mb-8">
-          <button
-            onClick={onBackToShopping}
-            className="flex items-center text-blue-600 hover:text-blue-800 mb-4"
-          >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Shopping
-          </button>
-          <h1 className="text-3xl font-bold text-gray-900">Checkout</h1>
-        </div>
+            {shippingOptions.length > 0 && (
+              <div className="space-y-4">
+                <h4 className="font-medium">Shipping Options</h4>
+                
+                <div className="space-y-3">
+                  {/* Cheapest Option */}
+                  {groupedShippingOptions.cheapest && (
+                    <div className="border border-green-300 rounded-lg p-4 bg-green-50">
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center space-x-3 flex-1">
+                          <input
+                            type="radio"
+                            value={`${groupedShippingOptions.cheapest.carrierId}-${groupedShippingOptions.cheapest.serviceCode}`}
+                            checked={selectedShippingOption === `${groupedShippingOptions.cheapest.carrierId}-${groupedShippingOptions.cheapest.serviceCode}`}
+                            onChange={(e) => setSelectedShippingOption(e.target.value)}
+                            className="form-radio"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">{groupedShippingOptions.cheapest.serviceName}</span>
+                              <span className="px-2 py-1 text-xs bg-green-600 text-white rounded">
+                                Best Value
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              {groupedShippingOptions.cheapest.carrierName} • {groupedShippingOptions.cheapest.estimatedDeliveryDays} business days
+                              {groupedShippingOptions.cheapest.warehouseName && ` • Ships from ${groupedShippingOptions.cheapest.warehouseName}`}
+                            </div>
+                          </div>
+                        </label>
+                        <div className="text-lg font-semibold text-green-600">
+                          ${groupedShippingOptions.cheapest.cost.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-        {/* Progress Steps */}
-        {!orderSubmitted && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
-              {[1, 2, 3, 4].map((step) => (
-                <div key={step} className="flex items-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                    step <= currentStep 
-                      ? 'bg-blue-600 text-white' 
-                      : 'bg-gray-200 text-gray-600'
-                  }`}>
-                    {step}
-                  </div>
-                  <div className="ml-2 text-sm font-medium text-gray-600">
-                    {step === 1 && 'Customer'}
-                    {step === 2 && 'Shipping'}
-                    {step === 3 && 'Payment'}
-                    {step === 4 && 'Review'}
-                  </div>
-                  {step < 4 && (
-                    <div className={`w-16 h-0.5 ml-4 ${
-                      step < currentStep ? 'bg-blue-600' : 'bg-gray-200'
-                    }`} />
+                  {/* Fastest Option */}
+                  {groupedShippingOptions.fastest && groupedShippingOptions.fastest !== groupedShippingOptions.cheapest && (
+                    <div className="border border-orange-300 rounded-lg p-4 bg-orange-50">
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center space-x-3 flex-1">
+                          <input
+                            type="radio"
+                            value={`${groupedShippingOptions.fastest.carrierId}-${groupedShippingOptions.fastest.serviceCode}`}
+                            checked={selectedShippingOption === `${groupedShippingOptions.fastest.carrierId}-${groupedShippingOptions.fastest.serviceCode}`}
+                            onChange={(e) => setSelectedShippingOption(e.target.value)}
+                            className="form-radio"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">{groupedShippingOptions.fastest.serviceName}</span>
+                              <span className="px-2 py-1 text-xs bg-orange-600 text-white rounded">
+                                Fastest
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              {groupedShippingOptions.fastest.carrierName} • {groupedShippingOptions.fastest.estimatedDeliveryDays} business days
+                              {groupedShippingOptions.fastest.warehouseName && ` • Ships from ${groupedShippingOptions.fastest.warehouseName}`}
+                            </div>
+                          </div>
+                        </label>
+                        <div className="text-lg font-semibold text-orange-600">
+                          ${groupedShippingOptions.fastest.cost.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Other Options */}
+                  {groupedShippingOptions.other.length > 0 && (
+                    <div>
+                      <button
+                        onClick={() => setShowOtherOptions(!showOtherOptions)}
+                        className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
+                      >
+                        <span>Other Options ({groupedShippingOptions.other.length})</span>
+                        <svg
+                          className={`w-4 h-4 transform transition-transform ${
+                            showOtherOptions ? 'rotate-180' : ''
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+
+                      {showOtherOptions && (
+                        <div className="mt-3 space-y-2">
+                          {groupedShippingOptions.other.map((option) => (
+                            <div key={`${option.carrierId}-${option.serviceCode}`} className="border border-gray-300 rounded-lg p-4">
+                              <div className="flex items-center justify-between">
+                                <label className="flex items-center space-x-3 flex-1">
+                                  <input
+                                    type="radio"
+                                    value={`${option.carrierId}-${option.serviceCode}`}
+                                    checked={selectedShippingOption === `${option.carrierId}-${option.serviceCode}`}
+                                    onChange={(e) => setSelectedShippingOption(e.target.value)}
+                                    className="form-radio"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="font-medium">{option.serviceName}</div>
+                                    <div className="text-sm text-gray-600">
+                                      {option.carrierName} • {option.estimatedDeliveryDays} business days
+                                      {option.warehouseName && ` • Ships from ${option.warehouseName}`}
+                                      {option.trackingAvailable && ' • Tracking available'}
+                                    </div>
+                                  </div>
+                                </label>
+                                <div className="text-lg font-semibold">
+                                  ${option.cost.toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Error Display */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-red-800">{error}</p>
-          </div>
-        )}
-
-        {/* Step Content */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          {renderStepContent()}
-        </div>
-
-        {/* Navigation Buttons */}
-        {!orderSubmitted && (
-          <div className="flex justify-between">
-            <button
-              onClick={prevStep}
-              disabled={currentStep === 1}
-              className={`px-6 py-2 rounded-md ${
-                currentStep === 1
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-600 text-white hover:bg-gray-700'
-              }`}
-            >
-              Previous
-            </button>
-            
-            {currentStep < 4 ? (
-              <button
-                onClick={nextStep}
-                disabled={!canProceedFromStep(currentStep)}
-                className={`px-6 py-2 rounded-md ${
-                  canProceedFromStep(currentStep)
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                onClick={submitOrder}
-                disabled={loading || !canProceedFromStep(currentStep)}
-                className={`px-6 py-2 rounded-md ${
-                  loading || !canProceedFromStep(currentStep)
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-green-600 text-white hover:bg-green-700'
-                }`}
-              >
-                {loading ? 'Submitting...' : 'Submit Order'}
-              </button>
+              </div>
             )}
           </div>
         )}
       </div>
+
+      <div className="flex justify-between">
+        <button
+          onClick={prevStep}
+          className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          Back
+        </button>
+        <button
+          onClick={nextStep}
+          disabled={!canProceedToNextStep()}
+          className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+
+  // Render payment step
+  const renderPaymentStep = () => (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold">Payment & Notes</h3>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Payment Method
+        </label>
+        <select
+          value={paymentMethod}
+          onChange={(e) => setPaymentMethod(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="account">Charge to Account</option>
+          <option value="cod">Cash on Delivery</option>
+          <option value="prepaid">Prepaid</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Order Notes (Optional)
+        </label>
+        <textarea
+          value={orderNotes}
+          onChange={(e) => setOrderNotes(e.target.value)}
+          rows={4}
+          placeholder="Special instructions, delivery notes, etc."
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <div className="flex justify-between">
+        <button
+          onClick={prevStep}
+          className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          Back
+        </button>
+        <button
+          onClick={nextStep}
+          disabled={!canProceedToNextStep()}
+          className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+        >
+          Review Order
+        </button>
+      </div>
+    </div>
+  );
+
+  // Render order review step
+  const renderReviewStep = () => {
+    const selectedShipping = shippingType === 'custom' && selectedShippingOption ? 
+      shippingOptions.find(opt => `${opt.carrierId}-${opt.serviceCode}` === selectedShippingOption) : null;
+    
+    const shippingCost = selectedShipping ? selectedShipping.cost : 0;
+    const total = calculateTotal();
+
+    return (
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold">Review Your Order</h3>
+
+        {/* Customer Info */}
+        <div className="border border-gray-300 rounded-lg p-4">
+          <h4 className="font-medium mb-2">Customer</h4>
+          <p>{selectedCustomer?.first_name} {selectedCustomer?.last_name}</p>
+          <p className="text-sm text-gray-600">{selectedCustomer?.email}</p>
+        </div>
+
+        {/* Shipping Info */}
+        <div className="border border-gray-300 rounded-lg p-4">
+          <h4 className="font-medium mb-2">Shipping</h4>
+          {shippingType === 'shop' ? (
+            <div>
+              <p className="font-medium text-green-600">Ship to Shop (Free)</p>
+              {(() => {
+                const shopAddr = shopAddresses.find(addr => addr.id === selectedShopAddress);
+                return shopAddr ? (
+                  <div>
+                    <p>{shopAddr.name}</p>
+                    <p>{shopAddr.street_address}</p>
+                    <p>{shopAddr.city}, {shopAddr.state} {shopAddr.zip_code}</p>
+                  </div>
+                ) : null;
+              })()}
+            </div>
+          ) : (
+            <div>
+              <p className="font-medium">{selectedShipping?.serviceName}</p>
+              <p>{customAddress.street_address}</p>
+              <p>{customAddress.city}, {customAddress.state} {customAddress.zip_code}</p>
+              <p className="text-sm text-gray-600 mt-2">
+                Shipping: ${shippingCost.toFixed(2)} ({selectedShipping?.estimatedDeliveryDays} business days)
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Order Items */}
+        <div className="border border-gray-300 rounded-lg p-4">
+          <h4 className="font-medium mb-2">Items ({cart.length})</h4>
+          <div className="space-y-2">
+            {cart.map((item) => (
+              <div key={item.id} className="flex justify-between items-center">
+                <div>
+                  <p className="font-medium">{item.name}</p>
+                  <p className="text-sm text-gray-600">
+                    {item.vcpn && `VCPN: ${item.vcpn}`}
+                    {item.sku && !item.vcpn && `SKU: ${item.sku}`}
+                  </p>
+                  <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">${(item.price * item.quantity).toFixed(2)}</p>
+                  <p className="text-sm text-gray-600">${item.price.toFixed(2)} each</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Order Total */}
+        <div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span>Subtotal:</span>
+              <span>${totalPrice.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Shipping:</span>
+              <span>{shippingCost === 0 ? 'Free' : `$${shippingCost.toFixed(2)}`}</span>
+            </div>
+            <div className="border-t pt-2 flex justify-between font-semibold text-lg">
+              <span>Total:</span>
+              <span>${total.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Payment Method */}
+        <div className="border border-gray-300 rounded-lg p-4">
+          <h4 className="font-medium mb-2">Payment Method</h4>
+          <p className="capitalize">{paymentMethod.replace('_', ' ')}</p>
+        </div>
+
+        {/* Order Notes */}
+        {orderNotes && (
+          <div className="border border-gray-300 rounded-lg p-4">
+            <h4 className="font-medium mb-2">Order Notes</h4>
+            <p className="text-gray-700">{orderNotes}</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-700">{error}</p>
+          </div>
+        )}
+
+        <div className="flex justify-between">
+          <button
+            onClick={prevStep}
+            disabled={loading}
+            className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+          >
+            Back
+          </button>
+          <button
+            onClick={submitOrder}
+            disabled={loading}
+            className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 flex items-center space-x-2"
+          >
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Placing Order...</span>
+              </>
+            ) : (
+              <span>Place Order</span>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Render confirmation step
+  const renderConfirmationStep = () => (
+    <div className="text-center space-y-6">
+      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+        <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      
+      <h3 className="text-2xl font-bold text-green-600">Order Placed Successfully!</h3>
+      
+      {orderResult && (
+        <div className="space-y-4">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h4 className="font-semibold text-green-800">Order Details</h4>
+            <div className="mt-2 space-y-1 text-sm">
+              <p><strong>Order Reference:</strong> {orderResult.orderReference}</p>
+              {orderResult.keystoneOrderId && (
+                <p><strong>Keystone Order ID:</strong> {orderResult.keystoneOrderId}</p>
+              )}
+              <p><strong>Total Items:</strong> {orderResult.totalItems}</p>
+              {orderResult.totalValue && (
+                <p><strong>Total Value:</strong> ${orderResult.totalValue.toFixed(2)}</p>
+              )}
+              {orderResult.estimatedDeliveryDate && (
+                <p><strong>Estimated Delivery:</strong> {new Date(orderResult.estimatedDeliveryDate).toLocaleDateString()}</p>
+              )}
+            </div>
+          </div>
+
+          {orderResult.trackingInfo && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-800">Tracking Information</h4>
+              <div className="mt-2 space-y-1 text-sm">
+                <p><strong>Carrier:</strong> {orderResult.trackingInfo.carrier}</p>
+                {orderResult.trackingInfo.trackingNumber && (
+                  <p><strong>Tracking Number:</strong> {orderResult.trackingInfo.trackingNumber}</p>
+                )}
+                {orderResult.trackingInfo.trackingUrl && (
+                  <a 
+                    href={orderResult.trackingInfo.trackingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-700 underline"
+                  >
+                    Track Your Package
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <button
+          onClick={onBackToShopping}
+          className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+        >
+          Continue Shopping
+        </button>
+        <button
+          onClick={() => window.print()}
+          className="w-full px-6 py-3 text-blue-600 border border-blue-600 rounded-md hover:bg-blue-50"
+        >
+          Print Order Confirmation
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="max-w-4xl mx-auto p-6 bg-white">
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold text-center mb-2">Checkout</h2>
+        {!orderSubmitted && renderStepIndicator()}
+      </div>
+
+      {currentStep === 1 && renderCustomerStep()}
+      {currentStep === 2 && renderShippingStep()}
+      {currentStep === 3 && renderPaymentStep()}
+      {currentStep === 4 && renderReviewStep()}
+      {currentStep === 5 && renderConfirmationStep()}
     </div>
   );
 };
