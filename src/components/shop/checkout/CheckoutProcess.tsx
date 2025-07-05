@@ -526,7 +526,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
     }
   };
 
-  // Create local order record for tracking
+  // Create local order record for tracking using correct schema
   const createLocalOrder = async (dropshipResult: any) => {
     try {
       const selectedShipping = shippingType === 'custom' && selectedShippingOption ? 
@@ -535,45 +535,45 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
       const shippingCost = selectedShipping ? selectedShipping.cost : 0;
       const totalWithShipping = totalPrice + shippingCost;
 
-      // Prepare shipping address
-      let shippingAddress;
-      if (shippingType === 'shop') {
-        const shopAddr = shopAddresses.find(addr => addr.id === selectedShopAddress);
-        shippingAddress = shopAddr ? {
-          name: shopAddr.name,
-          street_address: shopAddr.street_address,
-          city: shopAddr.city,
-          state: shopAddr.state,
-          zip_code: shopAddr.zip_code,
-          country: shopAddr.country
-        } : null;
-      } else {
-        shippingAddress = {
-          street_address: customAddress.street_address,
-          city: customAddress.city,
-          state: customAddress.state,
-          zip_code: customAddress.zip_code,
-          country: customAddress.country
-        };
-      }
-
-      // Create order in special_orders table
+      // Prepare order data using correct schema field names
       const orderData = {
+        order_reference: dropshipResult.orderReference || `ORD-${Date.now()}`,
         customer_id: selectedCustomer!.id,
-        order_type: 'parts',
-        status: 'submitted',
-        total_amount: totalWithShipping,
-        shipping_type: shippingType,
-        shipping_address: JSON.stringify(shippingAddress),
+        customer_first_name: selectedCustomer!.first_name || '',
+        customer_last_name: selectedCustomer!.last_name || '',
+        customer_email: selectedCustomer!.email || '',
+        customer_phone: selectedCustomer!.phone || '',
+        customer_company: '', // Not available in profiles
+        shipping_street: shippingType === 'shop' ? 
+          shopAddresses.find(addr => addr.id === selectedShopAddress)?.street_address || '' :
+          customAddress.street_address,
+        shipping_city: shippingType === 'shop' ? 
+          shopAddresses.find(addr => addr.id === selectedShopAddress)?.city || '' :
+          customAddress.city,
+        shipping_state: shippingType === 'shop' ? 
+          shopAddresses.find(addr => addr.id === selectedShopAddress)?.state || '' :
+          customAddress.state,
+        shipping_zip_code: shippingType === 'shop' ? 
+          shopAddresses.find(addr => addr.id === selectedShopAddress)?.zip_code || '' :
+          customAddress.zip_code,
+        shipping_country: shippingType === 'shop' ? 
+          shopAddresses.find(addr => addr.id === selectedShopAddress)?.country || 'US' :
+          customAddress.country,
+        items: JSON.stringify(cart), // Store as JSON string
+        item_count: cart.length,
+        subtotal: totalPrice,
         shipping_cost: shippingCost,
+        tax_amount: 0, // Not calculated yet
+        total_amount: totalWithShipping,
         shipping_method: selectedShipping ? `${selectedShipping.carrierName} ${selectedShipping.serviceName}` : 'Ship to Shop',
+        shipping_carrier: selectedShipping ? selectedShipping.carrierName : null,
+        status: 'pending',
+        special_instructions: orderNotes || null, // Use special_instructions instead of notes
         payment_method: paymentMethod,
-        notes: orderNotes,
-        external_order_id: dropshipResult.keystoneOrderId,
-        external_order_reference: dropshipResult.orderReference
+        created_by: selectedCustomer!.id
       };
 
-      console.log('Creating local order record:', orderData);
+      console.log('Creating local order record with correct schema:', orderData);
 
       const { data: order, error: orderError } = await supabase
         .from('special_orders')
@@ -589,25 +589,30 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
 
       console.log('Local order created successfully:', order);
 
-      // Create order items in order_items table
-      const orderItems = cart.map(item => ({
-        order_id: order.id,
-        part_number: item.vcpn || item.sku || item.id,
-        description: item.name,
-        quantity: item.quantity,
-        unit_price: item.price,
-        total_price: item.price * item.quantity
-      }));
+      // Create order items in order_items table if it exists
+      try {
+        const orderItems = cart.map(item => ({
+          order_id: order.id,
+          part_number: item.vcpn || item.sku || item.id,
+          description: item.name,
+          quantity: item.quantity,
+          unit_price: item.price,
+          total_price: item.price * item.quantity
+        }));
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .insert(orderItems);
 
-      if (itemsError) {
-        console.error('Order items creation error:', itemsError);
-        // Don't throw here - the main order was successful
-      } else {
-        console.log('Order items created successfully');
+        if (itemsError) {
+          console.error('Order items creation error:', itemsError);
+          // Don't throw here - the main order was successful
+        } else {
+          console.log('Order items created successfully');
+        }
+      } catch (itemsErr) {
+        console.error('Error creating order items (table may not exist):', itemsErr);
+        // Continue - this is not critical
       }
 
     } catch (err) {
