@@ -21,7 +21,7 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Enhanced categorization logic with word boundary matching
+// Vehicle make keywords for PostgreSQL word boundary search
 const MAKE_KEYWORDS = [
   "ford", "chevy", "gmc", "jeep", "ram", "toyota", "dodge", 
   "nissan", "honda", "hyundai", "kia", "subaru", "mazda"
@@ -90,24 +90,20 @@ interface CartItem {
   maxQuantity: number;
 }
 
-// Text normalization function
-const normalizeText = (text: string): string => {
-  if (!text) return '';
-  
-  return text
-    .toLowerCase()
-    .trim()
-    // Remove extra whitespace
-    .replace(/\s+/g, ' ')
-    // Keep punctuation that separates words, but normalize it
-    .replace(/[^\w\s-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+// PostgreSQL word boundary search function
+const createPostgreSQLWordBoundaryQuery = (keyword: string): string => {
+  // PostgreSQL uses \m and \M for word boundaries (not \b like JavaScript)
+  return `\\m${keyword}\\M`;
 };
 
-// Enhanced word boundary matching for vehicle makes
-const categorizeVehicleMake = (part: any): string => {
-  // Field priority: name, description, long_description, category
+// Create OR condition for PostgreSQL search across multiple fields
+const createPostgreSQLSearchCondition = (keyword: string): string => {
+  const pattern = createPostgreSQLWordBoundaryQuery(keyword);
+  return `name ~* '${pattern}' OR description ~* '${pattern}' OR long_description ~* '${pattern}' OR category ~* '${pattern}'`;
+};
+
+// Client-side categorization for processed parts (fallback/validation)
+const categorizeVehicleMakeClientSide = (part: any): string => {
   const searchFields = [
     part.name || '',
     part.description || '',
@@ -115,19 +111,14 @@ const categorizeVehicleMake = (part: any): string => {
     part.category || ''
   ];
 
-  // Search each field in priority order
   for (const field of searchFields) {
     if (!field) continue;
     
-    const normalizedField = normalizeText(field);
+    const normalizedField = field.toLowerCase();
     
-    // Check each make keyword with word boundary matching
     for (const make of MAKE_KEYWORDS) {
-      // Create regex with word boundaries: \bmake\b
       const regex = new RegExp(`\\b${make}\\b`, 'i');
-      
       if (regex.test(normalizedField)) {
-        console.log(`🎯 Found make "${make}" in field: "${field.substring(0, 50)}..."`);
         return make;
       }
     }
@@ -136,9 +127,7 @@ const categorizeVehicleMake = (part: any): string => {
   return 'unknown';
 };
 
-// Enhanced word boundary matching for part categories
-const categorizePartCategory = (part: any): string => {
-  // Field priority: name, description, long_description, category
+const categorizePartCategoryClientSide = (part: any): string => {
   const searchFields = [
     part.name || '',
     part.description || '',
@@ -146,27 +135,20 @@ const categorizePartCategory = (part: any): string => {
     part.category || ''
   ];
 
-  // Search each field in priority order
   for (const field of searchFields) {
     if (!field) continue;
     
-    const normalizedField = normalizeText(field);
+    const normalizedField = field.toLowerCase();
     
-    // Check each category and its keywords
     for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
       for (const keyword of keywords) {
-        // Handle multi-word keywords
         if (keyword.includes(' ')) {
-          // For multi-word keywords, check if the phrase exists
           if (normalizedField.includes(keyword.toLowerCase())) {
-            console.log(`🎯 Found category "${category}" with keyword "${keyword}" in field: "${field.substring(0, 50)}..."`);
             return category;
           }
         } else {
-          // For single words, use word boundary matching
           const regex = new RegExp(`\\b${keyword}\\b`, 'i');
           if (regex.test(normalizedField)) {
-            console.log(`🎯 Found category "${category}" with keyword "${keyword}" in field: "${field.substring(0, 50)}..."`);
             return category;
           }
         }
@@ -177,7 +159,7 @@ const categorizePartCategory = (part: any): string => {
   return 'uncategorized';
 };
 
-// Vehicle make categories with updated fallback
+// Vehicle make categories
 const VEHICLE_MAKES = [
   {
     id: 'ford',
@@ -250,7 +232,6 @@ const useSimpleCart = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load cart from localStorage on mount
   useEffect(() => {
     try {
       const savedCart = localStorage.getItem('simple-cart');
@@ -262,7 +243,6 @@ const useSimpleCart = () => {
     }
   }, []);
 
-  // Save cart to localStorage whenever it changes
   useEffect(() => {
     try {
       localStorage.setItem('simple-cart', JSON.stringify(cart));
@@ -300,7 +280,6 @@ const useSimpleCart = () => {
         }
       });
 
-      // Show success toast
       showToast(`Added ${part.name} to cart`, 'success');
       
     } catch (error) {
@@ -351,7 +330,6 @@ const useSimpleCart = () => {
 
 // Toast notification system
 const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-  // Create toast element
   const toast = document.createElement('div');
   toast.className = `fixed top-4 right-4 z-50 px-4 py-2 rounded-md text-white font-medium ${
     type === 'success' ? 'bg-green-500' : 'bg-red-500'
@@ -360,7 +338,6 @@ const showToast = (message: string, type: 'success' | 'error' = 'success') => {
   
   document.body.appendChild(toast);
   
-  // Remove after 3 seconds
   setTimeout(() => {
     document.body.removeChild(toast);
   }, 3000);
@@ -489,9 +466,9 @@ const Parts: React.FC = () => {
     }
   };
 
-  // Load category statistics with enhanced word boundary matching
+  // Load category statistics using consistent PostgreSQL word boundary search
   const loadCategoryStatistics = useCallback(async () => {
-    console.log('📊 Loading category statistics with enhanced matching...');
+    console.log('📊 Loading category statistics with PostgreSQL word boundary search...');
     
     try {
       // Test database connection first
@@ -520,46 +497,48 @@ const Parts: React.FC = () => {
 
       console.log(`📊 Total inventory count: ${totalCount}`);
 
-      // Get counts for each vehicle make using enhanced word boundary matching
+      // Get counts for each vehicle make using PostgreSQL word boundary search
       const updatedMakes = await Promise.all(
         VEHICLE_MAKES.map(async (make) => {
           try {
             if (make.id === 'unknown') {
-              // For unknown, we'll estimate based on sample data
-              const { data: sampleData, error: sampleError } = await supabase
-                .from('inventory')
-                .select('name, description, long_description, category')
-                .limit(1000);
+              // For unknown, calculate as total minus all known makes
+              let knownMakesCount = 0;
               
-              if (!sampleError && sampleData) {
-                let unknownCount = 0;
-                sampleData.forEach(item => {
-                  const vehicleMake = categorizeVehicleMake(item);
-                  if (vehicleMake === 'unknown') {
-                    unknownCount++;
+              for (const otherMake of VEHICLE_MAKES) {
+                if (otherMake.id !== 'unknown') {
+                  const searchCondition = createPostgreSQLSearchCondition(otherMake.id);
+                  const { count } = await supabase
+                    .from('inventory')
+                    .select('*', { count: 'exact', head: true })
+                    .or(searchCondition);
+                  
+                  if (count) {
+                    knownMakesCount += count;
                   }
-                });
-                
-                // Estimate total unknown parts based on sample
-                const estimatedUnknown = Math.floor((unknownCount / 1000) * (totalCount || 0));
-                console.log(`📊 ${make.name}: ${estimatedUnknown} parts (estimated)`);
-                return { ...make, count: estimatedUnknown };
+                }
               }
               
-              return { ...make, count: 0 };
+              const unknownCount = (totalCount || 0) - knownMakesCount;
+              console.log(`📊 ${make.name}: ${unknownCount} parts (calculated as total - known makes)`);
+              return { ...make, count: Math.max(0, unknownCount) };
+              
             } else {
-              // For specific makes, use word boundary SQL matching
+              // For specific makes, use PostgreSQL word boundary search
+              const searchCondition = createPostgreSQLSearchCondition(make.id);
+              console.log(`🔍 PostgreSQL search condition for ${make.id}: ${searchCondition}`);
+              
               const { count, error } = await supabase
                 .from('inventory')
                 .select('*', { count: 'exact', head: true })
-                .or(`name.ilike.%${make.id}%,description.ilike.%${make.id}%,long_description.ilike.%${make.id}%,category.ilike.%${make.id}%`);
+                .or(searchCondition);
               
               if (error) {
                 console.warn(`Warning: Could not get count for ${make.name}:`, error.message);
                 return { ...make, count: 0 };
               }
               
-              console.log(`📊 ${make.name}: ${count} parts`);
+              console.log(`📊 ${make.name}: ${count} parts (PostgreSQL word boundary)`);
               return { ...make, count: count || 0 };
             }
           } catch (error) {
@@ -570,18 +549,17 @@ const Parts: React.FC = () => {
       );
 
       setVehicleMakes(updatedMakes);
-      console.log('✅ Category statistics loaded successfully with enhanced matching');
+      console.log('✅ Category statistics loaded successfully with PostgreSQL word boundary search');
 
     } catch (error) {
       logError('Error loading category statistics', error);
-      // Use default categories with zero counts
       setVehicleMakes(VEHICLE_MAKES);
     }
   }, []);
 
-  // Load parts for selected make with enhanced categorization
+  // Load parts for selected make using consistent PostgreSQL word boundary search
   const loadPartsForMake = useCallback(async (makeId: string, page: number = 1) => {
-    console.log(`🔄 Loading parts for make: ${makeId}, page: ${page}`);
+    console.log(`🔄 Loading parts for make: ${makeId}, page: ${page} using PostgreSQL word boundary search`);
     setLoading(true);
     setError('');
 
@@ -595,16 +573,11 @@ const Parts: React.FC = () => {
         .from('inventory')
         .select('*', { count: 'exact' });
 
-      // Apply make filter using enhanced word boundary logic
-      if (makeId && makeId !== 'all') {
-        if (makeId === 'unknown') {
-          // For unknown, we'll filter client-side after loading
-          console.log(`🔍 Loading all parts for unknown filtering`);
-        } else {
-          // For specific makes, search across multiple fields
-          console.log(`🔍 Filtering by make keyword: ${makeId}`);
-          query = query.or(`name.ilike.%${makeId}%,description.ilike.%${makeId}%,long_description.ilike.%${makeId}%,category.ilike.%${makeId}%`);
-        }
+      // Apply make filter using PostgreSQL word boundary logic
+      if (makeId && makeId !== 'all' && makeId !== 'unknown') {
+        const searchCondition = createPostgreSQLSearchCondition(makeId);
+        console.log(`🔍 Using PostgreSQL search condition: ${searchCondition}`);
+        query = query.or(searchCondition);
       }
 
       // Apply pagination
@@ -619,13 +592,12 @@ const Parts: React.FC = () => {
       }
 
       console.log(`✅ Loaded ${data?.length || 0} parts for page ${page}`);
-      console.log(`📊 Total count: ${count}`);
+      console.log(`📊 Total count from query: ${count}`);
 
-      // Process parts with enhanced categorization logic
+      // Process parts with client-side categorization
       const processedParts: InventoryPart[] = (data || []).map(item => {
-        // Apply enhanced categorization logic with word boundaries
-        const vehicleMake = categorizeVehicleMake(item);
-        const partCategory = categorizePartCategory(item);
+        const vehicleMake = categorizeVehicleMakeClientSide(item);
+        const partCategory = categorizePartCategoryClientSide(item);
         
         return {
           id: item.id,
@@ -650,27 +622,26 @@ const Parts: React.FC = () => {
         };
       });
 
-      // Filter for specific make if needed (client-side filtering for unknown)
+      // For unknown category, filter client-side
       let finalParts = processedParts;
       if (makeId === 'unknown') {
         finalParts = processedParts.filter(part => part.vehicleMake === 'unknown');
-        console.log(`🔍 Filtered to ${finalParts.length} unknown parts`);
-      } else if (makeId !== 'all') {
-        // Additional client-side filtering for precise word boundary matching
-        finalParts = processedParts.filter(part => part.vehicleMake === makeId);
-        console.log(`🔍 Filtered to ${finalParts.length} ${makeId} parts with word boundary matching`);
+        console.log(`🔍 Filtered to ${finalParts.length} unknown parts (client-side)`);
       }
 
       setParts(finalParts);
       setFilteredParts(finalParts);
       
-      // Update pagination
+      // Update pagination with actual count
+      const actualCount = makeId === 'unknown' ? finalParts.length : (count || 0);
       setPagination(prev => ({
         ...prev,
         currentPage: page,
-        totalItems: finalParts.length,
-        totalPages: Math.ceil(finalParts.length / prev.itemsPerPage)
+        totalItems: actualCount,
+        totalPages: Math.ceil(actualCount / prev.itemsPerPage)
       }));
+
+      console.log(`📊 Final parts count: ${finalParts.length}, Total available: ${actualCount}`);
 
     } catch (error) {
       logError('Error loading parts', error);
@@ -680,18 +651,18 @@ const Parts: React.FC = () => {
     }
   }, [pagination.itemsPerPage]);
 
-  // Global search functionality with enhanced matching
+  // Global search functionality using PostgreSQL word boundary search
   const handleGlobalSearch = useCallback(async (searchTerm: string) => {
     if (!searchTerm.trim()) {
       setGlobalSearchResults([]);
       return;
     }
 
-    console.log(`🔍 Global search for: "${searchTerm}"`);
+    console.log(`🔍 Global search for: "${searchTerm}" using PostgreSQL patterns`);
     setLoading(true);
 
     try {
-      // Search across multiple fields
+      // Use PostgreSQL text search across multiple fields
       const { data, error } = await supabase
         .from('inventory')
         .select('*')
@@ -703,10 +674,10 @@ const Parts: React.FC = () => {
         return;
       }
 
-      // Process search results with enhanced categorization
+      // Process search results with client-side categorization
       const processedResults: InventoryPart[] = (data || []).map(item => {
-        const vehicleMake = categorizeVehicleMake(item);
-        const partCategory = categorizePartCategory(item);
+        const vehicleMake = categorizeVehicleMakeClientSide(item);
+        const partCategory = categorizePartCategoryClientSide(item);
         
         return {
           id: item.id,
@@ -996,6 +967,11 @@ const Parts: React.FC = () => {
               </h1>
               <p className="text-gray-600">
                 {filteredParts.length.toLocaleString()} parts found
+                {selectedMakeInfo && (
+                  <span className="text-sm ml-2">
+                    (Total available: {selectedMakeInfo.count.toLocaleString()})
+                  </span>
+                )}
               </p>
             </div>
           </div>
