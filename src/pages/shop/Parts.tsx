@@ -910,15 +910,19 @@ const PartsCatalog: React.FC = () => {
             `long_description.ilike.%${keyword}%`
           ).join(',');
           
-          query = query.or(orConditions);
           console.log(`🔍 Filtering by category keywords: ${category.keywords.join(', ')}`);
+          console.log(`🔍 OR conditions: ${orConditions}`);
+          
+          query = query.or(orConditions);
         }
       }
 
       // Apply search filter
       if (searchTerm.trim()) {
-        query = query.or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,long_description.ilike.%${searchTerm}%`);
+        const searchConditions = `name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,long_description.ilike.%${searchTerm}%`;
+        query = query.or(searchConditions);
         console.log(`🔍 Applying search filter: ${searchTerm}`);
+        console.log(`🔍 Search conditions: ${searchConditions}`);
       }
 
       // Apply stock status filter
@@ -933,6 +937,25 @@ const PartsCatalog: React.FC = () => {
       
       console.log(`📄 Applying pagination: ${startIndex} to ${endIndex}`);
       
+      // DEBUG: Let's try a simple query first to see what we get
+      console.log('🔍 DEBUG: Testing simple query without filters...');
+      const { data: simpleData, count: simpleCount, error: simpleError } = await supabase
+        .from('inventory')
+        .select('*', { count: 'exact' })
+        .limit(5);
+      
+      if (simpleError) {
+        logError('Simple query failed', simpleError);
+      } else {
+        console.log('🔍 DEBUG: Simple query returned:', simpleCount, 'total items');
+        console.log('🔍 DEBUG: First 5 items:', simpleData?.map(item => ({
+          name: item.name,
+          sku: item.sku,
+          long_description: item.long_description?.substring(0, 100) + '...'
+        })));
+      }
+
+      // Now try the filtered query
       const { data, count, error } = await query.range(startIndex, endIndex);
 
       if (error) {
@@ -942,6 +965,32 @@ const PartsCatalog: React.FC = () => {
 
       console.log(`✅ Loaded ${data?.length || 0} parts for page ${pagination.currentPage}`);
       console.log(`📊 Total count: ${count}`);
+
+      // DEBUG: Show what we got
+      if (data && data.length > 0) {
+        console.log('🔍 DEBUG: Sample parts returned:', data.slice(0, 3).map(item => ({
+          name: item.name,
+          sku: item.sku,
+          long_description: item.long_description?.substring(0, 100) + '...'
+        })));
+      } else {
+        console.log('🔍 DEBUG: No parts returned from query');
+        
+        // Let's test if any parts contain our keywords
+        if (selectedCategory && selectedCategory !== 'all') {
+          const category = VEHICLE_CATEGORIES.find(cat => cat.id === selectedCategory);
+          if (category && category.keywords.length > 0) {
+            console.log('🔍 DEBUG: Testing individual keywords...');
+            for (const keyword of category.keywords.slice(0, 3)) { // Test first 3 keywords
+              const { count: keywordCount } = await supabase
+                .from('inventory')
+                .select('*', { count: 'exact', head: true })
+                .ilike('long_description', `%${keyword}%`);
+              console.log(`🔍 DEBUG: Keyword "${keyword}" found in ${keywordCount} parts`);
+            }
+          }
+        }
+      }
 
       // Process the parts
       const processedParts = (data || []).map(processInventoryItem);
@@ -1282,7 +1331,6 @@ const PartsCatalog: React.FC = () => {
                 </h2>
                 <span className="text-gray-600">{pagination.totalItems.toLocaleString()} parts</span>
               </div>
-              {/* ✅ REMOVED: Duplicate cart button - only keep the one in main header */}
             </div>
 
             {/* Search and controls */}
