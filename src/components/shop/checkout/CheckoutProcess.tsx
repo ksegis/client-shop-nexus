@@ -18,6 +18,12 @@ interface Profile {
   phone: string | null;
   role: string | null;
   active: boolean;
+  // Address fields if they exist in profiles
+  street_address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  country?: string | null;
 }
 
 interface ShopAddress {
@@ -137,6 +143,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
   const [shopAddresses, setShopAddresses] = useState<ShopAddress[]>([]);
   const [selectedShopAddress, setSelectedShopAddress] = useState<string>('');
   const [customAddress, setCustomAddress] = useState({
+    ship_to_name: '',
     street_address: '',
     city: '',
     state: '',
@@ -204,6 +211,29 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
       loadShippingQuotes();
     }
   }, [shippingType, customAddress]);
+
+  // Handle shipping type change with proper state clearing
+  const handleShippingTypeChange = (newType: 'shop' | 'customer' | 'custom') => {
+    setShippingType(newType);
+    
+    // Clear shipping options and selection when changing types
+    setShippingOptions([]);
+    setSelectedShippingOption('');
+    setShippingQuoteError(null);
+    setShowOtherOptions(false);
+    
+    // Reset custom address if switching away from custom
+    if (newType !== 'custom') {
+      setCustomAddress({
+        ship_to_name: '',
+        street_address: '',
+        city: '',
+        state: '',
+        zip_code: '',
+        country: 'US'
+      });
+    }
+  };
 
   // Group shipping options by category
   const groupShippingOptions = (options: ShippingOption[]): GroupedShippingOptions => {
@@ -286,14 +316,21 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         throw error;
       }
 
-      const results: CustomerSearchResult[] = data.map(profile => ({
-        id: profile.id,
-        display_name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 
-                     'No Name',
-        email: profile.email,
-        phone: profile.phone,
-        full_address: 'Address information not available in profiles'
-      }));
+      const results: CustomerSearchResult[] = data.map(profile => {
+        // Check if customer has address information
+        const hasAddress = profile.street_address && profile.city && profile.state && profile.zip_code;
+        const addressText = hasAddress ? 
+          `${profile.street_address}, ${profile.city}, ${profile.state} ${profile.zip_code}` :
+          'No address on file';
+
+        return {
+          id: profile.id,
+          display_name: `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'No Name',
+          email: profile.email,
+          phone: profile.phone,
+          full_address: addressText
+        };
+      });
 
       setCustomerResults(results);
       
@@ -329,6 +366,15 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
     }
   };
 
+  // Check if customer has address information
+  const customerHasAddress = (): boolean => {
+    if (!selectedCustomer) return false;
+    return !!(selectedCustomer.street_address && 
+              selectedCustomer.city && 
+              selectedCustomer.state && 
+              selectedCustomer.zip_code);
+  };
+
   // Check if address is complete
   const isAddressComplete = (address: any): boolean => {
     return address.street_address && 
@@ -338,7 +384,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
            address.country;
   };
 
-  // Load shipping quotes for custom address
+  // Load shipping quotes for custom address with better error handling
   const loadShippingQuotes = async () => {
     if (!isAddressComplete(customAddress)) {
       return;
@@ -350,12 +396,17 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
       
       console.log('Loading shipping quotes for address:', customAddress);
       
-      // Get VCPNs from cart items
-      const vcpns = cart.map(item => item.vcpn || item.sku || item.id).filter(Boolean);
+      // Get VCPNs from cart items - ensure we have valid data
+      const vcpns = cart
+        .map(item => item.vcpn || item.sku || item.id)
+        .filter(Boolean)
+        .filter(vcpn => vcpn && vcpn.length > 0);
       
       if (vcpns.length === 0) {
         throw new Error('No valid part numbers found in cart');
       }
+
+      console.log('Using VCPNs for shipping quote:', vcpns);
 
       const result = await shippingQuoteService.getShippingQuotes(vcpns, {
         address1: customAddress.street_address,
@@ -367,7 +418,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
 
       console.log('Shipping quote result:', result);
 
-      if (result.success && result.data) {
+      if (result.success && result.data && Array.isArray(result.data)) {
         setShippingOptions(result.data);
         setShippingQuoteError(null);
       } else {
@@ -432,6 +483,21 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
           country: shopAddr.country
         };
         console.log('Using shop address:', shippingAddress);
+      } else if (shippingType === 'customer') {
+        if (!customerHasAddress()) {
+          throw new Error('Customer does not have address information on file');
+        }
+        
+        shippingAddress = {
+          name: `${selectedCustomer.first_name || ''} ${selectedCustomer.last_name || ''}`.trim(),
+          address1: selectedCustomer.street_address!,
+          city: selectedCustomer.city!,
+          state: selectedCustomer.state!,
+          zipCode: selectedCustomer.zip_code!,
+          country: selectedCustomer.country || 'US',
+          email: selectedCustomer.email
+        };
+        console.log('Using customer address:', shippingAddress);
       } else if (shippingType === 'custom') {
         if (!selectedShippingOption) {
           throw new Error('Please select a shipping option');
@@ -446,7 +512,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         }
         
         shippingAddress = {
-          name: `${selectedCustomer.first_name || ''} ${selectedCustomer.last_name || ''}`.trim(),
+          name: customAddress.ship_to_name || `${selectedCustomer.first_name || ''} ${selectedCustomer.last_name || ''}`.trim(),
           address1: customAddress.street_address,
           city: customAddress.city,
           state: customAddress.state,
@@ -456,7 +522,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         };
         console.log('Using custom address:', shippingAddress);
       } else {
-        throw new Error('Customer addresses not supported. Please use custom address.');
+        throw new Error('Invalid shipping type selected');
       }
 
       // Prepare order items for dropship service
@@ -479,6 +545,8 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
       let shippingMethod = 'standard';
       if (shippingType === 'shop') {
         shippingMethod = 'pickup';
+      } else if (shippingType === 'customer') {
+        shippingMethod = 'customer_address';
       } else if (selectedShippingOption) {
         const selectedShipping = shippingOptions.find(opt => 
           `${opt.carrierId}-${opt.serviceCode}` === selectedShippingOption
@@ -535,6 +603,35 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
       const shippingCost = selectedShipping ? selectedShipping.cost : 0;
       const totalWithShipping = totalPrice + shippingCost;
 
+      // Prepare shipping address for local storage
+      let shippingAddressData;
+      if (shippingType === 'shop') {
+        const shopAddr = shopAddresses.find(addr => addr.id === selectedShopAddress);
+        shippingAddressData = {
+          street: shopAddr?.street_address || '',
+          city: shopAddr?.city || '',
+          state: shopAddr?.state || '',
+          zip: shopAddr?.zip_code || '',
+          country: shopAddr?.country || 'US'
+        };
+      } else if (shippingType === 'customer') {
+        shippingAddressData = {
+          street: selectedCustomer!.street_address || '',
+          city: selectedCustomer!.city || '',
+          state: selectedCustomer!.state || '',
+          zip: selectedCustomer!.zip_code || '',
+          country: selectedCustomer!.country || 'US'
+        };
+      } else {
+        shippingAddressData = {
+          street: customAddress.street_address,
+          city: customAddress.city,
+          state: customAddress.state,
+          zip: customAddress.zip_code,
+          country: customAddress.country
+        };
+      }
+
       // Prepare order data using correct schema field names
       const orderData = {
         order_reference: dropshipResult.orderReference || `ORD-${Date.now()}`,
@@ -544,28 +641,20 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         customer_email: selectedCustomer!.email || '',
         customer_phone: selectedCustomer!.phone || '',
         customer_company: '', // Not available in profiles
-        shipping_street: shippingType === 'shop' ? 
-          shopAddresses.find(addr => addr.id === selectedShopAddress)?.street_address || '' :
-          customAddress.street_address,
-        shipping_city: shippingType === 'shop' ? 
-          shopAddresses.find(addr => addr.id === selectedShopAddress)?.city || '' :
-          customAddress.city,
-        shipping_state: shippingType === 'shop' ? 
-          shopAddresses.find(addr => addr.id === selectedShopAddress)?.state || '' :
-          customAddress.state,
-        shipping_zip_code: shippingType === 'shop' ? 
-          shopAddresses.find(addr => addr.id === selectedShopAddress)?.zip_code || '' :
-          customAddress.zip_code,
-        shipping_country: shippingType === 'shop' ? 
-          shopAddresses.find(addr => addr.id === selectedShopAddress)?.country || 'US' :
-          customAddress.country,
+        shipping_street: shippingAddressData.street,
+        shipping_city: shippingAddressData.city,
+        shipping_state: shippingAddressData.state,
+        shipping_zip_code: shippingAddressData.zip,
+        shipping_country: shippingAddressData.country,
         items: JSON.stringify(cart), // Store as JSON string
         item_count: cart.length,
         subtotal: totalPrice,
         shipping_cost: shippingCost,
         tax_amount: 0, // Not calculated yet
         total_amount: totalWithShipping,
-        shipping_method: selectedShipping ? `${selectedShipping.carrierName} ${selectedShipping.serviceName}` : 'Ship to Shop',
+        shipping_method: selectedShipping ? `${selectedShipping.carrierName} ${selectedShipping.serviceName}` : 
+                        shippingType === 'shop' ? 'Ship to Shop' : 
+                        shippingType === 'customer' ? 'Ship to Customer Address' : 'Custom Shipping',
         shipping_carrier: selectedShipping ? selectedShipping.carrierName : null,
         status: 'pending',
         special_instructions: orderNotes || null, // Use special_instructions instead of notes
@@ -642,6 +731,8 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
       case 2:
         if (shippingType === 'shop') {
           return selectedShopAddress !== '';
+        } else if (shippingType === 'customer') {
+          return customerHasAddress();
         } else if (shippingType === 'custom') {
           return isAddressComplete(customAddress) && selectedShippingOption !== '';
         }
@@ -716,6 +807,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
               {customer.phone && (
                 <div className="text-sm text-gray-600">{customer.phone}</div>
               )}
+              <div className="text-sm text-gray-500">{customer.full_address}</div>
             </div>
           ))}
         </div>
@@ -728,6 +820,11 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
             {selectedCustomer.first_name} {selectedCustomer.last_name}
           </p>
           <p className="text-sm text-green-600">{selectedCustomer.email}</p>
+          {customerHasAddress() && (
+            <p className="text-sm text-green-600">
+              Address on file: {selectedCustomer.street_address}, {selectedCustomer.city}, {selectedCustomer.state} {selectedCustomer.zip_code}
+            </p>
+          )}
         </div>
       )}
 
@@ -762,7 +859,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
               type="radio"
               value="shop"
               checked={shippingType === 'shop'}
-              onChange={(e) => setShippingType(e.target.value as 'shop' | 'customer' | 'custom')}
+              onChange={(e) => handleShippingTypeChange(e.target.value as 'shop' | 'customer' | 'custom')}
               className="form-radio"
             />
             <span className="font-medium">Ship to Shop (Free)</span>
@@ -797,6 +894,39 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
           </div>
         )}
 
+        {/* Ship to Customer Address Option */}
+        <div>
+          <label className="flex items-center space-x-3">
+            <input
+              type="radio"
+              value="customer"
+              checked={shippingType === 'customer'}
+              onChange={(e) => handleShippingTypeChange(e.target.value as 'shop' | 'customer' | 'custom')}
+              disabled={!customerHasAddress()}
+              className="form-radio"
+            />
+            <span className={`font-medium ${!customerHasAddress() ? 'text-gray-400' : ''}`}>
+              Ship to Customer Address
+            </span>
+            {!customerHasAddress() && (
+              <span className="text-sm text-gray-500">(No address on file)</span>
+            )}
+          </label>
+        </div>
+
+        {shippingType === 'customer' && customerHasAddress() && (
+          <div className="ml-6 p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="font-medium">Customer Address:</div>
+            <div className="text-sm text-gray-700">
+              {selectedCustomer!.street_address}<br />
+              {selectedCustomer!.city}, {selectedCustomer!.state} {selectedCustomer!.zip_code}
+            </div>
+            <div className="text-sm text-blue-600 mt-2">
+              Note: Shipping costs will be calculated at standard rates
+            </div>
+          </div>
+        )}
+
         {/* Ship to Custom Address Option */}
         <div>
           <label className="flex items-center space-x-3">
@@ -804,7 +934,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
               type="radio"
               value="custom"
               checked={shippingType === 'custom'}
-              onChange={(e) => setShippingType(e.target.value as 'shop' | 'customer' | 'custom')}
+              onChange={(e) => handleShippingTypeChange(e.target.value as 'shop' | 'customer' | 'custom')}
               className="form-radio"
             />
             <span className="font-medium">Ship to Custom Address</span>
@@ -814,6 +944,14 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         {shippingType === 'custom' && (
           <div className="ml-6 space-y-4">
             <div className="grid grid-cols-1 gap-4">
+              <input
+                type="text"
+                placeholder="Ship to Name"
+                value={customAddress.ship_to_name}
+                onChange={(e) => setCustomAddress({...customAddress, ship_to_name: e.target.value})}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              
               <input
                 type="text"
                 placeholder="Street Address"
@@ -1093,10 +1231,19 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
                 ) : null;
               })()}
             </div>
+          ) : shippingType === 'customer' ? (
+            <div>
+              <p className="font-medium text-blue-600">Ship to Customer Address</p>
+              <p>{selectedCustomer?.street_address}</p>
+              <p>{selectedCustomer?.city}, {selectedCustomer?.state} {selectedCustomer?.zip_code}</p>
+              <p className="text-sm text-gray-600 mt-2">
+                Shipping: Standard rates apply
+              </p>
+            </div>
           ) : (
             <div>
               <p className="font-medium">{selectedShipping?.serviceName}</p>
-              <p>{customAddress.street_address}</p>
+              <p>{customAddress.ship_to_name && `${customAddress.ship_to_name} - `}{customAddress.street_address}</p>
               <p>{customAddress.city}, {customAddress.state} {customAddress.zip_code}</p>
               <p className="text-sm text-gray-600 mt-2">
                 Shipping: ${shippingCost.toFixed(2)} ({selectedShipping?.estimatedDeliveryDays} business days)
