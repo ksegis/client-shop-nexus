@@ -406,7 +406,7 @@ const processInventoryItem = (item: any): InventoryPart => {
     name: safeString(item.name || item.description || 'Unknown Part'),
     sku: safeString(item.sku || ''),
     description: safeString(item.description || ''),
-    long_description: safeString(item.long_description || ''), // ✅ Fixed: snake_case
+    long_description: safeString(item.long_description || ''),
     keystone_vcpn: safeString(item.keystone_vcpn || ''),
     manufacturer_part_no: safeString(item.manufacturer_part_no || ''),
     compatibility: safeString(item.compatibility || ''),
@@ -418,10 +418,10 @@ const processInventoryItem = (item: any): InventoryPart => {
     cost: cost,
     list_price: listPrice,
     stockStatus: getStockStatus(Boolean(item.in_stock)),
-    vehicleCategory: categorizeVehicle(item.long_description || ''), // ✅ Fixed: snake_case
-    partCategory: categorizePart(item.long_description || ''), // ✅ Fixed: snake_case
-    modelYear: extractModelYear(item.long_description || ''), // ✅ Fixed: snake_case
-    vehicleModel: extractVehicleModel(item.long_description || '', categorizeVehicle(item.long_description || '')), // ✅ Fixed: snake_case
+    vehicleCategory: categorizeVehicle(item.long_description || ''),
+    partCategory: categorizePart(item.long_description || ''),
+    modelYear: extractModelYear(item.long_description || ''),
+    vehicleModel: extractVehicleModel(item.long_description || '', categorizeVehicle(item.long_description || '')),
     isKit: checkIfKit(item.id || item.sku || ''),
     pricingSource: pricingSource
   };
@@ -444,7 +444,7 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
       name: { value: safeString(part.name).toLowerCase(), weight: 30 },
       sku: { value: safeString(part.sku).toLowerCase(), weight: 20 },
       description: { value: safeString(part.description).toLowerCase(), weight: 20 },
-      long_description: { value: safeString(part.long_description).toLowerCase(), weight: 25 }, // ✅ Fixed: snake_case
+      long_description: { value: safeString(part.long_description).toLowerCase(), weight: 25 },
       manufacturer_part_no: { value: safeString(part.manufacturer_part_no).toLowerCase(), weight: 15 },
       compatibility: { value: safeString(part.compatibility).toLowerCase(), weight: 10 },
       brand: { value: safeString(part.brand).toLowerCase(), weight: 5 },
@@ -905,14 +905,17 @@ const PartsCatalog: React.FC = () => {
       if (selectedCategory && selectedCategory !== 'all') {
         const category = VEHICLE_CATEGORIES.find(cat => cat.id === selectedCategory);
         if (category && category.keywords.length > 0) {
-          // Use simple ILIKE for first keyword - ✅ Fixed: using long_description
-          const keyword = category.keywords[0];
-          query = query.ilike('long_description', `%${keyword}%`);
-          console.log(`🔍 Filtering by keyword: ${keyword}`);
+          // Build OR condition for all keywords in the category
+          const orConditions = category.keywords.map(keyword => 
+            `long_description.ilike.%${keyword}%`
+          ).join(',');
+          
+          query = query.or(orConditions);
+          console.log(`🔍 Filtering by category keywords: ${category.keywords.join(', ')}`);
         }
       }
 
-      // Apply search filter - ✅ Fixed: using long_description
+      // Apply search filter
       if (searchTerm.trim()) {
         query = query.or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,long_description.ilike.%${searchTerm}%`);
         console.log(`🔍 Applying search filter: ${searchTerm}`);
@@ -1279,18 +1282,7 @@ const PartsCatalog: React.FC = () => {
                 </h2>
                 <span className="text-gray-600">{pagination.totalItems.toLocaleString()} parts</span>
               </div>
-              <button
-                onClick={() => setShowCartDrawer(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 relative"
-              >
-                <ShoppingCart className="h-5 w-5" />
-                <span>Cart</span>
-                {cartItemCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center">
-                    {cartItemCount}
-                  </span>
-                )}
-              </button>
+              {/* ✅ REMOVED: Duplicate cart button - only keep the one in main header */}
             </div>
 
             {/* Search and controls */}
