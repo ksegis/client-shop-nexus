@@ -67,6 +67,8 @@ interface InventoryPart {
   vehicleMake: string;
   partCategory: string;
   pricingSource?: string;
+  year?: string;
+  model?: string;
 }
 
 interface CategorySummary {
@@ -117,6 +119,54 @@ const hasWordBoundaryMatch = (text: string, keyword: string): boolean => {
   // Use JavaScript regex for precise word boundary matching
   const regex = new RegExp(`\\b${normalizedKeyword}\\b`, 'i');
   return regex.test(normalizedText);
+};
+
+// Extract year from part name/description
+const extractYear = (part: any): string => {
+  const searchText = `${part.name || ''} ${part.description || ''} ${part.long_description || ''}`.toLowerCase();
+  
+  // Look for 4-digit years (1990-2030)
+  const yearMatch = searchText.match(/\b(19[9]\d|20[0-3]\d)\b/);
+  if (yearMatch) {
+    return yearMatch[1];
+  }
+  
+  // Look for year ranges like "2018-2022"
+  const rangeMatch = searchText.match(/\b(20[0-3]\d)[-–—](20[0-3]\d)\b/);
+  if (rangeMatch) {
+    return `${rangeMatch[1]}-${rangeMatch[2]}`;
+  }
+  
+  return 'Unknown';
+};
+
+// Extract model from part name/description
+const extractModel = (part: any): string => {
+  const searchText = `${part.name || ''} ${part.description || ''}`.toLowerCase();
+  
+  // Common truck models
+  const models = [
+    'f-150', 'f150', 'f-250', 'f250', 'f-350', 'f350', 'f-450', 'f450',
+    'silverado', 'sierra', 'colorado', 'canyon',
+    '1500', '2500', '3500',
+    'wrangler', 'gladiator', 'cherokee', 'grand cherokee',
+    'tacoma', 'tundra', 'highlander', 'prius',
+    'ram', 'charger', 'challenger', 'durango',
+    'frontier', 'titan', 'altima', 'sentra',
+    'accord', 'civic', 'pilot', 'ridgeline',
+    'elantra', 'sonata', 'tucson', 'santa fe',
+    'optima', 'sorento', 'sportage',
+    'outback', 'forester', 'impreza', 'legacy',
+    'cx-5', 'cx-9', 'mazda3', 'mazda6'
+  ];
+  
+  for (const model of models) {
+    if (hasWordBoundaryMatch(searchText, model)) {
+      return model.toUpperCase();
+    }
+  }
+  
+  return 'Unknown';
 };
 
 // Client-side categorization with word boundary matching
@@ -432,6 +482,7 @@ const Parts: React.FC = () => {
   const [currentView, setCurrentView] = useState<'categories' | 'parts'>('categories');
   const [selectedMake, setSelectedMake] = useState<string>('');
   const [parts, setParts] = useState<InventoryPart[]>([]);
+  const [allLoadedParts, setAllLoadedParts] = useState<InventoryPart[]>([]); // RESTORED: Keep all loaded parts for filter population
   const [filteredParts, setFilteredParts] = useState<InventoryPart[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -444,7 +495,7 @@ const Parts: React.FC = () => {
   const [showCartDrawer, setShowCartDrawer] = useState(false);
   const [vehicleMakes, setVehicleMakes] = useState<CategorySummary[]>(VEHICLE_MAKES);
 
-  // Pagination state - FIXED: Proper pagination for full dataset
+  // Pagination state
   const [pagination, setPagination] = useState({
     currentPage: 1,
     itemsPerPage: 50,
@@ -452,8 +503,10 @@ const Parts: React.FC = () => {
     totalPages: 0
   });
 
-  // Filter states
+  // RESTORED: Enhanced filter states with all missing filters
   const [filters, setFilters] = useState({
+    year: '',
+    model: '',
     partCategory: '',
     brand: '',
     stockStatus: '',
@@ -479,7 +532,7 @@ const Parts: React.FC = () => {
     }
   };
 
-  // FIXED: Load category statistics with proper counting
+  // Load category statistics with proper counting
   const loadCategoryStatistics = useCallback(async () => {
     console.log('📊 Loading category statistics with proper full dataset counting...');
     
@@ -585,19 +638,19 @@ const Parts: React.FC = () => {
     }
   }, []);
 
-  // FIXED: Load parts with proper pagination for full dataset
+  // FIXED: Load parts with proper pagination and filter data collection
   const loadPartsForMake = useCallback(async (makeId: string, page: number = 1) => {
-    console.log(`🔄 Loading parts for make: ${makeId}, page: ${page} with FIXED pagination`);
+    console.log(`🔄 Loading parts for make: ${makeId}, page: ${page} with FIXED pagination and filter data`);
     setLoading(true);
     setError('');
 
     try {
-      // FIXED: Calculate proper pagination offsets
+      // Calculate proper pagination offsets
       const startIndex = (page - 1) * pagination.itemsPerPage;
       
       console.log(`📄 Loading page ${page}, items ${startIndex} to ${startIndex + pagination.itemsPerPage - 1}`);
 
-      // FIXED: For specific makes, load data in chunks with proper pagination
+      // For specific makes, load data in chunks with proper pagination
       if (makeId && makeId !== 'all' && makeId !== 'unknown') {
         // Step 1: Get total count for this make first
         console.log(`🔍 Getting total count for ${makeId}...`);
@@ -613,7 +666,7 @@ const Parts: React.FC = () => {
           orConditions.push(`category.ilike.${pattern}`);
         });
 
-        // FIXED: Load larger chunks and paginate properly
+        // Load larger chunks and paginate properly
         const chunkSize = 1000; // Load 1000 at a time
         const maxChunks = 10; // Maximum chunks to load (10,000 parts max)
         let allMatchingParts: any[] = [];
@@ -667,13 +720,12 @@ const Parts: React.FC = () => {
 
         console.log(`✅ Total matching parts found: ${allMatchingParts.length}`);
 
-        // FIXED: Apply proper pagination to the matching parts
-        const paginatedParts = allMatchingParts.slice(startIndex, startIndex + pagination.itemsPerPage);
-
-        // Process parts with full information
-        const processedParts: InventoryPart[] = paginatedParts.map(item => {
+        // Process ALL parts with full information for filter population
+        const allProcessedParts: InventoryPart[] = allMatchingParts.map(item => {
           const vehicleMake = categorizeVehicleMakeClientSide(item);
           const partCategory = categorizePartCategoryClientSide(item);
+          const year = extractYear(item);
+          const model = extractModel(item);
           
           return {
             id: item.id,
@@ -694,22 +746,30 @@ const Parts: React.FC = () => {
             stockStatus: item.quantity_on_hand > 0 ? 'In Stock' : 'Out of Stock',
             vehicleMake: vehicleMake,
             partCategory: partCategory,
-            pricingSource: 'inventory_table'
+            pricingSource: 'inventory_table',
+            year: year,
+            model: model
           };
         });
 
-        setParts(processedParts);
-        setFilteredParts(processedParts);
+        // RESTORED: Store all loaded parts for filter population
+        setAllLoadedParts(allProcessedParts);
+
+        // Apply proper pagination to the matching parts
+        const paginatedParts = allProcessedParts.slice(startIndex, startIndex + pagination.itemsPerPage);
+
+        setParts(paginatedParts);
+        setFilteredParts(paginatedParts);
         
-        // FIXED: Update pagination with actual total count
+        // Update pagination with actual total count
         setPagination(prev => ({
           ...prev,
           currentPage: page,
-          totalItems: allMatchingParts.length,
-          totalPages: Math.ceil(allMatchingParts.length / prev.itemsPerPage)
+          totalItems: allProcessedParts.length,
+          totalPages: Math.ceil(allProcessedParts.length / prev.itemsPerPage)
         }));
 
-        console.log(`📊 FIXED: Page ${page} loaded with ${processedParts.length} parts, Total: ${allMatchingParts.length} parts`);
+        console.log(`📊 FIXED: Page ${page} loaded with ${paginatedParts.length} parts, Total: ${allProcessedParts.length} parts`);
 
       } else {
         // For 'all' or 'unknown', load with standard pagination
@@ -727,6 +787,8 @@ const Parts: React.FC = () => {
         const processedParts: InventoryPart[] = (data || []).map(item => {
           const vehicleMake = categorizeVehicleMakeClientSide(item);
           const partCategory = categorizePartCategoryClientSide(item);
+          const year = extractYear(item);
+          const model = extractModel(item);
           
           return {
             id: item.id,
@@ -747,7 +809,9 @@ const Parts: React.FC = () => {
             stockStatus: item.quantity_on_hand > 0 ? 'In Stock' : 'Out of Stock',
             vehicleMake: vehicleMake,
             partCategory: partCategory,
-            pricingSource: 'inventory_table'
+            pricingSource: 'inventory_table',
+            year: year,
+            model: model
           };
         });
 
@@ -756,6 +820,8 @@ const Parts: React.FC = () => {
           ? processedParts.filter(part => part.vehicleMake === 'unknown')
           : processedParts;
 
+        // RESTORED: Store all loaded parts for filter population
+        setAllLoadedParts(finalParts);
         setParts(finalParts);
         setFilteredParts(finalParts);
         
@@ -802,6 +868,8 @@ const Parts: React.FC = () => {
       const processedResults: InventoryPart[] = (data || []).map(item => {
         const vehicleMake = categorizeVehicleMakeClientSide(item);
         const partCategory = categorizePartCategoryClientSide(item);
+        const year = extractYear(item);
+        const model = extractModel(item);
         
         return {
           id: item.id,
@@ -822,7 +890,9 @@ const Parts: React.FC = () => {
           stockStatus: item.quantity_on_hand > 0 ? 'In Stock' : 'Out of Stock',
           vehicleMake: vehicleMake,
           partCategory: partCategory,
-          pricingSource: 'inventory_table'
+          pricingSource: 'inventory_table',
+          year: year,
+          model: model
         };
       });
 
@@ -845,8 +915,10 @@ const Parts: React.FC = () => {
     setGlobalSearchTerm('');
     setGlobalSearchResults([]);
     
-    // Reset filters
+    // RESTORED: Reset filters
     setFilters({
+      year: '',
+      model: '',
       partCategory: '',
       brand: '',
       stockStatus: '',
@@ -868,13 +940,16 @@ const Parts: React.FC = () => {
     setCurrentView('categories');
     setSelectedMake('');
     setParts([]);
+    setAllLoadedParts([]); // RESTORED: Clear all loaded parts
     setFilteredParts([]);
     setSearchTerm('');
     setGlobalSearchTerm('');
     setGlobalSearchResults([]);
     
-    // Reset filters
+    // RESTORED: Reset filters
     setFilters({
+      year: '',
+      model: '',
       partCategory: '',
       brand: '',
       stockStatus: '',
@@ -882,7 +957,7 @@ const Parts: React.FC = () => {
     });
   }, []);
 
-  // FIXED: Handle pagination properly
+  // Handle pagination properly
   const handlePageChange = useCallback((page: number) => {
     if (page >= 1 && page <= pagination.totalPages) {
       console.log(`📄 FIXED: Changing to page ${page}`);
@@ -890,7 +965,7 @@ const Parts: React.FC = () => {
     }
   }, [selectedMake, pagination.totalPages, loadPartsForMake]);
 
-  // Apply filters and search
+  // RESTORED: Apply filters and search with all filter types
   useEffect(() => {
     if (parts.length === 0) return;
 
@@ -901,17 +976,33 @@ const Parts: React.FC = () => {
       filtered = fuzzySearch(searchTerm, filtered);
     }
 
-    // Apply filters
+    // RESTORED: Apply year filter
+    if (filters.year) {
+      filtered = filtered.filter(part => 
+        part.year && part.year.toLowerCase().includes(filters.year.toLowerCase())
+      );
+    }
+
+    // RESTORED: Apply model filter
+    if (filters.model) {
+      filtered = filtered.filter(part => 
+        part.model && part.model.toLowerCase().includes(filters.model.toLowerCase())
+      );
+    }
+
+    // Apply part category filter
     if (filters.partCategory) {
       filtered = filtered.filter(part => part.partCategory === filters.partCategory);
     }
 
+    // Apply brand filter
     if (filters.brand) {
       filtered = filtered.filter(part => 
         safeString(part.brand).toLowerCase().includes(filters.brand.toLowerCase())
       );
     }
 
+    // Apply stock status filter
     if (filters.stockStatus) {
       filtered = filtered.filter(part => part.stockStatus === filters.stockStatus);
     }
@@ -941,16 +1032,26 @@ const Parts: React.FC = () => {
     loadCategoryStatistics();
   }, [loadCategoryStatistics]);
 
-  // Get unique values for filters
+  // RESTORED: Get unique values for filters from ALL loaded parts (not just current page)
+  const uniqueYears = useMemo(() => {
+    const years = new Set(allLoadedParts.map(part => part.year).filter(year => year && year !== 'Unknown'));
+    return Array.from(years).sort();
+  }, [allLoadedParts]);
+
+  const uniqueModels = useMemo(() => {
+    const models = new Set(allLoadedParts.map(part => part.model).filter(model => model && model !== 'Unknown'));
+    return Array.from(models).sort();
+  }, [allLoadedParts]);
+
   const uniquePartCategories = useMemo(() => {
-    const categories = new Set(parts.map(part => part.partCategory).filter(Boolean));
+    const categories = new Set(allLoadedParts.map(part => part.partCategory).filter(Boolean));
     return Array.from(categories).sort();
-  }, [parts]);
+  }, [allLoadedParts]);
 
   const uniqueBrands = useMemo(() => {
-    const brands = new Set(parts.map(part => part.brand).filter(Boolean));
+    const brands = new Set(allLoadedParts.map(part => part.brand).filter(Boolean));
     return Array.from(brands).sort();
-  }, [parts]);
+  }, [allLoadedParts]);
 
   // Handle global search from category view
   const handleGlobalSearchSubmit = useCallback(() => {
@@ -961,6 +1062,7 @@ const Parts: React.FC = () => {
       
       // Use global search results as parts
       setParts(globalSearchResults);
+      setAllLoadedParts(globalSearchResults); // RESTORED: Set all loaded parts for filters
       setFilteredParts(globalSearchResults);
       
       // Reset pagination for search results
@@ -1070,7 +1172,7 @@ const Parts: React.FC = () => {
   const renderPartsView = () => {
     const selectedMakeInfo = vehicleMakes.find(make => make.id === selectedMake);
     
-    // FIXED: Don't apply additional pagination to filteredParts since parts are already paginated
+    // Don't apply additional pagination to filteredParts since parts are already paginated
     const displayParts = filteredParts;
 
     return (
@@ -1090,7 +1192,6 @@ const Parts: React.FC = () => {
                 {selectedMakeInfo ? selectedMakeInfo.name : 'All'} Parts
               </h1>
               <p className="text-gray-600">
-                {/* FIXED: Show proper pagination info */}
                 {pagination.totalItems.toLocaleString()} parts found
                 {pagination.totalPages > 1 && (
                   <span className="text-sm ml-2">
@@ -1133,9 +1234,40 @@ const Parts: React.FC = () => {
             </div>
           </div>
 
-          {/* Filters Panel */}
+          {/* RESTORED: Enhanced Filters Panel with all filter types */}
           {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-4 border-t">
+              {/* RESTORED: Year Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                <select
+                  value={filters.year}
+                  onChange={(e) => setFilters(prev => ({ ...prev, year: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Years</option>
+                  {uniqueYears.map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* RESTORED: Model Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                <select
+                  value={filters.model}
+                  onChange={(e) => setFilters(prev => ({ ...prev, model: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Models</option>
+                  {uniqueModels.map(model => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Part Category Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Part Category</label>
                 <select
@@ -1150,6 +1282,7 @@ const Parts: React.FC = () => {
                 </select>
               </div>
 
+              {/* Brand Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
                 <select
@@ -1164,6 +1297,7 @@ const Parts: React.FC = () => {
                 </select>
               </div>
 
+              {/* Stock Status Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Stock Status</label>
                 <select
@@ -1177,6 +1311,7 @@ const Parts: React.FC = () => {
                 </select>
               </div>
 
+              {/* Price Range Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Price Range: ${filters.priceRange[0]} - ${filters.priceRange[1]}
@@ -1248,6 +1383,13 @@ const Parts: React.FC = () => {
                               <p><span className="font-medium">VCPN:</span> {part.keystone_vcpn}</p>
                             )}
                             <p><span className="font-medium">Brand:</span> {part.brand || 'N/A'}</p>
+                            {/* RESTORED: Show year and model in grid view */}
+                            {part.year && part.year !== 'Unknown' && (
+                              <p><span className="font-medium">Year:</span> {part.year}</p>
+                            )}
+                            {part.model && part.model !== 'Unknown' && (
+                              <p><span className="font-medium">Model:</span> {part.model}</p>
+                            )}
                           </div>
                         </div>
 
@@ -1308,6 +1450,13 @@ const Parts: React.FC = () => {
                             )}
                             <span><span className="font-medium">Brand:</span> {part.brand || 'N/A'}</span>
                             <span><span className="font-medium">Stock:</span> {part.quantity_on_hand}</span>
+                            {/* RESTORED: Show year and model in list view */}
+                            {part.year && part.year !== 'Unknown' && (
+                              <span><span className="font-medium">Year:</span> {part.year}</span>
+                            )}
+                            {part.model && part.model !== 'Unknown' && (
+                              <span><span className="font-medium">Model:</span> {part.model}</span>
+                            )}
                           </div>
                           <div className="flex flex-wrap gap-2 mt-2">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -1360,7 +1509,7 @@ const Parts: React.FC = () => {
               </div>
             )}
 
-            {/* FIXED: Pagination */}
+            {/* Pagination */}
             {pagination.totalPages > 1 && (
               <div className="flex items-center justify-between bg-white rounded-lg shadow-md p-4">
                 <div className="text-sm text-gray-600">
@@ -1446,6 +1595,13 @@ const Parts: React.FC = () => {
                     <p><span className="font-medium">Brand:</span> {selectedPart.brand || 'N/A'}</p>
                     <p><span className="font-medium">Category:</span> {selectedPart.category || 'N/A'}</p>
                     <p><span className="font-medium">Location:</span> {selectedPart.location || 'N/A'}</p>
+                    {/* RESTORED: Show year and model in detail dialog */}
+                    {selectedPart.year && selectedPart.year !== 'Unknown' && (
+                      <p><span className="font-medium">Year:</span> {selectedPart.year}</p>
+                    )}
+                    {selectedPart.model && selectedPart.model !== 'Unknown' && (
+                      <p><span className="font-medium">Model:</span> {selectedPart.model}</p>
+                    )}
                   </div>
                 </div>
 
