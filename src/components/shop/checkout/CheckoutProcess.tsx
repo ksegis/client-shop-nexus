@@ -20,7 +20,7 @@ interface Profile {
   state?: string;
   zip_code?: string;
   country?: string;
-  is_active?: boolean;
+  active?: boolean;
 }
 
 interface ShopAddress {
@@ -215,11 +215,13 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
   const searchCustomers = async (searchTerm: string) => {
     setIsSearchingCustomers(true);
     try {
+      console.log('🔍 Searching customers with term:', searchTerm);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('id, first_name, last_name, email, phone, street_address, city, state, zip_code, country')
         .eq('role', 'customer')
-        .eq('is_active', true)
+        .eq('active', true)  // Changed from is_active to active
         .or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
         .limit(10);
 
@@ -228,6 +230,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         return;
       }
 
+      console.log('👥 Found customers:', data);
       setCustomerSearchResults(data || []);
     } catch (error) {
       console.error('Error searching customers:', error);
