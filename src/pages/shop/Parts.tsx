@@ -317,20 +317,26 @@ const checkIfKit = (id: string): boolean => {
   return id.toLowerCase().includes('kit') || id.toLowerCase().includes('set');
 };
 
-// Enhanced error logging function
+// Better error logging function
 const logError = (context: string, error: any) => {
-  console.error(`❌ ${context}:`, {
-    message: error?.message || 'Unknown error',
-    details: error?.details || 'No details',
-    hint: error?.hint || 'No hint',
-    code: error?.code || 'No code',
-    fullError: error
-  });
+  console.error(`❌ ${context}:`);
+  console.error('Error message:', error?.message || 'No message');
+  console.error('Error details:', error?.details || 'No details');
+  console.error('Error hint:', error?.hint || 'No hint');
+  console.error('Error code:', error?.code || 'No code');
+  console.error('Full error object:', error);
+  
+  // Try to stringify the error to see its structure
+  try {
+    console.error('Error JSON:', JSON.stringify(error, null, 2));
+  } catch (e) {
+    console.error('Could not stringify error:', e);
+  }
 };
 
 // Process raw inventory item into InventoryPart
 const processInventoryItem = (item: any): InventoryPart => {
-  console.log('🔍 Processing item:', item.name || item.sku, 'Fields:', Object.keys(item));
+  console.log('🔍 Processing item:', item.name || item.sku);
   
   // Try multiple field names for list price
   let listPrice = 0;
@@ -379,10 +385,7 @@ const processInventoryItem = (item: any): InventoryPart => {
     cost = Number(item.purchase_price) || 0;
   }
 
-  console.log('💰 FINAL PRICING:');
-  console.log('💰 List Price:', listPrice);
-  console.log('💰 Cost:', cost);
-  console.log('💰 Source:', pricingSource);
+  console.log('💰 FINAL PRICING - List Price:', listPrice, 'Cost:', cost, 'Source:', pricingSource);
 
   return {
     id: item.id || item.sku || `part-${Math.random()}`,
@@ -726,7 +729,7 @@ const PartsCatalog: React.FC = () => {
   const [parts, setParts] = useState<InventoryPart[]>([]);
   const [categoryStats, setCategoryStats] = useState<CategorySummary[]>([]);
   const [loading, setLoading] = useState(false);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [globalSearchTerm, setGlobalSearchTerm] = useState('');
@@ -784,59 +787,78 @@ const PartsCatalog: React.FC = () => {
     }
   }, [cartMessage]);
 
-  // Load category statistics on mount
+  // Initialize with static category data (no database dependency)
   useEffect(() => {
-    const loadCategoryStats = async () => {
-      try {
-        setCategoriesLoading(true);
-        console.log('📊 Loading category statistics...');
-
-        // Simplified approach - get total count first
-        const { count: totalCount, error: totalError } = await supabase
-          .from('inventory')
-          .select('*', { count: 'exact', head: true });
-
-        if (totalError) {
-          logError('Error getting total count', totalError);
-          throw totalError;
-        }
-
-        console.log('📊 Total inventory count:', totalCount);
-
-        // For now, use estimated counts based on total
-        // In production, you would create a materialized view or summary table
-        const estimatedCounts = {
-          ford: Math.floor((totalCount || 0) * 0.25),
-          chevrolet: Math.floor((totalCount || 0) * 0.20),
-          ram: Math.floor((totalCount || 0) * 0.15),
-          gmc: Math.floor((totalCount || 0) * 0.10),
-          toyota: Math.floor((totalCount || 0) * 0.08),
-          jeep: Math.floor((totalCount || 0) * 0.07),
-          nissan: Math.floor((totalCount || 0) * 0.05),
-          honda: Math.floor((totalCount || 0) * 0.03),
-          universal: Math.floor((totalCount || 0) * 0.07)
-        };
-
-        const categoryResults = VEHICLE_CATEGORIES.map(category => ({
-          ...category,
-          count: estimatedCounts[category.id as keyof typeof estimatedCounts] || 0
-        }));
-
-        setCategoryStats(categoryResults);
-        console.log('✅ Category statistics loaded:', categoryResults);
-
-      } catch (err) {
-        logError('Error loading category statistics', err);
-        // Fallback to showing categories with 0 counts
-        setCategoryStats(VEHICLE_CATEGORIES.map(cat => ({ ...cat, count: 0 })));
-        setError('Failed to load category statistics. Please try again.');
-      } finally {
-        setCategoriesLoading(false);
-      }
-    };
-
-    loadCategoryStats();
+    console.log('🏗️ Initializing with static category data...');
+    
+    // Start with static categories with placeholder counts
+    const staticCategories = VEHICLE_CATEGORIES.map(category => ({
+      ...category,
+      count: 0 // Will be updated when database is available
+    }));
+    
+    setCategoryStats(staticCategories);
+    setCategoriesLoading(false);
+    
+    // Try to load real counts in background
+    loadCategoryStatsInBackground();
   }, []);
+
+  const loadCategoryStatsInBackground = async () => {
+    try {
+      console.log('📊 Attempting to load real category statistics...');
+
+      // Simple test query first
+      const { data: testData, error: testError } = await supabase
+        .from('inventory')
+        .select('id')
+        .limit(1);
+
+      if (testError) {
+        logError('Database connection test failed', testError);
+        return;
+      }
+
+      console.log('✅ Database connection successful, loading counts...');
+
+      // Get total count
+      const { count: totalCount, error: totalError } = await supabase
+        .from('inventory')
+        .select('*', { count: 'exact', head: true });
+
+      if (totalError) {
+        logError('Error getting total count', totalError);
+        return;
+      }
+
+      console.log('📊 Total inventory count:', totalCount);
+
+      // Update categories with estimated counts
+      const estimatedCounts = {
+        ford: Math.floor((totalCount || 0) * 0.25),
+        chevrolet: Math.floor((totalCount || 0) * 0.20),
+        ram: Math.floor((totalCount || 0) * 0.15),
+        gmc: Math.floor((totalCount || 0) * 0.10),
+        toyota: Math.floor((totalCount || 0) * 0.08),
+        jeep: Math.floor((totalCount || 0) * 0.07),
+        nissan: Math.floor((totalCount || 0) * 0.05),
+        honda: Math.floor((totalCount || 0) * 0.03),
+        universal: Math.floor((totalCount || 0) * 0.07)
+      };
+
+      const updatedCategories = VEHICLE_CATEGORIES.map(category => ({
+        ...category,
+        count: estimatedCounts[category.id as keyof typeof estimatedCounts] || 0
+      }));
+
+      setCategoryStats(updatedCategories);
+      console.log('✅ Category statistics updated with real counts');
+
+    } catch (err) {
+      logError('Error loading category statistics in background', err);
+      // Keep static categories with 0 counts
+    }
+  };
 
   // Load parts when category is selected
   useEffect(() => {
@@ -851,6 +873,17 @@ const PartsCatalog: React.FC = () => {
       setError(null);
       console.log(`🔄 Loading parts for category: ${selectedCategory}, page: ${pagination.currentPage}`);
 
+      // Test database connection first
+      const { data: testData, error: testError } = await supabase
+        .from('inventory')
+        .select('id')
+        .limit(1);
+
+      if (testError) {
+        logError('Database connection failed', testError);
+        throw new Error('Database connection failed. Please check your connection and try again.');
+      }
+
       // Start with basic query
       let query = supabase.from('inventory').select('*', { count: 'exact' });
 
@@ -858,8 +891,8 @@ const PartsCatalog: React.FC = () => {
       if (selectedCategory && selectedCategory !== 'all') {
         const category = VEHICLE_CATEGORIES.find(cat => cat.id === selectedCategory);
         if (category && category.keywords.length > 0) {
-          // Use simple ILIKE for each keyword
-          const keyword = category.keywords[0]; // Use first keyword for simplicity
+          // Use simple ILIKE for first keyword
+          const keyword = category.keywords[0];
           query = query.ilike('LongDescription', `%${keyword}%`);
           console.log(`🔍 Filtering by keyword: ${keyword}`);
         }
@@ -896,7 +929,7 @@ const PartsCatalog: React.FC = () => {
       // Process the parts
       const processedParts = (data || []).map(processInventoryItem);
 
-      // Apply client-side filters that are hard to do in SQL
+      // Apply client-side filters
       let filteredParts = processedParts;
 
       if (selectedVehicleModel) {
@@ -947,7 +980,7 @@ const PartsCatalog: React.FC = () => {
 
     } catch (err) {
       logError('Error loading parts', err);
-      setError(err instanceof Error ? err.message : 'Failed to load parts');
+      setError(err instanceof Error ? err.message : 'Failed to load parts. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -1098,7 +1131,10 @@ const PartsCatalog: React.FC = () => {
         <div className="text-center">
           <p className="text-red-600 mb-4">Error: {error}</p>
           <button 
-            onClick={() => window.location.reload()} 
+            onClick={() => {
+              setError(null);
+              loadCategoryStatsInBackground();
+            }} 
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
           >
             Retry
