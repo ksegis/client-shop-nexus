@@ -17,7 +17,7 @@ import { InventoryFileUpload} from './inventory/InventoryFileUpload';
 interface BasicInventoryItem {
   id: string;
   name: string;
-description?: string;{{{}}}
+  description?: string;  // ← Remove any extra braces here
   sku?: string;
   quantity: number;
   price: number;
