@@ -1,0 +1,83 @@
+{
+  "project": "TruckMod Pro - Parts Catalog Redesign",
+  "requirements": {
+    "goal": "Redesign the parts catalog page to improve usability, grouping, and filtering while reusing existing database connections and UI components.",
+    "db": {
+      "reuse": true,
+      "connection": "Existing Supabase/Postgres integration must be used.",
+      "source_tables": ["inventory"]
+    },
+    "ui": {
+      "reuse_components": true,
+      "components_to_extend": ["PartCard", "SearchFilter", "CategoryTabs", "InventoryListView"],
+      "modifications": {
+        "tile_layout": {
+          "fields": [
+            "name", 
+            "sku", 
+            "price", 
+            "cost", 
+            "margin", 
+            "stock", 
+            "brand", 
+            "category"
+          ],
+          "display": "structured card layout",
+          "badges": [
+            "Low Stock", 
+            "In Stock", 
+            "Out of Stock", 
+            "Region Availability"
+          ]
+        },
+        "filters": {
+          "fields": [
+            "price_range", 
+            "brand", 
+            "stock_status", 
+            "category", 
+            "warehouse_region"
+          ],
+          "type": "multi-select + sliders"
+        },
+        "view_modes": [
+          "grid", 
+          "table"
+        ],
+        "sorting_options": [
+          "name", 
+          "price", 
+          "availability"
+        ],
+        "search_fields": [
+          "name", 
+          "sku", 
+          "manufacturer_part_no", 
+          "compatibility"
+        ]
+      }
+    },
+    "search": {
+      "method": "extend existing search logic",
+      "include_fields": [
+        "name", 
+        "sku", 
+        "description", 
+        "manufacturer_part_no", 
+        "compatibility"
+      ],
+      "fuzzy_search": true
+    },
+    "categorization": {
+      "strategy": "derive category from keywords in name/description",
+      "mapping_logic": "simple keyword-based match (e.g., contains 'hose' -> category: Hose)",
+      "fallback": "Uncategorized"
+    }
+  },
+  "constraints": {
+    "no_new_api": true,
+    "preserve_existing_functionality": true,
+    "do_not_change_data_model": true,
+    "component_reuse_required": true
+  }
+}

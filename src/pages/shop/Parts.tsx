@@ -1,1744 +1,1803 @@
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Package, ShoppingCart, Search, Plus, Grid, List, Heart, Eye, RefreshCw, X, Minus, Trash2, ArrowRight, DollarSign, TrendingUp, TrendingDown, Truck, MapPin, Clock, Shield, Edit, CheckCircle, Timer, User, CreditCard, FileText, Star, Zap, UserSearch, UserPlus, Box } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-// Import the ProductPriceCheck component
-import ProductPriceCheck from '@/components/product_price_check_component';
-
-// Import existing services - FIXED: Import singleton instances instead of classes
-import { shippingQuoteService } from '@/services/shipping_quote_service';
-import { DropshipOrderService } from '@/services/dropship_order_service';
-
-// Import customer search service
-import { CustomerSearchService } from '@/services/customer_search_service';
-
-// Import kit components
-import { 
-  KitBadge, 
-  KitComponentsDisplay, 
-  CompactKitDisplay, 
-  useKitCheck 
-} from '@/components/kit_components_display';
-
-// Import Supabase for real data
-import { getSupabaseClient } from "@/lib/supabase";
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Search, Filter, Grid, List, Plus, Eye, X, ChevronDown, ShoppingCart, Minus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
 
-// Customer search result interface
-interface CustomerSearchResult {
-  id: string;
-  email: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  display_name: string;
+// Supabase configuration - using YOUR environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN;
+
+console.log('🔧 Supabase Config:', {
+  url: supabaseUrl,
+  keyLength: supabaseKey?.length || 0,
+  keyPreview: supabaseKey?.substring(0, 20) + '...',
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseKey
+});
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Missing Supabase environment variables!');
+  console.error('Expected: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_TOKEN');
 }
 
-// Enhanced interface for real inventory parts
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Vehicle make keywords for word boundary search
+const MAKE_KEYWORDS = [
+  "ford", "chevy", "gmc", "jeep", "ram", "toyota", "dodge", 
+  "nissan", "honda", "hyundai", "kia", "subaru", "mazda"
+];
+
+const CATEGORY_KEYWORDS = {
+  "Bumper": ["bumper", "bull bar", "brush guard"],
+  "Grille": ["grille", "grill"],
+  "Lift Kit": ["lift kit", "suspension lift"],
+  "Leveling Kit": ["leveling kit"],
+  "Fender": ["fender", "flare"],
+  "Bed Cover": ["bed cover", "tonneau"],
+  "Running Board": ["running board", "nerf bar", "step bar"],
+  "Lighting": ["light bar", "headlight", "tail light", "fog light", "led light"],
+  "Exhaust": ["exhaust", "muffler", "cat-back"],
+  "Intake": ["intake", "cold air intake"],
+  "Winch": ["winch"],
+  "Tow Equipment": ["tow hook", "tow strap", "recovery hook"],
+  "Mud Flap": ["mud flap", "splash guard"],
+  "Roof Rack": ["roof rack", "cargo rack"],
+  "Interior": ["floor mat", "seat cover", "console", "dash mat"],
+  "Exterior Trim": ["mirror", "spoiler", "hood", "diffuser"]
+};
+
+// Enhanced interfaces
 interface InventoryPart {
   id: string;
   name: string;
+  sku: string;
   description?: string;
-  sku?: string;
-  quantity: number;
-  price: number;
-  cost?: number;
-  category?: string;
-  supplier?: string;
-  reorder_level?: number;
-  created_at: string;
-  updated_at: string;
-  core_charge?: number;
+  long_description?: string;
   keystone_vcpn?: string;
-  keystone_synced?: boolean;
-  keystone_last_sync?: string;
-  
-  // Optional additional columns
-  warehouse?: string;
-  location?: string;
+  manufacturer_part_no?: string;
+  compatibility?: string;
   brand?: string;
-  weight?: number;
-  dimensions?: string;
-  warranty?: string;
-  list_price?: number;
-  discount_percentage?: number;
-  
-  // Kit support
-  is_kit?: boolean;
-  kit_component_count?: number;
-
-  // Map real inventory fields to expected interface
-  quantity_on_hand?: number; // Maps to quantity
-}
-
-// Customer interface for special orders
-interface Customer {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  company?: string;
-}
-
-// Shipping address interface
-interface ShippingAddress {
-  street: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  country: string;
-}
-
-// Shipping option interface
-interface ShippingOption {
-  id: string;
-  carrier: string;
-  service: string;
+  category?: string;
+  location?: string;
+  in_stock: boolean;
+  quantity_on_hand: number;
   cost: number;
-  estimatedDays: number;
-  deliveryDate: string;
+  list_price: number;
+  stockStatus: 'In Stock' | 'Out of Stock';
+  vehicleMake: string;
+  partCategory: string;
+  pricingSource?: string;
+  year?: string;
+  model?: string;
 }
 
-// Grouped shipping options interface
-interface GroupedShippingOptions {
-  bestValue: ShippingOption | null;
-  fastest: ShippingOption | null;
-  others: ShippingOption[];
+interface CategorySummary {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  count: number;
 }
 
-// Loading wrapper component
-const LoadingWrapper = ({ isLoading, children, message = "Loading..." }) => {
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm text-muted-foreground">{message}</span>
-        </div>
-      </div>
-    );
-  }
-  return children;
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  sku?: string;
+  category?: string;
+  image?: string;
+  inStock: boolean;
+  maxQuantity: number;
+}
+
+// Supabase-compatible word boundary search using multiple ilike patterns
+const createWordBoundaryPatterns = (keyword: string): string[] => {
+  // Create patterns that simulate word boundaries using ilike
+  return [
+    `${keyword} %`,      // keyword at start followed by space
+    `% ${keyword} %`,    // keyword surrounded by spaces
+    `% ${keyword}`,      // keyword at end preceded by space
+    `${keyword}-%`,      // keyword followed by hyphen
+    `%-${keyword}-%`,    // keyword surrounded by hyphens
+    `%-${keyword}`,      // keyword at end preceded by hyphen
+    `${keyword}.%`,      // keyword followed by period
+    `%.${keyword}.%`,    // keyword surrounded by periods
+    `%.${keyword}`,      // keyword at end preceded by period
+    `${keyword}`,        // exact match (whole field)
+  ];
 };
 
-// Customer Search Component
-const CustomerSearchComponent = ({ 
-  onCustomerSelect, 
-  selectedCustomer 
-}: {
-  onCustomerSelect: (customer: CustomerSearchResult | null) => void;
-  selectedCustomer: CustomerSearchResult | null;
-}) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<CustomerSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-  const { toast } = useToast();
-
-  // Debounced search function
-  const searchCustomers = useCallback(async (query: string) => {
-    if (!query.trim() || query.length < 2) {
-      setSearchResults([]);
-      setShowResults(false);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const results = await CustomerSearchService.searchCustomers(query);
-      setSearchResults(results);
-      setShowResults(true);
-    } catch (error) {
-      console.error('Customer search error:', error);
-      toast({
-        title: "Search Error",
-        description: "Failed to search customers. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSearching(false);
-    }
-  }, [toast]);
-
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      searchCustomers(searchQuery);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery, searchCustomers]);
-
-  const handleCustomerSelect = (customer: CustomerSearchResult) => {
-    onCustomerSelect(customer);
-    setSearchQuery(customer.display_name);
-    setShowResults(false);
-    setSearchResults([]); // Clear search results after selection
-  };
-
-  const clearSelection = () => {
-    onCustomerSelect(null);
-    setSearchQuery('');
-    setShowResults(false);
-    setSearchResults([]);
-  };
-
-  return (
-    <div className="relative">
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <UserSearch className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search customers by name, email, or phone..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-          {isSearching && (
-            <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-muted-foreground" />
-          )}
-        </div>
-        {selectedCustomer && (
-          <Button variant="outline" onClick={clearSelection}>
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-
-      {/* Search Results Dropdown */}
-      {showResults && searchResults.length > 0 && (
-        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-          {searchResults.map((customer) => (
-            <div
-              key={customer.id}
-              className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-              onClick={() => handleCustomerSelect(customer)}
-            >
-              <div className="font-medium">{customer.display_name}</div>
-              <div className="text-sm text-muted-foreground">{customer.email}</div>
-              {customer.phone && (
-                <div className="text-sm text-muted-foreground">{customer.phone}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Selected Customer Display */}
-      {selectedCustomer && (
-        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="font-medium text-blue-900">{selectedCustomer.display_name}</div>
-              <div className="text-sm text-blue-700">{selectedCustomer.email}</div>
-              {selectedCustomer.phone && (
-                <div className="text-sm text-blue-700">{selectedCustomer.phone}</div>
-              )}
-            </div>
-            <Button variant="ghost" size="sm" onClick={clearSelection}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Price display component with cost margin calculation
-const PriceDisplay = ({ part }: { part: InventoryPart }) => {
-  const [showPriceCheck, setShowPriceCheck] = useState(false);
+// Client-side word boundary validation
+const hasWordBoundaryMatch = (text: string, keyword: string): boolean => {
+  if (!text || !keyword) return false;
   
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        <span className="text-2xl font-bold text-green-600">
-          ${part.price.toFixed(2)}
-        </span>
-        {part.keystone_vcpn && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowPriceCheck(!showPriceCheck)}
-            className="h-6 px-2 text-xs"
-          >
-            <DollarSign className="h-3 w-3 mr-1" />
-            Check Price
-          </Button>
-        )}
-      </div>
-      
-      {part.cost && (
-        <div className="text-xs text-muted-foreground">
-          Cost: ${part.cost} | Margin: {((part.price - part.cost) / part.cost * 100).toFixed(1)}%
-        </div>
-      )}
-      
-      {part.list_price && part.list_price > part.price && (
-        <div className="text-xs text-muted-foreground line-through">
-          List: ${part.list_price}
-        </div>
-      )}
-
-      {showPriceCheck && part.keystone_vcpn && (
-        <div className="mt-2 p-2 border rounded-lg bg-gray-50">
-          <ProductPriceCheck vcpn={part.keystone_vcpn} />
-        </div>
-      )}
-    </div>
-  );
+  const normalizedText = text.toLowerCase();
+  const normalizedKeyword = keyword.toLowerCase();
+  
+  // Use JavaScript regex for precise word boundary matching
+  const regex = new RegExp(`\\b${normalizedKeyword}\\b`, 'i');
+  return regex.test(normalizedText);
 };
 
-// Enhanced Shipping Options Component with Amazon-style grouping
-const ShippingOptionsDisplay = ({ 
-  shippingOptions, 
-  selectedShipping, 
-  onShippingSelect 
-}: {
-  shippingOptions: ShippingOption[];
-  selectedShipping: string;
-  onShippingSelect: (optionId: string) => void;
-}) => {
-  // State for collapsible "Other Options" section
-  const [showOtherOptions, setShowOtherOptions] = useState(false);
+// Extract year from part name/description
+const extractYear = (part: any): string => {
+  const searchText = `${part.name || ''} ${part.description || ''} ${part.long_description || ''}`.toLowerCase();
+  
+  // Look for 4-digit years (1990-2030)
+  const yearMatch = searchText.match(/\b(19[9]\d|20[0-3]\d)\b/);
+  if (yearMatch) {
+    return yearMatch[1];
+  }
+  
+  // Look for year ranges like "2018-2022"
+  const rangeMatch = searchText.match(/\b(20[0-3]\d)[-–—](20[0-3]\d)\b/);
+  if (rangeMatch) {
+    return `${rangeMatch[1]}-${rangeMatch[2]}`;
+  }
+  
+  return 'Unknown';
+};
 
-  // Group shipping options by best value and fastest delivery
-  const groupedOptions = useMemo((): GroupedShippingOptions => {
-    if (shippingOptions.length === 0) {
-      return { bestValue: null, fastest: null, others: [] };
+// Extract model from part name/description
+const extractModel = (part: any): string => {
+  const searchText = `${part.name || ''} ${part.description || ''}`.toLowerCase();
+  
+  // Common truck models
+  const models = [
+    'f-150', 'f150', 'f-250', 'f250', 'f-350', 'f350', 'f-450', 'f450',
+    'silverado', 'sierra', 'colorado', 'canyon',
+    '1500', '2500', '3500',
+    'wrangler', 'gladiator', 'cherokee', 'grand cherokee',
+    'tacoma', 'tundra', 'highlander', 'prius',
+    'ram', 'charger', 'challenger', 'durango',
+    'frontier', 'titan', 'altima', 'sentra',
+    'accord', 'civic', 'pilot', 'ridgeline',
+    'elantra', 'sonata', 'tucson', 'santa fe',
+    'optima', 'sorento', 'sportage',
+    'outback', 'forester', 'impreza', 'legacy',
+    'cx-5', 'cx-9', 'mazda3', 'mazda6'
+  ];
+  
+  for (const model of models) {
+    if (hasWordBoundaryMatch(searchText, model)) {
+      return model.toUpperCase();
     }
-
-    // Find best value (lowest cost)
-    const bestValue = shippingOptions.reduce((prev, current) => 
-      prev.cost < current.cost ? prev : current
-    );
-
-    // Find fastest delivery (lowest estimated days)
-    const fastest = shippingOptions.reduce((prev, current) => 
-      prev.estimatedDays < current.estimatedDays ? prev : current
-    );
-
-    // Get remaining options (excluding best value and fastest if they're different)
-    const others = shippingOptions.filter(option => 
-      option.id !== bestValue.id && option.id !== fastest.id
-    );
-
-    return { bestValue, fastest, others };
-  }, [shippingOptions]);
-
-  const ShippingOptionCard = ({ 
-    option, 
-    isRecommended = false, 
-    recommendationType = '',
-    icon = null 
-  }: {
-    option: ShippingOption;
-    isRecommended?: boolean;
-    recommendationType?: string;
-    icon?: React.ReactNode;
-  }) => (
-    <div className={`border rounded-lg p-4 transition-all hover:shadow-md ${
-      selectedShipping === option.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-    } ${isRecommended ? 'border-green-500' : ''}`}>
-      <label className="flex items-center space-x-3 cursor-pointer">
-        <input
-          type="radio"
-          name="shipping"
-          value={option.id}
-          checked={selectedShipping === option.id}
-          onChange={(e) => onShippingSelect(e.target.value)}
-          className="text-blue-600"
-        />
-        <div className="flex-1">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              {isRecommended && (
-                <div className="flex items-center gap-1 mb-1">
-                  {icon}
-                  <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
-                    {recommendationType}
-                  </Badge>
-                </div>
-              )}
-              <div className="font-medium">{option.carrier} {option.service}</div>
-              <div className="text-sm text-muted-foreground">
-                Estimated delivery: {option.deliveryDate} ({option.estimatedDays} business days)
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="font-bold text-lg">${option.cost.toFixed(2)}</div>
-            </div>
-          </div>
-        </div>
-      </label>
-    </div>
-  );
-
-  return (
-    <div className="space-y-3">
-      {/* Best Value Option */}
-      {groupedOptions.bestValue && (
-        <ShippingOptionCard
-          option={groupedOptions.bestValue}
-          isRecommended={true}
-          recommendationType="Best Value"
-          icon={<DollarSign className="h-3 w-3 text-green-600" />}
-        />
-      )}
-
-      {/* Fastest Option (if different from best value) */}
-      {groupedOptions.fastest && groupedOptions.fastest.id !== groupedOptions.bestValue?.id && (
-        <ShippingOptionCard
-          option={groupedOptions.fastest}
-          isRecommended={true}
-          recommendationType="Fastest"
-          icon={<Zap className="h-3 w-3 text-green-600" />}
-        />
-      )}
-
-      {/* Other Options (Collapsible) */}
-      {groupedOptions.others.length > 0 && (
-        <div>
-          <Button
-            variant="ghost"
-            onClick={() => setShowOtherOptions(!showOtherOptions)}
-            className="w-full justify-between p-2 h-auto"
-          >
-            <span className="text-sm font-medium">
-              Other shipping options ({groupedOptions.others.length})
-            </span>
-            <ArrowRight className={`h-4 w-4 transition-transform ${showOtherOptions ? 'rotate-90' : ''}`} />
-          </Button>
-          
-          {showOtherOptions && (
-            <div className="space-y-2 mt-2">
-              {groupedOptions.others.map(option => (
-                <ShippingOptionCard key={option.id} option={option} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+  }
+  
+  return 'Unknown';
 };
 
-// Real inventory data hook
-const useInventoryData = () => {
-  const [parts, setParts] = useState<InventoryPart[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const supabase = getSupabaseClient();
+// Client-side categorization with word boundary matching
+const categorizeVehicleMakeClientSide = (part: any): string => {
+  const searchFields = [
+    part.name || '',
+    part.description || '',
+    part.long_description || '',
+    part.category || ''
+  ];
 
-  const loadInventoryData = useCallback(async () => {
+  for (const field of searchFields) {
+    if (!field) continue;
+    
+    for (const make of MAKE_KEYWORDS) {
+      if (hasWordBoundaryMatch(field, make)) {
+        return make;
+      }
+    }
+  }
+  
+  return 'unknown';
+};
+
+const categorizePartCategoryClientSide = (part: any): string => {
+  const searchFields = [
+    part.name || '',
+    part.description || '',
+    part.long_description || '',
+    part.category || ''
+  ];
+
+  for (const field of searchFields) {
+    if (!field) continue;
+    
+    for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+      for (const keyword of keywords) {
+        if (keyword.includes(' ')) {
+          // For multi-word keywords, check if the phrase exists
+          if (field.toLowerCase().includes(keyword.toLowerCase())) {
+            return category;
+          }
+        } else {
+          // For single words, use word boundary matching
+          if (hasWordBoundaryMatch(field, keyword)) {
+            return category;
+          }
+        }
+      }
+    }
+  }
+  
+  return 'uncategorized';
+};
+
+// Vehicle make categories
+const VEHICLE_MAKES = [
+  {
+    id: 'ford',
+    name: 'Ford',
+    description: 'Ford truck parts and accessories',
+    icon: '🚛',
+    color: 'bg-blue-500',
+    count: 0
+  },
+  {
+    id: 'chevy',
+    name: 'Chevrolet',
+    description: 'Chevrolet truck parts and accessories',
+    icon: '🚚',
+    color: 'bg-yellow-500',
+    count: 0
+  },
+  {
+    id: 'gmc',
+    name: 'GMC',
+    description: 'GMC truck parts and accessories',
+    icon: '🚐',
+    color: 'bg-red-500',
+    count: 0
+  },
+  {
+    id: 'ram',
+    name: 'RAM',
+    description: 'RAM truck parts and accessories',
+    icon: '🛻',
+    color: 'bg-gray-600',
+    count: 0
+  },
+  {
+    id: 'jeep',
+    name: 'Jeep',
+    description: 'Jeep parts and accessories',
+    icon: '🚙',
+    color: 'bg-green-600',
+    count: 0
+  },
+  {
+    id: 'toyota',
+    name: 'Toyota',
+    description: 'Toyota truck parts and accessories',
+    icon: '🚗',
+    color: 'bg-red-600',
+    count: 0
+  },
+  {
+    id: 'dodge',
+    name: 'Dodge',
+    description: 'Dodge truck parts and accessories',
+    icon: '🚐',
+    color: 'bg-orange-500',
+    count: 0
+  },
+  {
+    id: 'unknown',
+    name: 'Unknown/Universal',
+    description: 'Parts that don\'t match specific vehicle makes',
+    icon: '🔧',
+    color: 'bg-purple-500',
+    count: 0
+  }
+];
+
+// Simple cart hook
+const useSimpleCart = () => {
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedCart = localStorage.getItem('simple-cart');
+      if (savedCart) {
+        setCart(JSON.parse(savedCart));
+      }
+    } catch (error) {
+      console.error('Error loading cart:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('simple-cart', JSON.stringify(cart));
+    } catch (error) {
+      console.error('Error saving cart:', error);
+    }
+  }, [cart]);
+
+  const addToCart = useCallback(async (part: InventoryPart) => {
     setIsLoading(true);
-    setError(null);
     
     try {
-      console.log('🔄 Loading real inventory data from database...');
-      
-      const { data, error: fetchError } = await supabase
-        .from('inventory')
-        .select('*')
-        .order('name');
+      const cartItem: CartItem = {
+        id: part.keystone_vcpn || part.sku || part.id,
+        name: part.name,
+        price: part.list_price || 0,
+        quantity: 1,
+        sku: part.sku,
+        category: part.partCategory,
+        inStock: part.in_stock,
+        maxQuantity: part.quantity_on_hand || 999
+      };
 
-      if (fetchError) {
-        console.error('❌ Error loading inventory:', fetchError);
-        throw fetchError;
-      }
+      setCart(prevCart => {
+        const existingItem = prevCart.find(item => item.id === cartItem.id);
+        
+        if (existingItem) {
+          return prevCart.map(item =>
+            item.id === cartItem.id
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          );
+        } else {
+          return [...prevCart, cartItem];
+        }
+      });
 
-      console.log(`✅ Loaded ${data?.length || 0} real inventory items`);
+      showToast(`Added ${part.name} to cart`, 'success');
       
-      // Map real inventory data to expected interface
-      const mappedParts: InventoryPart[] = (data || []).map(item => ({
-        id: item.id,
-        name: item.name || 'Unnamed Part',
-        description: item.description || '',
-        sku: item.sku || '',
-        quantity: item.quantity_on_hand || 0,
-        price: item.list_price || item.cost || 0,
-        cost: item.cost || 0,
-        category: item.category || 'Uncategorized',
-        supplier: item.supplier || '',
-        reorder_level: item.reorder_level || 5,
-        created_at: item.created_at || new Date().toISOString(),
-        updated_at: item.updated_at || new Date().toISOString(),
-        core_charge: item.core_charge || 0,
-        keystone_vcpn: item.keystone_vcpn || '',
-        keystone_synced: item.keystone_synced || false,
-        keystone_last_sync: item.keystone_last_sync || '',
-        warehouse: item.warehouse || item.location || 'Main',
-        location: item.location || '',
-        brand: item.brand || item.manufacturer || '',
-        weight: item.weight || 0,
-        dimensions: item.dimensions || '',
-        warranty: item.warranty || '',
-        list_price: item.list_price || item.cost || 0,
-        discount_percentage: item.discount_percentage || 0,
-        is_kit: item.is_kit || false,
-        kit_component_count: item.kit_component_count || 0,
-        quantity_on_hand: item.quantity_on_hand || 0
-      }));
-
-      setParts(mappedParts);
-      
-    } catch (err) {
-      console.error('❌ Failed to load inventory data:', err);
-      setError('Failed to load inventory data. Please try again.');
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      showToast('Failed to add item to cart', 'error');
     } finally {
       setIsLoading(false);
     }
-  }, [supabase]);
+  }, []);
 
-  useEffect(() => {
-    loadInventoryData();
-  }, [loadInventoryData]);
+  const removeFromCart = useCallback((id: string) => {
+    setCart(prevCart => prevCart.filter(item => item.id !== id));
+    showToast('Item removed from cart', 'success');
+  }, []);
 
-  return { parts, isLoading, error, refreshData: loadInventoryData };
-};
-
-// Main Parts component
-export default function Parts() {
-  const { toast } = useToast();
-  
-  // Use real inventory data instead of mock data
-  const { parts: inventoryParts, isLoading: isLoadingParts, error: partsError, refreshData } = useInventoryData();
-  
-  // State management
-  const [currentTab, setCurrentTab] = useState('parts');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [priceRange, setPriceRange] = useState([0, 1000]);
-  const [sortBy, setSortBy] = useState('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(12);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
-  // ✅ NEW: Ultra-simple cart state
-  const [cartItems, setCartItems] = useState<{id: string, name: string, price: number, quantity: number}[]>([]);
-  const [showCartDialog, setShowCartDialog] = useState(false);
-  const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
-  const [showDetailDialog, setShowDetailDialog] = useState(false);
-
-  // Special orders state
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerSearchResult | null>(null);
-  const [specialOrderItems, setSpecialOrderItems] = useState<InventoryPart[]>([]);
-  const [orderNotes, setOrderNotes] = useState('');
-  const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
-    street: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    country: 'US'
-  });
-  const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
-  const [selectedShipping, setSelectedShipping] = useState('');
-  const [isGettingShippingQuotes, setIsGettingShippingQuotes] = useState(false);
-
-  // ✅ NEW: Ultra-simple button handlers
-  const handleAddToCart = (part: InventoryPart) => {
-    console.log('🛒 Add to cart clicked for:', part.name);
-    
-    setCartItems(prev => {
-      const existing = prev.find(item => item.id === part.id);
-      if (existing) {
-        const updated = prev.map(item => 
-          item.id === part.id 
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-        toast({
-          title: "Cart Updated",
-          description: `Increased ${part.name} quantity to ${existing.quantity + 1}`
-        });
-        return updated;
-      } else {
-        toast({
-          title: "Added to Cart",
-          description: `${part.name} has been added to your cart`
-        });
-        return [...prev, {
-          id: part.id,
-          name: part.name,
-          price: part.price,
-          quantity: 1
-        }];
-      }
-    });
-  };
-
-  const handleViewDetail = (part: InventoryPart) => {
-    console.log('👁️ View detail clicked for:', part.name);
-    setSelectedPart(part);
-    setShowDetailDialog(true);
-  };
-
-  const removeFromCart = (id: string) => {
-    setCartItems(prev => prev.filter(item => item.id !== id));
-  };
-
-  const updateCartQuantity = (id: string, quantity: number) => {
+  const updateQuantity = useCallback((id: string, quantity: number) => {
     if (quantity <= 0) {
       removeFromCart(id);
       return;
     }
-    setCartItems(prev => prev.map(item => 
-      item.id === id ? { ...item, quantity } : item
-    ));
+
+    setCart(prevCart =>
+      prevCart.map(item =>
+        item.id === id ? { ...item, quantity } : item
+      )
+    );
+  }, [removeFromCart]);
+
+  const clearCart = useCallback(() => {
+    setCart([]);
+    showToast('Cart cleared', 'success');
+  }, []);
+
+  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  return {
+    cart,
+    totalItems,
+    totalPrice,
+    isLoading,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart
   };
+};
 
-  const cartTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+// Toast notification system
+const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const toast = document.createElement('div');
+  toast.className = `fixed top-4 right-4 z-50 px-4 py-2 rounded-md text-white font-medium ${
+    type === 'success' ? 'bg-green-500' : 'bg-red-500'
+  }`;
+  toast.textContent = message;
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    document.body.removeChild(toast);
+  }, 3000);
+};
 
-  // Update URL when tab changes
-  useEffect(() => {
-    const url = new URL(window.location);
-    url.searchParams.set('tab', currentTab);
-    window.history.replaceState({}, '', url);
-  }, [currentTab]);
+// Safe string conversion for search
+const safeString = (value: any): string => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return value.toString();
+  }
+  if (typeof value === 'boolean') {
+    return value.toString();
+  }
+  if (Array.isArray(value)) {
+    return value.join(' ');
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
 
-  // Use real inventory data instead of mock data
-  const mockParts = inventoryParts; // Use real data
+// Enhanced fuzzy search with safe string handling
+const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[] => {
+  if (!searchTerm || !searchTerm.trim()) {
+    return parts;
+  }
 
-  // Get unique categories
-  const categories = useMemo(() => {
-    const cats = Array.from(new Set(mockParts.map(part => part.category).filter(Boolean)));
-    return ['all', ...cats.sort()];
-  }, [mockParts]);
+  const searchWords = searchTerm.toLowerCase().split(' ').filter(word => word.length > 0);
+  
+  if (searchWords.length === 0) {
+    return parts;
+  }
 
-  // Filter and sort parts
-  const filteredParts = useMemo(() => {
-    let filtered = mockParts.filter(part => {
-      // Only show items that have prices set (greater than 0)
-      const hasPrice = part.price && part.price > 0;
-      
-      // Search filter
-      const searchMatch = !searchTerm || 
-        part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        part.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        part.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        part.brand?.toLowerCase().includes(searchTerm.toLowerCase());
+  const scoredParts = parts.map(part => {
+    const fields = {
+      name: { value: safeString(part.name).toLowerCase(), weight: 30 },
+      sku: { value: safeString(part.sku).toLowerCase(), weight: 20 },
+      description: { value: safeString(part.description).toLowerCase(), weight: 20 },
+      long_description: { value: safeString(part.long_description).toLowerCase(), weight: 25 },
+      manufacturer_part_no: { value: safeString(part.manufacturer_part_no).toLowerCase(), weight: 15 },
+      compatibility: { value: safeString(part.compatibility).toLowerCase(), weight: 10 },
+      brand: { value: safeString(part.brand).toLowerCase(), weight: 5 },
+      vehicleMake: { value: safeString(part.vehicleMake).toLowerCase(), weight: 15 },
+      partCategory: { value: safeString(part.partCategory).toLowerCase(), weight: 10 },
+      keystone_vcpn: { value: safeString(part.keystone_vcpn).toLowerCase(), weight: 20 },
+      category: { value: safeString(part.category).toLowerCase(), weight: 8 },
+      location: { value: safeString(part.location).toLowerCase(), weight: 5 }
+    };
 
-      // Category filter
-      const categoryMatch = selectedCategory === 'all' || part.category === selectedCategory;
+    let totalScore = 0;
 
-      // Price filter
-      const priceMatch = part.price >= priceRange[0] && part.price <= priceRange[1];
-
-      // Favorites filter
-      const favoritesMatch = !showFavoritesOnly || favorites.has(part.id);
-
-      return hasPrice && searchMatch && categoryMatch && priceMatch && favoritesMatch;
-    });
-
-    // Sort parts
-    filtered.sort((a, b) => {
-      let aValue, bValue;
-      
-      switch (sortBy) {
-        case 'name':
-          aValue = a.name;
-          bValue = b.name;
-          break;
-        case 'price':
-          aValue = a.price;
-          bValue = b.price;
-          break;
-        case 'quantity':
-          aValue = a.quantity;
-          bValue = b.quantity;
-          break;
-        case 'category':
-          aValue = a.category || '';
-          bValue = b.category || '';
-          break;
-        case 'updated':
-          aValue = new Date(a.updated_at).getTime();
-          bValue = new Date(b.updated_at).getTime();
-          break;
-        default:
-          aValue = a.name;
-          bValue = b.name;
+    for (const searchWord of searchWords) {
+      for (const [fieldName, fieldData] of Object.entries(fields)) {
+        if (fieldData.value.includes(searchWord)) {
+          totalScore += fieldData.weight;
+        }
       }
-      
-      if (typeof aValue === 'string') {
-        return sortOrder === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-      } else {
-        return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
-      }
-    });
+    }
 
-    return filtered;
-  }, [mockParts, searchTerm, selectedCategory, priceRange, sortBy, sortOrder, favorites, showFavoritesOnly]);
+    return { part, score: totalScore };
+  });
 
-  // Pagination
-  const totalPages = Math.ceil(filteredParts.length / itemsPerPage);
-  const paginatedParts = filteredParts.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  return scoredParts
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(item => item.part);
+};
 
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, selectedCategory, priceRange, sortBy, sortOrder, showFavoritesOnly]);
+// Main Parts component
+const Parts: React.FC = () => {
+  // State management
+  const [currentView, setCurrentView] = useState<'categories' | 'parts'>('categories');
+  const [selectedMake, setSelectedMake] = useState<string>('');
+  const [parts, setParts] = useState<InventoryPart[]>([]);
+  const [allLoadedParts, setAllLoadedParts] = useState<InventoryPart[]>([]); // RESTORED: Keep all loaded parts for filter population
+  const [filteredParts, setFilteredParts] = useState<InventoryPart[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [globalSearchTerm, setGlobalSearchTerm] = useState('');
+  const [globalSearchResults, setGlobalSearchResults] = useState<InventoryPart[]>([]);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
+  const [showCartDrawer, setShowCartDrawer] = useState(false);
+  const [vehicleMakes, setVehicleMakes] = useState<CategorySummary[]>(VEHICLE_MAKES);
 
-  // Toggle favorite
-  const toggleFavorite = (partId: string) => {
-    setFavorites(prev => {
-      const newFavorites = new Set(prev);
-      if (newFavorites.has(partId)) {
-        newFavorites.delete(partId);
-      } else {
-        newFavorites.add(partId);
-      }
-      return newFavorites;
-    });
-  };
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    itemsPerPage: 50,
+    totalItems: 0,
+    totalPages: 0
+  });
 
-  // Refresh data function now uses real data
-  const refreshDataHandler = async () => {
-    setIsLoading(true);
+  // RESTORED: Enhanced filter states with all missing filters
+  const [filters, setFilters] = useState({
+    year: '',
+    model: '',
+    partCategory: '',
+    brand: '',
+    stockStatus: '',
+    priceRange: [0, 1000] as [number, number]
+  });
+
+  // Cart functionality
+  const { cart, totalItems, totalPrice, isLoading: cartLoading, addToCart, removeFromCart, updateQuantity, clearCart } = useSimpleCart();
+
+  // Error logging function
+  const logError = (context: string, error: any) => {
+    console.error(`❌ ${context}:`);
+    console.error('Error message:', error?.message || 'No message');
+    console.error('Error details:', error?.details || 'No details');
+    console.error('Error hint:', error?.hint || 'No hint');
+    console.error('Error code:', error?.code || 'No code');
+    console.error('Full error object:', error);
+    
     try {
-      await refreshData(); // Use real data refresh
-      toast({
-        title: "Data Refreshed",
-        description: "Parts inventory has been updated from database."
-      });
-    } catch (error) {
-      toast({
-        title: "Refresh Failed",
-        description: "Failed to refresh inventory data. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
+      console.error('Error JSON:', JSON.stringify(error, null, 2));
+    } catch (e) {
+      console.error('Could not stringify error:', e);
     }
   };
 
-  // ✅ NEW: Ultra-simple Part card component
-  const PartCard = ({ part }: { part: InventoryPart }) => (
-    <Card className="group hover:shadow-lg transition-all duration-200 border-gray-200 hover:border-gray-300">
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex-1">
-            <h3 className="font-semibold text-lg mb-1 group-hover:text-blue-600 transition-colors">
-              {part.name}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-              {part.description}
-            </p>
-            <div className="flex items-center gap-2 mb-2">
-              <Badge variant="secondary" className="text-xs">
-                {part.category}
-              </Badge>
-              {part.is_kit && <KitBadge />}
-              {part.keystone_synced && (
-                <Badge variant="outline" className="text-xs text-green-600 border-green-200">
-                  Synced
-                </Badge>
-              )}
-              {part.quantity <= (part.reorder_level || 5) && (
-                <Badge variant="destructive" className="text-xs">
-                  Low Stock
-                </Badge>
-              )}
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => toggleFavorite(part.id)}
-            className="opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <Heart className={`h-4 w-4 ${favorites.has(part.id) ? 'fill-red-500 text-red-500' : ''}`} />
-          </Button>
-        </div>
+  // Load category statistics with proper counting
+  const loadCategoryStatistics = useCallback(async () => {
+    console.log('📊 Loading category statistics with proper full dataset counting...');
+    
+    try {
+      // Test database connection first
+      console.log('🔍 Testing database connection...');
+      const { data: testData, error: testError } = await supabase
+        .from('inventory')
+        .select('id')
+        .limit(1);
 
-        <div className="space-y-2 mb-4">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">SKU:</span>
-            <span className="font-mono">{part.sku}</span>
-          </div>
-          {part.keystone_vcpn && (
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">VCPN:</span>
-              <span className="font-mono">{part.keystone_vcpn}</span>
-            </div>
-          )}
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Stock:</span>
-            <span className={`font-medium ${part.quantity <= (part.reorder_level || 5) ? 'text-red-600' : 'text-green-600'}`}>
-              {part.quantity} units
-            </span>
-          </div>
-          {part.location && (
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Location:</span>
-              <span>{part.location}</span>
-            </div>
-          )}
-        </div>
+      if (testError) {
+        logError('Database connection test failed', testError);
+        return;
+      }
 
-        <div className="mb-4">
-          <PriceDisplay part={part} />
-        </div>
+      console.log('✅ Database connection successful');
 
+      // Get total count first
+      const { count: totalCount, error: totalError } = await supabase
+        .from('inventory')
+        .select('*', { count: 'exact', head: true });
+
+      if (totalError) {
+        logError('Error getting total count', totalError);
+        return;
+      }
+
+      console.log(`📊 Total inventory count: ${totalCount}`);
+
+      // For each make, get an accurate count by loading larger samples and extrapolating
+      const updatedMakes = await Promise.all(VEHICLE_MAKES.map(async (make) => {
+        if (make.id === 'unknown') {
+          // Calculate unknown as total minus all known makes
+          return { ...make, count: 0 }; // Will be calculated later
+        }
+
+        try {
+          // Load a large sample for this make using word boundary patterns
+          const patterns = createWordBoundaryPatterns(make.id);
+          let orConditions: string[] = [];
+          
+          // Use first few patterns to avoid query complexity
+          patterns.slice(0, 5).forEach(pattern => {
+            orConditions.push(`name.ilike.${pattern}`);
+            orConditions.push(`description.ilike.${pattern}`);
+            orConditions.push(`long_description.ilike.${pattern}`);
+            orConditions.push(`category.ilike.${pattern}`);
+          });
+
+          const { data: sampleData, error: sampleError } = await supabase
+            .from('inventory')
+            .select('name, description, long_description, category')
+            .or(orConditions.slice(0, 20).join(','))
+            .limit(2000); // Load larger sample
+
+          if (sampleError) {
+            console.error(`Error loading sample for ${make.id}:`, sampleError);
+            return { ...make, count: 0 };
+          }
+
+          // Filter client-side with precise word boundary matching
+          const matchingParts = (sampleData || []).filter(item => 
+            categorizeVehicleMakeClientSide(item) === make.id
+          );
+
+          // For a more accurate count, if we got a good sample, extrapolate
+          // Otherwise use the sample count as minimum
+          let estimatedCount = matchingParts.length;
+          
+          if (sampleData && sampleData.length >= 1000) {
+            // If we have a good sample size, this might be close to actual
+            // But let's be conservative and assume this is a reasonable estimate
+            estimatedCount = Math.max(matchingParts.length, Math.round(matchingParts.length * 1.2));
+          }
+
+          console.log(`📊 ${make.name}: ${estimatedCount} parts (from ${matchingParts.length} matches in ${sampleData?.length || 0} sample)`);
+          
+          return { ...make, count: estimatedCount };
+
+        } catch (error) {
+          console.error(`Error processing ${make.id}:`, error);
+          return { ...make, count: 0 };
+        }
+      }));
+
+      // Calculate unknown count
+      const knownCount = updatedMakes.reduce((sum, make) => 
+        make.id !== 'unknown' ? sum + make.count : sum, 0
+      );
+      const unknownCount = Math.max(0, (totalCount || 0) - knownCount);
+      
+      const finalMakes = updatedMakes.map(make => 
+        make.id === 'unknown' ? { ...make, count: unknownCount } : make
+      );
+
+      setVehicleMakes(finalMakes);
+      console.log('✅ Category statistics loaded successfully with improved counting');
+
+    } catch (error) {
+      logError('Error loading category statistics', error);
+      setVehicleMakes(VEHICLE_MAKES);
+    }
+  }, []);
+
+  // FIXED: Load parts with proper pagination and filter data collection
+  const loadPartsForMake = useCallback(async (makeId: string, page: number = 1) => {
+    console.log(`🔄 Loading parts for make: ${makeId}, page: ${page} with FIXED pagination and filter data`);
+    setLoading(true);
+    setError('');
+
+    try {
+      // Calculate proper pagination offsets
+      const startIndex = (page - 1) * pagination.itemsPerPage;
+      
+      console.log(`📄 Loading page ${page}, items ${startIndex} to ${startIndex + pagination.itemsPerPage - 1}`);
+
+      // For specific makes, load data in chunks with proper pagination
+      if (makeId && makeId !== 'all' && makeId !== 'unknown') {
+        // Step 1: Get total count for this make first
+        console.log(`🔍 Getting total count for ${makeId}...`);
+        
+        const patterns = createWordBoundaryPatterns(makeId);
+        let orConditions: string[] = [];
+        
+        // Use patterns for broad server-side filtering
+        patterns.slice(0, 5).forEach(pattern => {
+          orConditions.push(`name.ilike.${pattern}`);
+          orConditions.push(`description.ilike.${pattern}`);
+          orConditions.push(`long_description.ilike.${pattern}`);
+          orConditions.push(`category.ilike.${pattern}`);
+        });
+
+        // Load larger chunks and paginate properly
+        const chunkSize = 1000; // Load 1000 at a time
+        const maxChunks = 10; // Maximum chunks to load (10,000 parts max)
+        let allMatchingParts: any[] = [];
+        let totalProcessed = 0;
+
+        // Load data in chunks until we have enough for pagination
+        for (let chunk = 0; chunk < maxChunks; chunk++) {
+          const chunkStart = chunk * chunkSize;
+          
+          console.log(`📦 Loading chunk ${chunk + 1}, offset ${chunkStart}`);
+          
+          const { data: chunkData, error: chunkError } = await supabase
+            .from('inventory')
+            .select('*')
+            .or(orConditions.slice(0, 20).join(','))
+            .range(chunkStart, chunkStart + chunkSize - 1);
+
+          if (chunkError) {
+            console.error(`Error loading chunk ${chunk}:`, chunkError);
+            break;
+          }
+
+          if (!chunkData || chunkData.length === 0) {
+            console.log(`📦 No more data in chunk ${chunk + 1}, stopping`);
+            break;
+          }
+
+          // Filter client-side with precise word boundary matching
+          const matchingInChunk = chunkData.filter(item => 
+            categorizeVehicleMakeClientSide(item) === makeId
+          );
+
+          allMatchingParts = [...allMatchingParts, ...matchingInChunk];
+          totalProcessed += chunkData.length;
+
+          console.log(`📦 Chunk ${chunk + 1}: ${matchingInChunk.length} matching parts (${chunkData.length} processed)`);
+
+          // If we have enough data for current page + some buffer, we can stop
+          const neededForCurrentPage = startIndex + pagination.itemsPerPage;
+          if (allMatchingParts.length >= neededForCurrentPage + pagination.itemsPerPage) {
+            console.log(`📦 Have enough data for page ${page}, stopping at chunk ${chunk + 1}`);
+            break;
+          }
+
+          // If chunk returned less than expected, we've reached the end
+          if (chunkData.length < chunkSize) {
+            console.log(`📦 Reached end of data at chunk ${chunk + 1}`);
+            break;
+          }
+        }
+
+        console.log(`✅ Total matching parts found: ${allMatchingParts.length}`);
+
+        // Process ALL parts with full information for filter population
+        const allProcessedParts: InventoryPart[] = allMatchingParts.map(item => {
+          const vehicleMake = categorizeVehicleMakeClientSide(item);
+          const partCategory = categorizePartCategoryClientSide(item);
+          const year = extractYear(item);
+          const model = extractModel(item);
+          
+          return {
+            id: item.id,
+            name: item.name || 'Unknown Part',
+            sku: item.sku || '',
+            description: item.description || '',
+            long_description: item.long_description || '',
+            keystone_vcpn: item.keystone_vcpn || '',
+            manufacturer_part_no: item.manufacturer_part_no || '',
+            compatibility: item.compatibility || '',
+            brand: item.brand || '',
+            category: item.category || '',
+            location: item.location || '',
+            in_stock: item.quantity_on_hand > 0,
+            quantity_on_hand: item.quantity_on_hand || 0,
+            cost: Number(item.cost) || 0,
+            list_price: Number(item.list_price) || 0,
+            stockStatus: item.quantity_on_hand > 0 ? 'In Stock' : 'Out of Stock',
+            vehicleMake: vehicleMake,
+            partCategory: partCategory,
+            pricingSource: 'inventory_table',
+            year: year,
+            model: model
+          };
+        });
+
+        // RESTORED: Store all loaded parts for filter population
+        setAllLoadedParts(allProcessedParts);
+
+        // Apply proper pagination to the matching parts
+        const paginatedParts = allProcessedParts.slice(startIndex, startIndex + pagination.itemsPerPage);
+
+        setParts(paginatedParts);
+        setFilteredParts(paginatedParts);
+        
+        // Update pagination with actual total count
+        setPagination(prev => ({
+          ...prev,
+          currentPage: page,
+          totalItems: allProcessedParts.length,
+          totalPages: Math.ceil(allProcessedParts.length / prev.itemsPerPage)
+        }));
+
+        console.log(`📊 FIXED: Page ${page} loaded with ${paginatedParts.length} parts, Total: ${allProcessedParts.length} parts`);
+
+      } else {
+        // For 'all' or 'unknown', load with standard pagination
+        const { data, error, count } = await supabase
+          .from('inventory')
+          .select('*', { count: 'exact' })
+          .range(startIndex, startIndex + pagination.itemsPerPage - 1);
+
+        if (error) {
+          logError('Error loading all parts', error);
+          setError('Failed to load parts. Please try again.');
+          return;
+        }
+
+        const processedParts: InventoryPart[] = (data || []).map(item => {
+          const vehicleMake = categorizeVehicleMakeClientSide(item);
+          const partCategory = categorizePartCategoryClientSide(item);
+          const year = extractYear(item);
+          const model = extractModel(item);
+          
+          return {
+            id: item.id,
+            name: item.name || 'Unknown Part',
+            sku: item.sku || '',
+            description: item.description || '',
+            long_description: item.long_description || '',
+            keystone_vcpn: item.keystone_vcpn || '',
+            manufacturer_part_no: item.manufacturer_part_no || '',
+            compatibility: item.compatibility || '',
+            brand: item.brand || '',
+            category: item.category || '',
+            location: item.location || '',
+            in_stock: item.quantity_on_hand > 0,
+            quantity_on_hand: item.quantity_on_hand || 0,
+            cost: Number(item.cost) || 0,
+            list_price: Number(item.list_price) || 0,
+            stockStatus: item.quantity_on_hand > 0 ? 'In Stock' : 'Out of Stock',
+            vehicleMake: vehicleMake,
+            partCategory: partCategory,
+            pricingSource: 'inventory_table',
+            year: year,
+            model: model
+          };
+        });
+
+        // Filter for unknown if needed
+        const finalParts = makeId === 'unknown' 
+          ? processedParts.filter(part => part.vehicleMake === 'unknown')
+          : processedParts;
+
+        // RESTORED: Store all loaded parts for filter population
+        setAllLoadedParts(finalParts);
+        setParts(finalParts);
+        setFilteredParts(finalParts);
+        
+        setPagination(prev => ({
+          ...prev,
+          currentPage: page,
+          totalItems: count || 0,
+          totalPages: Math.ceil((count || 0) / prev.itemsPerPage)
+        }));
+      }
+
+    } catch (error) {
+      logError('Error loading parts', error);
+      setError('Database connection failed. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.itemsPerPage]);
+
+  // Global search functionality using Supabase-compatible queries
+  const handleGlobalSearch = useCallback(async (searchTerm: string) => {
+    if (!searchTerm.trim()) {
+      setGlobalSearchResults([]);
+      return;
+    }
+
+    console.log(`🔍 Global search for: "${searchTerm}" using Supabase-compatible queries`);
+    setLoading(true);
+
+    try {
+      // Use ilike for text search across multiple fields
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,long_description.ilike.%${searchTerm}%,keystone_vcpn.ilike.%${searchTerm}%`)
+        .limit(100);
+
+      if (error) {
+        logError('Error in global search', error);
+        return;
+      }
+
+      // Process search results with client-side categorization
+      const processedResults: InventoryPart[] = (data || []).map(item => {
+        const vehicleMake = categorizeVehicleMakeClientSide(item);
+        const partCategory = categorizePartCategoryClientSide(item);
+        const year = extractYear(item);
+        const model = extractModel(item);
+        
+        return {
+          id: item.id,
+          name: item.name || 'Unknown Part',
+          sku: item.sku || '',
+          description: item.description || '',
+          long_description: item.long_description || '',
+          keystone_vcpn: item.keystone_vcpn || '',
+          manufacturer_part_no: item.manufacturer_part_no || '',
+          compatibility: item.compatibility || '',
+          brand: item.brand || '',
+          category: item.category || '',
+          location: item.location || '',
+          in_stock: item.quantity_on_hand > 0,
+          quantity_on_hand: item.quantity_on_hand || 0,
+          cost: Number(item.cost) || 0,
+          list_price: Number(item.list_price) || 0,
+          stockStatus: item.quantity_on_hand > 0 ? 'In Stock' : 'Out of Stock',
+          vehicleMake: vehicleMake,
+          partCategory: partCategory,
+          pricingSource: 'inventory_table',
+          year: year,
+          model: model
+        };
+      });
+
+      setGlobalSearchResults(processedResults);
+      console.log(`✅ Global search found ${processedResults.length} results`);
+
+    } catch (error) {
+      logError('Error in global search', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Navigate to parts view for selected make
+  const handleMakeSelect = useCallback((makeId: string) => {
+    console.log(`🎯 Selected make: ${makeId}`);
+    setSelectedMake(makeId);
+    setCurrentView('parts');
+    setSearchTerm('');
+    setGlobalSearchTerm('');
+    setGlobalSearchResults([]);
+    
+    // RESTORED: Reset filters
+    setFilters({
+      year: '',
+      model: '',
+      partCategory: '',
+      brand: '',
+      stockStatus: '',
+      priceRange: [0, 1000]
+    });
+    
+    // Reset pagination
+    setPagination(prev => ({
+      ...prev,
+      currentPage: 1
+    }));
+    
+    // Load parts for selected make
+    loadPartsForMake(makeId, 1);
+  }, [loadPartsForMake]);
+
+  // Navigate back to categories
+  const handleBackToCategories = useCallback(() => {
+    setCurrentView('categories');
+    setSelectedMake('');
+    setParts([]);
+    setAllLoadedParts([]); // RESTORED: Clear all loaded parts
+    setFilteredParts([]);
+    setSearchTerm('');
+    setGlobalSearchTerm('');
+    setGlobalSearchResults([]);
+    
+    // RESTORED: Reset filters
+    setFilters({
+      year: '',
+      model: '',
+      partCategory: '',
+      brand: '',
+      stockStatus: '',
+      priceRange: [0, 1000]
+    });
+  }, []);
+
+  // Handle pagination properly
+  const handlePageChange = useCallback((page: number) => {
+    if (page >= 1 && page <= pagination.totalPages) {
+      console.log(`📄 FIXED: Changing to page ${page}`);
+      loadPartsForMake(selectedMake, page);
+    }
+  }, [selectedMake, pagination.totalPages, loadPartsForMake]);
+
+  // RESTORED: Apply filters and search with all filter types
+  useEffect(() => {
+    if (parts.length === 0) return;
+
+    let filtered = [...parts];
+
+    // Apply search
+    if (searchTerm.trim()) {
+      filtered = fuzzySearch(searchTerm, filtered);
+    }
+
+    // RESTORED: Apply year filter
+    if (filters.year) {
+      filtered = filtered.filter(part => 
+        part.year && part.year.toLowerCase().includes(filters.year.toLowerCase())
+      );
+    }
+
+    // RESTORED: Apply model filter
+    if (filters.model) {
+      filtered = filtered.filter(part => 
+        part.model && part.model.toLowerCase().includes(filters.model.toLowerCase())
+      );
+    }
+
+    // Apply part category filter
+    if (filters.partCategory) {
+      filtered = filtered.filter(part => part.partCategory === filters.partCategory);
+    }
+
+    // Apply brand filter
+    if (filters.brand) {
+      filtered = filtered.filter(part => 
+        safeString(part.brand).toLowerCase().includes(filters.brand.toLowerCase())
+      );
+    }
+
+    // Apply stock status filter
+    if (filters.stockStatus) {
+      filtered = filtered.filter(part => part.stockStatus === filters.stockStatus);
+    }
+
+    // Apply price range filter
+    filtered = filtered.filter(part => 
+      part.list_price >= filters.priceRange[0] && part.list_price <= filters.priceRange[1]
+    );
+
+    setFilteredParts(filtered);
+  }, [parts, searchTerm, filters]);
+
+  // Global search effect
+  useEffect(() => {
+    if (globalSearchTerm.trim()) {
+      const timeoutId = setTimeout(() => {
+        handleGlobalSearch(globalSearchTerm);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setGlobalSearchResults([]);
+    }
+  }, [globalSearchTerm, handleGlobalSearch]);
+
+  // Load category statistics on mount
+  useEffect(() => {
+    loadCategoryStatistics();
+  }, [loadCategoryStatistics]);
+
+  // RESTORED: Get unique values for filters from ALL loaded parts (not just current page)
+  const uniqueYears = useMemo(() => {
+    const years = new Set(allLoadedParts.map(part => part.year).filter(year => year && year !== 'Unknown'));
+    return Array.from(years).sort();
+  }, [allLoadedParts]);
+
+  const uniqueModels = useMemo(() => {
+    const models = new Set(allLoadedParts.map(part => part.model).filter(model => model && model !== 'Unknown'));
+    return Array.from(models).sort();
+  }, [allLoadedParts]);
+
+  const uniquePartCategories = useMemo(() => {
+    const categories = new Set(allLoadedParts.map(part => part.partCategory).filter(Boolean));
+    return Array.from(categories).sort();
+  }, [allLoadedParts]);
+
+  const uniqueBrands = useMemo(() => {
+    const brands = new Set(allLoadedParts.map(part => part.brand).filter(Boolean));
+    return Array.from(brands).sort();
+  }, [allLoadedParts]);
+
+  // Handle global search from category view
+  const handleGlobalSearchSubmit = useCallback(() => {
+    if (globalSearchTerm.trim()) {
+      setCurrentView('parts');
+      setSelectedMake('all');
+      setSearchTerm(globalSearchTerm);
+      
+      // Use global search results as parts
+      setParts(globalSearchResults);
+      setAllLoadedParts(globalSearchResults); // RESTORED: Set all loaded parts for filters
+      setFilteredParts(globalSearchResults);
+      
+      // Reset pagination for search results
+      setPagination(prev => ({
+        ...prev,
+        currentPage: 1,
+        totalItems: globalSearchResults.length,
+        totalPages: Math.ceil(globalSearchResults.length / prev.itemsPerPage)
+      }));
+    }
+  }, [globalSearchTerm, globalSearchResults]);
+
+  // Render category overview
+  const renderCategoryOverview = () => (
+    <div className="space-y-6">
+      {/* Global Search Bar */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-semibold mb-4">Search All Parts</h2>
         <div className="flex gap-2">
-          {/* ✅ ULTRA-SIMPLE: Direct button with inline onClick */}
-          <Button 
-            onClick={() => handleAddToCart(part)}
-            disabled={part.quantity === 0}
-            className="flex-1"
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search by part name, SKU, description, or VCPN..."
+              value={globalSearchTerm}
+              onChange={(e) => setGlobalSearchTerm(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleGlobalSearchSubmit()}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <button
+            onClick={handleGlobalSearchSubmit}
+            disabled={!globalSearchTerm.trim()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Add to Cart
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="px-3"
-            onClick={() => handleViewDetail(part)}
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
+            Search
+          </button>
         </div>
-      </CardContent>
-    </Card>
-  );
-
-  // ✅ NEW: Ultra-simple List view component
-  const PartListItem = ({ part }: { part: InventoryPart }) => (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-lg">{part.name}</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleFavorite(part.id)}
-                className="p-1"
+        
+        {/* Search Preview */}
+        {globalSearchTerm && globalSearchResults.length > 0 && (
+          <div className="mt-4 p-4 bg-gray-50 rounded-md">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-medium">Search Results ({globalSearchResults.length.toLocaleString()} found)</h3>
+              <button
+                onClick={handleGlobalSearchSubmit}
+                className="text-blue-600 hover:text-blue-800 font-medium"
               >
-                <Heart className={`h-4 w-4 ${favorites.has(part.id) ? 'fill-red-500 text-red-500' : ''}`} />
-              </Button>
+                View All Results →
+              </button>
             </div>
-            <p className="text-sm text-muted-foreground mb-2">{part.description}</p>
-            <div className="flex gap-4 text-sm text-muted-foreground">
-              <span>SKU: {part.sku}</span>
-              {part.keystone_vcpn && <span>VCPN: {part.keystone_vcpn}</span>}
-              <span>Category: {part.category}</span>
-              {part.location && <span>Location: {part.location}</span>}
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <Badge variant="secondary" className="text-xs">
-                {part.category}
-              </Badge>
-              {part.is_kit && <KitBadge />}
-              {part.keystone_synced && (
-                <Badge variant="outline" className="text-xs text-green-600 border-green-200">
-                  Synced
-                </Badge>
+            <div className="space-y-2">
+              {globalSearchResults.slice(0, 5).map((part) => (
+                <div key={part.id} className="flex justify-between items-center py-1">
+                  <div>
+                    <span className="font-medium">{part.name}</span>
+                    <span className="text-gray-500 ml-2">({part.sku})</span>
+                    <span className="text-blue-600 ml-2 text-xs">{part.vehicleMake}</span>
+                    <span className="text-purple-600 ml-2 text-xs">{part.partCategory}</span>
+                  </div>
+                  <span className="text-green-600 font-medium">${part.list_price.toFixed(2)}</span>
+                </div>
+              ))}
+              {globalSearchResults.length > 5 && (
+                <div className="text-center pt-2">
+                  <button
+                    onClick={handleGlobalSearchSubmit}
+                    className="text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    View {(globalSearchResults.length - 5).toLocaleString()} more results
+                  </button>
+                </div>
               )}
-              {part.quantity <= (part.reorder_level || 5) && (
-                <Badge variant="destructive" className="text-xs">
-                  Low Stock
-                </Badge>
-              )}
             </div>
           </div>
-          
-          <div className="text-right">
-            <PriceDisplay part={part} />
-          </div>
-          
-          <div className="text-center">
-            <div className={`text-lg font-bold ${part.quantity <= (part.reorder_level || 5) ? 'text-red-600' : 'text-green-600'}`}>
-              {part.quantity}
+        )}
+      </div>
+
+      {/* Vehicle Make Categories */}
+      <div>
+        <h1 className="text-2xl font-bold mb-6">Vehicle Parts by Make</h1>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {vehicleMakes.map((make) => (
+            <div
+              key={make.id}
+              onClick={() => handleMakeSelect(make.id)}
+              className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer p-6"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className={`w-12 h-12 ${make.color} rounded-lg flex items-center justify-center text-white text-2xl`}>
+                  {make.icon}
+                </div>
+                <span className="text-2xl font-bold text-gray-600">
+                  {make.count.toLocaleString()}
+                </span>
+              </div>
+              <h3 className="text-lg font-semibold mb-2">{make.name}</h3>
+              <p className="text-gray-600 text-sm">{make.description}</p>
             </div>
-            <div className="text-sm text-muted-foreground">units</div>
-          </div>
-          
-          <div className="flex gap-2">
-            {/* ✅ ULTRA-SIMPLE: Direct button with inline onClick */}
-            <Button 
-              onClick={() => handleAddToCart(part)}
-              disabled={part.quantity === 0}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add to Cart
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="px-3"
-              onClick={() => handleViewDetail(part)}
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
-          </div>
+          ))}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 
-  // Add item to special order
-  const addToSpecialOrder = (part: InventoryPart) => {
-    setSpecialOrderItems(prev => {
-      const existing = prev.find(item => item.id === part.id);
-      if (existing) {
-        return prev; // Don't add duplicates
-      }
-      return [...prev, part];
-    });
-    toast({
-      title: "Added to Special Order",
-      description: `${part.name} has been added to your special order.`
-    });
-  };
+  // Render parts view
+  const renderPartsView = () => {
+    const selectedMakeInfo = vehicleMakes.find(make => make.id === selectedMake);
+    
+    // Don't apply additional pagination to filteredParts since parts are already paginated
+    const displayParts = filteredParts;
 
-  // Remove item from special order
-  const removeFromSpecialOrder = (partId: string) => {
-    setSpecialOrderItems(prev => prev.filter(item => item.id !== partId));
-  };
-
-  // Get shipping quotes
-  const getShippingQuotes = async () => {
-    if (!shippingAddress.street || !shippingAddress.city || !shippingAddress.state || !shippingAddress.zipCode) {
-      toast({
-        title: "Incomplete Address",
-        description: "Please fill in all shipping address fields.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (specialOrderItems.length === 0) {
-      toast({
-        title: "No Items",
-        description: "Please add items to your special order first.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsGettingShippingQuotes(true);
-    try {
-      // Calculate total weight and value
-      const totalWeight = specialOrderItems.reduce((sum, item) => sum + (item.weight || 1), 0);
-      const totalValue = specialOrderItems.reduce((sum, item) => sum + item.price, 0);
-
-      const quotes = await shippingQuoteService.getShippingQuotes({
-        origin: {
-          street: '123 Warehouse St',
-          city: 'Distribution City',
-          state: 'CA',
-          zipCode: '90210',
-          country: 'US'
-        },
-        destination: shippingAddress,
-        packages: [{
-          weight: Math.max(totalWeight, 1),
-          dimensions: { length: 12, width: 12, height: 6 },
-          value: totalValue
-        }]
-      });
-
-      setShippingOptions(quotes);
-      if (quotes.length > 0) {
-        setSelectedShipping(quotes[0].id); // Select first option by default
-      }
-
-      toast({
-        title: "Shipping Quotes Retrieved",
-        description: `Found ${quotes.length} shipping options.`
-      });
-    } catch (error) {
-      console.error('Shipping quote error:', error);
-      toast({
-        title: "Shipping Quote Error",
-        description: "Failed to get shipping quotes. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsGettingShippingQuotes(false);
-    }
-  };
-
-  // Submit special order
-  const submitSpecialOrder = async () => {
-    if (!selectedCustomer) {
-      toast({
-        title: "No Customer Selected",
-        description: "Please select a customer for this special order.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (specialOrderItems.length === 0) {
-      toast({
-        title: "No Items",
-        description: "Please add items to your special order.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!selectedShipping) {
-      toast({
-        title: "No Shipping Selected",
-        description: "Please select a shipping option.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      const selectedShippingOption = shippingOptions.find(opt => opt.id === selectedShipping);
-      const totalValue = specialOrderItems.reduce((sum, item) => sum + item.price, 0);
-      const shippingCost = selectedShippingOption?.cost || 0;
-
-      const orderData = {
-        customerId: selectedCustomer.id,
-        customerEmail: selectedCustomer.email,
-        items: specialOrderItems.map(item => ({
-          partId: item.id,
-          name: item.name,
-          sku: item.sku,
-          price: item.price,
-          quantity: 1 // Default quantity for special orders
-        })),
-        shippingAddress,
-        shippingOption: selectedShippingOption,
-        notes: orderNotes,
-        subtotal: totalValue,
-        shippingCost,
-        total: totalValue + shippingCost
-      };
-
-      await DropshipOrderService.createOrder(orderData);
-
-      toast({
-        title: "Special Order Submitted",
-        description: "Your special order has been submitted successfully."
-      });
-
-      // Reset form
-      setSpecialOrderItems([]);
-      setOrderNotes('');
-      setShippingOptions([]);
-      setSelectedShipping('');
-      setSelectedCustomer(null);
-      setShippingAddress({
-        street: '',
-        city: '',
-        state: '',
-        zipCode: '',
-        country: 'US'
-      });
-
-    } catch (error) {
-      console.error('Special order submission error:', error);
-      toast({
-        title: "Submission Error",
-        description: "Failed to submit special order. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  // Show loading state for real data
-  if (isLoadingParts) {
     return (
-      <div className="container mx-auto p-6">
-        <LoadingWrapper isLoading={true} message="Loading inventory from database..." />
-      </div>
-    );
-  }
-
-  // Show error state for real data
-  if (partsError) {
-    return (
-      <div className="container mx-auto p-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error Loading Inventory</AlertTitle>
-          <AlertDescription>
-            {partsError}
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={refreshDataHandler}
-              className="ml-2"
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleBackToCategories}
+              className="flex items-center gap-2 text-blue-600 hover:text-blue-800"
             >
-              <RefreshCw className="h-4 w-4 mr-1" />
+              <ChevronLeft className="w-4 h-4" />
+              Back to Vehicle Categories
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold">
+                {selectedMakeInfo ? selectedMakeInfo.name : 'All'} Parts
+              </h1>
+              <p className="text-gray-600">
+                {pagination.totalItems.toLocaleString()} parts found
+                {pagination.totalPages > 1 && (
+                  <span className="text-sm ml-2">
+                    (Page {pagination.currentPage} of {pagination.totalPages})
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+              className="p-2 border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              {viewMode === 'grid' ? <List className="w-4 h-4" /> : <Grid className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              <Filter className="w-4 h-4" />
+              Filters
+            </button>
+          </div>
+        </div>
+
+        {/* Search and Filters */}
+        <div className="bg-white rounded-lg shadow-md p-4">
+          <div className="flex gap-4 mb-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search parts..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* RESTORED: Enhanced Filters Panel with all filter types */}
+          {showFilters && (
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-4 border-t">
+              {/* RESTORED: Year Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                <select
+                  value={filters.year}
+                  onChange={(e) => setFilters(prev => ({ ...prev, year: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Years</option>
+                  {uniqueYears.map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* RESTORED: Model Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                <select
+                  value={filters.model}
+                  onChange={(e) => setFilters(prev => ({ ...prev, model: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Models</option>
+                  {uniqueModels.map(model => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Part Category Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Part Category</label>
+                <select
+                  value={filters.partCategory}
+                  onChange={(e) => setFilters(prev => ({ ...prev, partCategory: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Categories</option>
+                  {uniquePartCategories.map(category => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Brand Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
+                <select
+                  value={filters.brand}
+                  onChange={(e) => setFilters(prev => ({ ...prev, brand: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Brands</option>
+                  {uniqueBrands.map(brand => (
+                    <option key={brand} value={brand}>{brand}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Stock Status Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stock Status</label>
+                <select
+                  value={filters.stockStatus}
+                  onChange={(e) => setFilters(prev => ({ ...prev, stockStatus: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Stock</option>
+                  <option value="In Stock">In Stock</option>
+                  <option value="Out of Stock">Out of Stock</option>
+                </select>
+              </div>
+
+              {/* Price Range Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Price Range: ${filters.priceRange[0]} - ${filters.priceRange[1]}
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1000"
+                  value={filters.priceRange[1]}
+                  onChange={(e) => setFilters(prev => ({ 
+                    ...prev, 
+                    priceRange: [prev.priceRange[0], parseInt(e.target.value)] 
+                  }))}
+                  className="w-full"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-8">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p className="mt-2 text-gray-600">Loading parts...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <p className="text-red-800">{error}</p>
+            <button
+              onClick={() => loadPartsForMake(selectedMake, pagination.currentPage)}
+              className="mt-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            >
               Retry
-            </Button>
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
-  return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Parts & Special Orders</h1>
-          <p className="text-muted-foreground">
-            Browse parts inventory and place special orders
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          {/* ✅ ULTRA-SIMPLE: Cart button */}
-          <Button 
-            variant="outline" 
-            onClick={() => setShowCartDialog(true)}
-            className="relative"
-          >
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            Cart ({cartItemCount})
-            {cartItemCount > 0 && (
-              <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center">
-                {cartItemCount}
-              </Badge>
-            )}
-          </Button>
-          <Button variant="outline" onClick={refreshDataHandler} disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
-      </div>
-
-      {/* Show real data count */}
-      {inventoryParts.length > 0 && (
-        <Alert>
-          <Package className="h-4 w-4" />
-          <AlertTitle>Real Inventory Data Loaded</AlertTitle>
-          <AlertDescription>
-            Showing {inventoryParts.length} parts from your inventory database instead of mock data.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <Tabs value={currentTab} onValueChange={setCurrentTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="parts" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Parts Catalog
-          </TabsTrigger>
-          <TabsTrigger value="special-orders" className="flex items-center gap-2">
-            <ShoppingCart className="h-4 w-4" />
-            Special Orders
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Parts Catalog Tab */}
-        <TabsContent value="parts" className="space-y-6">
-          {/* Filters */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="h-5 w-5" />
-                Search & Filter
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Search and basic filters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search parts..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map(category => (
-                      <SelectItem key={category} value={category}>
-                        {category === 'all' ? 'All Categories' : category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="name">Name</SelectItem>
-                    <SelectItem value="price">Price</SelectItem>
-                    <SelectItem value="quantity">Stock</SelectItem>
-                    <SelectItem value="category">Category</SelectItem>
-                    <SelectItem value="updated">Last Updated</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <div className="flex gap-2">
-                  <Button
-                    variant={sortOrder === 'asc' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSortOrder('asc')}
-                    className="flex-1"
-                  >
-                    <TrendingUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={sortOrder === 'desc' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSortOrder('desc')}
-                    className="flex-1"
-                  >
-                    <TrendingDown className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Advanced filters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
-                  <Slider
-                    value={priceRange}
-                    onValueChange={setPriceRange}
-                    max={1000}
-                    step={10}
-                    className="w-full"
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="favorites-only"
-                      checked={showFavoritesOnly}
-                      onCheckedChange={setShowFavoritesOnly}
-                    />
-                    <Label htmlFor="favorites-only">Favorites only</Label>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <Button
-                      variant={viewMode === 'grid' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setViewMode('grid')}
-                    >
-                      <Grid className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant={viewMode === 'list' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setViewMode('list')}
-                    >
-                      <List className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Results summary */}
-          <div className="flex justify-between items-center">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredParts.length} of {mockParts.length} parts
-              </p>
-              <p className="text-xs text-muted-foreground">
-                ✅ Only showing items with prices set (excluding items without pricing)
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => prev - 1)}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(prev => prev + 1)}
-              >
-                Next
-              </Button>
-            </div>
+            </button>
           </div>
+        )}
 
-          {/* Parts display */}
-          <LoadingWrapper isLoading={isLoading}>
-            {filteredParts.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <Package className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No parts found</h3>
-                  <p className="text-muted-foreground text-center mb-4">
-                    Try adjusting your search criteria or filters
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSearchTerm('');
-                      setSelectedCategory('all');
-                      setPriceRange([0, 1000]);
-                      setShowFavoritesOnly(false);
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
-                </CardContent>
-              </Card>
+        {/* Parts Grid/List */}
+        {!loading && !error && (
+          <>
+            {displayParts.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">No parts found matching your criteria.</p>
+              </div>
             ) : (
               <div className={viewMode === 'grid' 
                 ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
                 : "space-y-4"
               }>
-                {paginatedParts.map(part => 
-                  viewMode === 'grid' 
-                    ? <PartCard key={part.id} part={part} />
-                    : <PartListItem key={part.id} part={part} />
-                )}
-              </div>
-            )}
-          </LoadingWrapper>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center gap-2">
-              <Button
-                variant="outline"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(1)}
-              >
-                First
-              </Button>
-              <Button
-                variant="outline"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => prev - 1)}
-              >
-                Previous
-              </Button>
-              <span className="flex items-center px-4">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(prev => prev + 1)}
-              >
-                Next
-              </Button>
-              <Button
-                variant="outline"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(totalPages)}
-              >
-                Last
-              </Button>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Special Orders Tab */}
-        <TabsContent value="special-orders" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Customer Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Customer Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CustomerSearchComponent
-                  onCustomerSelect={setSelectedCustomer}
-                  selectedCustomer={selectedCustomer}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Order Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ShoppingCart className="h-5 w-5" />
-                  Order Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {specialOrderItems.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">
-                    No items added to special order yet
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {specialOrderItems.map(item => (
-                      <div key={item.id} className="flex justify-between items-center p-2 border rounded">
+                {displayParts.map((part) => (
+                  <div
+                    key={part.id}
+                    className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow ${
+                      viewMode === 'list' ? 'p-4' : 'p-6'
+                    }`}
+                  >
+                    {viewMode === 'grid' ? (
+                      // Grid View
+                      <div className="space-y-4">
                         <div>
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-sm text-muted-foreground">${item.price.toFixed(2)}</div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeFromSpecialOrder(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Separator />
-                    <div className="flex justify-between font-semibold">
-                      <span>Subtotal:</span>
-                      <span>${specialOrderItems.reduce((sum, item) => sum + item.price, 0).toFixed(2)}</span>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Parts Selection for Special Orders */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Add Parts to Special Order</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Search for parts */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search parts to add to special order..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-
-                {/* Parts grid for special orders */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-                  {filteredParts.slice(0, 12).map(part => (
-                    <Card key={part.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-3">
-                        <h4 className="font-medium mb-1">{part.name}</h4>
-                        <p className="text-sm text-muted-foreground mb-2">{part.description}</p>
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-green-600">${part.price.toFixed(2)}</span>
-                          <Button
-                            size="sm"
-                            onClick={() => addToSpecialOrder(part)}
-                            disabled={specialOrderItems.some(item => item.id === part.id)}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Shipping Information */}
-          {specialOrderItems.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Truck className="h-5 w-5" />
-                  Shipping Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Shipping Address */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="street">Street Address</Label>
-                    <Input
-                      id="street"
-                      value={shippingAddress.street}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, street: e.target.value }))}
-                      placeholder="123 Main St"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="city">City</Label>
-                    <Input
-                      id="city"
-                      value={shippingAddress.city}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, city: e.target.value }))}
-                      placeholder="Anytown"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="state">State</Label>
-                    <Input
-                      id="state"
-                      value={shippingAddress.state}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, state: e.target.value }))}
-                      placeholder="CA"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="zipCode">ZIP Code</Label>
-                    <Input
-                      id="zipCode"
-                      value={shippingAddress.zipCode}
-                      onChange={(e) => setShippingAddress(prev => ({ ...prev, zipCode: e.target.value }))}
-                      placeholder="12345"
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  onClick={getShippingQuotes}
-                  disabled={isGettingShippingQuotes}
-                  className="w-full"
-                >
-                  {isGettingShippingQuotes ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Getting Quotes...
-                    </>
-                  ) : (
-                    <>
-                      <Truck className="h-4 w-4 mr-2" />
-                      Get Shipping Quotes
-                    </>
-                  )}
-                </Button>
-
-                {/* Shipping Options */}
-                {shippingOptions.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="font-medium">Shipping Options</h4>
-                    <ShippingOptionsDisplay
-                      shippingOptions={shippingOptions}
-                      selectedShipping={selectedShipping}
-                      onShippingSelect={setSelectedShipping}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Order Notes */}
-          {specialOrderItems.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Order Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Textarea
-                  placeholder="Add any special instructions or notes for this order..."
-                  value={orderNotes}
-                  onChange={(e) => setOrderNotes(e.target.value)}
-                  rows={4}
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Submit Order */}
-          {specialOrderItems.length > 0 && selectedCustomer && (
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-semibold">Ready to Submit Order</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Order for {selectedCustomer.display_name} with {specialOrderItems.length} items
-                    </p>
-                  </div>
-                  <Button onClick={submitSpecialOrder} size="lg">
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Submit Special Order
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {/* ✅ ULTRA-SIMPLE: Cart Dialog */}
-      <Dialog open={showCartDialog} onOpenChange={setShowCartDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Shopping Cart</DialogTitle>
-            <DialogDescription>
-              {cartItemCount} items - ${cartTotal.toFixed(2)} total
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            {cartItems.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">Your cart is empty</p>
-            ) : (
-              <>
-                <ScrollArea className="max-h-60">
-                  <div className="space-y-2">
-                    {cartItems.map(item => (
-                      <div key={item.id} className="flex items-center justify-between p-2 border rounded">
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">{item.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            ${item.price.toFixed(2)} each
+                          <h3 className="font-semibold text-lg mb-2 line-clamp-2">{part.name}</h3>
+                          <div className="space-y-1 text-sm text-gray-600">
+                            <p><span className="font-medium">SKU:</span> {part.sku}</p>
+                            {part.keystone_vcpn && (
+                              <p><span className="font-medium">VCPN:</span> {part.keystone_vcpn}</p>
+                            )}
+                            <p><span className="font-medium">Brand:</span> {part.brand || 'N/A'}</p>
+                            {/* RESTORED: Show year and model in grid view */}
+                            {part.year && part.year !== 'Unknown' && (
+                              <p><span className="font-medium">Year:</span> {part.year}</p>
+                            )}
+                            {part.model && part.model !== 'Unknown' && (
+                              <p><span className="font-medium">Model:</span> {part.model}</p>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
-                            className="h-6 w-6 p-0"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="text-sm w-8 text-center">{item.quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
-                            className="h-6 w-6 p-0"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeFromCart(item.id)}
-                            className="h-6 w-6 p-0 text-red-500"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+
+                        <div className="flex flex-wrap gap-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            part.stockStatus === 'In Stock' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {part.stockStatus}
+                          </span>
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                            {part.vehicleMake}
+                          </span>
+                          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                            {part.partCategory}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="text-lg font-bold text-green-600">${part.list_price.toFixed(2)}</p>
+                            {part.cost > 0 && (
+                              <p className="text-sm text-gray-500">Cost: ${part.cost.toFixed(2)}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setSelectedPart(part)}
+                              className="p-2 text-gray-600 hover:text-blue-600 border border-gray-300 rounded-md hover:border-blue-300"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => addToCart(part)}
+                              disabled={cartLoading}
+                              className="px-3 py-2 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                            >
+                              {cartLoading ? (
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                <Plus className="w-4 h-4" />
+                              )}
+                              Add to Cart
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    ))}
+                    ) : (
+                      // List View
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg mb-1">{part.name}</h3>
+                          <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                            <span><span className="font-medium">SKU:</span> {part.sku}</span>
+                            {part.keystone_vcpn && (
+                              <span><span className="font-medium">VCPN:</span> {part.keystone_vcpn}</span>
+                            )}
+                            <span><span className="font-medium">Brand:</span> {part.brand || 'N/A'}</span>
+                            <span><span className="font-medium">Stock:</span> {part.quantity_on_hand}</span>
+                            {/* RESTORED: Show year and model in list view */}
+                            {part.year && part.year !== 'Unknown' && (
+                              <span><span className="font-medium">Year:</span> {part.year}</span>
+                            )}
+                            {part.model && part.model !== 'Unknown' && (
+                              <span><span className="font-medium">Model:</span> {part.model}</span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              part.stockStatus === 'In Stock' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {part.stockStatus}
+                            </span>
+                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                              {part.vehicleMake}
+                            </span>
+                            <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                              {part.partCategory}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-green-600">${part.list_price.toFixed(2)}</p>
+                            {part.cost > 0 && (
+                              <p className="text-sm text-gray-500">Cost: ${part.cost.toFixed(2)}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setSelectedPart(part)}
+                              className="p-2 text-gray-600 hover:text-blue-600 border border-gray-300 rounded-md hover:border-blue-300"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => addToCart(part)}
+                              disabled={cartLoading}
+                              className="px-3 py-2 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                            >
+                              {cartLoading ? (
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                <Plus className="w-4 h-4" />
+                              )}
+                              Add to Cart
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </ScrollArea>
-                
-                <Separator />
-                
-                <div className="flex justify-between items-center font-semibold">
-                  <span>Total: ${cartTotal.toFixed(2)}</span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setCartItems([])}>
-                      Clear
-                    </Button>
-                    <Button size="sm">
+                ))}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center justify-between bg-white rounded-lg shadow-md p-4">
+                <div className="text-sm text-gray-600">
+                  Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
+                  {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of{' '}
+                  {pagination.totalItems.toLocaleString()} results
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage - 1)}
+                    disabled={pagination.currentPage === 1}
+                    className="p-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  
+                  {/* Page Numbers */}
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    const pageNum = Math.max(1, pagination.currentPage - 2) + i;
+                    if (pageNum > pagination.totalPages) return null;
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => handlePageChange(pageNum)}
+                        className={`px-3 py-2 border rounded-md ${
+                          pageNum === pagination.currentPage
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage + 1)}
+                    disabled={pagination.currentPage === pagination.totalPages}
+                    className="p-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // Render part detail dialog
+  const renderPartDetailDialog = () => {
+    if (!selectedPart) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-xl font-bold">{selectedPart.name}</h2>
+              <button
+                onClick={() => setSelectedPart(null)}
+                className="p-2 hover:bg-gray-100 rounded-md"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-2">Part Information</h3>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="font-medium">SKU:</span> {selectedPart.sku}</p>
+                    {selectedPart.keystone_vcpn && (
+                      <p><span className="font-medium">VCPN:</span> {selectedPart.keystone_vcpn}</p>
+                    )}
+                    {selectedPart.manufacturer_part_no && (
+                      <p><span className="font-medium">Manufacturer Part #:</span> {selectedPart.manufacturer_part_no}</p>
+                    )}
+                    <p><span className="font-medium">Brand:</span> {selectedPart.brand || 'N/A'}</p>
+                    <p><span className="font-medium">Category:</span> {selectedPart.category || 'N/A'}</p>
+                    <p><span className="font-medium">Location:</span> {selectedPart.location || 'N/A'}</p>
+                    {/* RESTORED: Show year and model in detail dialog */}
+                    {selectedPart.year && selectedPart.year !== 'Unknown' && (
+                      <p><span className="font-medium">Year:</span> {selectedPart.year}</p>
+                    )}
+                    {selectedPart.model && selectedPart.model !== 'Unknown' && (
+                      <p><span className="font-medium">Model:</span> {selectedPart.model}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2">Enhanced Categorization</h3>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                      Make: {selectedPart.vehicleMake}
+                    </span>
+                    <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                      Category: {selectedPart.partCategory}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-2">Pricing & Stock</h3>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="font-medium">List Price:</span> <span className="text-green-600 font-bold">${selectedPart.list_price.toFixed(2)}</span></p>
+                    {selectedPart.cost > 0 && (
+                      <p><span className="font-medium">Cost:</span> ${selectedPart.cost.toFixed(2)}</p>
+                    )}
+                    <p><span className="font-medium">Stock Status:</span> 
+                      <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                        selectedPart.stockStatus === 'In Stock' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {selectedPart.stockStatus}
+                      </span>
+                    </p>
+                    <p><span className="font-medium">Quantity on Hand:</span> {selectedPart.quantity_on_hand}</p>
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    onClick={() => {
+                      addToCart(selectedPart);
+                      setSelectedPart(null);
+                    }}
+                    disabled={cartLoading}
+                    className="w-full px-4 py-2 bg-[#6B7FE8] hover:bg-[#5A6FD7] text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {cartLoading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                    Add to Cart
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {selectedPart.description && (
+              <div className="mt-6">
+                <h3 className="font-semibold mb-2">Description</h3>
+                <p className="text-sm text-gray-600">{selectedPart.description}</p>
+              </div>
+            )}
+
+            {selectedPart.long_description && (
+              <div className="mt-4">
+                <h3 className="font-semibold mb-2">Detailed Description</h3>
+                <p className="text-sm text-gray-600">{selectedPart.long_description}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render cart drawer
+  const renderCartDrawer = () => {
+    if (!showCartDrawer) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-end z-50">
+        <div className="bg-white h-full w-full max-w-md overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold">Shopping Cart</h2>
+              <button
+                onClick={() => setShowCartDrawer(false)}
+                className="p-2 hover:bg-gray-100 rounded-md"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {cart.length === 0 ? (
+              <div className="text-center py-8">
+                <ShoppingCart className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">Your cart is empty</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4 mb-6">
+                  {cart.map((item) => (
+                    <div key={item.id} className="flex items-center gap-4 p-4 border border-gray-200 rounded-md">
+                      <div className="flex-1">
+                        <h3 className="font-medium">{item.name}</h3>
+                        <p className="text-sm text-gray-600">SKU: {item.sku}</p>
+                        <p className="text-sm font-medium text-green-600">${item.price.toFixed(2)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          className="p-1 hover:bg-gray-100 rounded"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="w-8 text-center">{item.quantity}</span>
+                        <button
+                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                          className="p-1 hover:bg-gray-100 rounded"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="p-1 hover:bg-gray-100 rounded text-red-600"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t pt-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="font-semibold">Total:</span>
+                    <span className="font-bold text-lg">${totalPrice.toFixed(2)}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <button className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
                       Checkout
-                    </Button>
+                    </button>
+                    <button
+                      onClick={clearCart}
+                      className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                    >
+                      Clear Cart
+                    </button>
                   </div>
                 </div>
               </>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
+    );
+  };
 
-      {/* ✅ ULTRA-SIMPLE: Detail Dialog */}
-      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{selectedPart?.name}</DialogTitle>
-            <DialogDescription>Part Details</DialogDescription>
-          </DialogHeader>
-          
-          {selectedPart && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>SKU</Label>
-                  <p className="font-mono">{selectedPart.sku}</p>
-                </div>
-                <div>
-                  <Label>Category</Label>
-                  <p>{selectedPart.category}</p>
-                </div>
-                <div>
-                  <Label>Price</Label>
-                  <p className="text-2xl font-bold text-green-600">${selectedPart.price.toFixed(2)}</p>
-                </div>
-                <div>
-                  <Label>Stock</Label>
-                  <p className={selectedPart.quantity > 0 ? 'text-green-600' : 'text-red-600'}>
-                    {selectedPart.quantity} units
-                  </p>
-                </div>
-              </div>
-              
-              {selectedPart.description && (
-                <div>
-                  <Label>Description</Label>
-                  <p>{selectedPart.description}</p>
-                </div>
-              )}
-              
-              <div className="flex gap-2">
-                <Button 
-                  onClick={() => {
-                    handleAddToCart(selectedPart);
-                    setShowDetailDialog(false);
-                  }}
-                  disabled={selectedPart.quantity === 0}
-                  className="flex-1"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add to Cart
-                </Button>
-                <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
-                  Close
-                </Button>
-              </div>
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <h1 className="text-xl font-bold text-gray-900">Parts Catalog</h1>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setShowCartDrawer(true)}
+                className="relative p-2 text-gray-600 hover:text-blue-600"
+              >
+                <ShoppingCart className="w-6 h-6" />
+                {totalItems > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {totalItems}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {currentView === 'categories' ? renderCategoryOverview() : renderPartsView()}
+      </main>
+
+      {/* Dialogs */}
+      {renderPartDetailDialog()}
+      {renderCartDrawer()}
     </div>
   );
-}
+};
+
+export default Parts;
 
