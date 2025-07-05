@@ -2,9 +2,23 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Filter, Grid, List, Plus, Eye, X, ChevronDown, ShoppingCart, Minus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase configuration
-const supabaseUrl = 'https://pqmjfwmbitodwtpedlle.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxbWpmd21iaXRvZHd0cGVkbGxlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMzNDI0NzEsImV4cCI6MjA0ODkxODQ3MX0.nJYJcjmSAOVR7VKUB_J2lqKIGGUvj-WXahIDWOM6gQI';
+// Supabase configuration - using YOUR environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN;
+
+console.log('🔧 Supabase Config:', {
+  url: supabaseUrl,
+  keyLength: supabaseKey?.length || 0,
+  keyPreview: supabaseKey?.substring(0, 20) + '...',
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseKey
+});
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Missing Supabase environment variables!');
+  console.error('Expected: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_TOKEN');
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Enhanced interfaces
