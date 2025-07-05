@@ -27,7 +27,7 @@ interface InventoryPart {
   name: string;
   sku: string;
   description?: string;
-  LongDescription?: string;
+  long_description?: string;
   keystone_vcpn?: string;
   manufacturer_part_no?: string;
   compatibility?: string;
@@ -406,7 +406,7 @@ const processInventoryItem = (item: any): InventoryPart => {
     name: safeString(item.name || item.description || 'Unknown Part'),
     sku: safeString(item.sku || ''),
     description: safeString(item.description || ''),
-    LongDescription: safeString(item.LongDescription || ''),
+    long_description: safeString(item.long_description || ''), // ✅ Fixed: snake_case
     keystone_vcpn: safeString(item.keystone_vcpn || ''),
     manufacturer_part_no: safeString(item.manufacturer_part_no || ''),
     compatibility: safeString(item.compatibility || ''),
@@ -418,10 +418,10 @@ const processInventoryItem = (item: any): InventoryPart => {
     cost: cost,
     list_price: listPrice,
     stockStatus: getStockStatus(Boolean(item.in_stock)),
-    vehicleCategory: categorizeVehicle(item.LongDescription || ''),
-    partCategory: categorizePart(item.LongDescription || ''),
-    modelYear: extractModelYear(item.LongDescription || ''),
-    vehicleModel: extractVehicleModel(item.LongDescription || '', categorizeVehicle(item.LongDescription || '')),
+    vehicleCategory: categorizeVehicle(item.long_description || ''), // ✅ Fixed: snake_case
+    partCategory: categorizePart(item.long_description || ''), // ✅ Fixed: snake_case
+    modelYear: extractModelYear(item.long_description || ''), // ✅ Fixed: snake_case
+    vehicleModel: extractVehicleModel(item.long_description || '', categorizeVehicle(item.long_description || '')), // ✅ Fixed: snake_case
     isKit: checkIfKit(item.id || item.sku || ''),
     pricingSource: pricingSource
   };
@@ -444,7 +444,7 @@ const fuzzySearch = (searchTerm: string, parts: InventoryPart[]): InventoryPart[
       name: { value: safeString(part.name).toLowerCase(), weight: 30 },
       sku: { value: safeString(part.sku).toLowerCase(), weight: 20 },
       description: { value: safeString(part.description).toLowerCase(), weight: 20 },
-      LongDescription: { value: safeString(part.LongDescription).toLowerCase(), weight: 25 },
+      long_description: { value: safeString(part.long_description).toLowerCase(), weight: 25 }, // ✅ Fixed: snake_case
       manufacturer_part_no: { value: safeString(part.manufacturer_part_no).toLowerCase(), weight: 15 },
       compatibility: { value: safeString(part.compatibility).toLowerCase(), weight: 10 },
       brand: { value: safeString(part.brand).toLowerCase(), weight: 5 },
@@ -905,16 +905,16 @@ const PartsCatalog: React.FC = () => {
       if (selectedCategory && selectedCategory !== 'all') {
         const category = VEHICLE_CATEGORIES.find(cat => cat.id === selectedCategory);
         if (category && category.keywords.length > 0) {
-          // Use simple ILIKE for first keyword
+          // Use simple ILIKE for first keyword - ✅ Fixed: using long_description
           const keyword = category.keywords[0];
-          query = query.ilike('LongDescription', `%${keyword}%`);
+          query = query.ilike('long_description', `%${keyword}%`);
           console.log(`🔍 Filtering by keyword: ${keyword}`);
         }
       }
 
-      // Apply search filter
+      // Apply search filter - ✅ Fixed: using long_description
       if (searchTerm.trim()) {
-        query = query.or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,LongDescription.ilike.%${searchTerm}%`);
+        query = query.or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,long_description.ilike.%${searchTerm}%`);
         console.log(`🔍 Applying search filter: ${searchTerm}`);
       }
 
@@ -1718,10 +1718,10 @@ const PartsCatalog: React.FC = () => {
                     </div>
                   )}
                   
-                  {selectedPart.LongDescription && (
+                  {selectedPart.long_description && (
                     <div>
                       <span className="text-sm text-gray-600">Full Description:</span>
-                      <p className="text-sm">{selectedPart.LongDescription}</p>
+                      <p className="text-sm">{selectedPart.long_description}</p>
                     </div>
                   )}
                   
