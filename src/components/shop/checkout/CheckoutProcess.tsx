@@ -54,7 +54,7 @@ interface CustomerSearchResult {
   full_address: string;
 }
 
-const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
+export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
   cart,
   totalPrice,
   onClearCart,
@@ -811,6 +811,4 @@ const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
     </div>
   );
 };
-
-export default CheckoutProcess;
 
