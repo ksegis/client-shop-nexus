@@ -72,6 +72,12 @@ interface ShippingOption {
   warehouseLocation: string;
 }
 
+interface GroupedShippingOptions {
+  fastest: ShippingOption | null;
+  cheapest: ShippingOption | null;
+  other: ShippingOption[];
+}
+
 export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
   cart,
   totalPrice,
@@ -103,9 +109,15 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
   
   // Shipping options state
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
+  const [groupedShippingOptions, setGroupedShippingOptions] = useState<GroupedShippingOptions>({
+    fastest: null,
+    cheapest: null,
+    other: []
+  });
   const [selectedShippingOption, setSelectedShippingOption] = useState<string>('');
   const [shippingQuoteLoading, setShippingQuoteLoading] = useState(false);
   const [shippingQuoteError, setShippingQuoteError] = useState<string | null>(null);
+  const [showOtherOptions, setShowOtherOptions] = useState(false);
   
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState('account');
@@ -132,6 +144,48 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
 
     return () => clearTimeout(timeoutId);
   }, [customerSearch]);
+
+  // Group shipping options when they change
+  useEffect(() => {
+    if (shippingOptions.length > 0) {
+      const grouped = groupShippingOptions(shippingOptions);
+      setGroupedShippingOptions(grouped);
+      
+      // Auto-select cheapest option if none selected
+      if (!selectedShippingOption && grouped.cheapest) {
+        setSelectedShippingOption(`${grouped.cheapest.carrierId}-${grouped.cheapest.serviceCode}`);
+      }
+    } else {
+      setGroupedShippingOptions({ fastest: null, cheapest: null, other: [] });
+    }
+  }, [shippingOptions]);
+
+  // Group shipping options by category
+  const groupShippingOptions = (options: ShippingOption[]): GroupedShippingOptions => {
+    if (options.length === 0) {
+      return { fastest: null, cheapest: null, other: [] };
+    }
+
+    // Sort by delivery days (fastest first)
+    const sortedBySpeed = [...options].sort((a, b) => a.estimatedDeliveryDays - b.estimatedDeliveryDays);
+    
+    // Sort by cost (cheapest first)
+    const sortedByCost = [...options].sort((a, b) => a.cost - b.cost);
+    
+    const fastest = sortedBySpeed[0];
+    const cheapest = sortedByCost[0];
+    
+    // Get other options (excluding fastest and cheapest if they're the same)
+    const other = options.filter(option => {
+      const optionKey = `${option.carrierId}-${option.serviceCode}`;
+      const fastestKey = `${fastest.carrierId}-${fastest.serviceCode}`;
+      const cheapestKey = `${cheapest.carrierId}-${cheapest.serviceCode}`;
+      
+      return optionKey !== fastestKey && optionKey !== cheapestKey;
+    });
+
+    return { fastest, cheapest, other };
+  };
 
   // Load shop addresses from dedicated shop_addresses table
   const loadShopAddresses = async () => {
@@ -266,10 +320,6 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
 
       if (quoteResponse.success) {
         setShippingOptions(quoteResponse.shippingOptions);
-        // Auto-select cheapest option
-        if (quoteResponse.shippingOptions.length > 0) {
-          setSelectedShippingOption(`${quoteResponse.shippingOptions[0].carrierId}-${quoteResponse.shippingOptions[0].serviceCode}`);
-        }
       } else {
         setShippingQuoteError(quoteResponse.message);
       }
@@ -466,6 +516,64 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
     return null;
   };
 
+  // Render shipping option card
+  const renderShippingOptionCard = (option: ShippingOption, label?: string, isRecommended?: boolean) => {
+    const optionKey = `${option.carrierId}-${option.serviceCode}`;
+    const isSelected = selectedShippingOption === optionKey;
+    
+    return (
+      <label 
+        key={optionKey} 
+        className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-all ${
+          isSelected 
+            ? 'border-blue-500 bg-blue-50' 
+            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+        } ${isRecommended ? 'ring-2 ring-green-200' : ''}`}
+      >
+        <div className="flex items-center space-x-3">
+          <input
+            type="radio"
+            name="shippingOption"
+            value={optionKey}
+            checked={isSelected}
+            onChange={(e) => setSelectedShippingOption(e.target.value)}
+            className="text-blue-600"
+          />
+          <div>
+            <div className="flex items-center space-x-2">
+              <div className="font-medium text-gray-900">
+                {option.carrierName} {option.serviceName}
+              </div>
+              {label && (
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                  label === 'Fastest' ? 'bg-orange-100 text-orange-800' :
+                  label === 'Cheapest' ? 'bg-green-100 text-green-800' :
+                  'bg-blue-100 text-blue-800'
+                }`}>
+                  {label}
+                </span>
+              )}
+            </div>
+            <div className="text-sm text-gray-600">
+              {option.estimatedDeliveryDays} business day{option.estimatedDeliveryDays !== 1 ? 's' : ''}
+            </div>
+            <div className="text-xs text-gray-500">
+              {option.warehouseName} • {option.warehouseLocation}
+            </div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-medium text-gray-900">
+            ${option.cost.toFixed(2)}
+          </div>
+          {option.trackingAvailable && (
+            <div className="text-xs text-gray-500">Tracking included</div>
+          )}
+        </div>
+      </label>
+    );
+  };
+
   // Render step content
   const renderStepContent = () => {
     switch (currentStep) {
@@ -625,7 +733,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
 
                 {/* Custom Address Form */}
                 {shippingType === 'custom' && (
-                  <div className="ml-6 space-y-3">
+                  <div className="ml-6 space-y-4">
                     <input
                       type="text"
                       placeholder="Street Address"
@@ -667,52 +775,77 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
                       </select>
                     </div>
 
-                    {/* Shipping Options */}
+                    {/* Shipping Quote Loading */}
                     {shippingQuoteLoading && (
-                      <div className="text-center py-4">
-                        <div className="text-sm text-gray-600">Getting shipping quotes...</div>
+                      <div className="text-center py-6">
+                        <div className="inline-flex items-center space-x-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                          <span className="text-sm text-gray-600">Getting shipping quotes...</span>
+                        </div>
                       </div>
                     )}
 
+                    {/* Shipping Quote Error */}
                     {shippingQuoteError && (
                       <div className="bg-red-50 border border-red-200 rounded-md p-3">
                         <p className="text-red-800 text-sm">{shippingQuoteError}</p>
                       </div>
                     )}
 
-                    {shippingOptions.length > 0 && (
-                      <div className="space-y-2">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Select Shipping Method
-                        </label>
-                        <div className="space-y-2">
-                          {shippingOptions.map((option) => (
-                            <label key={`${option.carrierId}-${option.serviceCode}`} className="flex items-center justify-between p-3 border border-gray-200 rounded-md cursor-pointer hover:bg-gray-50">
-                              <div className="flex items-center space-x-3">
-                                <input
-                                  type="radio"
-                                  name="shippingOption"
-                                  value={`${option.carrierId}-${option.serviceCode}`}
-                                  checked={selectedShippingOption === `${option.carrierId}-${option.serviceCode}`}
-                                  onChange={(e) => setSelectedShippingOption(e.target.value)}
-                                />
-                                <div>
-                                  <div className="font-medium text-gray-900">
-                                    {option.carrierName} {option.serviceName}
-                                  </div>
-                                  <div className="text-sm text-gray-600">
-                                    {option.estimatedDeliveryDays} business days
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="font-medium text-gray-900">
-                                  ${option.cost.toFixed(2)}
-                                </div>
-                              </div>
-                            </label>
-                          ))}
+                    {/* Grouped Shipping Options */}
+                    {!shippingQuoteLoading && !shippingQuoteError && shippingOptions.length > 0 && (
+                      <div className="space-y-4">
+                        <h4 className="font-medium text-gray-900">Select Shipping Method</h4>
+                        
+                        {/* Recommended Options */}
+                        <div className="space-y-3">
+                          {/* Cheapest Option */}
+                          {groupedShippingOptions.cheapest && (
+                            <div>
+                              <h5 className="text-sm font-medium text-gray-700 mb-2">💰 Best Value</h5>
+                              {renderShippingOptionCard(groupedShippingOptions.cheapest, 'Cheapest', true)}
+                            </div>
+                          )}
+                          
+                          {/* Fastest Option (if different from cheapest) */}
+                          {groupedShippingOptions.fastest && 
+                           groupedShippingOptions.fastest !== groupedShippingOptions.cheapest && (
+                            <div>
+                              <h5 className="text-sm font-medium text-gray-700 mb-2">⚡ Fastest Delivery</h5>
+                              {renderShippingOptionCard(groupedShippingOptions.fastest, 'Fastest')}
+                            </div>
+                          )}
                         </div>
+
+                        {/* Other Options (Collapsible) */}
+                        {groupedShippingOptions.other.length > 0 && (
+                          <div>
+                            <button
+                              onClick={() => setShowOtherOptions(!showOtherOptions)}
+                              className="flex items-center justify-between w-full p-3 text-left bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 transition-colors"
+                            >
+                              <span className="font-medium text-gray-700">
+                                Other Options ({groupedShippingOptions.other.length})
+                              </span>
+                              <svg 
+                                className={`w-5 h-5 text-gray-500 transition-transform ${showOtherOptions ? 'rotate-180' : ''}`}
+                                fill="none" 
+                                stroke="currentColor" 
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                            
+                            {showOtherOptions && (
+                              <div className="mt-3 space-y-2">
+                                {groupedShippingOptions.other.map((option) => 
+                                  renderShippingOptionCard(option)
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
