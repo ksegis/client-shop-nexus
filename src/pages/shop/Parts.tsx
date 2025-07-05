@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Filter, Grid, List, Plus, Eye, X, ChevronDown, ShoppingCart, Minus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { CheckoutProcess } from './checkout/CheckoutProcess';
 
 // Supabase configuration - using YOUR environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -482,7 +483,7 @@ const Parts: React.FC = () => {
   const [currentView, setCurrentView] = useState<'categories' | 'parts'>('categories');
   const [selectedMake, setSelectedMake] = useState<string>('');
   const [parts, setParts] = useState<InventoryPart[]>([]);
-  const [allLoadedParts, setAllLoadedParts] = useState<InventoryPart[]>([]); // RESTORED: Keep all loaded parts for filter population
+  const [allLoadedParts, setAllLoadedParts] = useState<InventoryPart[]>([]);
   const [filteredParts, setFilteredParts] = useState<InventoryPart[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -493,6 +494,7 @@ const Parts: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedPart, setSelectedPart] = useState<InventoryPart | null>(null);
   const [showCartDrawer, setShowCartDrawer] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
   const [vehicleMakes, setVehicleMakes] = useState<CategorySummary[]>(VEHICLE_MAKES);
 
   // Pagination state
@@ -503,7 +505,7 @@ const Parts: React.FC = () => {
     totalPages: 0
   });
 
-  // RESTORED: Enhanced filter states with all missing filters
+  // Enhanced filter states with all missing filters
   const [filters, setFilters] = useState({
     year: '',
     model: '',
@@ -515,6 +517,16 @@ const Parts: React.FC = () => {
 
   // Cart functionality
   const { cart, totalItems, totalPrice, isLoading: cartLoading, addToCart, removeFromCart, updateQuantity, clearCart } = useSimpleCart();
+
+  // Checkout handler
+  const handleCheckout = useCallback(() => {
+    if (cart.length === 0) {
+      showToast('Your cart is empty', 'error');
+      return;
+    }
+    setShowCheckout(true);
+    setShowCartDrawer(false);
+  }, [cart.length]);
 
   // Error logging function
   const logError = (context: string, error: any) => {
@@ -638,7 +650,7 @@ const Parts: React.FC = () => {
     }
   }, []);
 
-  // FIXED: Load parts with proper pagination and filter data collection
+  // Load parts with proper pagination and filter data collection
   const loadPartsForMake = useCallback(async (makeId: string, page: number = 1) => {
     console.log(`🔄 Loading parts for make: ${makeId}, page: ${page} with FIXED pagination and filter data`);
     setLoading(true);
@@ -752,7 +764,7 @@ const Parts: React.FC = () => {
           };
         });
 
-        // RESTORED: Store all loaded parts for filter population
+        // Store all loaded parts for filter population
         setAllLoadedParts(allProcessedParts);
 
         // Apply proper pagination to the matching parts
@@ -820,7 +832,7 @@ const Parts: React.FC = () => {
           ? processedParts.filter(part => part.vehicleMake === 'unknown')
           : processedParts;
 
-        // RESTORED: Store all loaded parts for filter population
+        // Store all loaded parts for filter population
         setAllLoadedParts(finalParts);
         setParts(finalParts);
         setFilteredParts(finalParts);
@@ -915,7 +927,7 @@ const Parts: React.FC = () => {
     setGlobalSearchTerm('');
     setGlobalSearchResults([]);
     
-    // RESTORED: Reset filters
+    // Reset filters
     setFilters({
       year: '',
       model: '',
@@ -940,13 +952,13 @@ const Parts: React.FC = () => {
     setCurrentView('categories');
     setSelectedMake('');
     setParts([]);
-    setAllLoadedParts([]); // RESTORED: Clear all loaded parts
+    setAllLoadedParts([]);
     setFilteredParts([]);
     setSearchTerm('');
     setGlobalSearchTerm('');
     setGlobalSearchResults([]);
     
-    // RESTORED: Reset filters
+    // Reset filters
     setFilters({
       year: '',
       model: '',
@@ -965,7 +977,7 @@ const Parts: React.FC = () => {
     }
   }, [selectedMake, pagination.totalPages, loadPartsForMake]);
 
-  // RESTORED: Apply filters and search with all filter types
+  // Apply filters and search with all filter types
   useEffect(() => {
     if (parts.length === 0) return;
 
@@ -976,14 +988,14 @@ const Parts: React.FC = () => {
       filtered = fuzzySearch(searchTerm, filtered);
     }
 
-    // RESTORED: Apply year filter
+    // Apply year filter
     if (filters.year) {
       filtered = filtered.filter(part => 
         part.year && part.year.toLowerCase().includes(filters.year.toLowerCase())
       );
     }
 
-    // RESTORED: Apply model filter
+    // Apply model filter
     if (filters.model) {
       filtered = filtered.filter(part => 
         part.model && part.model.toLowerCase().includes(filters.model.toLowerCase())
@@ -1032,7 +1044,7 @@ const Parts: React.FC = () => {
     loadCategoryStatistics();
   }, [loadCategoryStatistics]);
 
-  // RESTORED: Get unique values for filters from ALL loaded parts (not just current page)
+  // Get unique values for filters from ALL loaded parts (not just current page)
   const uniqueYears = useMemo(() => {
     const years = new Set(allLoadedParts.map(part => part.year).filter(year => year && year !== 'Unknown'));
     return Array.from(years).sort();
@@ -1062,7 +1074,7 @@ const Parts: React.FC = () => {
       
       // Use global search results as parts
       setParts(globalSearchResults);
-      setAllLoadedParts(globalSearchResults); // RESTORED: Set all loaded parts for filters
+      setAllLoadedParts(globalSearchResults);
       setFilteredParts(globalSearchResults);
       
       // Reset pagination for search results
@@ -1234,10 +1246,10 @@ const Parts: React.FC = () => {
             </div>
           </div>
 
-          {/* RESTORED: Enhanced Filters Panel with all filter types */}
+          {/* Enhanced Filters Panel with all filter types */}
           {showFilters && (
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-4 border-t">
-              {/* RESTORED: Year Filter */}
+              {/* Year Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
                 <select
@@ -1252,7 +1264,7 @@ const Parts: React.FC = () => {
                 </select>
               </div>
 
-              {/* RESTORED: Model Filter */}
+              {/* Model Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
                 <select
@@ -1383,7 +1395,6 @@ const Parts: React.FC = () => {
                               <p><span className="font-medium">VCPN:</span> {part.keystone_vcpn}</p>
                             )}
                             <p><span className="font-medium">Brand:</span> {part.brand || 'N/A'}</p>
-                            {/* RESTORED: Show year and model in grid view */}
                             {part.year && part.year !== 'Unknown' && (
                               <p><span className="font-medium">Year:</span> {part.year}</p>
                             )}
@@ -1450,7 +1461,6 @@ const Parts: React.FC = () => {
                             )}
                             <span><span className="font-medium">Brand:</span> {part.brand || 'N/A'}</span>
                             <span><span className="font-medium">Stock:</span> {part.quantity_on_hand}</span>
-                            {/* RESTORED: Show year and model in list view */}
                             {part.year && part.year !== 'Unknown' && (
                               <span><span className="font-medium">Year:</span> {part.year}</span>
                             )}
@@ -1595,7 +1605,6 @@ const Parts: React.FC = () => {
                     <p><span className="font-medium">Brand:</span> {selectedPart.brand || 'N/A'}</p>
                     <p><span className="font-medium">Category:</span> {selectedPart.category || 'N/A'}</p>
                     <p><span className="font-medium">Location:</span> {selectedPart.location || 'N/A'}</p>
-                    {/* RESTORED: Show year and model in detail dialog */}
                     {selectedPart.year && selectedPart.year !== 'Unknown' && (
                       <p><span className="font-medium">Year:</span> {selectedPart.year}</p>
                     )}
@@ -1742,7 +1751,10 @@ const Parts: React.FC = () => {
                     <span className="font-bold text-lg">${totalPrice.toFixed(2)}</span>
                   </div>
                   <div className="space-y-2">
-                    <button className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    <button 
+                      onClick={handleCheckout}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
                       Checkout
                     </button>
                     <button
@@ -1763,38 +1775,51 @@ const Parts: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">Parts Catalog</h1>
+      {showCheckout ? (
+        // Checkout View
+        <CheckoutProcess
+          cart={cart}
+          totalPrice={totalPrice}
+          onClearCart={clearCart}
+          onBackToShopping={() => setShowCheckout(false)}
+        />
+      ) : (
+        // Existing Parts Catalog View
+        <>
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between items-center h-16">
+                <div className="flex items-center">
+                  <h1 className="text-xl font-bold text-gray-900">Parts Catalog</h1>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setShowCartDrawer(true)}
+                    className="relative p-2 text-gray-600 hover:text-blue-600"
+                  >
+                    <ShoppingCart className="w-6 h-6" />
+                    {totalItems > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                        {totalItems}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowCartDrawer(true)}
-                className="relative p-2 text-gray-600 hover:text-blue-600"
-              >
-                <ShoppingCart className="w-6 h-6" />
-                {totalItems > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {totalItems}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+          </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {currentView === 'categories' ? renderCategoryOverview() : renderPartsView()}
-      </main>
+          {/* Main Content */}
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {currentView === 'categories' ? renderCategoryOverview() : renderPartsView()}
+          </main>
 
-      {/* Dialogs */}
-      {renderPartDetailDialog()}
-      {renderCartDrawer()}
+          {/* Dialogs */}
+          {renderPartDetailDialog()}
+          {renderCartDrawer()}
+        </>
+      )}
     </div>
   );
 };
