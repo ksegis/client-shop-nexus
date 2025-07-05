@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Filter, Grid, List, Plus, Eye, X, ChevronDown, ShoppingCart, Minus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
-import { CheckoutProcess } from './checkout/CheckoutProcess';
+import { CheckoutProcess } from '../../components/shop/checkout/CheckoutProcess';
 
 // Supabase configuration - using YOUR environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
