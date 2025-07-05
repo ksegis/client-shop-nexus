@@ -11,13 +11,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Edit, Trash2, Upload, AlertTriangle, FileText, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { InventoryFileUploadEnhanced } from './InventoryFileUpload';
+import { InventoryFileUpload} from './inventory/InventoryFileUpload';
 
 // Basic inventory item type
 interface BasicInventoryItem {
   id: string;
   name: string;
-  description?: string;
+description?: string;{{{}}}
   sku?: string;
   quantity: number;
   price: number;
