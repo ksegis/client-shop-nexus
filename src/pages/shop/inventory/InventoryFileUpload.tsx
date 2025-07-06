@@ -1,797 +1,183 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  Upload, 
-  FileText, 
-  CheckCircle, 
-  XCircle, 
-  AlertTriangle, 
-  Clock, 
-  Trash2, 
-  RefreshCw,
-  Activity,
-  Play,
-  Pause,
-  Square,
-  RotateCcw
-} from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2, BarChart3, Activity, Play, Pause, Square, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { CSVReconciliation } from './CSVReconciliation';
+import CSVAuditDashboard from './CSVAuditDashboard';
 
-// Configuration constants
-const CHUNK_SIZE = 5000; // Records per chunk
-const BATCH_SIZE = 50;   // Records per batch for real-time processing
-const PROGRESS_UPDATE_INTERVAL = 100; // Update UI every N records
+// Types for CSV processing
+interface CSVRecord {
+  [key: string]: string;
+}
 
 interface ValidationResult {
   isValid: boolean;
-  errors: string[];
-  warnings: string[];
-  cleanedData: Record<string, any>;
-  status: 'valid' | 'invalid' | 'corrected';
+  corrected: boolean;
+  notes: string[];
+  originalData: CSVRecord;
+  cleanedData: CSVRecord;
 }
 
-interface ProcessingChunk {
-  id: string;
-  chunkNumber: number;
-  totalChunks: number;
-  records: any[];
-  sessionId: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'paused';
-  processed: number;
-  inserted: number;
-  failed: number;
-  startTime?: Date;
-  endTime?: Date;
-  error?: string;
-}
-
-interface FileProcessingState {
-  originalFilename: string;
-  totalRecords: number;
-  chunks: ProcessingChunk[];
-  currentChunkIndex: number;
-  overallProgress: {
-    totalProcessed: number;
-    totalInserted: number;
-    totalFailed: number;
-    startTime: Date;
-    estimatedTimeRemaining?: number;
-  };
-  status: 'parsing' | 'processing' | 'completed' | 'failed' | 'paused';
-  isPaused: boolean;
+interface ProcessingProgress {
+  stage: 'parsing' | 'validating' | 'syncing' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  details?: any;
 }
 
 interface UploadSession {
   id: string;
+  filename: string;
   original_filename: string;
+  file_size: number;
   status: string;
   total_records: number;
   processed_records: number;
   valid_records: number;
   invalid_records: number;
   corrected_records: number;
+  error_message?: string;
   created_at: string;
+  completed_at?: string;
   updated_at: string;
   chunk_number?: number;
-  total_chunks?: number;
-  file_size?: number;
+  parent_session_id?: string;
+  last_processed_at?: string;
 }
 
-export default function InventoryFileUpload() {
-  // State management
-  const [file, setFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadSessions, setUploadSessions] = useState<UploadSession[]>([]);
-  const [processingState, setProcessingState] = useState<FileProcessingState | null>(null);
-  const [showReconciliation, setShowReconciliation] = useState(false);
-  const [reconciliationSessionId, setReconciliationSessionId] = useState<string>('');
-  
-  // Refs for processing control
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const processingControlRef = useRef<{
-    shouldStop: boolean;
-    shouldPause: boolean;
-  }>({ shouldStop: false, shouldPause: false });
+interface SyncSummary {
+  inserted: number;
+  updated: number;
+  deleted: number;
+  skipped: number;
+  errors: string[];
+}
 
-  // Load upload sessions on component mount
+interface ChunkInfo {
+  chunkNumber: number;
+  startIndex: number;
+  endIndex: number;
+  records: CSVRecord[];
+  sessionId?: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'paused';
+}
+
+interface ProcessingStats {
+  totalRecords: number;
+  processedRecords: number;
+  validRecords: number;
+  invalidRecords: number;
+  insertedRecords: number;
+  updatedRecords: number;
+  failedRecords: number;
+  processingRate: number;
+  successRate: number;
+  estimatedTimeRemaining: number;
+}
+
+export function InventoryFileUpload() {
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingStage, setProcessingStage] = useState<string>('');
+  const [uploadResult, setUploadResult] = useState<any>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [previewData, setPreviewData] = useState<CSVRecord[]>([]);
+  const [recentSessions, setRecentSessions] = useState<UploadSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [canClose, setCanClose] = useState(true);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  
+  // Hybrid approach state
+  const [chunks, setChunks] = useState<ChunkInfo[]>([]);
+  const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [processingStats, setProcessingStats] = useState<ProcessingStats>({
+    totalRecords: 0,
+    processedRecords: 0,
+    validRecords: 0,
+    invalidRecords: 0,
+    insertedRecords: 0,
+    updatedRecords: 0,
+    failedRecords: 0,
+    processingRate: 0,
+    successRate: 0,
+    estimatedTimeRemaining: 0
+  });
+  const [processingStartTime, setProcessingStartTime] = useState<Date | null>(null);
+  
+  // Reconciliation state
+  const [showReconciliation, setShowReconciliation] = useState(false);
+  const [showAuditDashboard, setShowAuditDashboard] = useState(false);
+  const [auditSessionId, setAuditSessionId] = useState<string | null>(null);
+  const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const processingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Configuration
+  const CHUNK_SIZE = 5000; // Records per chunk
+  const BATCH_SIZE = 50; // Records per batch within chunk
+  const PROGRESS_UPDATE_INTERVAL = 100; // Update progress every N records
+
+  // Get current user
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  
   useEffect(() => {
-    loadUploadSessions();
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+      
+      if (user) {
+        loadRecentSessions(user.id);
+      }
+    };
+    getCurrentUser();
   }, []);
 
-  const loadUploadSessions = async () => {
-    try {
-      const { data: sessions, error } = await supabase
-        .from('csv_upload_sessions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-      setUploadSessions(sessions || []);
-    } catch (error) {
-      console.error('Error loading upload sessions:', error);
-    }
-  };
-
-  // File selection handler
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0];
-    if (selectedFile && selectedFile.type === 'text/csv') {
-      setFile(selectedFile);
-    } else {
-      alert('Please select a valid CSV file.');
-    }
-  };
-
-  // Enhanced CSV parsing with chunking
-  const parseCSVFile = async (file: File): Promise<any[]> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const text = e.target?.result as string;
-          const lines = text.split('\n').filter(line => line.trim());
-          
-          if (lines.length === 0) {
-            reject(new Error('CSV file is empty'));
-            return;
-          }
-
-          const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-          const records = [];
-
-          // Enhanced column mapping
-          const columnMapping: Record<string, string> = {
-            'VendorCode': 'vendor_code',
-            'Vendor Code': 'vendor_code',
-            'PartNumber': 'part_number',
-            'Part Number': 'part_number',
-            'SKU': 'part_number',
-            'Part': 'part_number',
-            'PartNo': 'part_number',
-            'VendorName': 'vendor_name',
-            'Vendor Name': 'vendor_name',
-            'ManufacturerPartNo': 'manufacturer_part_no',
-            'Manufacturer Part No': 'manufacturer_part_no',
-            'LongDescription': 'long_description',
-            'Long Description': 'long_description',
-            'Description': 'long_description',
-            'JobberPrice': 'jobber_price',
-            'Jobber Price': 'jobber_price',
-            'Price': 'jobber_price',
-            'Cost': 'cost',
-            'TotalQty': 'total_qty',
-            'Total Qty': 'total_qty',
-            'Quantity': 'total_qty',
-            'EastQty': 'east_qty',
-            'East Qty': 'east_qty',
-            'MidwestQty': 'midwest_qty',
-            'Midwest Qty': 'midwest_qty',
-            'CaliforniaQty': 'california_qty',
-            'California Qty': 'california_qty',
-            'SoutheastQty': 'southeast_qty',
-            'Southeast Qty': 'southeast_qty',
-            'PacificNWQty': 'pacific_nw_qty',
-            'Pacific NW Qty': 'pacific_nw_qty',
-            'TexasQty': 'texas_qty',
-            'Texas Qty': 'texas_qty',
-            'GreatLakesQty': 'great_lakes_qty',
-            'Great Lakes Qty': 'great_lakes_qty',
-            'FloridaQty': 'florida_qty',
-            'Florida Qty': 'florida_qty'
-          };
-
-          for (let i = 1; i < lines.length; i++) {
-            const values = lines[i].split(',').map(v => {
-              let cleaned = v.trim().replace(/"/g, '');
-              // Remove Excel formula formatting
-              if (cleaned.startsWith('=') && cleaned.includes('"')) {
-                cleaned = cleaned.replace(/^="?/, '').replace(/"?$/, '');
-              }
-              return cleaned;
-            });
-
-            if (values.length !== headers.length) continue;
-
-            const record: any = { row_number: i };
-            
-            // Map headers to standardized field names
-            headers.forEach((header, index) => {
-              const mappedField = columnMapping[header] || header.toLowerCase().replace(/\s+/g, '_');
-              record[mappedField] = values[index] || '';
-            });
-
-            // Generate VCPN if missing
-            if (!record.vcpn && record.vendor_code && record.part_number) {
-              record.vcpn = `${record.vendor_code}-${record.part_number}`;
-            }
-
-            records.push(record);
-          }
-
-          resolve(records);
-        } catch (error) {
-          reject(error);
-        }
-      };
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsText(file);
-    });
-  };
-
-  // Enhanced validation with better error handling
-  const validateRecord = (record: any, rowNumber: number): ValidationResult => {
-    const errors: string[] = [];
-    const warnings: string[] = [];
-    const cleanedData = { ...record };
-
-    // Required field validation
-    if (!cleanedData.vendor_code?.trim()) {
-      errors.push('Missing vendor code');
-    }
-    if (!cleanedData.part_number?.trim()) {
-      errors.push('Missing part number');
-    }
-
-    // Data type validation and cleaning
-    const numericFields = ['total_qty', 'jobber_price', 'cost', 'case_qty', 'weight', 'height', 'length', 'width'];
-    numericFields.forEach(field => {
-      if (cleanedData[field]) {
-        const numValue = parseFloat(cleanedData[field]);
-        if (isNaN(numValue)) {
-          warnings.push(`Invalid ${field}: ${cleanedData[field]}`);
-          cleanedData[field] = 0;
-        } else {
-          cleanedData[field] = numValue;
-        }
+  // Cleanup processing interval on unmount
+  useEffect(() => {
+    return () => {
+      if (processingIntervalRef.current) {
+        clearInterval(processingIntervalRef.current);
       }
-    });
-
-    // Boolean field validation
-    const booleanFields = ['upsable', 'is_oversized', 'is_hazmat', 'is_chemical', 'is_non_returnable', 'is_kit'];
-    booleanFields.forEach(field => {
-      if (cleanedData[field]) {
-        cleanedData[field] = ['true', '1', 'yes', 'y'].includes(cleanedData[field].toString().toLowerCase());
-      }
-    });
-
-    // Determine validation status
-    let status: 'valid' | 'invalid' | 'corrected' = 'valid';
-    if (errors.length > 0) {
-      status = 'invalid';
-    } else if (warnings.length > 0) {
-      status = 'corrected';
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-      warnings,
-      cleanedData,
-      status
     };
-  };
+  }, []);
 
-  // Create upload session for a chunk
-  const createUploadSession = async (
-    filename: string, 
-    chunkNumber: number, 
-    totalChunks: number, 
-    recordCount: number,
-    fileSize: number
-  ): Promise<string> => {
+  // Load recent upload sessions with enhanced statistics
+  const loadRecentSessions = async (userId: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const chunkFilename = totalChunks > 1 
-        ? `${filename.replace('.csv', '')}_chunk_${chunkNumber}.csv`
-        : filename;
-
       const { data, error } = await supabase
         .from('csv_upload_sessions')
-        .insert({
-          original_filename: chunkFilename,
-          status: 'processing',
-          total_records: recordCount,
-          processed_records: 0,
-          valid_records: 0,
-          invalid_records: 0,
-          corrected_records: 0,
-          uploaded_by: user.id,
-          user_id: user.id,
-          chunk_number: chunkNumber,
-          total_chunks: totalChunks,
-          file_size: fileSize
-        })
-        .select()
-        .single();
+        .select('*')
+        .eq('uploaded_by', userId)
+        .order('created_at', { ascending: false })
+        .limit(20); // Show more recent sessions
 
       if (error) throw error;
-      return data.id;
+      setRecentSessions(data || []);
     } catch (error) {
-      console.error('Error creating upload session:', error);
-      throw error;
+      console.error('Error loading recent sessions:', error);
     }
   };
 
-  // Insert record to staging table
-  const insertStagingRecord = async (
-    sessionId: string, 
-    record: any, 
-    validation: ValidationResult
-  ): Promise<void> => {
+  // Format date with proper error handling
+  const formatDate = (dateString: string): string => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const { error } = await supabase
-        .from('csv_staging_records')
-        .insert({
-          upload_session_id: sessionId,
-          row_number: record.row_number,
-          vcpn: validation.cleanedData.vcpn || '',
-          vendor_code: validation.cleanedData.vendor_code || '',
-          vendor_name: validation.cleanedData.vendor_name || '',
-          part_number: validation.cleanedData.part_number || '',
-          manufacturer_part_no: validation.cleanedData.manufacturer_part_no || '',
-          long_description: validation.cleanedData.long_description || '',
-          jobber_price: validation.cleanedData.jobber_price || 0,
-          cost: validation.cleanedData.cost || 0,
-          total_qty: validation.cleanedData.total_qty || 0,
-          case_qty: validation.cleanedData.case_qty || 0,
-          weight: validation.cleanedData.weight || 0,
-          height: validation.cleanedData.height || 0,
-          length: validation.cleanedData.length || 0,
-          width: validation.cleanedData.width || 0,
-          upsable: validation.cleanedData.upsable || false,
-          is_oversized: validation.cleanedData.is_oversized || false,
-          is_hazmat: validation.cleanedData.is_hazmat || false,
-          is_chemical: validation.cleanedData.is_chemical || false,
-          is_non_returnable: validation.cleanedData.is_non_returnable || false,
-          prop65_toxicity: validation.cleanedData.prop65_toxicity || '',
-          upc_code: validation.cleanedData.upc_code || '',
-          aaia_code: validation.cleanedData.aaia_code || '',
-          east_qty: validation.cleanedData.east_qty || 0,
-          midwest_qty: validation.cleanedData.midwest_qty || 0,
-          california_qty: validation.cleanedData.california_qty || 0,
-          southeast_qty: validation.cleanedData.southeast_qty || 0,
-          pacific_nw_qty: validation.cleanedData.pacific_nw_qty || 0,
-          texas_qty: validation.cleanedData.texas_qty || 0,
-          great_lakes_qty: validation.cleanedData.great_lakes_qty || 0,
-          florida_qty: validation.cleanedData.florida_qty || 0,
-          is_kit: validation.cleanedData.is_kit || false,
-          kit_components: validation.cleanedData.kit_components || '',
-          validation_status: validation.status,
-          validation_errors: validation.errors.join('; ') || null,
-          validation_warnings: validation.warnings.join('; ') || null,
-          user_id: user.id,
-          uploaded_by: user.id
-        });
-
-      if (error) throw error;
+      if (!dateString) return 'Invalid Date';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleString();
     } catch (error) {
-      console.error('Error inserting staging record:', error);
-      throw error;
-    }
-  };
-
-  // Real-time inventory insertion
-  const insertToInventory = async (record: any, sessionId: string): Promise<boolean> => {
-    try {
-      // Check if record already exists
-      const { data: existing } = await supabase
-        .from('inventory')
-        .select('id')
-        .eq('vcpn', record.vcpn)
-        .single();
-
-      if (existing) {
-        // Update existing record
-        const { error } = await supabase
-          .from('inventory')
-          .update({
-            name: record.long_description || record.part_number || 'Unknown Item',
-            description: record.long_description,
-            sku: record.part_number, // Map part_number to sku
-            vendor_code: record.vendor_code,
-            vendor_name: record.vendor_name,
-            manufacturer_part_no: record.manufacturer_part_no,
-            quantity: record.total_qty,
-            price: record.jobber_price,
-            cost: record.cost,
-            case_qty: record.case_qty,
-            weight: record.weight,
-            height: record.height,
-            length: record.length,
-            width: record.width,
-            upsable: record.upsable,
-            is_oversized: record.is_oversized,
-            is_hazmat: record.is_hazmat,
-            is_chemical: record.is_chemical,
-            is_non_returnable: record.is_non_returnable,
-            prop65_toxicity: record.prop65_toxicity,
-            upc_code: record.upc_code,
-            aaia_code: record.aaia_code,
-            east_qty: record.east_qty,
-            midwest_qty: record.midwest_qty,
-            california_qty: record.california_qty,
-            southeast_qty: record.southeast_qty,
-            pacific_nw_qty: record.pacific_nw_qty,
-            texas_qty: record.texas_qty,
-            great_lakes_qty: record.great_lakes_qty,
-            florida_qty: record.florida_qty,
-            total_qty: record.total_qty,
-            is_kit: record.is_kit,
-            kit_components: record.kit_components,
-            ftp_upload_id: sessionId,
-            import_source: 'csv_upload',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existing.id);
-
-        if (error) throw error;
-        return true;
-      } else {
-        // Insert new record
-        const { error } = await supabase
-          .from('inventory')
-          .insert({
-            name: record.long_description || record.part_number || 'Unknown Item',
-            description: record.long_description,
-            sku: record.part_number, // Map part_number to sku
-            vcpn: record.vcpn,
-            vendor_code: record.vendor_code,
-            vendor_name: record.vendor_name,
-            manufacturer_part_no: record.manufacturer_part_no,
-            quantity: record.total_qty,
-            price: record.jobber_price,
-            cost: record.cost,
-            case_qty: record.case_qty,
-            weight: record.weight,
-            height: record.height,
-            length: record.length,
-            width: record.width,
-            upsable: record.upsable,
-            is_oversized: record.is_oversized,
-            is_hazmat: record.is_hazmat,
-            is_chemical: record.is_chemical,
-            is_non_returnable: record.is_non_returnable,
-            prop65_toxicity: record.prop65_toxicity,
-            upc_code: record.upc_code,
-            aaia_code: record.aaia_code,
-            east_qty: record.east_qty,
-            midwest_qty: record.midwest_qty,
-            california_qty: record.california_qty,
-            southeast_qty: record.southeast_qty,
-            pacific_nw_qty: record.pacific_nw_qty,
-            texas_qty: record.texas_qty,
-            great_lakes_qty: record.great_lakes_qty,
-            florida_qty: record.florida_qty,
-            total_qty: record.total_qty,
-            is_kit: record.is_kit,
-            kit_components: record.kit_components,
-            ftp_upload_id: sessionId,
-            import_source: 'csv_upload'
-          });
-
-        if (error) throw error;
-        return true;
-      }
-    } catch (error) {
-      console.error('Error inserting to inventory:', error);
-      return false;
-    }
-  };
-
-  // Mark staging record as processed
-  const markStagingRecordProcessed = async (sessionId: string, vcpn: string, actionType: string): Promise<void> => {
-    try {
-      const { error } = await supabase
-        .from('csv_staging_records')
-        .update({
-          processed_at: new Date().toISOString(),
-          action_type: actionType
-        })
-        .eq('upload_session_id', sessionId)
-        .eq('vcpn', vcpn);
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error marking staging record as processed:', error);
-    }
-  };
-
-  // Process a single chunk with real-time inventory insertion
-  const processChunk = async (chunk: ProcessingChunk): Promise<void> => {
-    try {
-      // Update chunk status
-      setProcessingState(prev => {
-        if (!prev) return prev;
-        const updatedChunks = [...prev.chunks];
-        updatedChunks[chunk.chunkNumber - 1] = {
-          ...chunk,
-          status: 'processing',
-          startTime: new Date()
-        };
-        return { ...prev, chunks: updatedChunks };
-      });
-
-      let processed = 0;
-      let inserted = 0;
-      let failed = 0;
-
-      // Process records in batches for better performance
-      for (let i = 0; i < chunk.records.length; i += BATCH_SIZE) {
-        // Check for pause/stop signals
-        if (processingControlRef.current.shouldStop) {
-          throw new Error('Processing stopped by user');
-        }
-        if (processingControlRef.current.shouldPause) {
-          // Update chunk status to paused
-          setProcessingState(prev => {
-            if (!prev) return prev;
-            const updatedChunks = [...prev.chunks];
-            updatedChunks[chunk.chunkNumber - 1] = {
-              ...chunk,
-              status: 'paused',
-              processed,
-              inserted,
-              failed
-            };
-            return { ...prev, chunks: updatedChunks, isPaused: true };
-          });
-          return;
-        }
-
-        const batch = chunk.records.slice(i, i + BATCH_SIZE);
-        
-        for (const record of batch) {
-          try {
-            // Validate record
-            const validation = validateRecord(record, record.row_number);
-            
-            // Insert to staging table
-            await insertStagingRecord(chunk.sessionId, record, validation);
-            
-            // If valid or corrected, immediately insert to inventory
-            if (validation.status === 'valid' || validation.status === 'corrected') {
-              const success = await insertToInventory(validation.cleanedData, chunk.sessionId);
-              if (success) {
-                await markStagingRecordProcessed(chunk.sessionId, validation.cleanedData.vcpn, 'insert');
-                inserted++;
-              } else {
-                failed++;
-              }
-            }
-            
-            processed++;
-            
-            // Update progress every PROGRESS_UPDATE_INTERVAL records
-            if (processed % PROGRESS_UPDATE_INTERVAL === 0) {
-              setProcessingState(prev => {
-                if (!prev) return prev;
-                const updatedChunks = [...prev.chunks];
-                updatedChunks[chunk.chunkNumber - 1] = {
-                  ...chunk,
-                  processed,
-                  inserted,
-                  failed
-                };
-                
-                const totalProcessed = prev.overallProgress.totalProcessed + processed;
-                const totalInserted = prev.overallProgress.totalInserted + inserted;
-                const totalFailed = prev.overallProgress.totalFailed + failed;
-                
-                return {
-                  ...prev,
-                  chunks: updatedChunks,
-                  overallProgress: {
-                    ...prev.overallProgress,
-                    totalProcessed,
-                    totalInserted,
-                    totalFailed
-                  }
-                };
-              });
-            }
-            
-          } catch (error) {
-            console.error('Error processing record:', error);
-            failed++;
-          }
-        }
-      }
-
-      // Update session status
-      await supabase
-        .from('csv_upload_sessions')
-        .update({
-          status: 'completed',
-          processed_records: processed,
-          valid_records: inserted,
-          invalid_records: failed,
-          completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', chunk.sessionId);
-
-      // Mark chunk as completed
-      setProcessingState(prev => {
-        if (!prev) return prev;
-        const updatedChunks = [...prev.chunks];
-        updatedChunks[chunk.chunkNumber - 1] = {
-          ...chunk,
-          status: 'completed',
-          processed,
-          inserted,
-          failed,
-          endTime: new Date()
-        };
-        return { ...prev, chunks: updatedChunks };
-      });
-
-    } catch (error) {
-      console.error('Error processing chunk:', error);
-      
-      // Mark chunk as failed
-      setProcessingState(prev => {
-        if (!prev) return prev;
-        const updatedChunks = [...prev.chunks];
-        updatedChunks[chunk.chunkNumber - 1] = {
-          ...chunk,
-          status: 'failed',
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
-        return { ...prev, chunks: updatedChunks };
-      });
-    }
-  };
-
-  // Main file upload and processing function
-  const handleUpload = async () => {
-    if (!file) return;
-
-    setIsUploading(true);
-    processingControlRef.current = { shouldStop: false, shouldPause: false };
-
-    try {
-      // Parse CSV file
-      const records = await parseCSVFile(file);
-      const totalRecords = records.length;
-      const totalChunks = Math.ceil(totalRecords / CHUNK_SIZE);
-
-      // Initialize processing state
-      const initialState: FileProcessingState = {
-        originalFilename: file.name,
-        totalRecords,
-        chunks: [],
-        currentChunkIndex: 0,
-        overallProgress: {
-          totalProcessed: 0,
-          totalInserted: 0,
-          totalFailed: 0,
-          startTime: new Date()
-        },
-        status: 'processing',
-        isPaused: false
-      };
-
-      // Create chunks
-      for (let i = 0; i < totalChunks; i++) {
-        const chunkRecords = records.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-        const sessionId = await createUploadSession(
-          file.name,
-          i + 1,
-          totalChunks,
-          chunkRecords.length,
-          file.size
-        );
-
-        const chunk: ProcessingChunk = {
-          id: `chunk_${i + 1}`,
-          chunkNumber: i + 1,
-          totalChunks,
-          records: chunkRecords,
-          sessionId,
-          status: 'pending',
-          processed: 0,
-          inserted: 0,
-          failed: 0
-        };
-
-        initialState.chunks.push(chunk);
-      }
-
-      setProcessingState(initialState);
-
-      // Process chunks sequentially
-      for (let i = 0; i < initialState.chunks.length; i++) {
-        if (processingControlRef.current.shouldStop) break;
-        
-        setProcessingState(prev => prev ? { ...prev, currentChunkIndex: i } : prev);
-        await processChunk(initialState.chunks[i]);
-      }
-
-      // Mark overall processing as completed
-      setProcessingState(prev => {
-        if (!prev) return prev;
-        return { ...prev, status: 'completed' };
-      });
-
-      // Refresh sessions list
-      await loadUploadSessions();
-
-    } catch (error) {
-      console.error('Error during upload:', error);
-      setProcessingState(prev => {
-        if (!prev) return prev;
-        return { ...prev, status: 'failed' };
-      });
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  // Processing control functions
-  const pauseProcessing = () => {
-    processingControlRef.current.shouldPause = true;
-  };
-
-  const resumeProcessing = async () => {
-    if (!processingState) return;
-    
-    processingControlRef.current.shouldPause = false;
-    setProcessingState(prev => prev ? { ...prev, isPaused: false } : prev);
-
-    // Find the first paused or failed chunk and resume from there
-    for (let i = 0; i < processingState.chunks.length; i++) {
-      const chunk = processingState.chunks[i];
-      if (chunk.status === 'paused' || chunk.status === 'failed') {
-        setProcessingState(prev => prev ? { ...prev, currentChunkIndex: i } : prev);
-        await processChunk(chunk);
-      }
-    }
-  };
-
-  const stopProcessing = () => {
-    processingControlRef.current.shouldStop = true;
-    setProcessingState(prev => {
-      if (!prev) return prev;
-      return { ...prev, status: 'failed', isPaused: false };
-    });
-  };
-
-  // Delete upload session
-  const deleteUploadSession = async (sessionId: string) => {
-    try {
-      // Delete staging records first
-      await supabase
-        .from('csv_staging_records')
-        .delete()
-        .eq('upload_session_id', sessionId);
-
-      // Delete session
-      await supabase
-        .from('csv_upload_sessions')
-        .delete()
-        .eq('id', sessionId);
-
-      // Refresh sessions list
-      await loadUploadSessions();
-    } catch (error) {
-      console.error('Error deleting session:', error);
+      return 'Invalid Date';
     }
   };
 
@@ -804,390 +190,1362 @@ export default function InventoryFileUpload() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Format duration
-  const formatDuration = (ms: number): string => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
+  // Stall detection function
+  const detectStall = (session: UploadSession): { isStalled: boolean; stallDuration?: number } => {
+    if (session.status !== 'processing') {
+      return { isStalled: false };
+    }
+
+    const now = new Date();
+    const lastProcessedAt = session.last_processed_at || session.updated_at;
     
-    if (hours > 0) return `${hours}h ${minutes % 60}m`;
-    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-    return `${seconds}s`;
+    if (!lastProcessedAt) {
+      return { isStalled: false };
+    }
+
+    try {
+      const lastProcessedDate = new Date(lastProcessedAt);
+      const timeSinceLastProgress = now.getTime() - lastProcessedDate.getTime();
+      const stallThresholdMs = 2 * 60 * 1000; // 2 minutes
+
+      if (timeSinceLastProgress > stallThresholdMs) {
+        const stallDurationMinutes = Math.floor(timeSinceLastProgress / 1000 / 60);
+        return { isStalled: true, stallDuration: stallDurationMinutes };
+      }
+    } catch (error) {
+      console.error('Error detecting stall:', error);
+    }
+
+    return { isStalled: false };
   };
 
-  // Get session status badge
-  const getSessionStatusBadge = (session: UploadSession) => {
-    const statusColors = {
-      'processing': 'bg-blue-100 text-blue-800',
-      'completed': 'bg-green-100 text-green-800',
-      'failed': 'bg-red-100 text-red-800',
-      'paused': 'bg-yellow-100 text-yellow-800'
+  // Get session status with stall detection
+  const getSessionStatus = (session: UploadSession) => {
+    const stallInfo = detectStall(session);
+    
+    if (stallInfo.isStalled) {
+      return {
+        status: `stalled (${stallInfo.stallDuration}m)`,
+        variant: 'destructive' as const,
+        icon: AlertTriangle
+      };
+    }
+
+    switch (session.status) {
+      case 'processing':
+        return { status: 'processing', variant: 'default' as const, icon: Clock };
+      case 'completed':
+        return { status: 'completed', variant: 'default' as const, icon: CheckCircle };
+      case 'failed':
+        return { status: 'failed', variant: 'destructive' as const, icon: XCircle };
+      default:
+        return { status: session.status, variant: 'secondary' as const, icon: Clock };
+    }
+  };
+
+  // Delete upload session functionality
+  const deleteUploadSession = async (sessionId: string) => {
+    if (!confirm('Are you sure you want to delete this upload session? This will also delete all associated staging records.')) {
+      return;
+    }
+
+    setIsDeleting(sessionId);
+    try {
+      // First delete staging records
+      const { error: stagingError } = await supabase
+        .from('csv_staging_records')
+        .delete()
+        .eq('upload_session_id', sessionId);
+
+      if (stagingError) {
+        console.error('Error deleting staging records:', stagingError);
+      }
+
+      // Then delete the session
+      const { error: sessionError } = await supabase
+        .from('csv_upload_sessions')
+        .delete()
+        .eq('id', sessionId);
+
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      toast({
+        title: "Session Deleted",
+        description: "Upload session and associated records have been deleted.",
+      });
+
+      // Reload recent sessions
+      if (currentUser) {
+        await loadRecentSessions(currentUser.id);
+      }
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      toast({
+        title: "Delete Failed",
+        description: error instanceof Error ? error.message : 'Failed to delete session',
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
+  // Create upload session
+  const createUploadSession = async (filename: string, originalFilename: string, fileSize: number, chunkNumber?: number, parentSessionId?: string): Promise<string> => {
+    const { data, error } = await supabase
+      .from('csv_upload_sessions')
+      .insert([{
+        filename,
+        original_filename: originalFilename,
+        file_size: fileSize,
+        status: 'processing',
+        uploaded_by: currentUser?.id,
+        user_id: currentUser?.id,
+        total_records: 0,
+        processed_records: 0,
+        valid_records: 0,
+        invalid_records: 0,
+        corrected_records: 0,
+        chunk_number: chunkNumber,
+        parent_session_id: parentSessionId,
+        last_processed_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data.id;
+  };
+
+  // Update session progress
+  const updateSessionProgress = async (sessionId: string, updates: Partial<UploadSession>) => {
+    const updateData = {
+      ...updates,
+      last_processed_at: new Date().toISOString()
     };
 
-    return (
-      <Badge className={statusColors[session.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}>
-        {session.status}
-      </Badge>
-    );
+    const { error } = await supabase
+      .from('csv_upload_sessions')
+      .update(updateData)
+      .eq('id', sessionId);
+
+    if (error) throw error;
+  };
+
+  // Enhanced CSV parsing with column mapping
+  const parseCSVFile = (csvText: string): CSVRecord[] => {
+    const lines = csvText.split('\n');
+    if (lines.length === 0) return [];
+    
+    const headers = lines[0]?.split(',').map(h => h.trim().replace(/"/g, '')) || [];
+    
+    // Column mapping for different CSV formats
+    const columnMapping: { [key: string]: string } = {
+      'VendorCode': 'VendorCode',
+      'Vendor': 'VendorCode',
+      'PartNumber': 'PartNumber',
+      'Part': 'PartNumber',
+      'PartNo': 'PartNumber',
+      'SKU': 'PartNumber',
+      'VendorName': 'VendorName',
+      'LongDescription': 'LongDescription',
+      'Description': 'LongDescription',
+      'VCPN': 'VCPN',
+      'JobberPrice': 'JobberPrice',
+      'Cost': 'Cost',
+      'TotalQty': 'TotalQty',
+      'EastQty': 'EastQty',
+      'MidwestQty': 'MidwestQty',
+      'CaliforniaQty': 'CaliforniaQty',
+      'SoutheastQty': 'SoutheastQty',
+      'PacificNWQty': 'PacificNWQty',
+      'TexasQty': 'TexasQty',
+      'GreatLakesQty': 'GreatLakesQty',
+      'FloridaQty': 'FloridaQty'
+    };
+    
+    const records: CSVRecord[] = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      const values = line.split(',').map(v => {
+        let cleaned = v.trim().replace(/"/g, '');
+        // Remove Excel formula formatting
+        if (cleaned.startsWith('=')) {
+          cleaned = cleaned.substring(1);
+          if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || 
+              (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+            cleaned = cleaned.slice(1, -1);
+          }
+        }
+        return cleaned;
+      });
+      
+      const record: CSVRecord = {};
+      
+      headers.forEach((header, index) => {
+        const mappedHeader = columnMapping[header] || header;
+        record[mappedHeader] = values[index] || '';
+      });
+      
+      // Only include records with essential data
+      if (record['LongDescription'] || record['PartNumber'] || record['VCPN'] || record['VendorCode']) {
+        records.push(record);
+      }
+    }
+    
+    return records;
+  };
+
+  // Split records into chunks
+  const createChunks = (records: CSVRecord[]): ChunkInfo[] => {
+    const chunks: ChunkInfo[] = [];
+    
+    for (let i = 0; i < records.length; i += CHUNK_SIZE) {
+      const chunkRecords = records.slice(i, Math.min(i + CHUNK_SIZE, records.length));
+      chunks.push({
+        chunkNumber: Math.floor(i / CHUNK_SIZE) + 1,
+        startIndex: i,
+        endIndex: Math.min(i + CHUNK_SIZE, records.length) - 1,
+        records: chunkRecords,
+        status: 'pending'
+      });
+    }
+    
+    return chunks;
+  };
+
+  // Enhanced normalization function for part numbers
+  const normalizeSKU = (sku: string): string => {
+    if (!sku) return '';
+    
+    let cleaned = sku.trim();
+    
+    if (cleaned.startsWith('=')) {
+      cleaned = cleaned.substring(1);
+      
+      if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || 
+          (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+        cleaned = cleaned.slice(1, -1);
+      }
+    }
+    
+    return cleaned;
+  };
+
+  // Calculate total quantity from warehouse quantities
+  const calculateTotalQuantity = (record: CSVRecord): number => {
+    const warehouseFields = [
+      'EastQty', 'MidwestQty', 'CaliforniaQty', 'SoutheastQty',
+      'PacificNWQty', 'TexasQty', 'GreatLakesQty', 'FloridaQty'
+    ];
+    
+    let total = 0;
+    warehouseFields.forEach(field => {
+      const qty = parseInt(record[field] || '0') || 0;
+      total += qty;
+    });
+    
+    return total;
+  };
+
+  // Validate and clean CSV record
+  const validateRecord = (record: CSVRecord): ValidationResult => {
+    const result: ValidationResult = {
+      isValid: true,
+      corrected: false,
+      notes: [],
+      originalData: { ...record },
+      cleanedData: { ...record }
+    };
+
+    const vendorCode = record['VendorCode'] || record['Vendor'] || '';
+    const originalSKU = record['PartNumber'] || record['SKU'] || '';
+    
+    if (!vendorCode.trim()) {
+      result.isValid = false;
+      result.notes.push('Missing vendor_code - record flagged as invalid');
+    }
+    
+    if (!originalSKU.trim()) {
+      result.isValid = false;
+      result.notes.push('Missing SKU/PartNumber - record flagged as invalid');
+    }
+
+    if (!result.isValid) {
+      return result;
+    }
+
+    // Normalize SKU
+    const cleanedSKU = normalizeSKU(originalSKU);
+    if (cleanedSKU !== originalSKU) {
+      result.corrected = true;
+      result.cleanedData['PartNumber'] = cleanedSKU;
+      if (originalSKU.startsWith('=')) {
+        result.notes.push(`Excel formula prefix removed: "${originalSKU}" → "${cleanedSKU}"`);
+      } else {
+        result.notes.push(`SKU normalized: "${originalSKU}" → "${cleanedSKU}"`);
+      }
+    }
+
+    // Auto-correct VCPN
+    const originalVCPN = record['VCPN'] || '';
+    const expectedVCPN = vendorCode + cleanedSKU;
+    
+    if (!originalVCPN || originalVCPN !== expectedVCPN) {
+      result.corrected = true;
+      result.cleanedData['VCPN'] = expectedVCPN;
+      if (!originalVCPN) {
+        result.notes.push(`VCPN auto-generated: "${expectedVCPN}"`);
+      } else {
+        result.notes.push(`VCPN corrected: "${originalVCPN}" → "${expectedVCPN}"`);
+      }
+    }
+
+    // Validate and correct total quantity
+    const originalTotalQty = parseInt(record['TotalQty'] || '0') || 0;
+    const calculatedTotalQty = calculateTotalQuantity(record);
+    
+    if (originalTotalQty !== calculatedTotalQty) {
+      result.corrected = true;
+      result.cleanedData['TotalQty'] = calculatedTotalQty.toString();
+      result.notes.push(`TotalQty corrected: ${originalTotalQty} → ${calculatedTotalQty} (sum of warehouse quantities)`);
+    }
+
+    return result;
+  };
+
+  // Save staging record
+  const saveStagingRecord = async (sessionId: string, record: CSVRecord, validation: ValidationResult, rowNumber: number) => {
+    const stagingData = {
+      upload_session_id: sessionId,
+      row_number: rowNumber,
+      validation_status: validation.isValid ? 'valid' : (validation.corrected ? 'corrected' : 'invalid'),
+      needs_review: !validation.isValid || validation.corrected,
+      validation_notes: validation.notes.join('; '),
+      original_data: validation.originalData,
+      
+      vendor_name: record['VendorName'] || record['Vendor'] || null,
+      vcpn: validation.cleanedData['VCPN'] || null,
+      vendor_code: record['VendorCode'] || record['Vendor'] || null,
+      part_number: validation.cleanedData['PartNumber'] || null,
+      manufacturer_part_no: record['ManufacturerPartNo'] || null,
+      long_description: record['LongDescription'] || record['Description'] || null,
+      jobber_price: parseFloat(record['JobberPrice'] || '0') || null,
+      cost: parseFloat(record['Cost'] || '0') || null,
+      case_qty: parseInt(record['CaseQty'] || '0') || null,
+      weight: parseFloat(record['Weight'] || '0') || null,
+      height: parseFloat(record['Height'] || '0') || null,
+      length: parseFloat(record['Length'] || '0') || null,
+      width: parseFloat(record['Width'] || '0') || null,
+      upsable: record['Upsable']?.toLowerCase() === 'true' || false,
+      is_oversized: record['IsOversized']?.toLowerCase() === 'true' || false,
+      is_hazmat: record['IsHazmat']?.toLowerCase() === 'true' || false,
+      is_chemical: record['IsChemical']?.toLowerCase() === 'true' || false,
+      is_non_returnable: record['IsNonReturnable']?.toLowerCase() === 'true' || false,
+      prop65_toxicity: record['Prop65Toxicity']?.toLowerCase() === 'true' || false,
+      upc_code: record['UPCCode'] || null,
+      aaia_code: record['AAIACode'] || null,
+      
+      east_qty: parseInt(record['EastQty'] || '0') || 0,
+      midwest_qty: parseInt(record['MidwestQty'] || '0') || 0,
+      california_qty: parseInt(record['CaliforniaQty'] || '0') || 0,
+      southeast_qty: parseInt(record['SoutheastQty'] || '0') || 0,
+      pacific_nw_qty: parseInt(record['PacificNWQty'] || '0') || 0,
+      texas_qty: parseInt(record['TexasQty'] || '0') || 0,
+      great_lakes_qty: parseInt(record['GreatLakesQty'] || '0') || 0,
+      florida_qty: parseInt(record['FloridaQty'] || '0') || 0,
+      total_qty: parseInt(validation.cleanedData['TotalQty'] || '0') || 0,
+      calculated_total_qty: calculateTotalQuantity(record),
+      
+      is_kit: record['IsKit']?.toLowerCase() === 'true' || false,
+      kit_components: record['KitComponents'] || null
+    };
+
+    const { error } = await supabase
+      .from('csv_staging_records')
+      .insert([stagingData]);
+
+    if (error) throw error;
+  };
+
+  // Real-time inventory sync for individual record
+  const syncRecordToInventory = async (sessionId: string, record: CSVRecord, validation: ValidationResult): Promise<{ action: 'insert' | 'update' | 'skip'; error?: string }> => {
+    if (!validation.isValid) {
+      return { action: 'skip', error: 'Invalid record' };
+    }
+
+    try {
+      const vcpn = validation.cleanedData['VCPN'];
+      
+      // Check if record exists
+      const { data: existing, error: checkError } = await supabase
+        .from('inventory')
+        .select('id')
+        .eq('vcpn', vcpn)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
+
+      const inventoryData = {
+        name: record['LongDescription'] || validation.cleanedData['PartNumber'] || 'Unknown Item',
+        description: record['LongDescription'],
+        sku: validation.cleanedData['PartNumber'], // Map part_number to sku
+        vcpn: validation.cleanedData['VCPN'],
+        vendor_code: record['VendorCode'] || record['Vendor'],
+        vendor_name: record['VendorName'] || record['Vendor'],
+        manufacturer_part_no: record['ManufacturerPartNo'],
+        quantity: parseInt(validation.cleanedData['TotalQty'] || '0') || 0,
+        price: parseFloat(record['JobberPrice'] || '0') || null,
+        cost: parseFloat(record['Cost'] || '0') || null,
+        case_qty: parseInt(record['CaseQty'] || '0') || null,
+        weight: parseFloat(record['Weight'] || '0') || null,
+        height: parseFloat(record['Height'] || '0') || null,
+        length: parseFloat(record['Length'] || '0') || null,
+        width: parseFloat(record['Width'] || '0') || null,
+        upsable: record['Upsable']?.toLowerCase() === 'true' || false,
+        is_oversized: record['IsOversized']?.toLowerCase() === 'true' || false,
+        is_hazmat: record['IsHazmat']?.toLowerCase() === 'true' || false,
+        is_chemical: record['IsChemical']?.toLowerCase() === 'true' || false,
+        is_non_returnable: record['IsNonReturnable']?.toLowerCase() === 'true' || false,
+        prop65_toxicity: record['Prop65Toxicity']?.toLowerCase() === 'true' || false,
+        upc_code: record['UPCCode'] || null,
+        aaia_code: record['AAIACode'] || null,
+        east_qty: parseInt(record['EastQty'] || '0') || 0,
+        midwest_qty: parseInt(record['MidwestQty'] || '0') || 0,
+        california_qty: parseInt(record['CaliforniaQty'] || '0') || 0,
+        southeast_qty: parseInt(record['SoutheastQty'] || '0') || 0,
+        pacific_nw_qty: parseInt(record['PacificNWQty'] || '0') || 0,
+        texas_qty: parseInt(record['TexasQty'] || '0') || 0,
+        great_lakes_qty: parseInt(record['GreatLakesQty'] || '0') || 0,
+        florida_qty: parseInt(record['FloridaQty'] || '0') || 0,
+        total_qty: parseInt(validation.cleanedData['TotalQty'] || '0') || 0,
+        is_kit: record['IsKit']?.toLowerCase() === 'true' || false,
+        kit_components: record['KitComponents'] || null,
+        ftp_upload_id: sessionId,
+        import_source: 'csv_upload',
+        imported_at: new Date().toISOString()
+      };
+
+      if (existing) {
+        const { error: updateError } = await supabase
+          .from('inventory')
+          .update(inventoryData)
+          .eq('id', existing.id);
+
+        if (updateError) throw updateError;
+        return { action: 'update' };
+      } else {
+        const { error: insertError } = await supabase
+          .from('inventory')
+          .insert([inventoryData]);
+
+        if (insertError) throw insertError;
+        return { action: 'insert' };
+      }
+    } catch (error) {
+      console.error('Error syncing record to inventory:', error);
+      return { action: 'skip', error: error.message };
+    }
+  };
+
+  // Process a single chunk with real-time inventory sync
+  const processChunk = async (chunk: ChunkInfo): Promise<void> => {
+    if (!chunk.sessionId) {
+      throw new Error('Chunk session ID not set');
+    }
+
+    const sessionId = chunk.sessionId;
+    let validCount = 0;
+    let invalidCount = 0;
+    let correctedCount = 0;
+    let insertedCount = 0;
+    let updatedCount = 0;
+    let failedCount = 0;
+
+    // Update chunk status
+    setChunks(prev => prev.map(c => 
+      c.chunkNumber === chunk.chunkNumber 
+        ? { ...c, status: 'processing' }
+        : c
+    ));
+
+    try {
+      // Process records in batches
+      for (let i = 0; i < chunk.records.length; i += BATCH_SIZE) {
+        if (isPaused) {
+          // Update chunk status to paused
+          setChunks(prev => prev.map(c => 
+            c.chunkNumber === chunk.chunkNumber 
+              ? { ...c, status: 'paused' }
+              : c
+          ));
+          return;
+        }
+
+        const batch = chunk.records.slice(i, Math.min(i + BATCH_SIZE, chunk.records.length));
+        
+        for (let j = 0; j < batch.length; j++) {
+          const record = batch[j];
+          const rowNumber = chunk.startIndex + i + j + 1;
+          
+          // Validate record
+          const validation = validateRecord(record);
+          
+          if (validation.isValid) {
+            validCount++;
+          } else {
+            invalidCount++;
+          }
+          
+          if (validation.corrected) {
+            correctedCount++;
+          }
+
+          // Save to staging
+          await saveStagingRecord(sessionId, record, validation, rowNumber);
+
+          // Real-time inventory sync for valid records
+          if (validation.isValid) {
+            const syncResult = await syncRecordToInventory(sessionId, record, validation);
+            
+            switch (syncResult.action) {
+              case 'insert':
+                insertedCount++;
+                break;
+              case 'update':
+                updatedCount++;
+                break;
+              case 'skip':
+                failedCount++;
+                break;
+            }
+
+            // Mark staging record as processed
+            await supabase
+              .from('csv_staging_records')
+              .update({ 
+                processed_at: new Date().toISOString(),
+                action_type: syncResult.action
+              })
+              .eq('upload_session_id', sessionId)
+              .eq('row_number', rowNumber);
+          }
+
+          // Update progress every PROGRESS_UPDATE_INTERVAL records
+          if ((i + j + 1) % PROGRESS_UPDATE_INTERVAL === 0) {
+            const processedInChunk = i + j + 1;
+            const chunkProgress = (processedInChunk / chunk.records.length) * 100;
+            
+            // Update session progress
+            await updateSessionProgress(sessionId, {
+              processed_records: processedInChunk,
+              valid_records: validCount,
+              invalid_records: invalidCount,
+              corrected_records: correctedCount
+            });
+
+            // Update overall stats
+            updateProcessingStats(processedInChunk, validCount, invalidCount, insertedCount, updatedCount, failedCount);
+          }
+        }
+      }
+
+      // Mark chunk as completed
+      setChunks(prev => prev.map(c => 
+        c.chunkNumber === chunk.chunkNumber 
+          ? { ...c, status: 'completed' }
+          : c
+      ));
+
+      // Final session update for this chunk
+      await updateSessionProgress(sessionId, {
+        status: 'completed',
+        processed_records: chunk.records.length,
+        valid_records: validCount,
+        invalid_records: invalidCount,
+        corrected_records: correctedCount,
+        completed_at: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('Error processing chunk:', error);
+      
+      // Mark chunk as failed
+      setChunks(prev => prev.map(c => 
+        c.chunkNumber === chunk.chunkNumber 
+          ? { ...c, status: 'failed' }
+          : c
+      ));
+
+      // Update session with error
+      await updateSessionProgress(sessionId, {
+        status: 'failed',
+        error_message: error.message
+      });
+
+      throw error;
+    }
+  };
+
+  // Update processing statistics
+  const updateProcessingStats = (processed: number, valid: number, invalid: number, inserted: number, updated: number, failed: number) => {
+    const now = new Date();
+    const startTime = processingStartTime || now;
+    const elapsedSeconds = (now.getTime() - startTime.getTime()) / 1000;
+    const processingRate = elapsedSeconds > 0 ? processed / elapsedSeconds : 0;
+    const successRate = processed > 0 ? ((inserted + updated) / processed) * 100 : 0;
+    
+    const totalRecords = chunks.reduce((sum, chunk) => sum + chunk.records.length, 0);
+    const totalProcessed = chunks.reduce((sum, chunk) => {
+      if (chunk.status === 'completed') return sum + chunk.records.length;
+      if (chunk.chunkNumber === currentChunkIndex + 1) return sum + processed;
+      return sum;
+    }, 0);
+    
+    const remainingRecords = totalRecords - totalProcessed;
+    const estimatedTimeRemaining = processingRate > 0 ? remainingRecords / processingRate : 0;
+
+    setProcessingStats({
+      totalRecords,
+      processedRecords: totalProcessed,
+      validRecords: valid,
+      invalidRecords: invalid,
+      insertedRecords: inserted,
+      updatedRecords: updated,
+      failedRecords: failed,
+      processingRate,
+      successRate,
+      estimatedTimeRemaining
+    });
+  };
+
+  // Start processing all chunks
+  const startProcessing = async () => {
+    if (chunks.length === 0) return;
+
+    setIsProcessing(true);
+    setIsPaused(false);
+    setProcessingStartTime(new Date());
+    setCurrentChunkIndex(0);
+
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        if (isPaused) break;
+
+        setCurrentChunkIndex(i);
+        const chunk = chunks[i];
+
+        // Create session for this chunk if not exists
+        if (!chunk.sessionId) {
+          const chunkSessionId = await createUploadSession(
+            `${selectedFile?.name}_chunk_${chunk.chunkNumber}`,
+            selectedFile?.name || 'unknown',
+            selectedFile?.size || 0,
+            chunk.chunkNumber
+          );
+          
+          // Update chunk with session ID
+          setChunks(prev => prev.map(c => 
+            c.chunkNumber === chunk.chunkNumber 
+              ? { ...c, sessionId: chunkSessionId }
+              : c
+          ));
+          
+          chunk.sessionId = chunkSessionId;
+        }
+
+        await processChunk(chunk);
+      }
+
+      if (!isPaused) {
+        setProcessingStage('All chunks processed successfully!');
+        toast({
+          title: "Processing Complete",
+          description: `Successfully processed ${chunks.length} chunks with ${processingStats.totalRecords} total records.`,
+        });
+      }
+
+    } catch (error) {
+      console.error('Error in chunk processing:', error);
+      setProcessingStage(`Processing failed: ${error.message}`);
+      toast({
+        title: "Processing Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+      
+      if (currentUser) {
+        loadRecentSessions(currentUser.id);
+      }
+    }
+  };
+
+  // Pause processing
+  const pauseProcessing = () => {
+    setIsPaused(true);
+    setProcessingStage('Processing paused...');
+    toast({
+      title: "Processing Paused",
+      description: "You can resume processing at any time.",
+    });
+  };
+
+  // Resume processing
+  const resumeProcessing = () => {
+    setIsPaused(false);
+    setProcessingStage('Resuming processing...');
+    toast({
+      title: "Processing Resumed",
+      description: "Continuing from where we left off.",
+    });
+  };
+
+  // Stop processing
+  const stopProcessing = () => {
+    setIsPaused(true);
+    setIsProcessing(false);
+    setProcessingStage('Processing stopped by user.');
+    
+    // Mark current chunk as paused
+    if (currentChunkIndex < chunks.length) {
+      setChunks(prev => prev.map(c => 
+        c.chunkNumber === currentChunkIndex + 1 
+          ? { ...c, status: 'paused' }
+          : c
+      ));
+    }
+    
+    toast({
+      title: "Processing Stopped",
+      description: "Processing has been stopped. You can resume later.",
+    });
+  };
+
+  // Handle file selection
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 100 * 1024 * 1024) { // 100MB limit for chunked processing
+        toast({
+          title: "File Too Large",
+          description: "Please select a file smaller than 100MB.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setSelectedFile(file);
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const csvText = e.target?.result as string;
+        const records = parseCSVFile(csvText);
+        setPreviewData(records.slice(0, 5)); // Show more preview records
+        
+        // Create chunks
+        const fileChunks = createChunks(records);
+        setChunks(fileChunks);
+        
+        // Initialize processing stats
+        setProcessingStats({
+          totalRecords: records.length,
+          processedRecords: 0,
+          validRecords: 0,
+          invalidRecords: 0,
+          insertedRecords: 0,
+          updatedRecords: 0,
+          failedRecords: 0,
+          processingRate: 0,
+          successRate: 0,
+          estimatedTimeRemaining: 0
+        });
+        
+        setProcessingStage(`File loaded: ${records.length} records split into ${fileChunks.length} chunks of ${CHUNK_SIZE} records each.`);
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  // Reset upload state
+  const resetUpload = () => {
+    setSelectedFile(null);
+    setPreviewData([]);
+    setUploadResult(null);
+    setUploadProgress(0);
+    setProcessingStage('');
+    setCurrentSessionId(null);
+    setCanClose(true);
+    setIsUploading(false);
+    setChunks([]);
+    setCurrentChunkIndex(0);
+    setIsProcessing(false);
+    setIsPaused(false);
+    setProcessingStartTime(null);
+    setProcessingStats({
+      totalRecords: 0,
+      processedRecords: 0,
+      validRecords: 0,
+      invalidRecords: 0,
+      insertedRecords: 0,
+      updatedRecords: 0,
+      failedRecords: 0,
+      processingRate: 0,
+      successRate: 0,
+      estimatedTimeRemaining: 0
+    });
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    
+    if (currentUser) {
+      loadRecentSessions(currentUser.id);
+    }
+    
+    toast({
+      title: "Reset Complete",
+      description: "Upload form has been reset.",
+    });
+  };
+
+  // Close dialog
+  const closeDialog = () => {
+    if (isProcessing && !isPaused) {
+      toast({
+        title: "Cannot close during processing",
+        description: "Please pause or stop processing before closing.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setShowUploadDialog(false);
+    
+    if (isProcessing && isPaused) {
+      toast({
+        title: "Processing paused",
+        description: "You can resume processing from the sessions tab.",
+      });
+    }
+  };
+
+  // Open reconciliation interface
+  const openReconciliation = (sessionId: string) => {
+    setReconciliationSessionId(sessionId);
+    setShowReconciliation(true);
+    setShowUploadDialog(false);
+  };
+
+  // Close reconciliation interface
+  const closeReconciliation = () => {
+    setShowReconciliation(false);
+    setReconciliationSessionId(null);
+    
+    if (currentUser) {
+      loadRecentSessions(currentUser.id);
+    }
+  };
+
+  // Open audit dashboard
+  const openAuditDashboard = (sessionId: string) => {
+    setAuditSessionId(sessionId);
+    setShowAuditDashboard(true);
+    setShowUploadDialog(false);
+  };
+
+  // Close audit dashboard
+  const closeAuditDashboard = () => {
+    setShowAuditDashboard(false);
+    setAuditSessionId(null);
+    
+    if (currentUser) {
+      loadRecentSessions(currentUser.id);
+    }
   };
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button className="flex items-center space-x-2">
-          <Upload className="h-4 w-4" />
-          <span>Enhanced CSV Upload</span>
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Enhanced CSV Upload</span>
-            <div className="flex items-center space-x-2">
-              {processingState && (
-                <div className="flex items-center space-x-2">
-                  {processingState.isPaused ? (
-                    <Button size="sm" onClick={resumeProcessing} className="flex items-center space-x-1">
-                      <Play className="h-4 w-4" />
-                      <span>Resume</span>
+    <>
+      {/* Main Upload Interface */}
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Upload className="h-5 w-5" />
+              <span>Enhanced CSV Inventory Upload</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="csv-upload"
+                />
+                <label htmlFor="csv-upload" className="cursor-pointer">
+                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-2 text-sm text-gray-600">
+                    Click to select a CSV file or drag and drop
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Maximum file size: 100MB (will be processed in chunks)
+                  </p>
+                </label>
+              </div>
+
+              {selectedFile && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <FileText className="h-4 w-4" />
+                      <span className="text-sm font-medium">{selectedFile.name}</span>
+                      <Badge variant="secondary">{formatFileSize(selectedFile.size)}</Badge>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowUploadDialog(true)}
+                    >
+                      Configure & Process
                     </Button>
-                  ) : processingState.status === 'processing' ? (
-                    <Button size="sm" onClick={pauseProcessing} className="flex items-center space-x-1">
-                      <Pause className="h-4 w-4" />
-                      <span>Pause</span>
-                    </Button>
-                  ) : null}
-                  <Button size="sm" variant="destructive" onClick={stopProcessing} className="flex items-center space-x-1">
-                    <Square className="h-4 w-4" />
-                    <span>Stop</span>
-                  </Button>
+                  </div>
+
+                  {chunks.length > 0 && (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        File will be processed in {chunks.length} chunks of {CHUNK_SIZE} records each for optimal performance and recovery.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
               )}
             </div>
-          </DialogTitle>
-          <DialogDescription>
-            Enhanced processing with chunking, real-time updates, and recovery options
-          </DialogDescription>
-        </DialogHeader>
+          </CardContent>
+        </Card>
 
-        <div className="space-y-6">
-          <Tabs defaultValue="upload" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="upload">Upload</TabsTrigger>
-              <TabsTrigger value="sessions">Recent Sessions</TabsTrigger>
-              <TabsTrigger value="progress">Processing Progress</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="upload" className="space-y-4">
-              {!processingState ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <FileText className="h-5 w-5" />
-                      <span>Upload CSV File</span>
-                    </CardTitle>
-                    <CardDescription>
-                      Enhanced processing with validation, chunking, and real-time inventory updates
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="csv-file">Select CSV File</Label>
-                      <Input
-                        id="csv-file"
-                        type="file"
-                        accept=".csv"
-                        ref={fileInputRef}
-                        onChange={handleFileSelect}
-                        disabled={isUploading}
-                      />
-                    </div>
-
-                    {file && (
-                      <Alert>
-                        <FileText className="h-4 w-4" />
-                        <AlertDescription>
-                          <strong>Selected:</strong> {file.name} ({formatFileSize(file.size)})
-                          <br />
-                          <strong>Processing:</strong> Will be split into chunks of {CHUNK_SIZE.toLocaleString()} records each
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    <Button 
-                      onClick={handleUpload} 
-                      disabled={!file || isUploading}
-                      className="w-full"
-                    >
-                      {isUploading ? (
-                        <>
-                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="mr-2 h-4 w-4" />
-                          Process CSV
-                        </>
-                      )}
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Processing: {processingState.originalFilename}</CardTitle>
-                    <CardDescription>
-                      Real-time processing with chunking and immediate inventory updates
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {/* Overall Progress */}
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span>Overall Progress</span>
-                          <span>
-                            {processingState.overallProgress.totalProcessed.toLocaleString()} / {processingState.totalRecords.toLocaleString()} records
-                          </span>
+        {/* Recent Sessions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>Recent Upload Sessions</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => currentUser && loadRecentSessions(currentUser.id)}
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Refresh
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recentSessions.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No recent upload sessions found.</p>
+            ) : (
+              <div className="space-y-3">
+                {recentSessions.map((session) => {
+                  const statusInfo = getSessionStatus(session);
+                  const StatusIcon = statusInfo.icon;
+                  
+                  return (
+                    <div key={session.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <StatusIcon className="h-4 w-4" />
+                          <span className="font-medium text-sm">{session.original_filename}</span>
+                          <Badge variant={statusInfo.variant}>{statusInfo.status}</Badge>
+                          {session.chunk_number && (
+                            <Badge variant="outline">Chunk {session.chunk_number}</Badge>
+                          )}
                         </div>
-                        <Progress 
-                          value={(processingState.overallProgress.totalProcessed / processingState.totalRecords) * 100} 
-                          className="w-full"
-                        />
-                      </div>
-
-                      {/* Statistics */}
-                      <div className="grid grid-cols-3 gap-4 text-center">
-                        <div className="space-y-1">
-                          <div className="text-2xl font-bold text-blue-600">
-                            {processingState.overallProgress.totalProcessed.toLocaleString()}
-                          </div>
-                          <div className="text-sm text-gray-600">Processed</div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-2xl font-bold text-green-600">
-                            {processingState.overallProgress.totalInserted.toLocaleString()}
-                          </div>
-                          <div className="text-sm text-gray-600">Inserted to Inventory</div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-2xl font-bold text-red-600">
-                            {processingState.overallProgress.totalFailed.toLocaleString()}
-                          </div>
-                          <div className="text-sm text-gray-600">Failed</div>
-                        </div>
-                      </div>
-
-                      {/* Chunk Progress */}
-                      <div className="space-y-2">
-                        <h4 className="font-medium">Chunk Progress</h4>
-                        <ScrollArea className="h-32">
-                          <div className="space-y-2">
-                            {processingState.chunks.map((chunk, index) => (
-                              <div key={chunk.id} className="flex items-center justify-between p-2 border rounded">
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-sm font-medium">
-                                    Chunk {chunk.chunkNumber}/{chunk.totalChunks}
-                                  </span>
-                                  {chunk.status === 'processing' && <RefreshCw className="h-3 w-3 animate-spin" />}
-                                  {chunk.status === 'completed' && <CheckCircle className="h-3 w-3 text-green-600" />}
-                                  {chunk.status === 'failed' && <XCircle className="h-3 w-3 text-red-600" />}
-                                  {chunk.status === 'paused' && <Pause className="h-3 w-3 text-yellow-600" />}
-                                </div>
-                                <div className="text-sm text-gray-600">
-                                  {chunk.processed}/{chunk.records.length} records
-                                  {chunk.inserted > 0 && ` (${chunk.inserted} inserted)`}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="sessions" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">Recent Upload Sessions</h3>
-                <Button size="sm" onClick={loadUploadSessions} className="flex items-center space-x-1">
-                  <RefreshCw className="h-4 w-4" />
-                  <span>Refresh</span>
-                </Button>
-              </div>
-
-              <ScrollArea className="h-96">
-                <div className="space-y-3">
-                  {uploadSessions.map((session) => (
-                    <Card key={session.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <FileText className="h-4 w-4" />
-                              <span className="font-medium">{session.original_filename}</span>
-                              {getSessionStatusBadge(session)}
-                              {session.chunk_number && (
-                                <Badge variant="outline">
-                                  Chunk {session.chunk_number}/{session.total_chunks}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              {session.total_records.toLocaleString()} records • 
-                              Processed: {session.processed_records.toLocaleString()} • 
-                              Valid: {session.valid_records.toLocaleString()}
-                              {session.file_size && ` • Size: ${formatFileSize(session.file_size)}`}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {new Date(session.created_at).toLocaleString()}
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            {session.status === 'completed' && session.invalid_records > 0 && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setReconciliationSessionId(session.id);
-                                  setShowReconciliation(true);
-                                }}
-                              >
-                                Review
-                              </Button>
+                        <div className="text-xs text-gray-500 space-y-1">
+                          <div>
+                            {session.processed_records}/{session.total_records} records processed
+                            {session.total_records > 0 && (
+                              <span className="ml-2">
+                                ({Math.round((session.processed_records / session.total_records) * 100)}%)
+                              </span>
                             )}
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => deleteUploadSession(session.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                          </div>
+                          <div>
+                            Valid: {session.valid_records} | Invalid: {session.invalid_records} | Corrected: {session.corrected_records}
+                          </div>
+                          <div>
+                            Created: {formatDate(session.created_at)} | Size: {formatFileSize(session.file_size)}
                           </div>
                         </div>
-                        {session.processed_records > 0 && (
-                          <div className="mt-2">
-                            <Progress 
-                              value={(session.processed_records / session.total_records) * 100} 
-                              className="w-full h-2"
-                            />
-                          </div>
+                        {session.total_records > 0 && (
+                          <Progress 
+                            value={(session.processed_records / session.total_records) * 100} 
+                            className="mt-2 h-2"
+                          />
                         )}
+                      </div>
+                      <div className="flex items-center space-x-2 ml-4">
+                        {/* Audit button */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openAuditDashboard(session.id)}
+                        >
+                          <BarChart3 className="h-4 w-4" />
+                        </Button>
+                        
+                        {/* Review button for problematic records */}
+                        {((session.invalid_records || 0) > 0 || (session.corrected_records || 0) > 0) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openReconciliation(session.id)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        )}
+                        
+                        {/* Delete button */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteUploadSession(session.id)}
+                          disabled={isDeleting === session.id}
+                        >
+                          {isDeleting === session.id ? (
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Enhanced Upload Dialog with Tabs */}
+      {showUploadDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Enhanced CSV Upload & Processing</h2>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={closeDialog}
+                disabled={isProcessing && !isPaused}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <Tabs defaultValue="upload" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="upload">Upload & Preview</TabsTrigger>
+                  <TabsTrigger value="chunks">Chunks & Processing</TabsTrigger>
+                  <TabsTrigger value="progress">Progress Monitor</TabsTrigger>
+                </TabsList>
+
+                {/* Upload & Preview Tab */}
+                <TabsContent value="upload" className="space-y-4">
+                  {selectedFile && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">File Information</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="font-medium">Filename:</span> {selectedFile.name}
+                          </div>
+                          <div>
+                            <span className="font-medium">Size:</span> {formatFileSize(selectedFile.size)}
+                          </div>
+                          <div>
+                            <span className="font-medium">Total Records:</span> {processingStats.totalRecords}
+                          </div>
+                          <div>
+                            <span className="font-medium">Chunks:</span> {chunks.length} × {CHUNK_SIZE} records
+                          </div>
+                        </div>
                       </CardContent>
                     </Card>
-                  ))}
-                </div>
-              </ScrollArea>
-            </TabsContent>
+                  )}
 
-            <TabsContent value="progress" className="space-y-4">
-              {processingState ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Real-Time Processing Monitor</CardTitle>
-                    <CardDescription>
-                      Live updates for {processingState.originalFilename}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-6">
-                      {/* Processing Status */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <Activity className="h-5 w-5" />
-                          <span className="font-medium">Status:</span>
-                          <Badge className={
-                            processingState.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            processingState.status === 'failed' ? 'bg-red-100 text-red-800' :
-                            processingState.isPaused ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-blue-100 text-blue-800'
-                          }>
-                            {processingState.isPaused ? 'Paused' : processingState.status}
-                          </Badge>
+                  {previewData.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Data Preview (First 5 Records)</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-xs border-collapse border border-gray-300">
+                            <thead>
+                              <tr className="bg-gray-50">
+                                {Object.keys(previewData[0] || {}).slice(0, 8).map((header) => (
+                                  <th key={header} className="border border-gray-300 px-2 py-1 text-left">
+                                    {header}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {previewData.map((record, index) => (
+                                <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                  {Object.values(record).slice(0, 8).map((value, cellIndex) => (
+                                    <td key={cellIndex} className="border border-gray-300 px-2 py-1">
+                                      {String(value).substring(0, 50)}
+                                      {String(value).length > 50 && '...'}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
-                        <div className="text-sm text-gray-600">
-                          Started: {processingState.overallProgress.startTime.toLocaleTimeString()}
-                        </div>
-                      </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
 
-                      {/* Detailed Statistics */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="text-center p-3 border rounded">
-                          <div className="text-xl font-bold text-blue-600">
-                            {processingState.chunks.length}
-                          </div>
-                          <div className="text-sm text-gray-600">Total Chunks</div>
+                {/* Chunks & Processing Tab */}
+                <TabsContent value="chunks" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center justify-between">
+                        <span>Processing Control</span>
+                        <div className="flex space-x-2">
+                          {!isProcessing && (
+                            <Button
+                              onClick={startProcessing}
+                              disabled={chunks.length === 0}
+                              size="sm"
+                            >
+                              <Play className="h-4 w-4 mr-1" />
+                              Start Processing
+                            </Button>
+                          )}
+                          {isProcessing && !isPaused && (
+                            <Button
+                              onClick={pauseProcessing}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <Pause className="h-4 w-4 mr-1" />
+                              Pause
+                            </Button>
+                          )}
+                          {isProcessing && isPaused && (
+                            <Button
+                              onClick={resumeProcessing}
+                              size="sm"
+                            >
+                              <Play className="h-4 w-4 mr-1" />
+                              Resume
+                            </Button>
+                          )}
+                          {isProcessing && (
+                            <Button
+                              onClick={stopProcessing}
+                              variant="destructive"
+                              size="sm"
+                            >
+                              <Square className="h-4 w-4 mr-1" />
+                              Stop
+                            </Button>
+                          )}
                         </div>
-                        <div className="text-center p-3 border rounded">
-                          <div className="text-xl font-bold text-green-600">
-                            {processingState.chunks.filter(c => c.status === 'completed').length}
-                          </div>
-                          <div className="text-sm text-gray-600">Completed</div>
-                        </div>
-                        <div className="text-center p-3 border rounded">
-                          <div className="text-xl font-bold text-yellow-600">
-                            {processingState.chunks.filter(c => c.status === 'processing' || c.status === 'paused').length}
-                          </div>
-                          <div className="text-sm text-gray-600">In Progress</div>
-                        </div>
-                        <div className="text-center p-3 border rounded">
-                          <div className="text-xl font-bold text-red-600">
-                            {processingState.chunks.filter(c => c.status === 'failed').length}
-                          </div>
-                          <div className="text-sm text-gray-600">Failed</div>
-                        </div>
-                      </div>
-
-                      {/* Performance Metrics */}
-                      {processingState.overallProgress.totalProcessed > 0 && (
-                        <div className="space-y-2">
-                          <h4 className="font-medium">Performance Metrics</h4>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-600">Processing Rate:</span>
-                              <span className="ml-2 font-medium">
-                                {Math.round(processingState.overallProgress.totalProcessed / 
-                                  ((Date.now() - processingState.overallProgress.startTime.getTime()) / 1000))} records/sec
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Success Rate:</span>
-                              <span className="ml-2 font-medium">
-                                {Math.round((processingState.overallProgress.totalInserted / 
-                                  processingState.overallProgress.totalProcessed) * 100)}%
-                              </span>
-                            </div>
-                          </div>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {processingStage && (
+                        <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                          <p className="text-sm text-blue-800">{processingStage}</p>
                         </div>
                       )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card>
-                  <CardContent className="p-8 text-center">
-                    <Activity className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Processing</h3>
-                    <p className="text-gray-600">Upload a CSV file to see real-time processing progress</p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
+                    </CardContent>
+                  </Card>
 
-        {/* CSV Reconciliation Dialog */}
-        {showReconciliation && (
-          <CSVReconciliation
-            sessionId={reconciliationSessionId}
-            onClose={() => setShowReconciliation(false)}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+                  {chunks.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Chunk Status</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {chunks.map((chunk) => {
+                            const getStatusColor = (status: string) => {
+                              switch (status) {
+                                case 'completed': return 'bg-green-100 text-green-800';
+                                case 'processing': return 'bg-blue-100 text-blue-800';
+                                case 'failed': return 'bg-red-100 text-red-800';
+                                case 'paused': return 'bg-yellow-100 text-yellow-800';
+                                default: return 'bg-gray-100 text-gray-800';
+                              }
+                            };
+
+                            return (
+                              <div key={chunk.chunkNumber} className="flex items-center justify-between p-2 border rounded">
+                                <div className="flex items-center space-x-3">
+                                  <Badge variant="outline">Chunk {chunk.chunkNumber}</Badge>
+                                  <span className="text-sm">
+                                    Records {chunk.startIndex + 1}-{chunk.endIndex + 1} ({chunk.records.length} total)
+                                  </span>
+                                </div>
+                                <Badge className={getStatusColor(chunk.status)}>
+                                  {chunk.status}
+                                </Badge>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+
+                {/* Progress Monitor Tab */}
+                <TabsContent value="progress" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Processing Statistics</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="text-center p-3 bg-blue-50 rounded-lg">
+                          <div className="text-2xl font-bold text-blue-600">{processingStats.totalRecords}</div>
+                          <div className="text-blue-800">Total Records</div>
+                        </div>
+                        <div className="text-center p-3 bg-green-50 rounded-lg">
+                          <div className="text-2xl font-bold text-green-600">{processingStats.processedRecords}</div>
+                          <div className="text-green-800">Processed</div>
+                        </div>
+                        <div className="text-center p-3 bg-purple-50 rounded-lg">
+                          <div className="text-2xl font-bold text-purple-600">{processingStats.insertedRecords}</div>
+                          <div className="text-purple-800">Inserted</div>
+                        </div>
+                        <div className="text-center p-3 bg-orange-50 rounded-lg">
+                          <div className="text-2xl font-bold text-orange-600">{processingStats.updatedRecords}</div>
+                          <div className="text-orange-800">Updated</div>
+                        </div>
+                      </div>
+
+                      {processingStats.totalRecords > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Overall Progress</span>
+                            <span>{Math.round((processingStats.processedRecords / processingStats.totalRecords) * 100)}%</span>
+                          </div>
+                          <Progress 
+                            value={(processingStats.processedRecords / processingStats.totalRecords) * 100} 
+                            className="h-3"
+                          />
+                        </div>
+                      )}
+
+                      <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium">Processing Rate:</span> {processingStats.processingRate.toFixed(1)} records/sec
+                        </div>
+                        <div>
+                          <span className="font-medium">Success Rate:</span> {processingStats.successRate.toFixed(1)}%
+                        </div>
+                        <div>
+                          <span className="font-medium">Valid Records:</span> {processingStats.validRecords}
+                        </div>
+                        <div>
+                          <span className="font-medium">Invalid Records:</span> {processingStats.invalidRecords}
+                        </div>
+                        {processingStats.estimatedTimeRemaining > 0 && (
+                          <div className="col-span-2">
+                            <span className="font-medium">Estimated Time Remaining:</span> {Math.round(processingStats.estimatedTimeRemaining / 60)} minutes
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {isProcessing && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Current Chunk Progress</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Chunk {currentChunkIndex + 1} of {chunks.length}</span>
+                            <span>{isPaused ? 'Paused' : 'Processing...'}</span>
+                          </div>
+                          {chunks[currentChunkIndex] && (
+                            <div className="text-xs text-gray-600">
+                              Records {chunks[currentChunkIndex].startIndex + 1}-{chunks[currentChunkIndex].endIndex + 1}
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+              </Tabs>
+
+              {/* Action Buttons */}
+              <div className="flex justify-between mt-6 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={resetUpload}
+                  disabled={isProcessing && !isPaused}
+                >
+                  Reset
+                </Button>
+                <div className="space-x-2">
+                  <Button
+                    variant="outline"
+                    onClick={closeDialog}
+                    disabled={isProcessing && !isPaused}
+                  >
+                    {isProcessing && isPaused ? 'Close (Processing paused)' : 'Close'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Reconciliation Interface */}
+      {showReconciliation && reconciliationSessionId && (
+        <CSVReconciliation
+          sessionId={reconciliationSessionId}
+          onClose={closeReconciliation}
+        />
+      )}
+
+      {/* CSV Audit Dashboard */}
+      {showAuditDashboard && auditSessionId && (
+        <CSVAuditDashboard
+          sessionId={auditSessionId}
+          onClose={closeAuditDashboard}
+        />
+      )}
+    </>
   );
 }
+
+export default InventoryFileUpload;
 
