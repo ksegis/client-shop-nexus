@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -31,16 +31,18 @@ interface ProcessingProgress {
 interface UploadSession {
   id: string;
   filename: string;
-  originalFilename: string;
+  original_filename: string; // FIXED: Use snake_case to match database
+  file_size: number; // FIXED: Use snake_case to match database
   status: string;
-  totalRecords: number;
-  processedRecords: number;
-  validRecords: number;
-  invalidRecords: number;
-  correctedRecords: number;
-  errorMessage?: string;
-  createdAt: string;
-  completedAt?: string;
+  total_records: number; // FIXED: Use snake_case to match database
+  processed_records: number; // FIXED: Use snake_case to match database
+  valid_records: number; // FIXED: Use snake_case to match database
+  invalid_records: number; // FIXED: Use snake_case to match database
+  corrected_records: number; // FIXED: Use snake_case to match database
+  error_message?: string; // FIXED: Use snake_case to match database
+  created_at: string; // FIXED: Use snake_case to match database
+  completed_at?: string; // FIXED: Use snake_case to match database
+  updated_at: string; // FIXED: Use snake_case to match database
 }
 
 interface SyncSummary {
@@ -61,7 +63,8 @@ export function InventoryFileUpload() {
   const [previewData, setPreviewData] = useState<CSVRecord[]>([]);
   const [recentSessions, setRecentSessions] = useState<UploadSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [canClose, setCanClose] = useState(true); // NEW: Track if dialog can be closed
+  const [canClose, setCanClose] = useState(true);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null); // NEW: Track deletion state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -97,8 +100,75 @@ export function InventoryFileUpload() {
     }
   };
 
+  // FIXED: Format date with proper error handling
+  const formatDate = (dateString: string): string => {
+    try {
+      if (!dateString) return 'Invalid Date';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleString();
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
+
+  // NEW: Delete upload session functionality
+  const deleteUploadSession = async (sessionId: string) => {
+    if (!confirm('Are you sure you want to delete this upload session? This will also delete all associated staging records.')) {
+      return;
+    }
+
+    setIsDeleting(sessionId);
+    try {
+      // First delete staging records
+      const { error: stagingError } = await supabase
+        .from('csv_staging_records')
+        .delete()
+        .eq('upload_session_id', sessionId);
+
+      if (stagingError) {
+        console.error('Error deleting staging records:', stagingError);
+        // Continue anyway - session might not have staging records
+      }
+
+      // Then delete the session
+      const { error: sessionError } = await supabase
+        .from('csv_upload_sessions')
+        .delete()
+        .eq('id', sessionId);
+
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      toast({
+        title: "Session Deleted",
+        description: "Upload session and associated records have been deleted.",
+      });
+
+      // Reload recent sessions
+      if (currentUser) {
+        await loadRecentSessions(currentUser.id);
+      }
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      toast({
+        title: "Delete Failed",
+        description: error instanceof Error ? error.message : 'Failed to delete session',
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
   // Create upload session
   const createUploadSession = async (filename: string, originalFilename: string, fileSize: number): Promise<string> => {
+    // Check file size limit (50MB for better performance)
+    if (fileSize > 50 * 1024 * 1024) {
+      throw new Error('File size exceeds 50MB limit. Please use a smaller file for optimal performance.');
+    }
+
     const { data, error } = await supabase
       .from('csv_upload_sessions')
       .insert([{
@@ -120,7 +190,7 @@ export function InventoryFileUpload() {
     return data.id;
   };
 
-  // Update session progress
+  // Update session progress - FIXED: Use snake_case field names
   const updateSessionProgress = async (sessionId: string, updates: Partial<UploadSession>) => {
     const { error } = await supabase
       .from('csv_upload_sessions')
@@ -462,9 +532,9 @@ export function InventoryFileUpload() {
       setUploadProgress(20);
       setProcessingStage(`Validating ${records.length} records...`);
 
-      // Update session with total records
+      // Update session with total records - FIXED: Use snake_case
       await updateSessionProgress(sessionId, {
-        totalRecords: records.length,
+        total_records: records.length,
         status: 'processing'
       });
 
@@ -500,12 +570,12 @@ export function InventoryFileUpload() {
         setUploadProgress(Math.min(progress, 80));
         setProcessingStage(`Processed ${Math.min(i + batchSize, records.length)} of ${records.length} records...`);
 
-        // Update session progress
+        // Update session progress - FIXED: Use snake_case
         await updateSessionProgress(sessionId, {
-          processedRecords: Math.min(i + batchSize, records.length),
-          validRecords: validCount,
-          invalidRecords: invalidCount,
-          correctedRecords: correctedCount
+          processed_records: Math.min(i + batchSize, records.length),
+          valid_records: validCount,
+          invalid_records: invalidCount,
+          corrected_records: correctedCount
         });
       }
 
@@ -519,10 +589,10 @@ export function InventoryFileUpload() {
       setUploadProgress(95);
       setProcessingStage('Finalizing...');
 
-      // Update session as completed
+      // Update session as completed - FIXED: Use snake_case
       await updateSessionProgress(sessionId, {
         status: 'completed',
-        completedAt: new Date().toISOString()
+        completed_at: new Date().toISOString()
       });
 
       setUploadProgress(100);
@@ -558,10 +628,11 @@ export function InventoryFileUpload() {
       setProcessingStage('Processing failed');
       
       if (sessionId) {
+        // FIXED: Use snake_case
         await updateSessionProgress(sessionId, {
           status: 'failed',
-          errorMessage: error.message,
-          completedAt: new Date().toISOString()
+          error_message: error.message,
+          completed_at: new Date().toISOString()
         });
       }
 
@@ -580,6 +651,16 @@ export function InventoryFileUpload() {
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // Check file size before setting
+      if (file.size > 50 * 1024 * 1024) {
+        toast({
+          title: "File Too Large",
+          description: "Please select a file smaller than 50MB for optimal performance.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setSelectedFile(file);
       
       // Preview first few rows
@@ -599,17 +680,34 @@ export function InventoryFileUpload() {
     await processCSVInBackground(selectedFile);
   };
 
-  // Reset upload state
+  // FIXED: Reset upload state - now properly clears everything
   const resetUpload = () => {
+    console.log('🔄 Resetting upload state');
+    
+    // Reset all state
     setSelectedFile(null);
     setPreviewData([]);
     setUploadResult(null);
     setUploadProgress(0);
     setProcessingStage('');
     setCurrentSessionId(null);
+    setCanClose(true);
+    setIsUploading(false);
+    
+    // Clear file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    
+    // Reload recent sessions
+    if (currentUser) {
+      loadRecentSessions(currentUser.id);
+    }
+    
+    toast({
+      title: "Reset Complete",
+      description: "Upload form has been reset.",
+    });
   };
 
   // Close dialog - FIXED: Now works during background processing
@@ -653,11 +751,6 @@ export function InventoryFileUpload() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Format date
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleString();
-  };
-
   return (
     <>
       <Button onClick={() => setShowUploadDialog(true)} className="flex items-center space-x-2">
@@ -686,27 +779,37 @@ export function InventoryFileUpload() {
                 </Button>
               </div>
 
-              {/* Recent Upload Sessions */}
+              {/* Recent Upload Sessions - ENHANCED with delete functionality */}
               {recentSessions.length > 0 && (
                 <Card className="mb-6">
                   <CardHeader>
-                    <CardTitle className="text-sm flex items-center">
-                      <Clock className="w-4 h-4 mr-2" />
-                      Recent Upload Sessions
+                    <CardTitle className="text-sm flex items-center justify-between">
+                      <div className="flex items-center">
+                        <Clock className="w-4 h-4 mr-2" />
+                        Recent Upload Sessions
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => currentUser && loadRecentSessions(currentUser.id)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       {recentSessions.map((session) => (
                         <div key={session.id} className="flex items-center justify-between p-2 border rounded text-xs">
-                          <div className="flex items-center space-x-2">
-                            <FileText className="w-3 h-3" />
-                            <span className="font-medium">{session.originalFilename}</span>
-                            <span className="text-gray-500">
-                              {session.totalRecords} records
+                          <div className="flex items-center space-x-2 flex-1 min-w-0">
+                            <FileText className="w-3 h-3 flex-shrink-0" />
+                            <span className="font-medium truncate">{session.original_filename}</span>
+                            <span className="text-gray-500 flex-shrink-0">
+                              {session.total_records} records
                             </span>
                           </div>
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-2 flex-shrink-0">
                             <Badge 
                               variant={session.status === 'completed' ? 'default' : 
                                       session.status === 'failed' ? 'destructive' : 'secondary'}
@@ -714,8 +817,8 @@ export function InventoryFileUpload() {
                             >
                               {session.status}
                             </Badge>
-                            <span className="text-gray-400">{formatDate(session.createdAt)}</span>
-                            {(session.invalidRecords > 0 || session.correctedRecords > 0) && (
+                            <span className="text-gray-400">{formatDate(session.created_at)}</span>
+                            {(session.invalid_records > 0 || session.corrected_records > 0) && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -726,6 +829,20 @@ export function InventoryFileUpload() {
                                 Review
                               </Button>
                             )}
+                            {/* NEW: Delete button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteUploadSession(session.id)}
+                              disabled={isDeleting === session.id}
+                              className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                            >
+                              {isDeleting === session.id ? (
+                                <RefreshCw className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3 w-3" />
+                              )}
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -753,6 +870,7 @@ export function InventoryFileUpload() {
                         <Upload className="w-12 h-12 text-gray-400 mx-auto" />
                         <p className="text-lg font-medium">Upload CSV File</p>
                         <p className="text-sm text-gray-500">Enhanced processing with validation and reconciliation</p>
+                        <p className="text-xs text-gray-400">Maximum file size: 50MB</p>
                         <Button onClick={() => fileInputRef.current?.click()}>
                           Select File
                         </Button>
