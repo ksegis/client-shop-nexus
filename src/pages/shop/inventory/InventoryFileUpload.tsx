@@ -9,7 +9,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CSVReconciliation } from './CSVReconciliation';
 import { CSVAuditDashboard } from './CSVAuditDashboard';
-import { ProcessingMonitor } from './ProcessingMonitor';
 
 
 // Types for CSV processing
@@ -75,9 +74,6 @@ export function InventoryFileUpload() {
   const [showAuditDashboard, setShowAuditDashboard] = useState(false);
   const [auditSessionId, setAuditSessionId] = useState<string | null>(null);
   const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
-  
-  // Processing monitor state
-  const [showProcessingMonitor, setShowProcessingMonitor] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -798,18 +794,19 @@ export function InventoryFileUpload() {
     }
   };
 
-  // Open processing monitor
-  const openProcessingMonitor = () => {
-    setShowProcessingMonitor(true);
-    setShowUploadDialog(false);
-  };
-
-  // Close processing monitor
-  const closeProcessingMonitor = () => {
-    setShowProcessingMonitor(false);
-    
-    if (currentUser) {
-      loadRecentSessions(currentUser.id);
+  // Monitor function - opens audit dashboard for monitoring
+  const openMonitor = () => {
+    if (currentSessionId) {
+      openAuditDashboard(currentSessionId);
+    } else if (recentSessions.length > 0) {
+      // Open the most recent session for monitoring
+      openAuditDashboard(recentSessions[0].id);
+    } else {
+      toast({
+        title: "No Sessions to Monitor",
+        description: "Upload a CSV file first to monitor processing.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -851,7 +848,7 @@ export function InventoryFileUpload() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={openProcessingMonitor}
+                    onClick={openMonitor}
                     className="flex items-center space-x-1"
                   >
                     <Activity className="h-4 w-4" />
@@ -955,6 +952,17 @@ export function InventoryFileUpload() {
                                   Review
                                 </Button>
                               )}
+                              
+                              {/* Monitor button for each session */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openAuditDashboard(session.id)}
+                                className="h-6 px-2 text-xs"
+                              >
+                                <BarChart3 className="w-3 h-3 mr-1" />
+                                Audit
+                              </Button>
                               
                               {/* Delete button */}
                               <Button
@@ -1170,11 +1178,6 @@ export function InventoryFileUpload() {
           sessionId={auditSessionId}
           onClose={closeAuditDashboard}
         />
-      )}
-
-      {/* Processing Monitor */}
-      {showProcessingMonitor && (
-        <ProcessingMonitor onClose={closeProcessingMonitor} />
       )}
     </>
   );
