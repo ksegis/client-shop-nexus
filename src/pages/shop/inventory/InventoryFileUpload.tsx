@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { CSVReconciliation } from './CSVReconciliation';
 
 // Types for CSV processing
 interface CSVRecord {
@@ -65,6 +66,11 @@ export function InventoryFileUpload() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [canClose, setCanClose] = useState(true);
   const [isDeleting, setIsDeleting] = useState<string | null>(null); // NEW: Track deletion state
+  
+  // NEW: Reconciliation state
+  const [showReconciliation, setShowReconciliation] = useState(false);
+  const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -732,14 +738,26 @@ export function InventoryFileUpload() {
     }
   };
 
-  // View session details (for reconciliation)
+  // NEW: Open reconciliation interface
+  const openReconciliation = (sessionId: string) => {
+    setReconciliationSessionId(sessionId);
+    setShowReconciliation(true);
+  };
+
+  // NEW: Close reconciliation interface
+  const closeReconciliation = () => {
+    setShowReconciliation(false);
+    setReconciliationSessionId(null);
+    
+    // Refresh sessions after reconciliation
+    if (currentUser) {
+      loadRecentSessions(currentUser.id);
+    }
+  };
+
+  // View session details (for reconciliation) - ENHANCED: Now opens reconciliation interface
   const viewSessionDetails = (sessionId: string) => {
-    // This would open the reconciliation interface
-    // For now, just show a toast
-    toast({
-      title: "Reconciliation Interface",
-      description: "Opening reconciliation interface for session: " + sessionId,
-    });
+    openReconciliation(sessionId);
   };
 
   // Format file size
@@ -818,11 +836,12 @@ export function InventoryFileUpload() {
                               {session.status}
                             </Badge>
                             <span className="text-gray-400">{formatDate(session.created_at)}</span>
+                            {/* ENHANCED: Review button now opens reconciliation interface */}
                             {(session.invalid_records > 0 || session.corrected_records > 0) && (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => viewSessionDetails(session.id)}
+                                onClick={() => openReconciliation(session.id)}
                                 className="h-6 px-2 text-xs"
                               >
                                 <Eye className="w-3 h-3 mr-1" />
@@ -970,6 +989,7 @@ export function InventoryFileUpload() {
                         </div>
                       )}
 
+                      {/* ENHANCED: Review button now opens reconciliation interface */}
                       {((uploadResult.session?.invalid_records || 0) > 0 || (uploadResult.session?.corrected_records || 0) > 0) && (
                         <Alert>
                           <AlertTriangle className="h-4 w-4" />
@@ -980,8 +1000,9 @@ export function InventoryFileUpload() {
                             <Button 
                               size="sm" 
                               className="mt-2"
-                              onClick={() => viewSessionDetails(uploadResult.sessionId)}
+                              onClick={() => openReconciliation(uploadResult.sessionId)}
                             >
+                              <Eye className="w-4 h-4 mr-1" />
                               Open Reconciliation
                             </Button>
                           </AlertDescription>
@@ -1020,6 +1041,14 @@ export function InventoryFileUpload() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* NEW: CSV Reconciliation Interface */}
+      {showReconciliation && reconciliationSessionId && (
+        <CSVReconciliation
+          sessionId={reconciliationSessionId}
+          onClose={closeReconciliation}
+        />
       )}
     </>
   );
