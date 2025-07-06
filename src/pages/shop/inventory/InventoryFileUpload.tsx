@@ -55,6 +55,22 @@ interface SyncSummary {
   errors: string[];
 }
 
+interface MonitorData {
+  session: UploadSession;
+  stats: {
+    total: number;
+    valid: number;
+    invalid: number;
+    corrected: number;
+    needsReview: number;
+    inserted: number;
+    updated: number;
+    processed: number;
+    progress: number;
+  };
+  lastUpdated: string;
+}
+
 export function InventoryFileUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -75,9 +91,11 @@ export function InventoryFileUpload() {
   // Monitor state
   const [showMonitor, setShowMonitor] = useState(false);
   const [monitorSessionId, setMonitorSessionId] = useState<string | null>(null);
-  const [monitorData, setMonitorData] = useState<any>(null);
+  const [monitorData, setMonitorData] = useState<MonitorData | null>(null);
+  const [isLoadingMonitor, setIsLoadingMonitor] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const monitorIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
   // Get current user
@@ -95,6 +113,26 @@ export function InventoryFileUpload() {
     getCurrentUser();
   }, []);
 
+  // Auto-refresh monitor data when monitor is open
+  useEffect(() => {
+    if (showMonitor && monitorSessionId) {
+      // Load initial data
+      loadMonitorData(monitorSessionId);
+      
+      // Set up auto-refresh every 3 seconds
+      monitorIntervalRef.current = setInterval(() => {
+        loadMonitorData(monitorSessionId);
+      }, 3000);
+      
+      return () => {
+        if (monitorIntervalRef.current) {
+          clearInterval(monitorIntervalRef.current);
+          monitorIntervalRef.current = null;
+        }
+      };
+    }
+  }, [showMonitor, monitorSessionId]);
+
   // Load recent upload sessions with enhanced statistics
   const loadRecentSessions = async (userId: string) => {
     try {
@@ -103,7 +141,7 @@ export function InventoryFileUpload() {
         .select('*')
         .eq('uploaded_by', userId)
         .order('created_at', { ascending: false })
-        .limit(10); // Show more recent sessions
+        .limit(10);
 
       if (error) throw error;
       setRecentSessions(data || []);
@@ -112,9 +150,12 @@ export function InventoryFileUpload() {
     }
   };
 
-  // Load monitor data for a session
+  // Load real-time monitor data for a session
   const loadMonitorData = async (sessionId: string) => {
     try {
+      setIsLoadingMonitor(true);
+      
+      // Get session data
       const { data: session, error: sessionError } = await supabase
         .from('csv_upload_sessions')
         .select('*')
@@ -123,27 +164,46 @@ export function InventoryFileUpload() {
 
       if (sessionError) throw sessionError;
 
+      // Get staging records statistics
       const { data: stagingRecords, error: stagingError } = await supabase
         .from('csv_staging_records')
-        .select('validation_status, needs_review, action_type')
+        .select('validation_status, needs_review, action_type, processed_at')
         .eq('upload_session_id', sessionId);
 
       if (stagingError) throw stagingError;
 
+      // Calculate real statistics
+      const total = session.total_records || 0;
+      const processed = session.processed_records || 0;
+      const valid = session.valid_records || 0;
+      const invalid = session.invalid_records || 0;
+      const corrected = session.corrected_records || 0;
+      
+      const needsReview = stagingRecords?.filter(r => r.needs_review).length || 0;
+      const inserted = stagingRecords?.filter(r => r.action_type === 'insert').length || 0;
+      const updated = stagingRecords?.filter(r => r.action_type === 'update').length || 0;
+      
+      // Calculate progress percentage
+      const progress = total > 0 ? Math.round((processed / total) * 100) : 0;
+
       const stats = {
-        total: stagingRecords?.length || 0,
-        valid: stagingRecords?.filter(r => r.validation_status === 'valid').length || 0,
-        invalid: stagingRecords?.filter(r => r.validation_status === 'invalid').length || 0,
-        corrected: stagingRecords?.filter(r => r.validation_status === 'corrected').length || 0,
-        needsReview: stagingRecords?.filter(r => r.needs_review).length || 0,
-        inserted: stagingRecords?.filter(r => r.action_type === 'insert').length || 0,
-        updated: stagingRecords?.filter(r => r.action_type === 'update').length || 0
+        total,
+        processed,
+        valid,
+        invalid,
+        corrected,
+        needsReview,
+        inserted,
+        updated,
+        progress
       };
 
       setMonitorData({
         session,
-        stats
+        stats,
+        lastUpdated: new Date().toLocaleTimeString()
       });
+      
     } catch (error) {
       console.error('Error loading monitor data:', error);
       toast({
@@ -151,6 +211,8 @@ export function InventoryFileUpload() {
         description: "Failed to load monitoring data",
         variant: "destructive",
       });
+    } finally {
+      setIsLoadingMonitor(false);
     }
   };
 
@@ -821,7 +883,7 @@ export function InventoryFileUpload() {
     }
   };
 
-  // Open monitor
+  // Open monitor with real-time data
   const openMonitor = async () => {
     const sessionId = currentSessionId || (recentSessions.length > 0 ? recentSessions[0].id : null);
     
@@ -835,16 +897,21 @@ export function InventoryFileUpload() {
     }
 
     setMonitorSessionId(sessionId);
-    await loadMonitorData(sessionId);
     setShowMonitor(true);
     setShowUploadDialog(false);
   };
 
-  // Close monitor
+  // Close monitor and cleanup
   const closeMonitor = () => {
     setShowMonitor(false);
     setMonitorSessionId(null);
     setMonitorData(null);
+    
+    // Clear the interval
+    if (monitorIntervalRef.current) {
+      clearInterval(monitorIntervalRef.current);
+      monitorIntervalRef.current = null;
+    }
     
     if (currentUser) {
       loadRecentSessions(currentUser.id);
@@ -860,7 +927,7 @@ export function InventoryFileUpload() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // NEW: Get processing progress percentage for sessions
+  // Get processing progress percentage for sessions
   const getSessionProgress = (session: UploadSession): number => {
     if (session.status === 'completed') return 100;
     if (session.status === 'failed') return 0;
@@ -907,7 +974,7 @@ export function InventoryFileUpload() {
                 </div>
               </div>
 
-              {/* ENHANCED: Recent Upload Sessions with audit access */}
+              {/* Recent Upload Sessions */}
               {recentSessions.length > 0 && (
                 <Card className="mb-6">
                   <CardHeader>
@@ -945,7 +1012,6 @@ export function InventoryFileUpload() {
                             <span className="text-xs text-gray-400">{formatDate(session.created_at)}</span>
                           </div>
                           
-                          {/* ENHANCED: Detailed progress and statistics */}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-2">
                             <div>
                               <span className="text-gray-500">Total:</span>
@@ -965,7 +1031,6 @@ export function InventoryFileUpload() {
                             </div>
                           </div>
                           
-                          {/* Progress bar for processing sessions */}
                           {session.status === 'processing' && (
                             <div className="mb-2">
                               <div className="flex justify-between text-xs mb-1">
@@ -981,7 +1046,6 @@ export function InventoryFileUpload() {
                               Size: {formatFileSize(session.file_size || 0)}
                             </div>
                             <div className="flex items-center space-x-1">
-                              {/* Review button for problematic records */}
                               {(session.invalid_records > 0 || session.corrected_records > 0) && (
                                 <Button
                                   size="sm"
@@ -994,7 +1058,6 @@ export function InventoryFileUpload() {
                                 </Button>
                               )}
                               
-                              {/* Delete button */}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1136,9 +1199,7 @@ export function InventoryFileUpload() {
                         </div>
                       )}
 
-                      {/* Action buttons */}
                       <div className="flex space-x-2">
-                        {/* Review button for problematic records */}
                         {((uploadResult.session?.invalid_records || 0) > 0 || (uploadResult.session?.corrected_records || 0) > 0) && (
                           <Button 
                             size="sm" 
@@ -1150,7 +1211,6 @@ export function InventoryFileUpload() {
                         )}
                       </div>
 
-                      {/* Alert for records needing review */}
                       {((uploadResult.session?.invalid_records || 0) > 0 || (uploadResult.session?.corrected_records || 0) > 0) && (
                         <Alert>
                           <AlertTriangle className="h-4 w-4" />
@@ -1202,15 +1262,19 @@ export function InventoryFileUpload() {
         />
       )}
 
-      {/* Simple Monitor Interface */}
+      {/* Real-Time Monitor Interface */}
       {showMonitor && monitorData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <div>
-                  <h2 className="text-xl font-semibold">Processing Monitor</h2>
+                  <h2 className="text-xl font-semibold flex items-center">
+                    Processing Monitor
+                    {isLoadingMonitor && <RefreshCw className="h-4 w-4 ml-2 animate-spin" />}
+                  </h2>
                   <p className="text-sm text-gray-600">{monitorData.session.original_filename}</p>
+                  <p className="text-xs text-gray-400">Last updated: {monitorData.lastUpdated}</p>
                 </div>
                 <Button
                   variant="ghost"
@@ -1222,57 +1286,84 @@ export function InventoryFileUpload() {
                 </Button>
               </div>
 
+              {/* Progress Bar for Active Processing */}
+              {monitorData.session.status === 'processing' && (
+                <div className="mb-6">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span>Processing Progress</span>
+                    <span>{monitorData.stats.progress}%</span>
+                  </div>
+                  <Progress value={monitorData.stats.progress} className="h-3" />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {monitorData.stats.processed.toLocaleString()} of {monitorData.stats.total.toLocaleString()} records processed
+                  </p>
+                </div>
+              )}
+
+              {/* Statistics Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <Card>
                   <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-blue-600">{monitorData.stats.total}</div>
+                    <div className="text-2xl font-bold text-blue-600">{monitorData.stats.total.toLocaleString()}</div>
                     <div className="text-sm text-gray-500">Total Records</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-green-600">{monitorData.stats.valid}</div>
+                    <div className="text-2xl font-bold text-gray-600">{monitorData.stats.processed.toLocaleString()}</div>
+                    <div className="text-sm text-gray-500">Processed</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-green-600">{monitorData.stats.valid.toLocaleString()}</div>
                     <div className="text-sm text-gray-500">Valid</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-red-600">{monitorData.stats.invalid}</div>
+                    <div className="text-2xl font-bold text-red-600">{monitorData.stats.invalid.toLocaleString()}</div>
                     <div className="text-sm text-gray-500">Invalid</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-yellow-600">{monitorData.stats.corrected}</div>
-                    <div className="text-sm text-gray-500">Corrected</div>
                   </CardContent>
                 </Card>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 <Card>
                   <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-green-600">{monitorData.stats.inserted}</div>
+                    <div className="text-2xl font-bold text-yellow-600">{monitorData.stats.corrected.toLocaleString()}</div>
+                    <div className="text-sm text-gray-500">Corrected</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-green-600">{monitorData.stats.inserted.toLocaleString()}</div>
                     <div className="text-sm text-gray-500">Inserted to Inventory</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-blue-600">{monitorData.stats.updated}</div>
+                    <div className="text-2xl font-bold text-blue-600">{monitorData.stats.updated.toLocaleString()}</div>
                     <div className="text-sm text-gray-500">Updated in Inventory</div>
                   </CardContent>
                 </Card>
               </div>
 
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <div className="text-sm text-gray-500">
-                  Status: <Badge variant={monitorData.session.status === 'completed' ? 'default' : 'secondary'}>
+                  Status: <Badge variant={monitorData.session.status === 'completed' ? 'default' : 
+                                          monitorData.session.status === 'failed' ? 'destructive' : 'secondary'}>
                     {monitorData.session.status}
                   </Badge>
                 </div>
                 <div className="text-sm text-gray-500">
                   {formatDate(monitorData.session.created_at)}
                 </div>
+              </div>
+
+              {/* Auto-refresh indicator */}
+              <div className="mt-4 text-xs text-gray-400 text-center">
+                🔄 Auto-refreshing every 3 seconds
               </div>
             </div>
           </div>
