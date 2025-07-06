@@ -138,7 +138,32 @@ export function InventoryFileUpload() {
     }
   }, [showMonitor, monitorSessionId]);
 
-  // FIXED: Improved stall detection that works with existing database schema
+  // FIXED: Normalize timestamp to handle database format inconsistencies
+  const normalizeTimestamp = (timestamp: string): Date => {
+    if (!timestamp) return new Date();
+    
+    // Handle different timestamp formats from database
+    let normalizedTimestamp = timestamp;
+    
+    // If timestamp has microseconds but no timezone, add UTC timezone
+    if (timestamp.includes('.') && !timestamp.includes('Z') && !timestamp.includes('+')) {
+      // Truncate microseconds to milliseconds and add Z
+      const parts = timestamp.split('.');
+      if (parts.length === 2) {
+        const milliseconds = parts[1].substring(0, 3); // Take only first 3 digits
+        normalizedTimestamp = `${parts[0]}.${milliseconds}Z`;
+      }
+    }
+    
+    // If no timezone info at all, assume UTC
+    if (!normalizedTimestamp.includes('Z') && !normalizedTimestamp.includes('+')) {
+      normalizedTimestamp += 'Z';
+    }
+    
+    return new Date(normalizedTimestamp);
+  };
+
+  // FIXED: Improved stall detection with proper date handling
   const isSessionStalled = (session: UploadSession): { isStalled: boolean; stallDuration?: number; lastProgressTime: string } => {
     // If session is not processing, it's not stalled
     if (session.status !== 'processing') {
@@ -153,7 +178,9 @@ export function InventoryFileUpload() {
     
     // Use last_processed_at if available, otherwise fall back to updated_at
     const lastProgressTime = session.last_processed_at || session.updated_at || session.created_at;
-    const lastProgressDate = new Date(lastProgressTime);
+    
+    // FIXED: Use normalized timestamp parsing
+    const lastProgressDate = normalizeTimestamp(lastProgressTime);
     
     // Calculate time since last progress
     const timeSinceLastProgress = now.getTime() - lastProgressDate.getTime();
@@ -163,9 +190,11 @@ export function InventoryFileUpload() {
       status: session.status,
       now: now.toISOString(),
       lastProgressTime,
+      lastProgressDate: lastProgressDate.toISOString(),
       timeSinceLastProgress,
       stallThresholdMs,
-      isStalled: timeSinceLastProgress > stallThresholdMs
+      isStalled: timeSinceLastProgress > stallThresholdMs,
+      stallDurationMinutes: Math.floor(timeSinceLastProgress / 1000 / 60)
     });
     
     if (timeSinceLastProgress > stallThresholdMs) {
@@ -513,7 +542,7 @@ export function InventoryFileUpload() {
   const formatDate = (dateString: string): string => {
     try {
       if (!dateString) return 'Invalid Date';
-      const date = new Date(dateString);
+      const date = normalizeTimestamp(dateString);
       if (isNaN(date.getTime())) return 'Invalid Date';
       return date.toLocaleString();
     } catch (error) {
@@ -1617,7 +1646,7 @@ export function InventoryFileUpload() {
         />
       )}
 
-      {/* Real-Time Monitor Interface with Enhanced Stall Detection */}
+      {/* Real-Time Monitor Interface with Fixed Stall Detection */}
       {showMonitor && monitorData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -1759,7 +1788,7 @@ export function InventoryFileUpload() {
 
               {/* Auto-refresh indicator */}
               <div className="mt-4 text-xs text-gray-400 text-center">
-                🔄 Auto-refreshing every 3 seconds • Stall detection: 2 minutes • Debug logs in console
+                🔄 Auto-refreshing every 3 seconds • Stall detection: 2 minutes • Fixed timestamp parsing
               </div>
             </div>
           </div>
