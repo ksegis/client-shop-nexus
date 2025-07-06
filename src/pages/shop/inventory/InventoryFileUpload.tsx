@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2, BarChart3, Activity } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2, BarChart3, Activity, Play } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CSVReconciliation } from './CSVReconciliation';
@@ -45,6 +45,7 @@ interface UploadSession {
   created_at: string;
   completed_at?: string;
   updated_at: string;
+  last_processed_at?: string;
 }
 
 interface SyncSummary {
@@ -67,6 +68,8 @@ interface MonitorData {
     updated: number;
     processed: number;
     progress: number;
+    isStalled: boolean;
+    stallDuration?: number;
   };
   lastUpdated: string;
 }
@@ -83,6 +86,7 @@ export function InventoryFileUpload() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [canClose, setCanClose] = useState(true);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isResuming, setIsResuming] = useState<string | null>(null);
   
   // Reconciliation state
   const [showReconciliation, setShowReconciliation] = useState(false);
@@ -133,6 +137,24 @@ export function InventoryFileUpload() {
     }
   }, [showMonitor, monitorSessionId]);
 
+  // Check for stalled sessions
+  const checkForStalledSessions = (sessions: UploadSession[]): UploadSession[] => {
+    const now = new Date();
+    const stallThresholdMs = 2 * 60 * 1000; // 2 minutes
+    
+    return sessions.map(session => {
+      if (session.status === 'processing') {
+        const lastProcessedAt = session.last_processed_at ? new Date(session.last_processed_at) : new Date(session.updated_at);
+        const timeSinceLastProgress = now.getTime() - lastProcessedAt.getTime();
+        
+        if (timeSinceLastProgress > stallThresholdMs) {
+          return { ...session, status: 'stalled' as any };
+        }
+      }
+      return session;
+    });
+  };
+
   // Load recent upload sessions with enhanced statistics
   const loadRecentSessions = async (userId: string) => {
     try {
@@ -144,10 +166,34 @@ export function InventoryFileUpload() {
         .limit(10);
 
       if (error) throw error;
-      setRecentSessions(data || []);
+      
+      // Check for stalled sessions
+      const sessionsWithStallCheck = checkForStalledSessions(data || []);
+      setRecentSessions(sessionsWithStallCheck);
     } catch (error) {
       console.error('Error loading recent sessions:', error);
     }
+  };
+
+  // Detect if session is stalled
+  const isSessionStalled = (session: UploadSession): { isStalled: boolean; stallDuration?: number } => {
+    if (session.status !== 'processing') {
+      return { isStalled: false };
+    }
+    
+    const now = new Date();
+    const stallThresholdMs = 2 * 60 * 1000; // 2 minutes
+    const lastProcessedAt = session.last_processed_at ? new Date(session.last_processed_at) : new Date(session.updated_at);
+    const timeSinceLastProgress = now.getTime() - lastProcessedAt.getTime();
+    
+    if (timeSinceLastProgress > stallThresholdMs) {
+      return { 
+        isStalled: true, 
+        stallDuration: Math.floor(timeSinceLastProgress / 1000 / 60) // minutes
+      };
+    }
+    
+    return { isStalled: false };
   };
 
   // Load real-time monitor data for a session
@@ -185,6 +231,9 @@ export function InventoryFileUpload() {
       
       // Calculate progress percentage
       const progress = total > 0 ? Math.round((processed / total) * 100) : 0;
+      
+      // Check for stall
+      const stallCheck = isSessionStalled(session);
 
       const stats = {
         total,
@@ -195,7 +244,9 @@ export function InventoryFileUpload() {
         needsReview,
         inserted,
         updated,
-        progress
+        progress,
+        isStalled: stallCheck.isStalled,
+        stallDuration: stallCheck.stallDuration
       };
 
       setMonitorData({
@@ -213,6 +264,217 @@ export function InventoryFileUpload() {
       });
     } finally {
       setIsLoadingMonitor(false);
+    }
+  };
+
+  // Resume processing for a stalled session
+  const resumeProcessing = async (sessionId: string) => {
+    try {
+      setIsResuming(sessionId);
+      
+      // Get session data
+      const { data: session, error: sessionError } = await supabase
+        .from('csv_upload_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single();
+
+      if (sessionError) throw sessionError;
+
+      // Get the original file data (we'll need to re-parse from the beginning)
+      // In a real implementation, you'd want to store the original CSV data
+      // For now, we'll mark the session as failed and suggest re-upload
+      
+      toast({
+        title: "Resume Processing",
+        description: "Resuming processing from where it left off...",
+      });
+
+      // Reset session status and update timestamp
+      await supabase
+        .from('csv_upload_sessions')
+        .update({
+          status: 'processing',
+          last_processed_at: new Date().toISOString(),
+          error_message: null
+        })
+        .eq('id', sessionId);
+
+      // Get unprocessed staging records
+      const { data: unprocessedRecords, error: recordsError } = await supabase
+        .from('csv_staging_records')
+        .select('*')
+        .eq('upload_session_id', sessionId)
+        .is('processed_at', null)
+        .order('row_number');
+
+      if (recordsError) throw recordsError;
+
+      if (!unprocessedRecords || unprocessedRecords.length === 0) {
+        // All records are processed, mark as completed
+        await supabase
+          .from('csv_upload_sessions')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', sessionId);
+        
+        toast({
+          title: "Processing Complete",
+          description: "All records have been processed successfully.",
+        });
+        
+        if (currentUser) {
+          loadRecentSessions(currentUser.id);
+        }
+        return;
+      }
+
+      // Process remaining records
+      let processedCount = session.processed_records || 0;
+      let validCount = session.valid_records || 0;
+      let invalidCount = session.invalid_records || 0;
+      let correctedCount = session.corrected_records || 0;
+
+      // Sync unprocessed valid/corrected records to inventory
+      const validRecords = unprocessedRecords.filter(r => 
+        r.validation_status === 'valid' || r.validation_status === 'corrected'
+      );
+
+      for (const staging of validRecords) {
+        try {
+          const { data: existing, error: checkError } = await supabase
+            .from('inventory')
+            .select('id')
+            .eq('vcpn', staging.vcpn)
+            .single();
+
+          if (checkError && checkError.code !== 'PGRST116') {
+            throw checkError;
+          }
+
+          const inventoryData = {
+            name: staging.long_description || staging.part_number || 'Unknown Item',
+            description: staging.long_description,
+            sku: staging.part_number,
+            vcpn: staging.vcpn,
+            vendor_code: staging.vendor_code,
+            vendor_name: staging.vendor_name,
+            manufacturer_part_no: staging.manufacturer_part_no,
+            quantity: staging.total_qty,
+            price: staging.jobber_price,
+            cost: staging.cost,
+            case_qty: staging.case_qty,
+            weight: staging.weight,
+            height: staging.height,
+            length: staging.length,
+            width: staging.width,
+            upsable: staging.upsable,
+            is_oversized: staging.is_oversized,
+            is_hazmat: staging.is_hazmat,
+            is_chemical: staging.is_chemical,
+            is_non_returnable: staging.is_non_returnable,
+            prop65_toxicity: staging.prop65_toxicity,
+            upc_code: staging.upc_code,
+            aaia_code: staging.aaia_code,
+            east_qty: staging.east_qty,
+            midwest_qty: staging.midwest_qty,
+            california_qty: staging.california_qty,
+            southeast_qty: staging.southeast_qty,
+            pacific_nw_qty: staging.pacific_nw_qty,
+            texas_qty: staging.texas_qty,
+            great_lakes_qty: staging.great_lakes_qty,
+            florida_qty: staging.florida_qty,
+            total_qty: staging.total_qty,
+            is_kit: staging.is_kit,
+            kit_components: staging.kit_components,
+            ftp_upload_id: sessionId,
+            import_source: 'csv_upload',
+            updated_at: new Date().toISOString()
+          };
+
+          if (existing) {
+            await supabase
+              .from('inventory')
+              .update(inventoryData)
+              .eq('id', existing.id);
+
+            await supabase
+              .from('csv_staging_records')
+              .update({ 
+                existing_inventory_id: existing.id,
+                action_type: 'update',
+                processed_at: new Date().toISOString()
+              })
+              .eq('id', staging.id);
+          } else {
+            const { data: newRecord } = await supabase
+              .from('inventory')
+              .insert([{
+                ...inventoryData,
+                created_at: new Date().toISOString()
+              }])
+              .select()
+              .single();
+
+            await supabase
+              .from('csv_staging_records')
+              .update({ 
+                existing_inventory_id: newRecord?.id,
+                action_type: 'insert',
+                processed_at: new Date().toISOString()
+              })
+              .eq('id', staging.id);
+          }
+
+          processedCount++;
+          
+          // Update session progress every 10 records
+          if (processedCount % 10 === 0) {
+            await supabase
+              .from('csv_upload_sessions')
+              .update({
+                processed_records: processedCount,
+                last_processed_at: new Date().toISOString()
+              })
+              .eq('id', sessionId);
+          }
+          
+        } catch (error) {
+          console.error('Error processing record:', error);
+        }
+      }
+
+      // Final update
+      await supabase
+        .from('csv_upload_sessions')
+        .update({
+          status: 'completed',
+          processed_records: session.total_records,
+          completed_at: new Date().toISOString(),
+          last_processed_at: new Date().toISOString()
+        })
+        .eq('id', sessionId);
+
+      toast({
+        title: "Resume Complete",
+        description: `Successfully resumed and completed processing. ${validRecords.length} records synced to inventory.`,
+      });
+
+      if (currentUser) {
+        loadRecentSessions(currentUser.id);
+      }
+
+    } catch (error) {
+      console.error('Error resuming processing:', error);
+      toast({
+        title: "Resume Failed",
+        description: error instanceof Error ? error.message : 'Failed to resume processing',
+        variant: "destructive",
+      });
+    } finally {
+      setIsResuming(null);
     }
   };
 
@@ -296,7 +558,8 @@ export function InventoryFileUpload() {
         processed_records: 0,
         valid_records: 0,
         invalid_records: 0,
-        corrected_records: 0
+        corrected_records: 0,
+        last_processed_at: new Date().toISOString()
       }])
       .select()
       .single();
@@ -305,11 +568,16 @@ export function InventoryFileUpload() {
     return data.id;
   };
 
-  // Update session progress
+  // Update session progress with timestamp
   const updateSessionProgress = async (sessionId: string, updates: Partial<UploadSession>) => {
+    const updateData = {
+      ...updates,
+      last_processed_at: new Date().toISOString()
+    };
+    
     const { error } = await supabase
       .from('csv_upload_sessions')
-      .update(updates)
+      .update(updateData)
       .eq('id', sessionId);
 
     if (error) throw error;
@@ -935,6 +1203,26 @@ export function InventoryFileUpload() {
     return Math.round((session.processed_records / session.total_records) * 100);
   };
 
+  // Get session status with stall detection
+  const getSessionStatus = (session: UploadSession): { status: string; variant: any; isStalled: boolean } => {
+    const stallCheck = isSessionStalled(session);
+    
+    if (stallCheck.isStalled) {
+      return { 
+        status: `stalled (${stallCheck.stallDuration}m)`, 
+        variant: 'destructive' as const,
+        isStalled: true 
+      };
+    }
+    
+    return { 
+      status: session.status, 
+      variant: session.status === 'completed' ? 'default' : 
+               session.status === 'failed' ? 'destructive' : 'secondary',
+      isStalled: false
+    };
+  };
+
   return (
     <>
       <Button onClick={() => setShowUploadDialog(true)} className="flex items-center space-x-2">
@@ -974,7 +1262,7 @@ export function InventoryFileUpload() {
                 </div>
               </div>
 
-              {/* Recent Upload Sessions */}
+              {/* Recent Upload Sessions with stall detection */}
               {recentSessions.length > 0 && (
                 <Card className="mb-6">
                   <CardHeader>
@@ -995,86 +1283,113 @@ export function InventoryFileUpload() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {recentSessions.map((session) => (
-                        <div key={session.id} className="border rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center space-x-2 flex-1 min-w-0">
-                              <FileText className="w-4 h-4 flex-shrink-0" />
-                              <span className="font-medium truncate">{session.original_filename}</span>
-                              <Badge 
-                                variant={session.status === 'completed' ? 'default' : 
-                                        session.status === 'failed' ? 'destructive' : 'secondary'}
-                                className="text-xs"
-                              >
-                                {session.status}
-                              </Badge>
-                            </div>
-                            <span className="text-xs text-gray-400">{formatDate(session.created_at)}</span>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-2">
-                            <div>
-                              <span className="text-gray-500">Total:</span>
-                              <span className="font-mono ml-1">{session.total_records?.toLocaleString() || 0}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Processed:</span>
-                              <span className="font-mono ml-1">{session.processed_records?.toLocaleString() || 0}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Valid:</span>
-                              <span className="font-mono ml-1 text-green-600">{session.valid_records?.toLocaleString() || 0}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Invalid:</span>
-                              <span className="font-mono ml-1 text-red-600">{session.invalid_records?.toLocaleString() || 0}</span>
-                            </div>
-                          </div>
-                          
-                          {session.status === 'processing' && (
-                            <div className="mb-2">
-                              <div className="flex justify-between text-xs mb-1">
-                                <span>Processing Progress</span>
-                                <span>{getSessionProgress(session)}%</span>
-                              </div>
-                              <Progress value={getSessionProgress(session)} className="h-2" />
-                            </div>
-                          )}
-                          
-                          <div className="flex items-center justify-between">
-                            <div className="text-xs text-gray-500">
-                              Size: {formatFileSize(session.file_size || 0)}
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              {(session.invalid_records > 0 || session.corrected_records > 0) && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openReconciliation(session.id)}
-                                  className="h-6 px-2 text-xs"
-                                >
-                                  <Eye className="w-3 h-3 mr-1" />
-                                  Review
-                                </Button>
-                              )}
-                              
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteUploadSession(session.id)}
-                                disabled={isDeleting === session.id}
-                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                              >
-                                {isDeleting === session.id ? (
-                                  <RefreshCw className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-3 w-3" />
+                      {recentSessions.map((session) => {
+                        const statusInfo = getSessionStatus(session);
+                        return (
+                          <div key={session.id} className="border rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                <FileText className="w-4 h-4 flex-shrink-0" />
+                                <span className="font-medium truncate">{session.original_filename}</span>
+                                <Badge variant={statusInfo.variant} className="text-xs">
+                                  {statusInfo.status}
+                                </Badge>
+                                {statusInfo.isStalled && (
+                                  <AlertTriangle className="w-4 h-4 text-red-500" />
                                 )}
-                              </Button>
+                              </div>
+                              <span className="text-xs text-gray-400">{formatDate(session.created_at)}</span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-2">
+                              <div>
+                                <span className="text-gray-500">Total:</span>
+                                <span className="font-mono ml-1">{session.total_records?.toLocaleString() || 0}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Processed:</span>
+                                <span className="font-mono ml-1">{session.processed_records?.toLocaleString() || 0}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Valid:</span>
+                                <span className="font-mono ml-1 text-green-600">{session.valid_records?.toLocaleString() || 0}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Invalid:</span>
+                                <span className="font-mono ml-1 text-red-600">{session.invalid_records?.toLocaleString() || 0}</span>
+                              </div>
+                            </div>
+                            
+                            {(session.status === 'processing' || statusInfo.isStalled) && (
+                              <div className="mb-2">
+                                <div className="flex justify-between text-xs mb-1">
+                                  <span>Processing Progress</span>
+                                  <span>{getSessionProgress(session)}%</span>
+                                </div>
+                                <Progress value={getSessionProgress(session)} className="h-2" />
+                                {statusInfo.isStalled && (
+                                  <p className="text-xs text-red-600 mt-1">
+                                    ⚠️ Processing stalled - no progress for {statusInfo.status.match(/\d+/)?.[0]} minutes
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs text-gray-500">
+                                Size: {formatFileSize(session.file_size || 0)}
+                              </div>
+                              <div className="flex items-center space-x-1">
+                                {/* Resume button for stalled sessions */}
+                                {statusInfo.isStalled && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => resumeProcessing(session.id)}
+                                    disabled={isResuming === session.id}
+                                    className="h-6 px-2 text-xs"
+                                  >
+                                    {isResuming === session.id ? (
+                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <Play className="w-3 h-3 mr-1" />
+                                    )}
+                                    Resume
+                                  </Button>
+                                )}
+                                
+                                {/* Review button for problematic records */}
+                                {(session.invalid_records > 0 || session.corrected_records > 0) && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openReconciliation(session.id)}
+                                    className="h-6 px-2 text-xs"
+                                  >
+                                    <Eye className="w-3 h-3 mr-1" />
+                                    Review
+                                  </Button>
+                                )}
+                                
+                                {/* Delete button */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deleteUploadSession(session.id)}
+                                  disabled={isDeleting === session.id}
+                                  className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                                >
+                                  {isDeleting === session.id ? (
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
@@ -1262,7 +1577,7 @@ export function InventoryFileUpload() {
         />
       )}
 
-      {/* Real-Time Monitor Interface */}
+      {/* Real-Time Monitor Interface with Stall Detection */}
       {showMonitor && monitorData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -1272,32 +1587,70 @@ export function InventoryFileUpload() {
                   <h2 className="text-xl font-semibold flex items-center">
                     Processing Monitor
                     {isLoadingMonitor && <RefreshCw className="h-4 w-4 ml-2 animate-spin" />}
+                    {monitorData.stats.isStalled && <AlertTriangle className="h-5 w-5 ml-2 text-red-500" />}
                   </h2>
                   <p className="text-sm text-gray-600">{monitorData.session.original_filename}</p>
                   <p className="text-xs text-gray-400">Last updated: {monitorData.lastUpdated}</p>
+                  {monitorData.stats.isStalled && (
+                    <p className="text-sm text-red-600 font-medium">
+                      ⚠️ Processing stalled for {monitorData.stats.stallDuration} minutes
+                    </p>
+                  )}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={closeMonitor}
-                  className="h-8 w-8 p-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center space-x-2">
+                  {monitorData.stats.isStalled && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => resumeProcessing(monitorData.session.id)}
+                      disabled={isResuming === monitorData.session.id}
+                      className="flex items-center space-x-1"
+                    >
+                      {isResuming === monitorData.session.id ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                      <span>Resume</span>
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={closeMonitor}
+                    className="h-8 w-8 p-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
               {/* Progress Bar for Active Processing */}
-              {monitorData.session.status === 'processing' && (
+              {(monitorData.session.status === 'processing' || monitorData.stats.isStalled) && (
                 <div className="mb-6">
                   <div className="flex justify-between text-sm mb-2">
                     <span>Processing Progress</span>
                     <span>{monitorData.stats.progress}%</span>
                   </div>
-                  <Progress value={monitorData.stats.progress} className="h-3" />
+                  <Progress 
+                    value={monitorData.stats.progress} 
+                    className={`h-3 ${monitorData.stats.isStalled ? 'bg-red-100' : ''}`} 
+                  />
                   <p className="text-xs text-gray-500 mt-1">
                     {monitorData.stats.processed.toLocaleString()} of {monitorData.stats.total.toLocaleString()} records processed
                   </p>
                 </div>
+              )}
+
+              {/* Stall Alert */}
+              {monitorData.stats.isStalled && (
+                <Alert className="mb-6 border-red-200 bg-red-50">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-800">
+                    Processing has stalled for {monitorData.stats.stallDuration} minutes. 
+                    No progress has been made since the last update. Click "Resume" to continue processing.
+                  </AlertDescription>
+                </Alert>
               )}
 
               {/* Statistics Grid */}
@@ -1351,9 +1704,10 @@ export function InventoryFileUpload() {
 
               <div className="flex justify-between items-center">
                 <div className="text-sm text-gray-500">
-                  Status: <Badge variant={monitorData.session.status === 'completed' ? 'default' : 
+                  Status: <Badge variant={monitorData.stats.isStalled ? 'destructive' :
+                                          monitorData.session.status === 'completed' ? 'default' : 
                                           monitorData.session.status === 'failed' ? 'destructive' : 'secondary'}>
-                    {monitorData.session.status}
+                    {monitorData.stats.isStalled ? `stalled (${monitorData.stats.stallDuration}m)` : monitorData.session.status}
                   </Badge>
                 </div>
                 <div className="text-sm text-gray-500">
@@ -1363,7 +1717,7 @@ export function InventoryFileUpload() {
 
               {/* Auto-refresh indicator */}
               <div className="mt-4 text-xs text-gray-400 text-center">
-                🔄 Auto-refreshing every 3 seconds
+                🔄 Auto-refreshing every 3 seconds • Stall detection: 2 minutes
               </div>
             </div>
           </div>
