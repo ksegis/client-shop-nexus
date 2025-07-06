@@ -8,7 +8,6 @@ import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, Refr
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CSVReconciliation } from './CSVReconciliation';
-import CSVAuditDashboard from './CSVAuditDashboard';
 
 
 // Types for CSV processing
@@ -71,9 +70,12 @@ export function InventoryFileUpload() {
   
   // Reconciliation state
   const [showReconciliation, setShowReconciliation] = useState(false);
-  const [showAuditDashboard, setShowAuditDashboard] = useState(false);
-  const [auditSessionId, setAuditSessionId] = useState<string | null>(null);
   const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
+  
+  // Monitor state
+  const [showMonitor, setShowMonitor] = useState(false);
+  const [monitorSessionId, setMonitorSessionId] = useState<string | null>(null);
+  const [monitorData, setMonitorData] = useState<any>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -107,6 +109,48 @@ export function InventoryFileUpload() {
       setRecentSessions(data || []);
     } catch (error) {
       console.error('Error loading recent sessions:', error);
+    }
+  };
+
+  // Load monitor data for a session
+  const loadMonitorData = async (sessionId: string) => {
+    try {
+      const { data: session, error: sessionError } = await supabase
+        .from('csv_upload_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single();
+
+      if (sessionError) throw sessionError;
+
+      const { data: stagingRecords, error: stagingError } = await supabase
+        .from('csv_staging_records')
+        .select('validation_status, needs_review, action_type')
+        .eq('upload_session_id', sessionId);
+
+      if (stagingError) throw stagingError;
+
+      const stats = {
+        total: stagingRecords?.length || 0,
+        valid: stagingRecords?.filter(r => r.validation_status === 'valid').length || 0,
+        invalid: stagingRecords?.filter(r => r.validation_status === 'invalid').length || 0,
+        corrected: stagingRecords?.filter(r => r.validation_status === 'corrected').length || 0,
+        needsReview: stagingRecords?.filter(r => r.needs_review).length || 0,
+        inserted: stagingRecords?.filter(r => r.action_type === 'insert').length || 0,
+        updated: stagingRecords?.filter(r => r.action_type === 'update').length || 0
+      };
+
+      setMonitorData({
+        session,
+        stats
+      });
+    } catch (error) {
+      console.error('Error loading monitor data:', error);
+      toast({
+        title: "Monitor Error",
+        description: "Failed to load monitoring data",
+        variant: "destructive",
+      });
     }
   };
 
@@ -777,36 +821,33 @@ export function InventoryFileUpload() {
     }
   };
 
-  // Open audit dashboard
-  const openAuditDashboard = (sessionId: string) => {
-    setAuditSessionId(sessionId);
-    setShowAuditDashboard(true);
-    setShowUploadDialog(false);
-  };
-
-  // Close audit dashboard
-  const closeAuditDashboard = () => {
-    setShowAuditDashboard(false);
-    setAuditSessionId(null);
+  // Open monitor
+  const openMonitor = async () => {
+    const sessionId = currentSessionId || (recentSessions.length > 0 ? recentSessions[0].id : null);
     
-    if (currentUser) {
-      loadRecentSessions(currentUser.id);
-    }
-  };
-
-  // Monitor function - opens audit dashboard for monitoring
-  const openMonitor = () => {
-    if (currentSessionId) {
-      openAuditDashboard(currentSessionId);
-    } else if (recentSessions.length > 0) {
-      // Open the most recent session for monitoring
-      openAuditDashboard(recentSessions[0].id);
-    } else {
+    if (!sessionId) {
       toast({
         title: "No Sessions to Monitor",
         description: "Upload a CSV file first to monitor processing.",
         variant: "destructive",
       });
+      return;
+    }
+
+    setMonitorSessionId(sessionId);
+    await loadMonitorData(sessionId);
+    setShowMonitor(true);
+    setShowUploadDialog(false);
+  };
+
+  // Close monitor
+  const closeMonitor = () => {
+    setShowMonitor(false);
+    setMonitorSessionId(null);
+    setMonitorData(null);
+    
+    if (currentUser) {
+      loadRecentSessions(currentUser.id);
     }
   };
 
@@ -952,17 +993,6 @@ export function InventoryFileUpload() {
                                   Review
                                 </Button>
                               )}
-                              
-                              {/* Monitor button for each session */}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openAuditDashboard(session.id)}
-                                className="h-6 px-2 text-xs"
-                              >
-                                <BarChart3 className="w-3 h-3 mr-1" />
-                                Audit
-                              </Button>
                               
                               {/* Delete button */}
                               <Button
@@ -1172,12 +1202,81 @@ export function InventoryFileUpload() {
         />
       )}
 
-      {/* CSV Audit Dashboard */}
-      {showAuditDashboard && auditSessionId && (
-        <CSVAuditDashboard
-          sessionId={auditSessionId}
-          onClose={closeAuditDashboard}
-        />
+      {/* Simple Monitor Interface */}
+      {showMonitor && monitorData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-xl font-semibold">Processing Monitor</h2>
+                  <p className="text-sm text-gray-600">{monitorData.session.original_filename}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={closeMonitor}
+                  className="h-8 w-8 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-blue-600">{monitorData.stats.total}</div>
+                    <div className="text-sm text-gray-500">Total Records</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-green-600">{monitorData.stats.valid}</div>
+                    <div className="text-sm text-gray-500">Valid</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-red-600">{monitorData.stats.invalid}</div>
+                    <div className="text-sm text-gray-500">Invalid</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-yellow-600">{monitorData.stats.corrected}</div>
+                    <div className="text-sm text-gray-500">Corrected</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-green-600">{monitorData.stats.inserted}</div>
+                    <div className="text-sm text-gray-500">Inserted to Inventory</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="text-2xl font-bold text-blue-600">{monitorData.stats.updated}</div>
+                    <div className="text-sm text-gray-500">Updated in Inventory</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="flex justify-between">
+                <div className="text-sm text-gray-500">
+                  Status: <Badge variant={monitorData.session.status === 'completed' ? 'default' : 'secondary'}>
+                    {monitorData.session.status}
+                  </Badge>
+                </div>
+                <div className="text-sm text-gray-500">
+                  {formatDate(monitorData.session.created_at)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
