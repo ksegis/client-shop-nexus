@@ -9,7 +9,6 @@ import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, Refr
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CSVReconciliation } from './CSVReconciliation';
-import CSVAuditDashboard from './CSVAuditDashboard';
 
 // Types for CSV processing
 interface CSVRecord {
@@ -115,8 +114,6 @@ export function InventoryFileUpload() {
   
   // Reconciliation state
   const [showReconciliation, setShowReconciliation] = useState(false);
-  const [showAuditDashboard, setShowAuditDashboard] = useState(false);
-  const [auditSessionId, setAuditSessionId] = useState<string | null>(null);
   const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1055,23 +1052,6 @@ export function InventoryFileUpload() {
     }
   };
 
-  // Open audit dashboard
-  const openAuditDashboard = (sessionId: string) => {
-    setAuditSessionId(sessionId);
-    setShowAuditDashboard(true);
-    setShowUploadDialog(false);
-  };
-
-  // Close audit dashboard
-  const closeAuditDashboard = () => {
-    setShowAuditDashboard(false);
-    setAuditSessionId(null);
-    
-    if (currentUser) {
-      loadRecentSessions(currentUser.id);
-    }
-  };
-
   return (
     <>
       {/* Main Upload Interface */}
@@ -1195,15 +1175,6 @@ export function InventoryFileUpload() {
                         )}
                       </div>
                       <div className="flex items-center space-x-2 ml-4">
-                        {/* Audit button */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openAuditDashboard(session.id)}
-                        >
-                          <BarChart3 className="h-4 w-4" />
-                        </Button>
-                        
                         {/* Review button for problematic records */}
                         {((session.invalid_records || 0) > 0 || (session.corrected_records || 0) > 0) && (
                           <Button
@@ -1533,14 +1504,6 @@ export function InventoryFileUpload() {
         <CSVReconciliation
           sessionId={reconciliationSessionId}
           onClose={closeReconciliation}
-        />
-      )}
-
-      {/* CSV Audit Dashboard */}
-      {showAuditDashboard && auditSessionId && (
-        <CSVAuditDashboard
-          sessionId={auditSessionId}
-          onClose={closeAuditDashboard}
         />
       )}
     </>
