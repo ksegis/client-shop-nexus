@@ -138,35 +138,89 @@ export function InventoryFileUpload() {
     }
   }, [showMonitor, monitorSessionId]);
 
-  // FIXED: Normalize timestamp to handle database format inconsistencies
-  const normalizeTimestamp = (timestamp: string): Date => {
-    if (!timestamp) return new Date();
+  // COMPLETELY REWRITTEN: Safe timestamp parsing with extensive debugging
+  const parseTimestampSafely = (timestamp: string): Date => {
+    if (!timestamp) {
+      console.log('parseTimestampSafely: Empty timestamp, using current time');
+      return new Date();
+    }
     
-    // Handle different timestamp formats from database
-    let normalizedTimestamp = timestamp;
+    console.log('parseTimestampSafely: Input timestamp:', timestamp);
     
-    // If timestamp has microseconds but no timezone, add UTC timezone
-    if (timestamp.includes('.') && !timestamp.includes('Z') && !timestamp.includes('+')) {
-      // Truncate microseconds to milliseconds and add Z
-      const parts = timestamp.split('.');
-      if (parts.length === 2) {
-        const milliseconds = parts[1].substring(0, 3); // Take only first 3 digits
-        normalizedTimestamp = `${parts[0]}.${milliseconds}Z`;
+    try {
+      // Method 1: Try direct parsing first
+      let testDate = new Date(timestamp);
+      if (!isNaN(testDate.getTime())) {
+        console.log('parseTimestampSafely: Direct parsing successful:', testDate.toISOString());
+        return testDate;
       }
+      
+      // Method 2: Handle PostgreSQL timestamp format with microseconds
+      let normalizedTimestamp = timestamp;
+      
+      // If it has microseconds (6 digits after decimal), truncate to milliseconds (3 digits)
+      if (timestamp.includes('.')) {
+        const parts = timestamp.split('.');
+        if (parts.length === 2 && parts[1].length > 3) {
+          // Truncate microseconds to milliseconds
+          const milliseconds = parts[1].substring(0, 3);
+          normalizedTimestamp = `${parts[0]}.${milliseconds}`;
+          console.log('parseTimestampSafely: Truncated microseconds:', normalizedTimestamp);
+        }
+      }
+      
+      // Add Z if no timezone specified
+      if (!normalizedTimestamp.includes('Z') && !normalizedTimestamp.includes('+') && !normalizedTimestamp.includes('-', 10)) {
+        normalizedTimestamp += 'Z';
+        console.log('parseTimestampSafely: Added timezone Z:', normalizedTimestamp);
+      }
+      
+      // Try parsing the normalized timestamp
+      testDate = new Date(normalizedTimestamp);
+      if (!isNaN(testDate.getTime())) {
+        console.log('parseTimestampSafely: Normalized parsing successful:', testDate.toISOString());
+        return testDate;
+      }
+      
+      // Method 3: Manual parsing as last resort
+      // Format: "2025-07-06T18:13:18.390511"
+      const match = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?/);
+      if (match) {
+        const [, year, month, day, hour, minute, second, fraction] = match;
+        const milliseconds = fraction ? parseInt(fraction.substring(0, 3).padEnd(3, '0')) : 0;
+        
+        testDate = new Date(Date.UTC(
+          parseInt(year),
+          parseInt(month) - 1, // Month is 0-indexed
+          parseInt(day),
+          parseInt(hour),
+          parseInt(minute),
+          parseInt(second),
+          milliseconds
+        ));
+        
+        console.log('parseTimestampSafely: Manual parsing successful:', testDate.toISOString());
+        return testDate;
+      }
+      
+      console.error('parseTimestampSafely: All parsing methods failed for:', timestamp);
+      return new Date(); // Fallback to current time
+      
+    } catch (error) {
+      console.error('parseTimestampSafely: Error parsing timestamp:', timestamp, error);
+      return new Date(); // Fallback to current time
     }
-    
-    // If no timezone info at all, assume UTC
-    if (!normalizedTimestamp.includes('Z') && !normalizedTimestamp.includes('+')) {
-      normalizedTimestamp += 'Z';
-    }
-    
-    return new Date(normalizedTimestamp);
   };
 
-  // FIXED: Improved stall detection with proper date handling
+  // COMPLETELY REWRITTEN: Stall detection with extensive debugging
   const isSessionStalled = (session: UploadSession): { isStalled: boolean; stallDuration?: number; lastProgressTime: string } => {
+    console.log('=== STALL DETECTION START ===');
+    console.log('Session ID:', session.id);
+    console.log('Session Status:', session.status);
+    
     // If session is not processing, it's not stalled
     if (session.status !== 'processing') {
+      console.log('Session not processing, returning not stalled');
       return { 
         isStalled: false, 
         lastProgressTime: session.updated_at || session.created_at 
@@ -179,12 +233,38 @@ export function InventoryFileUpload() {
     // Use last_processed_at if available, otherwise fall back to updated_at
     const lastProgressTime = session.last_processed_at || session.updated_at || session.created_at;
     
-    // FIXED: Use normalized timestamp parsing
-    const lastProgressDate = normalizeTimestamp(lastProgressTime);
+    console.log('Raw timestamps:');
+    console.log('  now (raw):', now.toISOString());
+    console.log('  lastProgressTime (raw):', lastProgressTime);
     
-    // Calculate time since last progress
-    const timeSinceLastProgress = now.getTime() - lastProgressDate.getTime();
+    // Parse timestamps safely
+    const lastProgressDate = parseTimestampSafely(lastProgressTime);
     
+    console.log('Parsed timestamps:');
+    console.log('  now (parsed):', now.toISOString());
+    console.log('  lastProgressDate (parsed):', lastProgressDate.toISOString());
+    
+    // Calculate time difference
+    const nowMs = now.getTime();
+    const lastProgressMs = lastProgressDate.getTime();
+    const timeSinceLastProgress = nowMs - lastProgressMs;
+    
+    console.log('Time calculations:');
+    console.log('  nowMs:', nowMs);
+    console.log('  lastProgressMs:', lastProgressMs);
+    console.log('  timeSinceLastProgress:', timeSinceLastProgress);
+    console.log('  stallThresholdMs:', stallThresholdMs);
+    console.log('  timeSinceLastProgress > stallThresholdMs:', timeSinceLastProgress > stallThresholdMs);
+    
+    const isStalled = timeSinceLastProgress > stallThresholdMs;
+    const stallDurationMinutes = Math.floor(timeSinceLastProgress / 1000 / 60);
+    
+    console.log('Final result:');
+    console.log('  isStalled:', isStalled);
+    console.log('  stallDurationMinutes:', stallDurationMinutes);
+    console.log('=== STALL DETECTION END ===');
+    
+    // Also log to the original debug format for comparison
     console.log('Stall Detection Debug:', {
       sessionId: session.id,
       status: session.status,
@@ -193,12 +273,11 @@ export function InventoryFileUpload() {
       lastProgressDate: lastProgressDate.toISOString(),
       timeSinceLastProgress,
       stallThresholdMs,
-      isStalled: timeSinceLastProgress > stallThresholdMs,
-      stallDurationMinutes: Math.floor(timeSinceLastProgress / 1000 / 60)
+      isStalled,
+      stallDurationMinutes
     });
     
-    if (timeSinceLastProgress > stallThresholdMs) {
-      const stallDurationMinutes = Math.floor(timeSinceLastProgress / 1000 / 60);
+    if (isStalled) {
       return { 
         isStalled: true, 
         stallDuration: stallDurationMinutes,
@@ -280,7 +359,7 @@ export function InventoryFileUpload() {
       // Calculate progress percentage
       const progress = total > 0 ? Math.round((processed / total) * 100) : 0;
       
-      // FIXED: Apply proper stall detection
+      // Apply proper stall detection
       const stallCheck = isSessionStalled(session);
 
       const stats = {
@@ -542,7 +621,7 @@ export function InventoryFileUpload() {
   const formatDate = (dateString: string): string => {
     try {
       if (!dateString) return 'Invalid Date';
-      const date = normalizeTimestamp(dateString);
+      const date = parseTimestampSafely(dateString);
       if (isNaN(date.getTime())) return 'Invalid Date';
       return date.toLocaleString();
     } catch (error) {
@@ -1788,7 +1867,7 @@ export function InventoryFileUpload() {
 
               {/* Auto-refresh indicator */}
               <div className="mt-4 text-xs text-gray-400 text-center">
-                🔄 Auto-refreshing every 3 seconds • Stall detection: 2 minutes • Fixed timestamp parsing
+                🔄 Auto-refreshing every 3 seconds • Stall detection: 2 minutes • FIXED timestamp parsing with extensive debugging
               </div>
             </div>
           </div>
