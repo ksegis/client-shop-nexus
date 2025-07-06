@@ -738,10 +738,11 @@ export function InventoryFileUpload() {
     }
   };
 
-  // NEW: Open reconciliation interface
+  // NEW: Open reconciliation interface - ENHANCED: Closes upload dialog
   const openReconciliation = (sessionId: string) => {
     setReconciliationSessionId(sessionId);
     setShowReconciliation(true);
+    setShowUploadDialog(false); // Close the upload dialog
   };
 
   // NEW: Close reconciliation interface
@@ -836,7 +837,7 @@ export function InventoryFileUpload() {
                               {session.status}
                             </Badge>
                             <span className="text-gray-400">{formatDate(session.created_at)}</span>
-                            {/* ENHANCED: Review button now opens reconciliation interface */}
+                            {/* ENHANCED: Review button now closes upload dialog and opens reconciliation */}
                             {(session.invalid_records > 0 || session.corrected_records > 0) && (
                               <Button
                                 size="sm"
@@ -989,7 +990,7 @@ export function InventoryFileUpload() {
                         </div>
                       )}
 
-                      {/* ENHANCED: Review button now opens reconciliation interface */}
+                      {/* ENHANCED: Review button now closes upload dialog and opens reconciliation */}
                       {((uploadResult.session?.invalid_records || 0) > 0 || (uploadResult.session?.corrected_records || 0) > 0) && (
                         <Alert>
                           <AlertTriangle className="h-4 w-4" />
@@ -1043,7 +1044,7 @@ export function InventoryFileUpload() {
         </div>
       )}
 
-      {/* NEW: CSV Reconciliation Interface */}
+      {/* NEW: CSV Reconciliation Interface - Separate from upload dialog */}
       {showReconciliation && reconciliationSessionId && (
         <CSVReconciliation
           sessionId={reconciliationSessionId}
