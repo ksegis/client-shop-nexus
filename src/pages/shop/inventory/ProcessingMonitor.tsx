@@ -136,14 +136,24 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
   };
 
   const isSessionStalled = (session: ProcessingSession): boolean => {
+    // Only check processing sessions
     if (session.status !== 'processing') return false;
     
+    // Check if processing is incomplete
+    const isIncomplete = (session.processed_records || 0) < (session.total_records || 0);
+    if (!isIncomplete) return false;
+    
+    // Check time since last update
     const lastUpdate = new Date(session.updated_at);
     const now = new Date();
-    const minutesSinceUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60);
+    const hoursSinceUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60);
     
-    // Consider stalled if no update in 10 minutes and not completed
-    return minutesSinceUpdate > 10 && (session.processed_records || 0) < (session.total_records || 0);
+    // Consider stalled if no update in 1 hour and processing is incomplete
+    const isStalled = hoursSinceUpdate > 1;
+    
+    console.log(`Session ${session.id}: ${session.processed_records}/${session.total_records}, Hours since update: ${hoursSinceUpdate.toFixed(2)}, Stalled: ${isStalled}`);
+    
+    return isStalled;
   };
 
   const getSessionProgress = (session: ProcessingSession): number => {
@@ -176,34 +186,192 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
     }
   };
 
-  const forceProcessing = async (sessionId: string) => {
+  const resumeProcessing = async (sessionId: string) => {
     try {
       setProcessingSession(sessionId);
       
-      // Update the session to trigger processing
-      const { error } = await supabase
+      console.log(`Resuming processing for session: ${sessionId}`);
+      
+      // First, get the current session data
+      const { data: currentSession, error: fetchError } = await supabase
         .from('csv_upload_sessions')
-        .update({
-          status: 'processing',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sessionId);
+        .select('*')
+        .eq('id', sessionId)
+        .single();
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
+      
+      console.log('Current session data:', currentSession);
+      
+      // Get staging records that need processing
+      const { data: stagingRecords, error: stagingError } = await supabase
+        .from('csv_staging_records')
+        .select('*')
+        .eq('upload_session_id', sessionId)
+        .in('validation_status', ['valid', 'corrected'])
+        .is('processed_at', null);
 
-      toast({
-        title: "Processing Resumed",
-        description: "Session has been marked for continued processing",
-      });
+      if (stagingError) throw stagingError;
+      
+      console.log(`Found ${stagingRecords?.length || 0} records to process`);
+      
+      if (!stagingRecords || stagingRecords.length === 0) {
+        // No records to process, mark as completed
+        const { error: updateError } = await supabase
+          .from('csv_upload_sessions')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sessionId);
+
+        if (updateError) throw updateError;
+        
+        toast({
+          title: "Processing Complete",
+          description: "No remaining records to process. Session marked as completed.",
+        });
+      } else {
+        // Update session to trigger processing
+        const { error: updateError } = await supabase
+          .from('csv_upload_sessions')
+          .update({
+            status: 'processing',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sessionId);
+
+        if (updateError) throw updateError;
+
+        // Process remaining records
+        let processedCount = currentSession.processed_records || 0;
+        
+        for (const record of stagingRecords) {
+          try {
+            // Check if record exists in inventory by VCPN
+            const { data: existing, error: checkError } = await supabase
+              .from('inventory')
+              .select('id')
+              .eq('vcpn', record.vcpn)
+              .single();
+
+            if (checkError && checkError.code !== 'PGRST116') {
+              throw checkError;
+            }
+
+            const inventoryData = {
+              name: record.long_description || record.part_number || 'Unknown Item',
+              description: record.long_description,
+              sku: record.part_number,
+              vcpn: record.vcpn,
+              vendor_code: record.vendor_code,
+              vendor_name: record.vendor_name,
+              quantity: record.total_qty,
+              east_qty: record.east_qty,
+              midwest_qty: record.midwest_qty,
+              california_qty: record.california_qty,
+              southeast_qty: record.southeast_qty,
+              pacific_nw_qty: record.pacific_nw_qty,
+              texas_qty: record.texas_qty,
+              great_lakes_qty: record.great_lakes_qty,
+              florida_qty: record.florida_qty,
+              total_qty: record.total_qty,
+              ftp_upload_id: sessionId
+            };
+
+            if (existing) {
+              // Update existing record
+              const { error: updateError } = await supabase
+                .from('inventory')
+                .update(inventoryData)
+                .eq('id', existing.id);
+
+              if (updateError) throw updateError;
+
+              // Update staging record
+              await supabase
+                .from('csv_staging_records')
+                .update({ 
+                  existing_inventory_id: existing.id,
+                  action_type: 'update',
+                  validation_status: 'processed',
+                  processed_at: new Date().toISOString()
+                })
+                .eq('id', record.id);
+            } else {
+              // Insert new record
+              const { data: newRecord, error: insertError } = await supabase
+                .from('inventory')
+                .insert([inventoryData])
+                .select()
+                .single();
+
+              if (insertError) throw insertError;
+
+              // Update staging record
+              await supabase
+                .from('csv_staging_records')
+                .update({ 
+                  existing_inventory_id: newRecord.id,
+                  action_type: 'insert',
+                  validation_status: 'processed',
+                  processed_at: new Date().toISOString()
+                })
+                .eq('id', record.id);
+            }
+
+            processedCount++;
+            
+            // Update session progress every 100 records
+            if (processedCount % 100 === 0) {
+              await supabase
+                .from('csv_upload_sessions')
+                .update({
+                  processed_records: processedCount,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', sessionId);
+            }
+            
+          } catch (error) {
+            console.error('Error processing record:', record.id, error);
+            // Mark record as failed
+            await supabase
+              .from('csv_staging_records')
+              .update({ 
+                validation_status: 'invalid',
+                validation_notes: `Processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+              })
+              .eq('id', record.id);
+          }
+        }
+
+        // Final update
+        await supabase
+          .from('csv_upload_sessions')
+          .update({
+            processed_records: processedCount,
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sessionId);
+
+        toast({
+          title: "Processing Resumed",
+          description: `Successfully processed ${processedCount} records`,
+        });
+      }
 
       // Refresh data after a delay
       setTimeout(loadProcessingData, 2000);
       
     } catch (error) {
-      console.error('Error forcing processing:', error);
+      console.error('Error resuming processing:', error);
       toast({
-        title: "Force Processing Failed",
-        description: "Could not resume processing for this session",
+        title: "Resume Processing Failed",
+        description: error instanceof Error ? error.message : "Could not resume processing for this session",
         variant: "destructive",
       });
     } finally {
@@ -363,104 +531,107 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
           
           {sessions.length > 0 ? (
             <div className="space-y-4">
-              {sessions.map((session) => (
-                <Card key={session.id} className={`p-4 ${isSessionStalled(session) ? 'border-red-200 bg-red-50' : ''}`}>
-                  <div className="space-y-4">
-                    {/* Session Header */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
+              {sessions.map((session) => {
+                const isStalled = isSessionStalled(session);
+                return (
+                  <Card key={session.id} className={`p-4 ${isStalled ? 'border-red-200 bg-red-50' : ''}`}>
+                    <div className="space-y-4">
+                      {/* Session Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div>
+                            <div className="font-medium">{session.original_filename}</div>
+                            <div className="text-sm text-gray-500">
+                              {formatFileSize(session.file_size || 0)} • Started: {formatDate(session.created_at)}
+                            </div>
+                          </div>
+                          {getStatusBadge(session)}
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          {isStalled && (
+                            <Button
+                              size="sm"
+                              onClick={() => resumeProcessing(session.id)}
+                              disabled={processingSession === session.id}
+                              className="flex items-center space-x-1 bg-green-600 hover:bg-green-700"
+                            >
+                              {processingSession === session.id ? (
+                                <RefreshCw className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Play className="h-3 w-3" />
+                              )}
+                              <span>Resume</span>
+                            </Button>
+                          )}
+                          
+                          {session.status === 'processing' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => markSessionCompleted(session.id)}
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Mark Complete
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Progress Information */}
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
-                          <div className="font-medium">{session.original_filename}</div>
-                          <div className="text-sm text-gray-500">
-                            {formatFileSize(session.file_size || 0)} • Started: {formatDate(session.created_at)}
+                          <div className="text-sm text-gray-500">Progress</div>
+                          <div className="font-medium">
+                            {(session.processed_records || 0).toLocaleString()} / {session.total_records.toLocaleString()}
+                          </div>
+                          <Progress value={getSessionProgress(session)} className="h-2 mt-1" />
+                        </div>
+                        
+                        <div>
+                          <div className="text-sm text-gray-500">Records Status</div>
+                          <div className="text-sm">
+                            <span className="text-green-600">Valid: {session.valid_records || 0}</span> • 
+                            <span className="text-red-600 ml-1">Invalid: {session.invalid_records || 0}</span> • 
+                            <span className="text-blue-600 ml-1">Corrected: {session.corrected_records || 0}</span>
                           </div>
                         </div>
-                        {getStatusBadge(session)}
-                      </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        {isSessionStalled(session) && (
-                          <Button
-                            size="sm"
-                            onClick={() => forceProcessing(session.id)}
-                            disabled={processingSession === session.id}
-                            className="flex items-center space-x-1"
-                          >
-                            {processingSession === session.id ? (
-                              <RefreshCw className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Zap className="h-3 w-3" />
-                            )}
-                            <span>Resume</span>
-                          </Button>
-                        )}
                         
-                        {session.status === 'processing' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => markSessionCompleted(session.id)}
-                          >
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Mark Complete
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Progress Information */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div>
-                        <div className="text-sm text-gray-500">Progress</div>
-                        <div className="font-medium">
-                          {(session.processed_records || 0).toLocaleString()} / {session.total_records.toLocaleString()}
+                        <div>
+                          <div className="text-sm text-gray-500">Estimated Completion</div>
+                          <div className="font-medium">{getEstimatedCompletion(session)}</div>
                         </div>
-                        <Progress value={getSessionProgress(session)} className="h-2 mt-1" />
-                      </div>
-                      
-                      <div>
-                        <div className="text-sm text-gray-500">Records Status</div>
-                        <div className="text-sm">
-                          <span className="text-green-600">Valid: {session.valid_records || 0}</span> • 
-                          <span className="text-red-600 ml-1">Invalid: {session.invalid_records || 0}</span> • 
-                          <span className="text-blue-600 ml-1">Corrected: {session.corrected_records || 0}</span>
+                        
+                        <div>
+                          <div className="text-sm text-gray-500">Last Updated</div>
+                          <div className="font-medium">{formatDate(session.updated_at)}</div>
                         </div>
                       </div>
-                      
-                      <div>
-                        <div className="text-sm text-gray-500">Estimated Completion</div>
-                        <div className="font-medium">{getEstimatedCompletion(session)}</div>
-                      </div>
-                      
-                      <div>
-                        <div className="text-sm text-gray-500">Last Updated</div>
-                        <div className="font-medium">{formatDate(session.updated_at)}</div>
-                      </div>
+
+                      {/* Stalled Warning */}
+                      {isStalled && (
+                        <Alert variant="destructive">
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertDescription>
+                            <strong>Processing Stalled:</strong> This session hasn't been updated in over 1 hour and has {(session.total_records - (session.processed_records || 0)).toLocaleString()} records remaining. 
+                            Click "Resume" to continue processing.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      {/* Error Message */}
+                      {session.error_message && (
+                        <Alert variant="destructive">
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertDescription>
+                            <strong>Error:</strong> {session.error_message}
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     </div>
-
-                    {/* Stalled Warning */}
-                    {isSessionStalled(session) && (
-                      <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          <strong>Processing Stalled:</strong> This session hasn't been updated in over 10 minutes. 
-                          It may need manual intervention to continue processing.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    {/* Error Message */}
-                    {session.error_message && (
-                      <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          <strong>Error:</strong> {session.error_message}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
