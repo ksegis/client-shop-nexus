@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2, BarChart3, Activity, Play } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2, BarChart3, Activity } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CSVReconciliation } from './CSVReconciliation';
+import { CSVAuditDashboard } from './CSVAuditDashboard';
 
 
 // Types for CSV processing
@@ -45,7 +46,7 @@ interface UploadSession {
   created_at: string;
   completed_at?: string;
   updated_at: string;
-  last_processed_at?: string;
+  last_processed_at?: string; // Added for stall detection
 }
 
 interface SyncSummary {
@@ -54,25 +55,6 @@ interface SyncSummary {
   deleted: number;
   skipped: number;
   errors: string[];
-}
-
-interface MonitorData {
-  session: UploadSession;
-  stats: {
-    total: number;
-    valid: number;
-    invalid: number;
-    corrected: number;
-    needsReview: number;
-    inserted: number;
-    updated: number;
-    processed: number;
-    progress: number;
-    isStalled: boolean;
-    stallDuration?: number;
-    lastProgressTime: string;
-  };
-  lastUpdated: string;
 }
 
 export function InventoryFileUpload() {
@@ -87,20 +69,14 @@ export function InventoryFileUpload() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [canClose, setCanClose] = useState(true);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
-  const [isResuming, setIsResuming] = useState<string | null>(null);
   
   // Reconciliation state
   const [showReconciliation, setShowReconciliation] = useState(false);
+  const [showAuditDashboard, setShowAuditDashboard] = useState(false);
+  const [auditSessionId, setAuditSessionId] = useState<string | null>(null);
   const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
   
-  // Monitor state
-  const [showMonitor, setShowMonitor] = useState(false);
-  const [monitorSessionId, setMonitorSessionId] = useState<string | null>(null);
-  const [monitorData, setMonitorData] = useState<MonitorData | null>(null);
-  const [isLoadingMonitor, setIsLoadingMonitor] = useState(false);
-  
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const monitorIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
   // Get current user
@@ -118,180 +94,102 @@ export function InventoryFileUpload() {
     getCurrentUser();
   }, []);
 
-  // Auto-refresh monitor data when monitor is open
-  useEffect(() => {
-    if (showMonitor && monitorSessionId) {
-      // Load initial data
-      loadMonitorData(monitorSessionId);
-      
-      // Set up auto-refresh every 3 seconds
-      monitorIntervalRef.current = setInterval(() => {
-        loadMonitorData(monitorSessionId);
-      }, 3000);
-      
-      return () => {
-        if (monitorIntervalRef.current) {
-          clearInterval(monitorIntervalRef.current);
-          monitorIntervalRef.current = null;
-        }
-      };
-    }
-  }, [showMonitor, monitorSessionId]);
-
-  // COMPLETELY REWRITTEN: Safe timestamp parsing with extensive debugging
-  const parseTimestampSafely = (timestamp: string): Date => {
-    if (!timestamp) {
-      console.log('parseTimestampSafely: Empty timestamp, using current time');
-      return new Date();
-    }
-    
-    console.log('parseTimestampSafely: Input timestamp:', timestamp);
+  // **ADDED: UTC TIMESTAMP PARSING FIX**
+  const parseTimestampAsUTC = (timestamp: string): Date => {
+    console.log(`parseTimestampAsUTC: Input timestamp: ${timestamp}`);
     
     try {
-      // Method 1: Try direct parsing first
-      let testDate = new Date(timestamp);
-      if (!isNaN(testDate.getTime())) {
-        console.log('parseTimestampSafely: Direct parsing successful:', testDate.toISOString());
-        return testDate;
+      // If timestamp already has timezone info, use it directly
+      if (timestamp.includes('Z') || timestamp.includes('+') || timestamp.includes('-')) {
+        const result = new Date(timestamp);
+        console.log(`parseTimestampAsUTC: Has timezone, parsed as: ${result.toISOString()}`);
+        return result;
       }
       
-      // Method 2: Handle PostgreSQL timestamp format with microseconds
-      let normalizedTimestamp = timestamp;
+      // For timestamps without timezone, treat as UTC by appending 'Z'
+      let utcTimestamp = timestamp;
       
-      // If it has microseconds (6 digits after decimal), truncate to milliseconds (3 digits)
+      // Handle microseconds by truncating to milliseconds
       if (timestamp.includes('.')) {
         const parts = timestamp.split('.');
         if (parts.length === 2 && parts[1].length > 3) {
-          // Truncate microseconds to milliseconds
           const milliseconds = parts[1].substring(0, 3);
-          normalizedTimestamp = `${parts[0]}.${milliseconds}`;
-          console.log('parseTimestampSafely: Truncated microseconds:', normalizedTimestamp);
+          utcTimestamp = `${parts[0]}.${milliseconds}`;
         }
       }
       
-      // Add Z if no timezone specified
-      if (!normalizedTimestamp.includes('Z') && !normalizedTimestamp.includes('+') && !normalizedTimestamp.includes('-', 10)) {
-        normalizedTimestamp += 'Z';
-        console.log('parseTimestampSafely: Added timezone Z:', normalizedTimestamp);
+      // Append Z to force UTC interpretation
+      if (!utcTimestamp.endsWith('Z')) {
+        utcTimestamp += 'Z';
       }
       
-      // Try parsing the normalized timestamp
-      testDate = new Date(normalizedTimestamp);
-      if (!isNaN(testDate.getTime())) {
-        console.log('parseTimestampSafely: Normalized parsing successful:', testDate.toISOString());
-        return testDate;
+      const result = new Date(utcTimestamp);
+      console.log(`parseTimestampAsUTC: Forced UTC, parsed as: ${result.toISOString()}`);
+      
+      if (isNaN(result.getTime())) {
+        console.error(`parseTimestampAsUTC: Failed to parse timestamp: ${timestamp}`);
+        return new Date(); // Fallback to current time
       }
       
-      // Method 3: Manual parsing as last resort
-      // Format: "2025-07-06T18:13:18.390511"
-      const match = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?/);
-      if (match) {
-        const [, year, month, day, hour, minute, second, fraction] = match;
-        const milliseconds = fraction ? parseInt(fraction.substring(0, 3).padEnd(3, '0')) : 0;
-        
-        testDate = new Date(Date.UTC(
-          parseInt(year),
-          parseInt(month) - 1, // Month is 0-indexed
-          parseInt(day),
-          parseInt(hour),
-          parseInt(minute),
-          parseInt(second),
-          milliseconds
-        ));
-        
-        console.log('parseTimestampSafely: Manual parsing successful:', testDate.toISOString());
-        return testDate;
-      }
-      
-      console.error('parseTimestampSafely: All parsing methods failed for:', timestamp);
-      return new Date(); // Fallback to current time
-      
+      return result;
     } catch (error) {
-      console.error('parseTimestampSafely: Error parsing timestamp:', timestamp, error);
+      console.error(`parseTimestampAsUTC: Error parsing timestamp ${timestamp}:`, error);
       return new Date(); // Fallback to current time
     }
   };
 
-  // COMPLETELY REWRITTEN: Stall detection with extensive debugging
-  const isSessionStalled = (session: UploadSession): { isStalled: boolean; stallDuration?: number; lastProgressTime: string } => {
+  // **ADDED: STALL DETECTION FUNCTION**
+  const detectStall = (session: UploadSession): { isStalled: boolean; stallDuration?: number } => {
     console.log('=== STALL DETECTION START ===');
-    console.log('Session ID:', session.id);
-    console.log('Session Status:', session.status);
+    console.log(`Session ID: ${session.id}`);
+    console.log(`Session Status: ${session.status}`);
     
-    // If session is not processing, it's not stalled
     if (session.status !== 'processing') {
-      console.log('Session not processing, returning not stalled');
-      return { 
-        isStalled: false, 
-        lastProgressTime: session.updated_at || session.created_at 
-      };
+      console.log('Session not processing, no stall check needed');
+      console.log('=== STALL DETECTION END ===');
+      return { isStalled: false };
     }
-    
+
     const now = new Date();
-    const stallThresholdMs = 2 * 60 * 1000; // 2 minutes in milliseconds
-    
-    // Use last_processed_at if available, otherwise fall back to updated_at
-    const lastProgressTime = session.last_processed_at || session.updated_at || session.created_at;
+    const lastProgressTime = session.last_processed_at || session.updated_at;
     
     console.log('Raw timestamps:');
-    console.log('  now (raw):', now.toISOString());
-    console.log('  lastProgressTime (raw):', lastProgressTime);
+    console.log(`  now (raw): ${now.toISOString()}`);
+    console.log(`  lastProgressTime (raw): ${lastProgressTime}`);
     
-    // Parse timestamps safely
-    const lastProgressDate = parseTimestampSafely(lastProgressTime);
+    const lastProgressDate = parseTimestampAsUTC(lastProgressTime);
     
     console.log('Parsed timestamps:');
-    console.log('  now (parsed):', now.toISOString());
-    console.log('  lastProgressDate (parsed):', lastProgressDate.toISOString());
+    console.log(`  now (parsed): ${now.toISOString()}`);
+    console.log(`  lastProgressDate (parsed): ${lastProgressDate.toISOString()}`);
     
-    // Calculate time difference
     const nowMs = now.getTime();
     const lastProgressMs = lastProgressDate.getTime();
     const timeSinceLastProgress = nowMs - lastProgressMs;
+    const stallThresholdMs = 2 * 60 * 1000; // 2 minutes
     
     console.log('Time calculations:');
-    console.log('  nowMs:', nowMs);
-    console.log('  lastProgressMs:', lastProgressMs);
-    console.log('  timeSinceLastProgress:', timeSinceLastProgress);
-    console.log('  stallThresholdMs:', stallThresholdMs);
-    console.log('  timeSinceLastProgress > stallThresholdMs:', timeSinceLastProgress > stallThresholdMs);
+    console.log(`  nowMs: ${nowMs}`);
+    console.log(`  lastProgressMs: ${lastProgressMs}`);
+    console.log(`  timeSinceLastProgress: ${timeSinceLastProgress}`);
+    console.log(`  stallThresholdMs: ${stallThresholdMs}`);
+    console.log(`  timeSinceLastProgress > stallThresholdMs: ${timeSinceLastProgress > stallThresholdMs}`);
     
     const isStalled = timeSinceLastProgress > stallThresholdMs;
     const stallDurationMinutes = Math.floor(timeSinceLastProgress / 1000 / 60);
     
     console.log('Final result:');
-    console.log('  isStalled:', isStalled);
-    console.log('  stallDurationMinutes:', stallDurationMinutes);
+    console.log(`  isStalled: ${isStalled}`);
+    console.log(`  stallDurationMinutes: ${stallDurationMinutes}`);
     console.log('=== STALL DETECTION END ===');
     
-    // Also log to the original debug format for comparison
-    console.log('Stall Detection Debug:', {
-      sessionId: session.id,
-      status: session.status,
-      now: now.toISOString(),
-      lastProgressTime,
-      lastProgressDate: lastProgressDate.toISOString(),
-      timeSinceLastProgress,
-      stallThresholdMs,
+    return {
       isStalled,
-      stallDurationMinutes
-    });
-    
-    if (isStalled) {
-      return { 
-        isStalled: true, 
-        stallDuration: stallDurationMinutes,
-        lastProgressTime 
-      };
-    }
-    
-    return { 
-      isStalled: false, 
-      lastProgressTime 
+      stallDuration: isStalled ? stallDurationMinutes : undefined
     };
   };
 
-  // Load recent upload sessions with enhanced stall detection
+  // Load recent upload sessions with enhanced statistics
   const loadRecentSessions = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -299,321 +197,12 @@ export function InventoryFileUpload() {
         .select('*')
         .eq('uploaded_by', userId)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(10); // Show more recent sessions
 
       if (error) throw error;
-      
-      // Apply stall detection to each session
-      const sessionsWithStallCheck = (data || []).map(session => {
-        const stallInfo = isSessionStalled(session);
-        if (stallInfo.isStalled) {
-          // Mark as stalled in the local state (don't update database here)
-          return { 
-            ...session, 
-            status: 'stalled' as any,
-            stallDuration: stallInfo.stallDuration 
-          };
-        }
-        return session;
-      });
-      
-      setRecentSessions(sessionsWithStallCheck);
+      setRecentSessions(data || []);
     } catch (error) {
       console.error('Error loading recent sessions:', error);
-    }
-  };
-
-  // Load real-time monitor data with proper stall detection
-  const loadMonitorData = async (sessionId: string) => {
-    try {
-      setIsLoadingMonitor(true);
-      
-      // Get session data
-      const { data: session, error: sessionError } = await supabase
-        .from('csv_upload_sessions')
-        .select('*')
-        .eq('id', sessionId)
-        .single();
-
-      if (sessionError) throw sessionError;
-
-      // Get staging records statistics
-      const { data: stagingRecords, error: stagingError } = await supabase
-        .from('csv_staging_records')
-        .select('validation_status, needs_review, action_type, processed_at')
-        .eq('upload_session_id', sessionId);
-
-      if (stagingError) throw stagingError;
-
-      // Calculate real statistics
-      const total = session.total_records || 0;
-      const processed = session.processed_records || 0;
-      const valid = session.valid_records || 0;
-      const invalid = session.invalid_records || 0;
-      const corrected = session.corrected_records || 0;
-      
-      const needsReview = stagingRecords?.filter(r => r.needs_review).length || 0;
-      const inserted = stagingRecords?.filter(r => r.action_type === 'insert').length || 0;
-      const updated = stagingRecords?.filter(r => r.action_type === 'update').length || 0;
-      
-      // Calculate progress percentage
-      const progress = total > 0 ? Math.round((processed / total) * 100) : 0;
-      
-      // Apply proper stall detection
-      const stallCheck = isSessionStalled(session);
-
-      const stats = {
-        total,
-        processed,
-        valid,
-        invalid,
-        corrected,
-        needsReview,
-        inserted,
-        updated,
-        progress,
-        isStalled: stallCheck.isStalled,
-        stallDuration: stallCheck.stallDuration,
-        lastProgressTime: stallCheck.lastProgressTime
-      };
-
-      setMonitorData({
-        session: {
-          ...session,
-          // Override status if stalled
-          status: stallCheck.isStalled ? 'stalled' : session.status
-        },
-        stats,
-        lastUpdated: new Date().toLocaleTimeString()
-      });
-      
-    } catch (error) {
-      console.error('Error loading monitor data:', error);
-      toast({
-        title: "Monitor Error",
-        description: "Failed to load monitoring data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingMonitor(false);
-    }
-  };
-
-  // Resume processing for a stalled session
-  const resumeProcessing = async (sessionId: string) => {
-    try {
-      setIsResuming(sessionId);
-      
-      toast({
-        title: "Resume Processing",
-        description: "Resuming processing from where it left off...",
-      });
-
-      // Reset session status and update timestamp
-      const now = new Date().toISOString();
-      await supabase
-        .from('csv_upload_sessions')
-        .update({
-          status: 'processing',
-          updated_at: now,
-          // Try to update last_processed_at if the column exists
-          last_processed_at: now,
-          error_message: null
-        })
-        .eq('id', sessionId);
-
-      // Get unprocessed staging records
-      const { data: unprocessedRecords, error: recordsError } = await supabase
-        .from('csv_staging_records')
-        .select('*')
-        .eq('upload_session_id', sessionId)
-        .is('processed_at', null)
-        .in('validation_status', ['valid', 'corrected'])
-        .order('row_number');
-
-      if (recordsError) throw recordsError;
-
-      if (!unprocessedRecords || unprocessedRecords.length === 0) {
-        // All records are processed, mark as completed
-        await supabase
-          .from('csv_upload_sessions')
-          .update({
-            status: 'completed',
-            completed_at: now,
-            updated_at: now
-          })
-          .eq('id', sessionId);
-        
-        toast({
-          title: "Processing Complete",
-          description: "All records have been processed successfully.",
-        });
-        
-        if (currentUser) {
-          loadRecentSessions(currentUser.id);
-        }
-        return;
-      }
-
-      // Get current session data
-      const { data: currentSession, error: sessionError } = await supabase
-        .from('csv_upload_sessions')
-        .select('*')
-        .eq('id', sessionId)
-        .single();
-
-      if (sessionError) throw sessionError;
-
-      let processedCount = currentSession.processed_records || 0;
-      let insertedCount = 0;
-      let updatedCount = 0;
-
-      // Process unprocessed records in batches
-      const batchSize = 10;
-      for (let i = 0; i < unprocessedRecords.length; i += batchSize) {
-        const batch = unprocessedRecords.slice(i, i + batchSize);
-        
-        for (const staging of batch) {
-          try {
-            // Check if record already exists in inventory
-            const { data: existing, error: checkError } = await supabase
-              .from('inventory')
-              .select('id')
-              .eq('vcpn', staging.vcpn)
-              .single();
-
-            if (checkError && checkError.code !== 'PGRST116') {
-              throw checkError;
-            }
-
-            const inventoryData = {
-              name: staging.long_description || staging.part_number || 'Unknown Item',
-              description: staging.long_description,
-              sku: staging.part_number, // Map part_number to sku
-              vcpn: staging.vcpn,
-              vendor_code: staging.vendor_code,
-              vendor_name: staging.vendor_name,
-              manufacturer_part_no: staging.manufacturer_part_no,
-              quantity: staging.total_qty,
-              price: staging.jobber_price,
-              cost: staging.cost,
-              case_qty: staging.case_qty,
-              weight: staging.weight,
-              height: staging.height,
-              length: staging.length,
-              width: staging.width,
-              upsable: staging.upsable,
-              is_oversized: staging.is_oversized,
-              is_hazmat: staging.is_hazmat,
-              is_chemical: staging.is_chemical,
-              is_non_returnable: staging.is_non_returnable,
-              prop65_toxicity: staging.prop65_toxicity,
-              upc_code: staging.upc_code,
-              aaia_code: staging.aaia_code,
-              east_qty: staging.east_qty,
-              midwest_qty: staging.midwest_qty,
-              california_qty: staging.california_qty,
-              southeast_qty: staging.southeast_qty,
-              pacific_nw_qty: staging.pacific_nw_qty,
-              texas_qty: staging.texas_qty,
-              great_lakes_qty: staging.great_lakes_qty,
-              florida_qty: staging.florida_qty,
-              total_qty: staging.total_qty,
-              is_kit: staging.is_kit,
-              kit_components: staging.kit_components,
-              ftp_upload_id: sessionId,
-              import_source: 'csv_upload',
-              updated_at: now
-            };
-
-            if (existing) {
-              await supabase
-                .from('inventory')
-                .update(inventoryData)
-                .eq('id', existing.id);
-
-              await supabase
-                .from('csv_staging_records')
-                .update({ 
-                  existing_inventory_id: existing.id,
-                  action_type: 'update',
-                  processed_at: now
-                })
-                .eq('id', staging.id);
-                
-              updatedCount++;
-            } else {
-              const { data: newRecord } = await supabase
-                .from('inventory')
-                .insert([{
-                  ...inventoryData,
-                  created_at: now
-                }])
-                .select()
-                .single();
-
-              await supabase
-                .from('csv_staging_records')
-                .update({ 
-                  existing_inventory_id: newRecord?.id,
-                  action_type: 'insert',
-                  processed_at: now
-                })
-                .eq('id', staging.id);
-                
-              insertedCount++;
-            }
-
-            processedCount++;
-            
-          } catch (error) {
-            console.error('Error processing record:', error);
-          }
-        }
-
-        // Update session progress after each batch
-        const updateTime = new Date().toISOString();
-        await supabase
-          .from('csv_upload_sessions')
-          .update({
-            processed_records: processedCount,
-            updated_at: updateTime,
-            last_processed_at: updateTime
-          })
-          .eq('id', sessionId);
-      }
-
-      // Final update - mark as completed
-      const finalTime = new Date().toISOString();
-      await supabase
-        .from('csv_upload_sessions')
-        .update({
-          status: 'completed',
-          processed_records: currentSession.total_records,
-          completed_at: finalTime,
-          updated_at: finalTime,
-          last_processed_at: finalTime
-        })
-        .eq('id', sessionId);
-
-      toast({
-        title: "Resume Complete",
-        description: `Successfully resumed and completed processing. ${insertedCount} inserted, ${updatedCount} updated.`,
-      });
-
-      if (currentUser) {
-        loadRecentSessions(currentUser.id);
-      }
-
-    } catch (error) {
-      console.error('Error resuming processing:', error);
-      toast({
-        title: "Resume Failed",
-        description: error instanceof Error ? error.message : 'Failed to resume processing',
-        variant: "destructive",
-      });
-    } finally {
-      setIsResuming(null);
     }
   };
 
@@ -621,7 +210,7 @@ export function InventoryFileUpload() {
   const formatDate = (dateString: string): string => {
     try {
       if (!dateString) return 'Invalid Date';
-      const date = parseTimestampSafely(dateString);
+      const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Invalid Date';
       return date.toLocaleString();
     } catch (error) {
@@ -684,7 +273,6 @@ export function InventoryFileUpload() {
       throw new Error('File size exceeds 50MB limit. Please use a smaller file for optimal performance.');
     }
 
-    const now = new Date().toISOString();
     const { data, error } = await supabase
       .from('csv_upload_sessions')
       .insert([{
@@ -693,15 +281,11 @@ export function InventoryFileUpload() {
         file_size: fileSize,
         status: 'processing',
         uploaded_by: currentUser?.id,
-        user_id: currentUser?.id,
         total_records: 0,
         processed_records: 0,
         valid_records: 0,
         invalid_records: 0,
-        corrected_records: 0,
-        created_at: now,
-        updated_at: now,
-        last_processed_at: now
+        corrected_records: 0
       }])
       .select()
       .single();
@@ -710,52 +294,20 @@ export function InventoryFileUpload() {
     return data.id;
   };
 
-  // Update session progress with timestamp
+  // Update session progress
   const updateSessionProgress = async (sessionId: string, updates: Partial<UploadSession>) => {
-    const now = new Date().toISOString();
-    const updateData = {
-      ...updates,
-      updated_at: now,
-      last_processed_at: now
-    };
-    
     const { error } = await supabase
       .from('csv_upload_sessions')
-      .update(updateData)
+      .update(updates)
       .eq('id', sessionId);
 
     if (error) throw error;
   };
 
-  // Parse CSV content with enhanced column mapping
+  // Parse CSV content
   const parseCSV = (csvText: string): CSVRecord[] => {
     const lines = csvText.split('\n');
     const headers = lines[0]?.split(',').map(h => h.trim().replace(/"/g, '')) || [];
-    
-    // COLUMN MAPPING - Map CSV headers to expected field names
-    const columnMapping: { [key: string]: string } = {
-      'VendorName': 'VendorName',
-      'VendorCode': 'VendorCode', 
-      'PartNumber': 'PartNumber',
-      'LongDescription': 'LongDescription',
-      'VCPN': 'VCPN',
-      'ManufacturerPartNo': 'ManufacturerPartNo',
-      'EastQty': 'EastQty',
-      'MidwestQty': 'MidwestQty',
-      'CaliforniaQty': 'CaliforniaQty',
-      'SoutheastQty': 'SoutheastQty',
-      'PacificNWQty': 'PacificNWQty',
-      'TexasQty': 'TexasQty',
-      'GreatLakesQty': 'GreatLakesQty',
-      'FloridaQty': 'FloridaQty',
-      'TotalQty': 'TotalQty',
-      'Description': 'LongDescription',
-      'Qty': 'TotalQty',
-      'SKU': 'PartNumber',
-      'Part': 'PartNumber',
-      'PartNo': 'PartNumber',
-      'Vendor': 'VendorCode'
-    };
     
     const records: CSVRecord[] = [];
     
@@ -767,22 +319,7 @@ export function InventoryFileUpload() {
       const record: CSVRecord = {};
       
       headers.forEach((header, index) => {
-        // Use mapped column name if available, otherwise use original
-        const mappedHeader = columnMapping[header] || header;
-        let value = values[index] || '';
-        
-        // Clean data during parsing - remove Excel formula formatting
-        if (value.startsWith('=')) {
-          value = value.substring(1); // Remove leading = sign
-          // If it's wrapped in quotes after removing =, remove those too
-          if ((value.startsWith('"') && value.endsWith('"')) || 
-              (value.startsWith("'") && value.endsWith("'"))) {
-            value = value.slice(1, -1);
-          }
-        }
-        value = value.trim(); // Remove whitespace
-        
-        record[mappedHeader] = value;
+        record[header] = values[index] || '';
       });
       
       if (record['LongDescription'] || record['PartNumber'] || record['VCPN'] || record['VendorCode']) {
@@ -898,7 +435,7 @@ export function InventoryFileUpload() {
     const stagingData = {
       upload_session_id: sessionId,
       row_number: rowNumber,
-      validation_status: validation.isValid ? 'valid' : (validation.corrected ? 'corrected' : 'invalid'),
+      validation_status: validation.isValid ? 'valid' : 'invalid',
       needs_review: !validation.isValid || validation.corrected,
       validation_notes: validation.notes.join('; '),
       original_data: validation.originalData,
@@ -962,7 +499,7 @@ export function InventoryFileUpload() {
         .from('csv_staging_records')
         .select('*')
         .eq('upload_session_id', sessionId)
-        .in('validation_status', ['valid', 'corrected']);
+        .eq('validation_status', 'valid');
 
       if (fetchError) throw fetchError;
 
@@ -981,7 +518,7 @@ export function InventoryFileUpload() {
           const inventoryData = {
             name: staging.long_description || staging.part_number || 'Unknown Item',
             description: staging.long_description,
-            sku: staging.part_number, // Map part_number to sku in inventory
+            sku: staging.part_number,
             vcpn: staging.vcpn,
             vendor_code: staging.vendor_code,
             vendor_name: staging.vendor_name,
@@ -1013,9 +550,7 @@ export function InventoryFileUpload() {
             total_qty: staging.total_qty,
             is_kit: staging.is_kit,
             kit_components: staging.kit_components,
-            ftp_upload_id: sessionId,
-            import_source: 'csv_upload',
-            updated_at: new Date().toISOString()
+            ftp_upload_id: sessionId
           };
 
           if (existing) {
@@ -1038,10 +573,7 @@ export function InventoryFileUpload() {
           } else {
             const { data: newRecord, error: insertError } = await supabase
               .from('inventory')
-              .insert([{
-                ...inventoryData,
-                created_at: new Date().toISOString()
-              }])
+              .insert([inventoryData])
               .select()
               .single();
 
@@ -1295,35 +827,17 @@ export function InventoryFileUpload() {
     }
   };
 
-  // Open monitor with real-time data
-  const openMonitor = async () => {
-    const sessionId = currentSessionId || (recentSessions.length > 0 ? recentSessions[0].id : null);
-    
-    if (!sessionId) {
-      toast({
-        title: "No Sessions to Monitor",
-        description: "Upload a CSV file first to monitor processing.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setMonitorSessionId(sessionId);
-    setShowMonitor(true);
+  // Open audit dashboard
+  const openAuditDashboard = (sessionId: string) => {
+    setAuditSessionId(sessionId);
+    setShowAuditDashboard(true);
     setShowUploadDialog(false);
   };
 
-  // Close monitor and cleanup
-  const closeMonitor = () => {
-    setShowMonitor(false);
-    setMonitorSessionId(null);
-    setMonitorData(null);
-    
-    // Clear the interval
-    if (monitorIntervalRef.current) {
-      clearInterval(monitorIntervalRef.current);
-      monitorIntervalRef.current = null;
-    }
+  // Close audit dashboard
+  const closeAuditDashboard = () => {
+    setShowAuditDashboard(false);
+    setAuditSessionId(null);
     
     if (currentUser) {
       loadRecentSessions(currentUser.id);
@@ -1339,7 +853,7 @@ export function InventoryFileUpload() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Get processing progress percentage for sessions
+  // NEW: Get processing progress percentage for sessions
   const getSessionProgress = (session: UploadSession): number => {
     if (session.status === 'completed') return 100;
     if (session.status === 'failed') return 0;
@@ -1347,23 +861,20 @@ export function InventoryFileUpload() {
     return Math.round((session.processed_records / session.total_records) * 100);
   };
 
-  // Get session status with stall detection
-  const getSessionStatus = (session: UploadSession): { status: string; variant: any; isStalled: boolean; stallDuration?: number } => {
-    const stallCheck = isSessionStalled(session);
+  // **ADDED: Get session status with stall detection**
+  const getSessionStatus = (session: UploadSession): { status: string; isStalled: boolean; stallDuration?: number } => {
+    const stallResult = detectStall(session);
     
-    if (stallCheck.isStalled) {
-      return { 
-        status: `stalled (${stallCheck.stallDuration}m)`, 
-        variant: 'destructive' as const,
+    if (stallResult.isStalled) {
+      return {
+        status: `stalled (${stallResult.stallDuration}m)`,
         isStalled: true,
-        stallDuration: stallCheck.stallDuration
+        stallDuration: stallResult.stallDuration
       };
     }
     
-    return { 
-      status: session.status, 
-      variant: session.status === 'completed' ? 'default' : 
-               session.status === 'failed' ? 'destructive' : 'secondary',
+    return {
+      status: session.status,
       isStalled: false
     };
   };
@@ -1379,35 +890,24 @@ export function InventoryFileUpload() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              {/* Header with Monitor and close buttons */}
+              {/* Header with close button */}
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-xl font-semibold">Enhanced CSV Upload</h2>
                   <p className="text-sm text-gray-600">Enhanced processing with validation, reconciliation, and audit tracking</p>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={openMonitor}
-                    className="flex items-center space-x-1"
-                  >
-                    <Activity className="h-4 w-4" />
-                    <span>Monitor</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={closeDialog}
-                    className="h-8 w-8 p-0"
-                    disabled={isUploading && !canClose}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={closeDialog}
+                  className="h-8 w-8 p-0"
+                  disabled={isUploading && !canClose}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
 
-              {/* Recent Upload Sessions with enhanced stall detection */}
+              {/* ENHANCED: Recent Upload Sessions with audit access */}
               {recentSessions.length > 0 && (
                 <Card className="mb-6">
                   <CardHeader>
@@ -1429,23 +929,29 @@ export function InventoryFileUpload() {
                   <CardContent>
                     <div className="space-y-3">
                       {recentSessions.map((session) => {
-                        const statusInfo = getSessionStatus(session);
+                        const sessionStatus = getSessionStatus(session);
                         return (
                           <div key={session.id} className="border rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center space-x-2 flex-1 min-w-0">
                                 <FileText className="w-4 h-4 flex-shrink-0" />
                                 <span className="font-medium truncate">{session.original_filename}</span>
-                                <Badge variant={statusInfo.variant} className="text-xs">
-                                  {statusInfo.status}
+                                <Badge 
+                                  variant={session.status === 'completed' ? 'default' : 
+                                          session.status === 'failed' ? 'destructive' : 
+                                          sessionStatus.isStalled ? 'destructive' : 'secondary'}
+                                  className="text-xs"
+                                >
+                                  {sessionStatus.status}
                                 </Badge>
-                                {statusInfo.isStalled && (
+                                {sessionStatus.isStalled && (
                                   <AlertTriangle className="w-4 h-4 text-red-500" />
                                 )}
                               </div>
                               <span className="text-xs text-gray-400">{formatDate(session.created_at)}</span>
                             </div>
                             
+                            {/* ENHANCED: Detailed progress and statistics */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-2">
                               <div>
                                 <span className="text-gray-500">Total:</span>
@@ -1465,7 +971,8 @@ export function InventoryFileUpload() {
                               </div>
                             </div>
                             
-                            {(session.status === 'processing' || statusInfo.isStalled) && (
+                            {/* Progress bar for processing sessions */}
+                            {(session.status === 'processing' || sessionStatus.isStalled) && (
                               <div className="mb-2">
                                 <div className="flex justify-between text-xs mb-1">
                                   <span>Processing Progress</span>
@@ -1473,13 +980,8 @@ export function InventoryFileUpload() {
                                 </div>
                                 <Progress 
                                   value={getSessionProgress(session)} 
-                                  className={`h-2 ${statusInfo.isStalled ? 'bg-red-100' : ''}`} 
+                                  className={`h-2 ${sessionStatus.isStalled ? 'bg-red-100' : ''}`} 
                                 />
-                                {statusInfo.isStalled && (
-                                  <p className="text-xs text-red-600 mt-1">
-                                    ⚠️ Processing stalled - no progress for {statusInfo.stallDuration} minutes
-                                  </p>
-                                )}
                               </div>
                             )}
                             
@@ -1488,23 +990,16 @@ export function InventoryFileUpload() {
                                 Size: {formatFileSize(session.file_size || 0)}
                               </div>
                               <div className="flex items-center space-x-1">
-                                {/* Resume button for stalled sessions */}
-                                {statusInfo.isStalled && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => resumeProcessing(session.id)}
-                                    disabled={isResuming === session.id}
-                                    className="h-6 px-2 text-xs"
-                                  >
-                                    {isResuming === session.id ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <Play className="w-3 h-3 mr-1" />
-                                    )}
-                                    Resume
-                                  </Button>
-                                )}
+                                {/* Audit button */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openAuditDashboard(session.id)}
+                                  className="h-6 px-2 text-xs"
+                                >
+                                  <BarChart3 className="w-3 h-3 mr-1" />
+                                  Audit
+                                </Button>
                                 
                                 {/* Review button for problematic records */}
                                 {(session.invalid_records > 0 || session.corrected_records > 0) && (
@@ -1662,7 +1157,18 @@ export function InventoryFileUpload() {
                         </div>
                       )}
 
+                      {/* Action buttons */}
                       <div className="flex space-x-2">
+                        {/* Audit button */}
+                        <Button 
+                          size="sm" 
+                          onClick={() => openAuditDashboard(uploadResult.sessionId)}
+                        >
+                          <BarChart3 className="w-4 h-4 mr-1" />
+                          View Audit
+                        </Button>
+                        
+                        {/* Review button for problematic records */}
                         {((uploadResult.session?.invalid_records || 0) > 0 || (uploadResult.session?.corrected_records || 0) > 0) && (
                           <Button 
                             size="sm" 
@@ -1674,6 +1180,7 @@ export function InventoryFileUpload() {
                         )}
                       </div>
 
+                      {/* Alert for records needing review */}
                       {((uploadResult.session?.invalid_records || 0) > 0 || (uploadResult.session?.corrected_records || 0) > 0) && (
                         <Alert>
                           <AlertTriangle className="h-4 w-4" />
@@ -1725,153 +1232,12 @@ export function InventoryFileUpload() {
         />
       )}
 
-      {/* Real-Time Monitor Interface with Fixed Stall Detection */}
-      {showMonitor && monitorData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="text-xl font-semibold flex items-center">
-                    Processing Monitor
-                    {isLoadingMonitor && <RefreshCw className="h-4 w-4 ml-2 animate-spin" />}
-                    {monitorData.stats.isStalled && <AlertTriangle className="h-5 w-5 ml-2 text-red-500" />}
-                  </h2>
-                  <p className="text-sm text-gray-600">{monitorData.session.original_filename}</p>
-                  <p className="text-xs text-gray-400">Last updated: {monitorData.lastUpdated}</p>
-                  <p className="text-xs text-gray-400">Last progress: {formatDate(monitorData.stats.lastProgressTime)}</p>
-                  {monitorData.stats.isStalled && (
-                    <p className="text-sm text-red-600 font-medium">
-                      ⚠️ Processing stalled for {monitorData.stats.stallDuration} minutes
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center space-x-2">
-                  {monitorData.stats.isStalled && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => resumeProcessing(monitorData.session.id)}
-                      disabled={isResuming === monitorData.session.id}
-                      className="flex items-center space-x-1"
-                    >
-                      {isResuming === monitorData.session.id ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Play className="h-4 w-4" />
-                      )}
-                      <span>Resume</span>
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={closeMonitor}
-                    className="h-8 w-8 p-0"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Progress Bar for Active Processing */}
-              {(monitorData.session.status === 'processing' || monitorData.stats.isStalled) && (
-                <div className="mb-6">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span>Processing Progress</span>
-                    <span>{monitorData.stats.progress}%</span>
-                  </div>
-                  <Progress 
-                    value={monitorData.stats.progress} 
-                    className={`h-3 ${monitorData.stats.isStalled ? 'bg-red-100' : ''}`} 
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    {monitorData.stats.processed.toLocaleString()} of {monitorData.stats.total.toLocaleString()} records processed
-                  </p>
-                </div>
-              )}
-
-              {/* Enhanced Stall Alert */}
-              {monitorData.stats.isStalled && (
-                <Alert className="mb-6 border-red-200 bg-red-50">
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-800">
-                    <strong>Processing Stalled!</strong> No progress for {monitorData.stats.stallDuration} minutes. 
-                    Last progress was at {formatDate(monitorData.stats.lastProgressTime)}. 
-                    Click "Resume" to continue processing from where it left off.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {/* Statistics Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-blue-600">{monitorData.stats.total.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">Total Records</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-gray-600">{monitorData.stats.processed.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">Processed</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-green-600">{monitorData.stats.valid.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">Valid</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-red-600">{monitorData.stats.invalid.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">Invalid</div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-yellow-600">{monitorData.stats.corrected.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">Corrected</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-green-600">{monitorData.stats.inserted.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">Inserted to Inventory</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="text-2xl font-bold text-blue-600">{monitorData.stats.updated.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">Updated in Inventory</div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <div className="text-sm text-gray-500">
-                  Status: <Badge variant={monitorData.stats.isStalled ? 'destructive' :
-                                          monitorData.session.status === 'completed' ? 'default' : 
-                                          monitorData.session.status === 'failed' ? 'destructive' : 'secondary'}>
-                    {monitorData.stats.isStalled ? `stalled (${monitorData.stats.stallDuration}m)` : monitorData.session.status}
-                  </Badge>
-                </div>
-                <div className="text-sm text-gray-500">
-                  {formatDate(monitorData.session.created_at)}
-                </div>
-              </div>
-
-              {/* Auto-refresh indicator */}
-              <div className="mt-4 text-xs text-gray-400 text-center">
-                🔄 Auto-refreshing every 3 seconds • Stall detection: 2 minutes • FIXED timestamp parsing with extensive debugging
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* CSV Audit Dashboard */}
+      {showAuditDashboard && auditSessionId && (
+        <CSVAuditDashboard
+          sessionId={auditSessionId}
+          onClose={closeAuditDashboard}
+        />
       )}
     </>
   );
