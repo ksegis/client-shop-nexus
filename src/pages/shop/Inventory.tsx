@@ -17,7 +17,7 @@ import { InventoryFileUpload} from './inventory/InventoryFileUpload';
 interface BasicInventoryItem {
   id: string;
   name: string;
-  description?: string;  // ← Remove any extra braces here
+  description?: string;
   sku?: string;
   quantity: number;
   price: number;
@@ -89,7 +89,7 @@ export default function Inventory() {
   });
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Legacy CSV Upload states (keeping for backward compatibility)
+  // Legacy CSV Upload states (keeping for backward compatibility - but hidden from UI)
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -297,7 +297,6 @@ export default function Inventory() {
       }
 
       console.log('✅ Item updated:', data.id);
-
       resetForm();
       setIsEditDialogOpen(false);
       setEditingItem(null);
@@ -405,7 +404,7 @@ export default function Inventory() {
     setIsEditDialogOpen(true);
   };
 
-  // Legacy CSV Upload Functions (keeping for backward compatibility)
+  // Legacy CSV Upload Functions (keeping for backward compatibility - but hidden from UI)
   const handleUploadClick = () => {
     console.log('📤 Upload CSV button clicked');
     setIsUploadDialogOpen(true);
@@ -752,10 +751,7 @@ export default function Inventory() {
             Refresh
           </Button>
           <InventoryFileUpload />
-          <Button variant="outline" onClick={handleUploadClick}>
-            <Upload className="w-4 h-4 mr-2" />
-            Upload CSV (Legacy)
-          </Button>
+          {/* REMOVED: Legacy upload button - keeping functionality for reference but hiding from UI */}
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={resetForm}>
@@ -885,7 +881,7 @@ export default function Inventory() {
         </CardContent>
       </Card>
 
-      {/* Legacy CSV Upload Dialog */}
+      {/* Legacy CSV Upload Dialog - KEEPING FOR REFERENCE BUT HIDDEN FROM UI */}
       <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>

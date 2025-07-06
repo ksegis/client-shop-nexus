@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -61,6 +61,7 @@ export function InventoryFileUpload() {
   const [previewData, setPreviewData] = useState<CSVRecord[]>([]);
   const [recentSessions, setRecentSessions] = useState<UploadSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [canClose, setCanClose] = useState(true); // NEW: Track if dialog can be closed
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -398,13 +399,12 @@ export function InventoryFileUpload() {
                 processed_at: new Date().toISOString()
               })
               .eq('id', staging.id);
-
           } else {
             // Insert new record
             const { data: newRecord, error: insertError } = await supabase
               .from('inventory')
               .insert([inventoryData])
-              .select('id')
+              .select()
               .single();
 
             if (insertError) throw insertError;
@@ -420,184 +420,116 @@ export function InventoryFileUpload() {
               })
               .eq('id', staging.id);
           }
-
         } catch (error) {
           console.error('Error syncing record:', error);
-          summary.errors.push(`VCPN ${staging.vcpn}: ${error}`);
+          summary.errors.push(`Row ${staging.row_number}: ${error.message}`);
           summary.skipped++;
         }
       }
-
     } catch (error) {
       console.error('Error in sync process:', error);
-      summary.errors.push(`Sync process error: ${error}`);
+      summary.errors.push(`Sync process error: ${error.message}`);
     }
 
     return summary;
   };
 
-  // Main processing function
-  const processCSVInBackground = async (csvContent: string, sessionId: string) => {
+  // Process CSV file in background
+  const processCSVInBackground = async (file: File) => {
+    let sessionId: string | null = null;
+    
     try {
-      // Stage 1: Parse CSV
-      setProcessingStage('Parsing CSV file...');
+      setIsUploading(true);
+      setCanClose(false); // Prevent closing during critical operations
+      setUploadProgress(0);
+      setProcessingStage('Initializing upload session...');
+
+      // Create upload session
+      sessionId = await createUploadSession(
+        `${Date.now()}_${file.name}`,
+        file.name,
+        file.size
+      );
+      setCurrentSessionId(sessionId);
+
       setUploadProgress(10);
-      
-      const records = parseCSV(csvContent);
-      await updateSessionProgress(sessionId, { 
-        total_records: records.length,
+      setProcessingStage('Reading CSV file...');
+
+      // Read and parse CSV
+      const csvText = await file.text();
+      const records = parseCSV(csvText);
+
+      setUploadProgress(20);
+      setProcessingStage(`Validating ${records.length} records...`);
+
+      // Update session with total records
+      await updateSessionProgress(sessionId, {
+        totalRecords: records.length,
         status: 'processing'
       });
 
-      // Stage 2: Validate and save to staging
-      setProcessingStage('Validating records...');
-      setUploadProgress(30);
-      
+      // Process records in batches
+      const batchSize = 50;
       let validCount = 0;
       let invalidCount = 0;
       let correctedCount = 0;
 
-      for (let i = 0; i < records.length; i++) {
-        const record = records[i];
-        const validation = validateRecord(record);
+      for (let i = 0; i < records.length; i += batchSize) {
+        const batch = records.slice(i, i + batchSize);
         
-        await saveStagingRecord(sessionId, record, validation, i + 1);
-        
-        if (validation.isValid) {
-          validCount++;
-          if (validation.corrected) correctedCount++;
-        } else {
-          invalidCount++;
+        for (let j = 0; j < batch.length; j++) {
+          const record = batch[j];
+          const validation = validateRecord(record);
+          
+          if (validation.isValid) {
+            validCount++;
+          } else {
+            invalidCount++;
+          }
+          
+          if (validation.corrected) {
+            correctedCount++;
+          }
+
+          // Save to staging table
+          await saveStagingRecord(sessionId, record, validation, i + j + 1);
         }
 
         // Update progress
-        const progress = 30 + (i / records.length) * 40;
-        setUploadProgress(Math.round(progress));
-        
-        if (i % 100 === 0) {
-          setProcessingStage(`Validating records... ${i + 1}/${records.length}`);
-        }
+        const progress = 20 + ((i + batch.length) / records.length) * 60;
+        setUploadProgress(Math.min(progress, 80));
+        setProcessingStage(`Processed ${Math.min(i + batchSize, records.length)} of ${records.length} records...`);
+
+        // Update session progress
+        await updateSessionProgress(sessionId, {
+          processedRecords: Math.min(i + batchSize, records.length),
+          validRecords: validCount,
+          invalidRecords: invalidCount,
+          correctedRecords: correctedCount
+        });
       }
 
-      await updateSessionProgress(sessionId, {
-        processed_records: records.length,
-        valid_records: validCount,
-        invalid_records: invalidCount,
-        corrected_records: correctedCount
-      });
-
-      // Stage 3: Sync to inventory
+      setUploadProgress(85);
       setProcessingStage('Syncing to inventory...');
-      setUploadProgress(80);
-      
+      setCanClose(true); // Allow closing during sync phase
+
+      // Sync valid records to inventory
       const syncSummary = await syncStagingToInventory(sessionId);
 
-      // Stage 4: Complete
-      setProcessingStage('Processing complete!');
-      setUploadProgress(100);
-      
+      setUploadProgress(95);
+      setProcessingStage('Finalizing...');
+
+      // Update session as completed
       await updateSessionProgress(sessionId, {
         status: 'completed',
-        completed_at: new Date().toISOString()
+        completedAt: new Date().toISOString()
       });
 
-      return {
-        validationSummary: { validCount, invalidCount, correctedCount },
-        syncSummary
-      };
-
-    } catch (error) {
-      console.error('Processing error:', error);
-      await updateSessionProgress(sessionId, {
-        status: 'failed',
-        error_message: error instanceof Error ? error.message : 'Unknown error'
-      });
-      throw error;
-    }
-  };
-
-  // Handle button click
-  const handleUploadClick = () => {
-    setShowUploadDialog(true);
-    setUploadResult(null);
-    setSelectedFile(null);
-    setPreviewData([]);
-    setUploadProgress(0);
-    setProcessingStage('');
-    setCurrentSessionId(null);
-  };
-
-  // Handle file selection
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      setUploadResult(null);
-      previewCSVFile(file);
-    }
-  };
-
-  // Preview CSV file
-  const previewCSVFile = async (file: File) => {
-    try {
-      const text = await file.text();
-      const lines = text.split('\n');
-      const headers = lines[0]?.split(',').map(h => h.trim().replace(/"/g, '')) || [];
-      
-      // Parse first few rows for preview
-      const preview = lines.slice(1, 4).map(line => {
-        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-        const record: CSVRecord = {};
-        headers.forEach((header, index) => {
-          record[header] = values[index] || '';
-        });
-        return record;
-      }).filter(record => Object.values(record).some(value => value.length > 0));
-
-      setPreviewData(preview);
-    } catch (error) {
-      console.error('Preview error:', error);
-      toast({
-        title: "Preview Error",
-        description: "Could not preview the CSV file",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Process CSV file
-  const processCSVFile = async () => {
-    if (!selectedFile || !currentUser) {
-      toast({
-        title: "Error",
-        description: "No file selected or user not authenticated",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadProgress(0);
-    setProcessingStage('Initializing...');
-    setUploadResult(null);
-
-    try {
-      // Create upload session
-      const sessionId = await createUploadSession(
-        selectedFile.name,
-        selectedFile.name,
-        selectedFile.size
-      );
-      setCurrentSessionId(sessionId);
-
-      // Read CSV content
-      const csvContent = await selectedFile.text();
-
-      // Process in background
-      const result = await processCSVInBackground(csvContent, sessionId);
+      setUploadProgress(100);
+      setProcessingStage('Processing completed successfully!');
 
       // Get final session data
-      const { data: session } = await supabase
+      const { data: finalSession } = await supabase
         .from('csv_upload_sessions')
         .select('*')
         .eq('id', sessionId)
@@ -605,8 +537,13 @@ export function InventoryFileUpload() {
 
       setUploadResult({
         sessionId,
-        session,
-        ...result
+        session: finalSession,
+        syncSummary
+      });
+
+      toast({
+        title: "CSV Processing Complete",
+        description: `Processed ${records.length} records. ${validCount} valid, ${invalidCount} invalid, ${correctedCount} corrected.`,
       });
 
       // Refresh recent sessions
@@ -614,144 +551,181 @@ export function InventoryFileUpload() {
         loadRecentSessions(currentUser.id);
       }
 
-      toast({
-        title: "Processing Complete",
-        description: `Successfully processed ${session?.valid_records || 0} of ${session?.total_records || 0} records`,
-      });
-
     } catch (error) {
+      console.error('Processing error:', error);
       console.error('Upload process error:', error);
+      
       setProcessingStage('Processing failed');
       
+      if (sessionId) {
+        await updateSessionProgress(sessionId, {
+          status: 'failed',
+          errorMessage: error.message,
+          completedAt: new Date().toISOString()
+        });
+      }
+
       toast({
         title: "Upload Failed",
-        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        description: error.message,
         variant: "destructive",
       });
     } finally {
       setIsUploading(false);
+      setCanClose(true); // Always allow closing after completion
     }
   };
 
-  // View session details (opens reconciliation interface)
-  const viewSessionDetails = (sessionId: string) => {
-    // This would navigate to the reconciliation interface
-    toast({
-      title: "Reconciliation Interface",
-      description: `Opening reconciliation for session ${sessionId}`,
-    });
+  // Handle file selection
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      
+      // Preview first few rows
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const csvText = e.target?.result as string;
+        const records = parseCSV(csvText);
+        setPreviewData(records.slice(0, 3));
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  // Process CSV file
+  const processCSVFile = async () => {
+    if (!selectedFile) return;
+    await processCSVInBackground(selectedFile);
   };
 
   // Reset upload state
   const resetUpload = () => {
     setSelectedFile(null);
+    setPreviewData([]);
     setUploadResult(null);
     setUploadProgress(0);
     setProcessingStage('');
-    setPreviewData([]);
     setCurrentSessionId(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  // Open file picker
-  const openFilePicker = () => {
-    fileInputRef.current?.click();
-  };
-
-  // Close dialog
+  // Close dialog - FIXED: Now works during background processing
   const closeDialog = () => {
+    if (isUploading && !canClose) {
+      toast({
+        title: "Cannot close yet",
+        description: "Please wait for the critical processing phase to complete.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setShowUploadDialog(false);
-    resetUpload();
+    
+    // If processing is ongoing, show notification
+    if (isUploading) {
+      toast({
+        title: "Processing continues in background",
+        description: "Your CSV upload will continue processing. Check recent sessions for updates.",
+      });
+    }
   };
 
-  // Format session status
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <Badge variant="default" className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" />Completed</Badge>;
-      case 'processing':
-        return <Badge variant="outline"><Clock className="w-3 h-3 mr-1" />Processing</Badge>;
-      case 'failed':
-        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Failed</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+  // View session details (for reconciliation)
+  const viewSessionDetails = (sessionId: string) => {
+    // This would open the reconciliation interface
+    // For now, just show a toast
+    toast({
+      title: "Reconciliation Interface",
+      description: "Opening reconciliation interface for session: " + sessionId,
+    });
+  };
+
+  // Format file size
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Format date
+  const formatDate = (dateString: string): string => {
+    return new Date(dateString).toLocaleString();
   };
 
   return (
     <>
-      {/* Upload Button */}
-      <Button 
-        variant="outline" 
-        onClick={handleUploadClick}
-        type="button"
-      >
-        <Upload className="w-4 h-4 mr-2" />
-        Upload CSV
+      <Button onClick={() => setShowUploadDialog(true)} className="flex items-center space-x-2">
+        <Upload className="w-4 h-4" />
+        <span>Enhanced CSV Upload</span>
       </Button>
 
-      {/* Upload Dialog */}
       {showUploadDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Enhanced CSV Upload & Validation</h2>
-              <Button variant="outline" onClick={closeDialog} disabled={isUploading}>
-                ✕
-              </Button>
-            </div>
-            
-            <div className="space-y-6">
-              {/* Feature Overview */}
-              <Card>
-                <CardContent className="p-4">
-                  <div className="text-sm space-y-2">
-                    <p className="font-medium">✅ Enhanced Processing Features:</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                      <div>• SKU normalization (Excel formatting)</div>
-                      <div>• VCPN auto-correction</div>
-                      <div>• Quantity validation & correction</div>
-                      <div>• Background processing</div>
-                      <div>• Duplicate detection & updates</div>
-                      <div>• Complete audit trail</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header with close button - FIXED */}
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-xl font-semibold">Enhanced CSV Upload</h2>
+                  <p className="text-sm text-gray-600">Enhanced processing with validation and reconciliation</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={closeDialog}
+                  className="h-8 w-8 p-0"
+                  disabled={isUploading && !canClose}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
 
-              {/* Recent Sessions */}
+              {/* Recent Upload Sessions */}
               {recentSessions.length > 0 && (
-                <Card>
+                <Card className="mb-6">
                   <CardHeader>
                     <CardTitle className="text-sm flex items-center">
-                      <RefreshCw className="w-4 h-4 mr-2" />
+                      <Clock className="w-4 h-4 mr-2" />
                       Recent Upload Sessions
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       {recentSessions.map((session) => (
-                        <div key={session.id} className="flex items-center justify-between p-2 border rounded">
-                          <div className="flex-1">
-                            <div className="font-medium text-sm">{session.originalFilename}</div>
-                            <div className="text-xs text-gray-500">
-                              {session.totalRecords} records • {session.validRecords} valid • {session.correctedRecords} corrected
-                            </div>
-                            <div className="text-xs text-gray-400">
-                              {new Date(session.createdAt).toLocaleDateString()} {new Date(session.createdAt).toLocaleTimeString()}
-                            </div>
+                        <div key={session.id} className="flex items-center justify-between p-2 border rounded text-xs">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="w-3 h-3" />
+                            <span className="font-medium">{session.originalFilename}</span>
+                            <span className="text-gray-500">
+                              {session.totalRecords} records
+                            </span>
                           </div>
                           <div className="flex items-center space-x-2">
-                            {getStatusBadge(session.status)}
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => viewSessionDetails(session.id)}
+                            <Badge 
+                              variant={session.status === 'completed' ? 'default' : 
+                                      session.status === 'failed' ? 'destructive' : 'secondary'}
+                              className="text-xs"
                             >
-                              <Eye className="w-3 h-3" />
-                            </Button>
+                              {session.status}
+                            </Badge>
+                            <span className="text-gray-400">{formatDate(session.createdAt)}</span>
+                            {(session.invalidRecords > 0 || session.correctedRecords > 0) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => viewSessionDetails(session.id)}
+                                className="h-6 px-2 text-xs"
+                              >
+                                <Eye className="w-3 h-3 mr-1" />
+                                Review
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -760,41 +734,44 @@ export function InventoryFileUpload() {
                 </Card>
               )}
 
-              {/* File Selection */}
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                  disabled={isUploading}
-                />
-                
-                <div className="space-y-2">
-                  <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                  <div>
-                    <p className="text-lg font-medium">
-                      {selectedFile ? selectedFile.name : 'Select CSV File'}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Enhanced processing with validation and reconciliation
-                    </p>
-                    {selectedFile && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        Size: {(selectedFile.size / 1024).toFixed(1)} KB
-                      </p>
+              {/* File Upload */}
+              <Card className="mb-6">
+                <CardContent className="pt-6">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                    {selectedFile ? (
+                      <div className="space-y-2">
+                        <FileText className="w-12 h-12 text-blue-500 mx-auto" />
+                        <p className="font-medium">{selectedFile.name}</p>
+                        <p className="text-sm text-gray-500">Enhanced processing with validation and reconciliation</p>
+                        <p className="text-xs text-gray-400">Size: {formatFileSize(selectedFile.size)}</p>
+                        <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                          Select Different File
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Upload className="w-12 h-12 text-gray-400 mx-auto" />
+                        <p className="text-lg font-medium">Upload CSV File</p>
+                        <p className="text-sm text-gray-500">Enhanced processing with validation and reconciliation</p>
+                        <Button onClick={() => fileInputRef.current?.click()}>
+                          Select File
+                        </Button>
+                      </div>
                     )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
                   </div>
-                  <Button onClick={openFilePicker} disabled={isUploading}>
-                    Select File
-                  </Button>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
 
               {/* CSV Preview */}
               {previewData.length > 0 && (
-                <Card>
+                <Card className="mb-6">
                   <CardHeader>
                     <CardTitle className="text-sm">CSV Preview & Field Detection</CardTitle>
                   </CardHeader>
@@ -816,21 +793,21 @@ export function InventoryFileUpload() {
 
               {/* Processing Progress */}
               {isUploading && (
-                <div className="space-y-2">
+                <div className="space-y-2 mb-6">
                   <div className="flex justify-between text-sm">
                     <span>{processingStage}</span>
                     <span>{uploadProgress}%</span>
                   </div>
                   <Progress value={uploadProgress} className="w-full" />
                   <p className="text-xs text-gray-500">
-                    ⚡ Processing in background - you can continue working while this completes
+                    ⚡ Processing in background - you can {canClose ? 'close this dialog and ' : ''}continue working while this completes
                   </p>
                 </div>
               )}
 
               {/* Upload Results */}
               {uploadResult && (
-                <Card>
+                <Card className="mb-6">
                   <CardHeader>
                     <CardTitle className="text-sm flex items-center">
                       <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
@@ -902,7 +879,7 @@ export function InventoryFileUpload() {
                 <Button
                   variant="outline"
                   onClick={resetUpload}
-                  disabled={isUploading}
+                  disabled={isUploading && !canClose}
                 >
                   Reset
                 </Button>
@@ -910,9 +887,9 @@ export function InventoryFileUpload() {
                   <Button
                     variant="outline"
                     onClick={closeDialog}
-                    disabled={isUploading}
+                    disabled={isUploading && !canClose}
                   >
-                    Close
+                    {isUploading && canClose ? 'Close (Processing continues)' : 'Close'}
                   </Button>
                   <Button
                     onClick={processCSVFile}
