@@ -144,15 +144,42 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
       return false;
     }
     
-    // Check time since last update
-    const lastUpdate = new Date(session.updated_at || session.created_at);
+    // Get current time and last update time
     const now = new Date();
-    const hoursSinceUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60);
+    const lastUpdateString = session.updated_at || session.created_at;
     
-    // Consider stalled if no update in 1 hour and processing is incomplete
-    const isStalled = hoursSinceUpdate > 1;
+    // Parse the timestamp - handle both ISO format and PostgreSQL timestamp
+    let lastUpdate: Date;
+    try {
+      // If it contains 'T', it's ISO format
+      if (lastUpdateString.includes('T')) {
+        lastUpdate = new Date(lastUpdateString);
+      } else {
+        // Otherwise, treat as PostgreSQL timestamp
+        lastUpdate = new Date(lastUpdateString + 'Z'); // Add Z to treat as UTC
+      }
+    } catch (e) {
+      console.error(`Error parsing date: ${lastUpdateString}`, e);
+      lastUpdate = new Date(session.created_at);
+    }
     
-    console.log(`Session ${session.id}: ${processedRecords}/${totalRecords}, Hours since update: ${hoursSinceUpdate.toFixed(2)}, Last update: ${lastUpdate.toISOString()}, Stalled: ${isStalled}`);
+    // Calculate time difference in milliseconds, then convert to hours
+    const timeDiffMs = now.getTime() - lastUpdate.getTime();
+    const hoursSinceUpdate = timeDiffMs / (1000 * 60 * 60);
+    
+    // Consider stalled if no update in 30 minutes (0.5 hours) for testing
+    // You can change this back to 1 hour later
+    const stallThresholdHours = 0.5;
+    const isStalled = hoursSinceUpdate > stallThresholdHours;
+    
+    console.log(`Session ${session.id}: 
+      - Progress: ${processedRecords}/${totalRecords}
+      - Last update string: ${lastUpdateString}
+      - Last update parsed: ${lastUpdate.toISOString()}
+      - Current time: ${now.toISOString()}
+      - Hours since update: ${hoursSinceUpdate.toFixed(2)}
+      - Stall threshold: ${stallThresholdHours} hours
+      - Is stalled: ${isStalled}`);
     
     return isStalled;
   };
@@ -198,23 +225,55 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
       
       console.log(`Attempting to resume processing for session: ${sessionId}`);
       
-      // Update session to trigger processing continuation
-      const { error: updateError } = await supabase
-        .from('csv_upload_sessions')
-        .update({
-          status: 'processing',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sessionId);
+      // Get staging records that need processing
+      const { data: stagingRecords, error: stagingError } = await supabase
+        .from('csv_staging_records')
+        .select('*')
+        .eq('upload_session_id', sessionId)
+        .in('validation_status', ['valid', 'corrected'])
+        .is('processed_at', null)
+        .limit(10); // Limit to first 10 for testing
 
-      if (updateError) {
-        throw new Error(`Failed to update session: ${updateError.message}`);
+      if (stagingError) {
+        throw new Error(`Failed to get staging records: ${stagingError.message}`);
       }
 
-      toast({
-        title: "Processing Resumed",
-        description: "Session has been marked for processing continuation",
-      });
+      console.log(`Found ${stagingRecords?.length || 0} records to process`);
+
+      if (!stagingRecords || stagingRecords.length === 0) {
+        // No records to process, mark as completed
+        const { error: updateError } = await supabase
+          .from('csv_upload_sessions')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sessionId);
+
+        if (updateError) throw updateError;
+        
+        toast({
+          title: "Processing Complete",
+          description: "No remaining records to process. Session marked as completed.",
+        });
+      } else {
+        // Update session timestamp to show activity
+        const { error: updateError } = await supabase
+          .from('csv_upload_sessions')
+          .update({
+            status: 'processing',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sessionId);
+
+        if (updateError) throw updateError;
+
+        toast({
+          title: "Processing Resumed",
+          description: `Found ${stagingRecords.length} records to process. Processing will continue in the background.`,
+        });
+      }
 
       // Refresh data after a delay
       setTimeout(loadProcessingData, 2000);
@@ -321,7 +380,7 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
             <div>
               <h2 className="text-2xl font-semibold flex items-center space-x-2">
                 <Activity className="h-6 w-6" />
-                <span>Processing Monitor (Debug)</span>
+                <span>Processing Monitor (Fixed Time)</span>
               </h2>
               <p className="text-gray-600 mt-1">
                 Real-time monitoring of CSV processing sessions
@@ -353,7 +412,7 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Debug Info:</strong> {debugInfo}
+              <strong>Debug Info:</strong> {debugInfo} | Current Time: {new Date().toISOString()}
             </AlertDescription>
           </Alert>
         </div>
@@ -486,7 +545,7 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
                         <Alert variant="destructive">
                           <AlertTriangle className="h-4 w-4" />
                           <AlertDescription>
-                            <strong>Processing Stalled:</strong> This session hasn't been updated in over 1 hour and has {((session.total_records || 0) - (session.processed_records || 0)).toLocaleString()} records remaining. 
+                            <strong>Processing Stalled:</strong> This session hasn't been updated in over 30 minutes and has {((session.total_records || 0) - (session.processed_records || 0)).toLocaleString()} records remaining. 
                             Click "Resume" to continue processing.
                           </AlertDescription>
                         </Alert>
