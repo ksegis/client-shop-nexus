@@ -169,14 +169,14 @@ export function InventoryFileUpload() {
     let corrected = false;
     const cleanedData = { ...record };
 
-    // Rule 1: Normalize SKU (remove Excel formatting)
-    if (cleanedData.sku) {
-      const originalSku = cleanedData.sku;
-      const normalizedSku = normalizePartNumber(originalSku);
+    // Rule 1: Normalize part_number (remove Excel formatting)
+    if (cleanedData.part_number) {
+      const originalPartNumber = cleanedData.part_number;
+      const normalizedPartNumber = normalizePartNumber(originalPartNumber);
       
-      if (originalSku !== normalizedSku) {
-        cleanedData.sku = normalizedSku;
-        notes.push(`SKU normalized: "${originalSku}" → "${normalizedSku}"`);
+      if (originalPartNumber !== normalizedPartNumber) {
+        cleanedData.part_number = normalizedPartNumber;
+        notes.push(`Part number normalized: "${originalPartNumber}" → "${normalizedPartNumber}"`);
         corrected = true;
       }
     }
@@ -187,14 +187,14 @@ export function InventoryFileUpload() {
       isValid = false;
     }
 
-    if (!cleanedData.sku || cleanedData.sku.trim() === '') {
-      notes.push('Missing SKU');
+    if (!cleanedData.part_number || cleanedData.part_number.trim() === '') {
+      notes.push('Missing part_number');
       isValid = false;
     }
 
     // Rule 3: Auto-generate VCPN
-    if (cleanedData.vendor_code && cleanedData.sku) {
-      const expectedVCPN = cleanedData.vendor_code + cleanedData.sku;
+    if (cleanedData.vendor_code && cleanedData.part_number) {
+      const expectedVCPN = cleanedData.vendor_code + cleanedData.part_number;
       if (!cleanedData.vcpn || cleanedData.vcpn !== expectedVCPN) {
         const originalVCPN = cleanedData.vcpn || '';
         cleanedData.vcpn = expectedVCPN;
@@ -244,15 +244,56 @@ export function InventoryFileUpload() {
           }
 
           const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+          
+          // COLUMN MAPPING - Map CSV headers to staging table field names
+          const columnMapping: { [key: string]: string } = {
+            'VendorName': 'vendor_name',
+            'VendorCode': 'vendor_code', 
+            'PartNumber': 'part_number',  // Maps to part_number in staging
+            'LongDescription': 'long_description',
+            'VCPN': 'vcpn',
+            'ManufacturerPartNo': 'manufacturer_part_no',
+            'EastQty': 'east_qty',
+            'MidwestQty': 'midwest_qty',
+            'CaliforniaQty': 'california_qty',
+            'SoutheastQty': 'southeast_qty',
+            'PacificNWQty': 'pacific_nw_qty',
+            'TexasQty': 'texas_qty',
+            'GreatLakesQty': 'great_lakes_qty',
+            'FloridaQty': 'florida_qty',
+            'TotalQty': 'total_qty',
+            'Description': 'long_description',
+            'Qty': 'total_qty',
+            'SKU': 'part_number',
+            'Part': 'part_number',
+            'PartNo': 'part_number'
+          };
+
           const records: CSVRecord[] = [];
 
           for (let i = 1; i < lines.length; i++) {
             const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-            if (values.length === headers.length) {
+            if (values.length === headers.length && values.some(v => v !== '')) {
               const record: CSVRecord = {};
               headers.forEach((header, index) => {
-                record[header] = values[index] || '';
+                // Use mapped column name if available, otherwise use original
+                const mappedHeader = columnMapping[header] || header.toLowerCase().replace(/\s+/g, '_');
+                let value = values[index] || '';
+                
+                // Clean data during parsing
+                if (value.startsWith('=')) {
+                  value = value.substring(1); // Remove leading = sign
+                }
+                value = value.trim(); // Remove whitespace
+                
+                record[mappedHeader] = value;
               });
+              
+              // Generate VCPN if not provided
+              if (!record.vcpn && record.vendor_code && record.part_number) {
+                record.vcpn = `${record.vendor_code}${record.part_number}`;
+              }
+              
               records.push(record);
             }
           }
@@ -280,7 +321,8 @@ export function InventoryFileUpload() {
         valid_records: 0,
         invalid_records: 0,
         corrected_records: 0,
-        user_id: currentUser?.id
+        user_id: currentUser?.id,
+        uploaded_by: currentUser?.id
       }])
       .select()
       .single();
@@ -295,7 +337,7 @@ export function InventoryFileUpload() {
       return {
         upload_session_id: sessionId,
         row_number: index + 1,
-        validation_status: validation.isValid ? 'valid' : 'invalid',
+        validation_status: validation.isValid ? 'valid' : (validation.corrected ? 'corrected' : 'invalid'),
         action_type: 'unknown',
         needs_review: !validation.isValid || validation.corrected,
         validation_notes: validation.notes.join('; '),
@@ -305,7 +347,7 @@ export function InventoryFileUpload() {
         vendor_name: validation.cleanedData.vendor_name || '',
         vcpn: validation.cleanedData.vcpn || '',
         vendor_code: validation.cleanedData.vendor_code || '',
-        part_number: validation.cleanedData.sku || '',
+        part_number: validation.cleanedData.part_number || '',
         long_description: validation.cleanedData.long_description || '',
         total_qty: parseInt(validation.cleanedData.total_qty) || 0,
         calculated_total_qty: parseInt(validation.cleanedData.total_qty) || 0,
@@ -336,7 +378,7 @@ export function InventoryFileUpload() {
 
   const updateSessionStats = async (sessionId: string, validationResults: ValidationResult[]) => {
     const validCount = validationResults.filter(r => r.isValid).length;
-    const invalidCount = validationResults.filter(r => !r.isValid).length;
+    const invalidCount = validationResults.filter(r => !r.isValid && !r.corrected).length;
     const correctedCount = validationResults.filter(r => r.corrected).length;
 
     const { error } = await supabase
@@ -383,10 +425,11 @@ export function InventoryFileUpload() {
           const inventoryData = {
             name: record.long_description || record.part_number || 'Unknown Item',
             description: record.long_description,
-            sku: record.part_number,
+            sku: record.part_number,  // Map part_number to sku in inventory
             vcpn: record.vcpn,
             vendor_code: record.vendor_code,
             vendor_name: record.vendor_name,
+            manufacturer_part_no: record.manufacturer_part_no,
             quantity: record.total_qty,
             east_qty: record.east_qty,
             midwest_qty: record.midwest_qty,
@@ -397,7 +440,9 @@ export function InventoryFileUpload() {
             great_lakes_qty: record.great_lakes_qty,
             florida_qty: record.florida_qty,
             total_qty: record.total_qty,
-            ftp_upload_id: sessionId
+            ftp_upload_id: sessionId,
+            import_source: 'csv_upload',
+            updated_at: new Date().toISOString()
           };
 
           if (existing) {
@@ -423,7 +468,10 @@ export function InventoryFileUpload() {
             // Insert new record
             const { data: newRecord, error: insertError } = await supabase
               .from('inventory')
-              .insert([inventoryData])
+              .insert([{
+                ...inventoryData,
+                created_at: new Date().toISOString()
+              }])
               .select()
               .single();
 
@@ -553,7 +601,7 @@ export function InventoryFileUpload() {
         sessionId,
         totalRecords: records.length,
         validRecords: validationResults.filter(r => r.isValid).length,
-        invalidRecords: validationResults.filter(r => !r.isValid).length,
+        invalidRecords: validationResults.filter(r => !r.isValid && !r.corrected).length,
         correctedRecords: validationResults.filter(r => r.corrected).length,
         processedRecords: processedCount,
         session: finalSession
@@ -570,6 +618,23 @@ export function InventoryFileUpload() {
       // Refresh recent sessions
       if (currentUser) {
         loadRecentSessions(currentUser.id);
+      }
+
+      // Trigger automatic processing for valid/corrected records
+      try {
+        const { data, error: processError } = await supabase
+          .rpc('process_csv_staging_records', {
+            session_id: sessionId,
+            batch_size: 100
+          });
+
+        if (processError) {
+          console.warn('Background processing failed:', processError);
+        } else {
+          console.log('Background processing initiated:', data);
+        }
+      } catch (processError) {
+        console.warn('Could not start background processing:', processError);
       }
 
     } catch (error) {
