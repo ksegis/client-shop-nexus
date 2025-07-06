@@ -8,7 +8,6 @@ import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, Refr
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CSVReconciliation } from './CSVReconciliation';
-import CSVAuditDashboard from './CSVAuditDashboard';
 
 
 // Types for CSV processing
@@ -72,8 +71,6 @@ export function InventoryFileUpload() {
   
   // Reconciliation state
   const [showReconciliation, setShowReconciliation] = useState(false);
-  const [showAuditDashboard, setShowAuditDashboard] = useState(false);
-  const [auditSessionId, setAuditSessionId] = useState<string | null>(null);
   const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -827,23 +824,6 @@ export function InventoryFileUpload() {
     }
   };
 
-  // Open audit dashboard
-  const openAuditDashboard = (sessionId: string) => {
-    setAuditSessionId(sessionId);
-    setShowAuditDashboard(true);
-    setShowUploadDialog(false);
-  };
-
-  // Close audit dashboard
-  const closeAuditDashboard = () => {
-    setShowAuditDashboard(false);
-    setAuditSessionId(null);
-    
-    if (currentUser) {
-      loadRecentSessions(currentUser.id);
-    }
-  };
-
   // Format file size
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
@@ -907,7 +887,7 @@ export function InventoryFileUpload() {
                 </Button>
               </div>
 
-              {/* ENHANCED: Recent Upload Sessions with audit access */}
+              {/* ENHANCED: Recent Upload Sessions with stall detection */}
               {recentSessions.length > 0 && (
                 <Card className="mb-6">
                   <CardHeader>
@@ -985,22 +965,21 @@ export function InventoryFileUpload() {
                               </div>
                             )}
                             
+                            {/* Stall alert */}
+                            {sessionStatus.isStalled && (
+                              <Alert className="mb-2 border-red-200 bg-red-50">
+                                <AlertTriangle className="h-4 w-4 text-red-600" />
+                                <AlertDescription className="text-red-800 text-xs">
+                                  Processing has stalled for {sessionStatus.stallDuration} minutes. No progress detected.
+                                </AlertDescription>
+                              </Alert>
+                            )}
+                            
                             <div className="flex items-center justify-between">
                               <div className="text-xs text-gray-500">
                                 Size: {formatFileSize(session.file_size || 0)}
                               </div>
                               <div className="flex items-center space-x-1">
-                                {/* Audit button */}
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openAuditDashboard(session.id)}
-                                  className="h-6 px-2 text-xs"
-                                >
-                                  <BarChart3 className="w-3 h-3 mr-1" />
-                                  Audit
-                                </Button>
-                                
                                 {/* Review button for problematic records */}
                                 {(session.invalid_records > 0 || session.corrected_records > 0) && (
                                   <Button
@@ -1159,15 +1138,6 @@ export function InventoryFileUpload() {
 
                       {/* Action buttons */}
                       <div className="flex space-x-2">
-                        {/* Audit button */}
-                        <Button 
-                          size="sm" 
-                          onClick={() => openAuditDashboard(uploadResult.sessionId)}
-                        >
-                          <BarChart3 className="w-4 h-4 mr-1" />
-                          View Audit
-                        </Button>
-                        
                         {/* Review button for problematic records */}
                         {((uploadResult.session?.invalid_records || 0) > 0 || (uploadResult.session?.corrected_records || 0) > 0) && (
                           <Button 
@@ -1229,14 +1199,6 @@ export function InventoryFileUpload() {
         <CSVReconciliation
           sessionId={reconciliationSessionId}
           onClose={closeReconciliation}
-        />
-      )}
-
-      {/* CSV Audit Dashboard */}
-      {showAuditDashboard && auditSessionId && (
-        <CSVAuditDashboard
-          sessionId={auditSessionId}
-          onClose={closeAuditDashboard}
         />
       )}
     </>
