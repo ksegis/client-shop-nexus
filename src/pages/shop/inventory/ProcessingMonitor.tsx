@@ -22,28 +22,19 @@ import { useToast } from '@/hooks/use-toast';
 
 interface ProcessingSession {
   id: string;
-  filename: string;
-  original_filename: string;
-  file_size: number;
+  filename?: string;
+  original_filename?: string;
+  file_size?: number;
   status: string;
-  total_records: number;
-  processed_records: number;
-  valid_records: number;
-  invalid_records: number;
-  corrected_records: number;
+  total_records?: number;
+  processed_records?: number;
+  valid_records?: number;
+  invalid_records?: number;
+  corrected_records?: number;
   error_message?: string;
   created_at: string;
   completed_at?: string;
-  updated_at: string;
-}
-
-interface ProcessingStats {
-  totalSessions: number;
-  activeSessions: number;
-  stalledSessions: number;
-  completedToday: number;
-  totalRecordsProcessed: number;
-  averageProcessingRate: number;
+  updated_at?: string;
 }
 
 interface ProcessingMonitorProps {
@@ -52,8 +43,9 @@ interface ProcessingMonitorProps {
 
 export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
   const [sessions, setSessions] = useState<ProcessingSession[]>([]);
-  const [stats, setStats] = useState<ProcessingStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
   const [processingSession, setProcessingSession] = useState<string | null>(null);
   const { toast } = useToast();
@@ -69,26 +61,64 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
   const loadProcessingData = async () => {
     try {
       setRefreshing(true);
+      setError(null);
+      setDebugInfo('Starting to load sessions...');
       
-      // Load all sessions
+      // First, check if user is authenticated
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        throw new Error(`Auth error: ${authError.message}`);
+      }
+      
+      if (!user) {
+        throw new Error('No authenticated user found');
+      }
+      
+      setDebugInfo(`User authenticated: ${user.email}`);
+      
+      // Try to load sessions with minimal fields first
+      console.log('Attempting to load csv_upload_sessions...');
+      
       const { data: allSessions, error: sessionsError } = await supabase
         .from('csv_upload_sessions')
-        .select('*')
+        .select(`
+          id,
+          status,
+          total_records,
+          processed_records,
+          valid_records,
+          invalid_records,
+          corrected_records,
+          created_at,
+          updated_at,
+          completed_at,
+          original_filename,
+          file_size,
+          error_message
+        `)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(20);
 
-      if (sessionsError) throw sessionsError;
+      if (sessionsError) {
+        console.error('Sessions query error:', sessionsError);
+        throw new Error(`Database error: ${sessionsError.message} (Code: ${sessionsError.code})`);
+      }
+
+      console.log('Sessions loaded successfully:', allSessions?.length || 0);
+      setDebugInfo(`Successfully loaded ${allSessions?.length || 0} sessions`);
+      
       setSessions(allSessions || []);
-
-      // Calculate statistics
-      const stats = calculateStats(allSessions || []);
-      setStats(stats);
 
     } catch (error) {
       console.error('Error loading processing data:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setError(errorMessage);
+      setDebugInfo(`Error: ${errorMessage}`);
+      
       toast({
         title: "Error Loading Data",
-        description: "Could not load processing information",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -97,68 +127,41 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
     }
   };
 
-  const calculateStats = (sessions: ProcessingSession[]): ProcessingStats => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    const activeSessions = sessions.filter(s => s.status === 'processing').length;
-    const stalledSessions = sessions.filter(s => isSessionStalled(s)).length;
-    const completedToday = sessions.filter(s => {
-      const completedAt = s.completed_at ? new Date(s.completed_at) : null;
-      return completedAt && completedAt >= today;
-    }).length;
-    
-    const totalRecordsProcessed = sessions.reduce((sum, s) => sum + (s.processed_records || 0), 0);
-    
-    // Calculate average processing rate (records per minute)
-    const processingRates = sessions
-      .filter(s => s.status === 'completed' && s.completed_at)
-      .map(s => {
-        const start = new Date(s.created_at);
-        const end = new Date(s.completed_at!);
-        const minutes = (end.getTime() - start.getTime()) / (1000 * 60);
-        return minutes > 0 ? (s.processed_records || 0) / minutes : 0;
-      })
-      .filter(rate => rate > 0);
-    
-    const averageProcessingRate = processingRates.length > 0 
-      ? processingRates.reduce((sum, rate) => sum + rate, 0) / processingRates.length 
-      : 0;
-
-    return {
-      totalSessions: sessions.length,
-      activeSessions,
-      stalledSessions,
-      completedToday,
-      totalRecordsProcessed,
-      averageProcessingRate: Math.round(averageProcessingRate * 100) / 100
-    };
-  };
-
   const isSessionStalled = (session: ProcessingSession): boolean => {
     // Only check processing sessions
-    if (session.status !== 'processing') return false;
+    if (session.status !== 'processing') {
+      console.log(`Session ${session.id}: Not processing (status: ${session.status})`);
+      return false;
+    }
     
     // Check if processing is incomplete
-    const isIncomplete = (session.processed_records || 0) < (session.total_records || 0);
-    if (!isIncomplete) return false;
+    const totalRecords = session.total_records || 0;
+    const processedRecords = session.processed_records || 0;
+    const isIncomplete = processedRecords < totalRecords;
+    
+    if (!isIncomplete) {
+      console.log(`Session ${session.id}: Complete (${processedRecords}/${totalRecords})`);
+      return false;
+    }
     
     // Check time since last update
-    const lastUpdate = new Date(session.updated_at);
+    const lastUpdate = new Date(session.updated_at || session.created_at);
     const now = new Date();
     const hoursSinceUpdate = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60);
     
     // Consider stalled if no update in 1 hour and processing is incomplete
     const isStalled = hoursSinceUpdate > 1;
     
-    console.log(`Session ${session.id}: ${session.processed_records}/${session.total_records}, Hours since update: ${hoursSinceUpdate.toFixed(2)}, Stalled: ${isStalled}`);
+    console.log(`Session ${session.id}: ${processedRecords}/${totalRecords}, Hours since update: ${hoursSinceUpdate.toFixed(2)}, Last update: ${lastUpdate.toISOString()}, Stalled: ${isStalled}`);
     
     return isStalled;
   };
 
   const getSessionProgress = (session: ProcessingSession): number => {
-    if (session.total_records === 0) return 0;
-    return Math.round(((session.processed_records || 0) / session.total_records) * 100);
+    const total = session.total_records || 0;
+    const processed = session.processed_records || 0;
+    if (total === 0) return 0;
+    return Math.round((processed / total) * 100);
   };
 
   const getEstimatedCompletion = (session: ProcessingSession): string => {
@@ -168,10 +171,13 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
     const now = new Date();
     const elapsedMinutes = (now.getTime() - start.getTime()) / (1000 * 60);
     
-    if (elapsedMinutes === 0 || !session.processed_records) return 'Calculating...';
+    const processedRecords = session.processed_records || 0;
+    const totalRecords = session.total_records || 0;
     
-    const rate = session.processed_records / elapsedMinutes;
-    const remaining = (session.total_records || 0) - (session.processed_records || 0);
+    if (elapsedMinutes === 0 || !processedRecords) return 'Calculating...';
+    
+    const rate = processedRecords / elapsedMinutes;
+    const remaining = totalRecords - processedRecords;
     
     if (rate === 0) return 'Stalled';
     
@@ -190,179 +196,25 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
     try {
       setProcessingSession(sessionId);
       
-      console.log(`Resuming processing for session: ${sessionId}`);
+      console.log(`Attempting to resume processing for session: ${sessionId}`);
       
-      // First, get the current session data
-      const { data: currentSession, error: fetchError } = await supabase
+      // Update session to trigger processing continuation
+      const { error: updateError } = await supabase
         .from('csv_upload_sessions')
-        .select('*')
-        .eq('id', sessionId)
-        .single();
+        .update({
+          status: 'processing',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', sessionId);
 
-      if (fetchError) throw fetchError;
-      
-      console.log('Current session data:', currentSession);
-      
-      // Get staging records that need processing
-      const { data: stagingRecords, error: stagingError } = await supabase
-        .from('csv_staging_records')
-        .select('*')
-        .eq('upload_session_id', sessionId)
-        .in('validation_status', ['valid', 'corrected'])
-        .is('processed_at', null);
-
-      if (stagingError) throw stagingError;
-      
-      console.log(`Found ${stagingRecords?.length || 0} records to process`);
-      
-      if (!stagingRecords || stagingRecords.length === 0) {
-        // No records to process, mark as completed
-        const { error: updateError } = await supabase
-          .from('csv_upload_sessions')
-          .update({
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', sessionId);
-
-        if (updateError) throw updateError;
-        
-        toast({
-          title: "Processing Complete",
-          description: "No remaining records to process. Session marked as completed.",
-        });
-      } else {
-        // Update session to trigger processing
-        const { error: updateError } = await supabase
-          .from('csv_upload_sessions')
-          .update({
-            status: 'processing',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', sessionId);
-
-        if (updateError) throw updateError;
-
-        // Process remaining records
-        let processedCount = currentSession.processed_records || 0;
-        
-        for (const record of stagingRecords) {
-          try {
-            // Check if record exists in inventory by VCPN
-            const { data: existing, error: checkError } = await supabase
-              .from('inventory')
-              .select('id')
-              .eq('vcpn', record.vcpn)
-              .single();
-
-            if (checkError && checkError.code !== 'PGRST116') {
-              throw checkError;
-            }
-
-            const inventoryData = {
-              name: record.long_description || record.part_number || 'Unknown Item',
-              description: record.long_description,
-              sku: record.part_number,
-              vcpn: record.vcpn,
-              vendor_code: record.vendor_code,
-              vendor_name: record.vendor_name,
-              quantity: record.total_qty,
-              east_qty: record.east_qty,
-              midwest_qty: record.midwest_qty,
-              california_qty: record.california_qty,
-              southeast_qty: record.southeast_qty,
-              pacific_nw_qty: record.pacific_nw_qty,
-              texas_qty: record.texas_qty,
-              great_lakes_qty: record.great_lakes_qty,
-              florida_qty: record.florida_qty,
-              total_qty: record.total_qty,
-              ftp_upload_id: sessionId
-            };
-
-            if (existing) {
-              // Update existing record
-              const { error: updateError } = await supabase
-                .from('inventory')
-                .update(inventoryData)
-                .eq('id', existing.id);
-
-              if (updateError) throw updateError;
-
-              // Update staging record
-              await supabase
-                .from('csv_staging_records')
-                .update({ 
-                  existing_inventory_id: existing.id,
-                  action_type: 'update',
-                  validation_status: 'processed',
-                  processed_at: new Date().toISOString()
-                })
-                .eq('id', record.id);
-            } else {
-              // Insert new record
-              const { data: newRecord, error: insertError } = await supabase
-                .from('inventory')
-                .insert([inventoryData])
-                .select()
-                .single();
-
-              if (insertError) throw insertError;
-
-              // Update staging record
-              await supabase
-                .from('csv_staging_records')
-                .update({ 
-                  existing_inventory_id: newRecord.id,
-                  action_type: 'insert',
-                  validation_status: 'processed',
-                  processed_at: new Date().toISOString()
-                })
-                .eq('id', record.id);
-            }
-
-            processedCount++;
-            
-            // Update session progress every 100 records
-            if (processedCount % 100 === 0) {
-              await supabase
-                .from('csv_upload_sessions')
-                .update({
-                  processed_records: processedCount,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', sessionId);
-            }
-            
-          } catch (error) {
-            console.error('Error processing record:', record.id, error);
-            // Mark record as failed
-            await supabase
-              .from('csv_staging_records')
-              .update({ 
-                validation_status: 'invalid',
-                validation_notes: `Processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-              })
-              .eq('id', record.id);
-          }
-        }
-
-        // Final update
-        await supabase
-          .from('csv_upload_sessions')
-          .update({
-            processed_records: processedCount,
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', sessionId);
-
-        toast({
-          title: "Processing Resumed",
-          description: `Successfully processed ${processedCount} records`,
-        });
+      if (updateError) {
+        throw new Error(`Failed to update session: ${updateError.message}`);
       }
+
+      toast({
+        title: "Processing Resumed",
+        description: "Session has been marked for processing continuation",
+      });
 
       // Refresh data after a delay
       setTimeout(loadProcessingData, 2000);
@@ -413,7 +265,8 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
     }
   };
 
-  const formatDate = (dateString: string): string => {
+  const formatDate = (dateString?: string): string => {
+    if (!dateString) return 'N/A';
     try {
       return new Date(dateString).toLocaleString();
     } catch {
@@ -421,8 +274,8 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
     }
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
+  const formatFileSize = (bytes?: number): string => {
+    if (!bytes || bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -468,7 +321,7 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
             <div>
               <h2 className="text-2xl font-semibold flex items-center space-x-2">
                 <Activity className="h-6 w-6" />
-                <span>Processing Monitor</span>
+                <span>Processing Monitor (Debug)</span>
               </h2>
               <p className="text-gray-600 mt-1">
                 Real-time monitoring of CSV processing sessions
@@ -495,32 +348,52 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
           </div>
         </div>
 
+        {/* Debug Information */}
+        <div className="p-6 border-b">
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Debug Info:</strong> {debugInfo}
+            </AlertDescription>
+          </Alert>
+        </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="p-6 border-b">
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Error:</strong> {error}
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+
         {/* Statistics Overview */}
         <div className="p-6 border-b">
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="text-center p-4">
-              <div className="text-2xl font-bold text-blue-600">{stats?.totalSessions || 0}</div>
+              <div className="text-2xl font-bold text-blue-600">{sessions.length}</div>
               <div className="text-sm text-gray-500">Total Sessions</div>
             </Card>
             <Card className="text-center p-4">
-              <div className="text-2xl font-bold text-orange-600">{stats?.activeSessions || 0}</div>
+              <div className="text-2xl font-bold text-orange-600">
+                {sessions.filter(s => s.status === 'processing').length}
+              </div>
               <div className="text-sm text-gray-500">Active</div>
             </Card>
             <Card className="text-center p-4">
-              <div className="text-2xl font-bold text-red-600">{stats?.stalledSessions || 0}</div>
+              <div className="text-2xl font-bold text-red-600">
+                {sessions.filter(s => isSessionStalled(s)).length}
+              </div>
               <div className="text-sm text-gray-500">Stalled</div>
             </Card>
             <Card className="text-center p-4">
-              <div className="text-2xl font-bold text-green-600">{stats?.completedToday || 0}</div>
-              <div className="text-sm text-gray-500">Completed Today</div>
-            </Card>
-            <Card className="text-center p-4">
-              <div className="text-2xl font-bold text-purple-600">{stats?.totalRecordsProcessed.toLocaleString() || 0}</div>
-              <div className="text-sm text-gray-500">Records Processed</div>
-            </Card>
-            <Card className="text-center p-4">
-              <div className="text-2xl font-bold text-indigo-600">{stats?.averageProcessingRate || 0}</div>
-              <div className="text-sm text-gray-500">Avg Rate/min</div>
+              <div className="text-2xl font-bold text-green-600">
+                {sessions.filter(s => s.status === 'completed').length}
+              </div>
+              <div className="text-sm text-gray-500">Completed</div>
             </Card>
           </div>
         </div>
@@ -540,9 +413,9 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                           <div>
-                            <div className="font-medium">{session.original_filename}</div>
+                            <div className="font-medium">{session.original_filename || 'Unknown File'}</div>
                             <div className="text-sm text-gray-500">
-                              {formatFileSize(session.file_size || 0)} • Started: {formatDate(session.created_at)}
+                              {formatFileSize(session.file_size)} • Started: {formatDate(session.created_at)}
                             </div>
                           </div>
                           {getStatusBadge(session)}
@@ -583,7 +456,7 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
                         <div>
                           <div className="text-sm text-gray-500">Progress</div>
                           <div className="font-medium">
-                            {(session.processed_records || 0).toLocaleString()} / {session.total_records.toLocaleString()}
+                            {(session.processed_records || 0).toLocaleString()} / {(session.total_records || 0).toLocaleString()}
                           </div>
                           <Progress value={getSessionProgress(session)} className="h-2 mt-1" />
                         </div>
@@ -613,7 +486,7 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
                         <Alert variant="destructive">
                           <AlertTriangle className="h-4 w-4" />
                           <AlertDescription>
-                            <strong>Processing Stalled:</strong> This session hasn't been updated in over 1 hour and has {(session.total_records - (session.processed_records || 0)).toLocaleString()} records remaining. 
+                            <strong>Processing Stalled:</strong> This session hasn't been updated in over 1 hour and has {((session.total_records || 0) - (session.processed_records || 0)).toLocaleString()} records remaining. 
                             Click "Resume" to continue processing.
                           </AlertDescription>
                         </Alert>
@@ -628,6 +501,12 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
                           </AlertDescription>
                         </Alert>
                       )}
+
+                      {/* Debug Info for this session */}
+                      <div className="text-xs text-gray-400 bg-gray-50 p-2 rounded">
+                        <strong>Debug:</strong> ID: {session.id}, Status: {session.status}, 
+                        Created: {session.created_at}, Updated: {session.updated_at || 'N/A'}
+                      </div>
                     </div>
                   </Card>
                 );
@@ -637,6 +516,7 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
             <div className="text-center py-8 text-gray-500">
               <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No processing sessions found</p>
+              <p className="text-sm mt-2">Check the debug info above for details</p>
             </div>
           )}
         </div>
