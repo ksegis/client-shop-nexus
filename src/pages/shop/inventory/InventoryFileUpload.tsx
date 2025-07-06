@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2 } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2, Activity } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CSVReconciliation } from './CSVReconciliation';
+import { ProcessingMonitor } from './ProcessingMonitor';
 
 // Types for CSV processing
 interface CSVRecord {
@@ -81,6 +82,9 @@ export function InventoryFileUpload() {
   const [showReconciliation, setShowReconciliation] = useState(false);
   const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
   
+  // Processing monitor state
+  const [showProcessingMonitor, setShowProcessingMonitor] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -96,16 +100,23 @@ export function InventoryFileUpload() {
 
   const getCurrentUser = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error) {
+        console.error('Error getting user:', error);
+        return;
+      }
+      
       setCurrentUser(user);
     } catch (error) {
-      console.error('Error getting current user:', error);
+      console.error('Exception getting current user:', error);
     }
   };
 
   const loadRecentSessions = async (userId: string) => {
     try {
       setLoadingSessions(true);
+      
       const { data, error } = await supabase
         .from('csv_upload_sessions')
         .select('*')
@@ -113,10 +124,20 @@ export function InventoryFileUpload() {
         .order('created_at', { ascending: false })
         .limit(10);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading sessions:', error);
+        throw error;
+      }
+      
       setRecentSessions(data || []);
+      
     } catch (error) {
-      console.error('Error loading recent sessions:', error);
+      console.error('Exception loading recent sessions:', error);
+      toast({
+        title: "Error Loading Sessions",
+        description: "Could not load recent upload sessions",
+        variant: "destructive",
+      });
     } finally {
       setLoadingSessions(false);
     }
@@ -666,6 +687,19 @@ export function InventoryFileUpload() {
     }
   };
 
+  const openProcessingMonitor = () => {
+    setShowProcessingMonitor(true);
+    setShowUploadDialog(false);
+  };
+
+  const closeProcessingMonitor = () => {
+    setShowProcessingMonitor(false);
+    
+    if (currentUser) {
+      loadRecentSessions(currentUser.id);
+    }
+  };
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -720,14 +754,25 @@ export function InventoryFileUpload() {
                   <h2 className="text-xl font-semibold">Enhanced CSV Upload</h2>
                   <p className="text-sm text-gray-600">Enhanced processing with validation and reconciliation</p>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={closeUploadDialog}
-                  disabled={!canClose && isUploading}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={openProcessingMonitor}
+                    className="flex items-center space-x-1"
+                  >
+                    <Activity className="h-4 w-4" />
+                    <span>Monitor</span>
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={closeUploadDialog}
+                    disabled={!canClose && isUploading}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -930,7 +975,7 @@ export function InventoryFileUpload() {
                     <Card>
                       <CardHeader>
                         <CardTitle className="flex items-center space-x-2">
-                          <Activity className="h-5 w-5" />
+                          <RefreshCw className="h-5 w-5 animate-spin" />
                           <span>Processing Progress</span>
                         </CardTitle>
                       </CardHeader>
@@ -1035,6 +1080,11 @@ export function InventoryFileUpload() {
           sessionId={reconciliationSessionId}
           onClose={closeReconciliation}
         />
+      )}
+
+      {/* Processing Monitor */}
+      {showProcessingMonitor && (
+        <ProcessingMonitor onClose={closeProcessingMonitor} />
       )}
     </>
   );
