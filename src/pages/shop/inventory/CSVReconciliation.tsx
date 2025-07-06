@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { 
   Table, 
   TableBody, 
@@ -29,7 +30,11 @@ import {
   ChevronsRight,
   Eye,
   Upload,
-  RefreshCw
+  RefreshCw,
+  Settings,
+  Wand2,
+  FileEdit,
+  Info
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -93,6 +98,13 @@ interface PaginationInfo {
   totalPages: number;
 }
 
+interface ValidationIssue {
+  type: 'missing_field' | 'invalid_format' | 'calculation_error' | 'duplicate' | 'other';
+  field: string;
+  description: string;
+  suggestion: string;
+}
+
 export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps) {
   const [session, setSession] = useState<CSVProcessingSession | null>(null);
   const [records, setRecords] = useState<StagingRecord[]>([]);
@@ -102,13 +114,19 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
   const [editData, setEditData] = useState<any>({});
   const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState<Set<string>>(new Set());
+  const [showMassCorrection, setShowMassCorrection] = useState(false);
+  const [massCorrection, setMassCorrection] = useState({
+    type: 'vcpn_fix',
+    applyTo: 'selected'
+  });
   
   // Enhanced filtering and pagination state
   const [filters, setFilters] = useState({
     status: 'needs_action', // Default to items needing action
     needsReview: true, // Default to needs review only
     actionType: 'all',
-    searchTerm: ''
+    searchTerm: '',
+    issueType: 'all'
   });
   
   const [pagination, setPagination] = useState<PaginationInfo>({
@@ -164,6 +182,72 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
     }
   };
 
+  // Parse validation notes to extract specific issues
+  const parseValidationIssues = (notes: string): ValidationIssue[] => {
+    const issues: ValidationIssue[] = [];
+    
+    if (!notes) return issues;
+    
+    const noteLines = notes.split(';').map(n => n.trim());
+    
+    noteLines.forEach(note => {
+      if (note.includes('Missing vendor_code')) {
+        issues.push({
+          type: 'missing_field',
+          field: 'vendor_code',
+          description: 'Vendor code is required but missing',
+          suggestion: 'Add a valid vendor code'
+        });
+      } else if (note.includes('Missing SKU')) {
+        issues.push({
+          type: 'missing_field',
+          field: 'part_number',
+          description: 'Part number/SKU is required but missing',
+          suggestion: 'Add a valid part number'
+        });
+      } else if (note.includes('SKU normalized')) {
+        const match = note.match(/SKU normalized: "([^"]*)" → "([^"]*)"/);
+        if (match) {
+          issues.push({
+            type: 'invalid_format',
+            field: 'part_number',
+            description: `SKU format corrected from "${match[1]}" to "${match[2]}"`,
+            suggestion: 'Excel formatting was removed'
+          });
+        }
+      } else if (note.includes('VCPN corrected') || note.includes('VCPN auto-generated')) {
+        const match = note.match(/VCPN (?:corrected|auto-generated): "?([^"]*)"? → "?([^"]*)"?/);
+        if (match) {
+          issues.push({
+            type: 'calculation_error',
+            field: 'vcpn',
+            description: `VCPN should be vendor_code + part_number`,
+            suggestion: `Corrected to: ${match[2] || match[1]}`
+          });
+        }
+      } else if (note.includes('TotalQty corrected')) {
+        const match = note.match(/TotalQty corrected: (\d+) → (\d+)/);
+        if (match) {
+          issues.push({
+            type: 'calculation_error',
+            field: 'total_qty',
+            description: `Total quantity should equal sum of warehouse quantities`,
+            suggestion: `Corrected from ${match[1]} to ${match[2]}`
+          });
+        }
+      } else if (note.length > 0) {
+        issues.push({
+          type: 'other',
+          field: 'general',
+          description: note,
+          suggestion: 'Review and correct manually'
+        });
+      }
+    });
+    
+    return issues;
+  };
+
   const applyFiltersAndPagination = () => {
     let filtered = [...records];
 
@@ -186,6 +270,14 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
     // Apply action type filter
     if (filters.actionType !== 'all') {
       filtered = filtered.filter(record => record.action_type === filters.actionType);
+    }
+
+    // Apply issue type filter
+    if (filters.issueType !== 'all') {
+      filtered = filtered.filter(record => {
+        const issues = parseValidationIssues(record.validation_notes);
+        return issues.some(issue => issue.type === filters.issueType);
+      });
     }
 
     // Apply search filter
@@ -483,6 +575,79 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
     setSelectedRecords(new Set());
   };
 
+  // Mass correction functions
+  const applyMassCorrection = async () => {
+    if (selectedRecords.size === 0) {
+      toast({
+        title: "No Records Selected",
+        description: "Please select records to apply mass correction",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setProcessing(new Set(selectedRecords));
+
+      const recordsToUpdate = records.filter(r => selectedRecords.has(r.id));
+      
+      for (const record of recordsToUpdate) {
+        let updateData: any = {};
+        
+        if (massCorrection.type === 'vcpn_fix') {
+          // Auto-fix VCPN = vendor_code + part_number
+          updateData.vcpn = record.vendor_code + record.part_number;
+          updateData.validation_notes = 'VCPN auto-corrected via mass correction';
+        } else if (massCorrection.type === 'total_qty_fix') {
+          // Recalculate total quantity
+          const calculatedTotal = 
+            (record.east_qty || 0) +
+            (record.midwest_qty || 0) +
+            (record.california_qty || 0) +
+            (record.southeast_qty || 0) +
+            (record.pacific_nw_qty || 0) +
+            (record.texas_qty || 0) +
+            (record.great_lakes_qty || 0) +
+            (record.florida_qty || 0);
+          
+          updateData.total_qty = calculatedTotal;
+          updateData.calculated_total_qty = calculatedTotal;
+          updateData.validation_notes = 'Total quantity recalculated via mass correction';
+        }
+        
+        updateData.validation_status = 'corrected';
+        updateData.needs_review = false;
+
+        const { error } = await supabase
+          .from('csv_staging_records')
+          .update(updateData)
+          .eq('id', record.id);
+
+        if (error) throw error;
+      }
+
+      toast({
+        title: "Mass Correction Applied",
+        description: `Updated ${recordsToUpdate.length} records`,
+      });
+
+      // Refresh data
+      await loadSessionData();
+      setSelectedRecords(new Set());
+      setShowMassCorrection(false);
+
+    } catch (error) {
+      console.error('Error applying mass correction:', error);
+      toast({
+        title: "Mass Correction Failed",
+        description: "Could not apply mass correction",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessing(new Set());
+    }
+  };
+
   const toggleRecordSelection = (recordId: string) => {
     setSelectedRecords(prev => {
       const newSet = new Set(prev);
@@ -516,6 +681,29 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
     } else {
       return <Badge variant="default">Valid</Badge>;
     }
+  };
+
+  const renderValidationIssues = (record: StagingRecord) => {
+    const issues = parseValidationIssues(record.validation_notes);
+    
+    if (issues.length === 0) {
+      return <span className="text-green-600 text-xs">No issues</span>;
+    }
+
+    return (
+      <div className="space-y-1">
+        {issues.map((issue, index) => (
+          <div key={index} className="text-xs">
+            <div className="flex items-center space-x-1">
+              <AlertTriangle className="h-3 w-3 text-orange-500" />
+              <span className="font-medium">{issue.field}:</span>
+            </div>
+            <div className="text-gray-600 ml-4">{issue.description}</div>
+            <div className="text-blue-600 ml-4 italic">{issue.suggestion}</div>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const renderPagination = () => {
@@ -601,9 +789,9 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full mx-4 max-h-[95vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl max-w-[98vw] w-full mx-2 max-h-[98vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="p-6 border-b">
+        <div className="p-4 border-b flex-shrink-0">
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-xl font-semibold">CSV Reconciliation</h2>
@@ -618,8 +806,8 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
         </div>
 
         {/* Filters and Search */}
-        <div className="p-6 border-b bg-gray-50">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        <div className="p-4 border-b bg-gray-50 flex-shrink-0">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -643,6 +831,21 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
                 <SelectItem value="invalid">Invalid</SelectItem>
                 <SelectItem value="corrected">Corrected</SelectItem>
                 <SelectItem value="processed">Processed</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Issue Type Filter */}
+            <Select value={filters.issueType} onValueChange={(value) => handleFilterChange('issueType', value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by issue" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Issues</SelectItem>
+                <SelectItem value="missing_field">Missing Fields</SelectItem>
+                <SelectItem value="invalid_format">Format Issues</SelectItem>
+                <SelectItem value="calculation_error">Calculation Errors</SelectItem>
+                <SelectItem value="duplicate">Duplicates</SelectItem>
+                <SelectItem value="other">Other Issues</SelectItem>
               </SelectContent>
             </Select>
 
@@ -700,6 +903,15 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
                 <Upload className="h-4 w-4 mr-1" />
                 Process Selected ({selectedRecords.size})
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowMassCorrection(true)}
+                disabled={selectedRecords.size === 0}
+              >
+                <Wand2 className="h-4 w-4 mr-1" />
+                Mass Correction ({selectedRecords.size})
+              </Button>
             </div>
             
             <div className="text-sm text-gray-600">
@@ -708,161 +920,168 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
           </div>
         </div>
 
-        {/* Records Table */}
+        {/* Records Table with Horizontal Scroll */}
         <div className="flex-1 overflow-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox
-                    checked={selectedRecords.size === filteredRecords.length && filteredRecords.length > 0}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        selectAllVisible();
-                      } else {
-                        clearSelection();
-                      }
-                    }}
-                  />
-                </TableHead>
-                <TableHead>Row</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>VCPN</TableHead>
-                <TableHead>Vendor</TableHead>
-                <TableHead>Part Number</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Total Qty</TableHead>
-                <TableHead>Validation Notes</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRecords.map((record) => (
-                <TableRow key={record.id}>
-                  <TableCell>
+          <div className="min-w-[1400px]"> {/* Ensure minimum width for horizontal scroll */}
+            <Table>
+              <TableHeader className="sticky top-0 bg-white z-10">
+                <TableRow>
+                  <TableHead className="w-12">
                     <Checkbox
-                      checked={selectedRecords.has(record.id)}
-                      onCheckedChange={() => toggleRecordSelection(record.id)}
+                      checked={selectedRecords.size === filteredRecords.length && filteredRecords.length > 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          selectAllVisible();
+                        } else {
+                          clearSelection();
+                        }
+                      }}
                     />
-                  </TableCell>
-                  <TableCell>{record.row_number}</TableCell>
-                  <TableCell>{getStatusBadge(record)}</TableCell>
-                  <TableCell>
-                    {editingRecord === record.id ? (
-                      <Input
-                        value={editData.vcpn || ''}
-                        onChange={(e) => setEditData(prev => ({ ...prev, vcpn: e.target.value }))}
-                        className="w-24"
-                      />
-                    ) : (
-                      record.vcpn
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingRecord === record.id ? (
-                      <Input
-                        value={editData.vendor_code || ''}
-                        onChange={(e) => setEditData(prev => ({ ...prev, vendor_code: e.target.value }))}
-                        className="w-20"
-                      />
-                    ) : (
-                      record.vendor_code
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingRecord === record.id ? (
-                      <Input
-                        value={editData.part_number || ''}
-                        onChange={(e) => setEditData(prev => ({ ...prev, part_number: e.target.value }))}
-                        className="w-24"
-                      />
-                    ) : (
-                      record.part_number
-                    )}
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {editingRecord === record.id ? (
-                      <Input
-                        value={editData.long_description || ''}
-                        onChange={(e) => setEditData(prev => ({ ...prev, long_description: e.target.value }))}
-                        className="w-48"
-                      />
-                    ) : (
-                      record.long_description
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingRecord === record.id ? (
-                      <Input
-                        type="number"
-                        value={editData.total_qty || 0}
-                        onChange={(e) => setEditData(prev => ({ ...prev, total_qty: parseInt(e.target.value) || 0 }))}
-                        className="w-20"
-                      />
-                    ) : (
-                      record.total_qty
-                    )}
-                  </TableCell>
-                  <TableCell className="max-w-xs">
-                    <div className="text-xs text-gray-600 truncate" title={record.validation_notes}>
-                      {record.validation_notes}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-1">
-                      {editingRecord === record.id ? (
-                        <>
-                          <Button
-                            size="sm"
-                            onClick={() => saveRecord(record.id)}
-                            disabled={processing.has(record.id)}
-                          >
-                            <Save className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={cancelEditing}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          {record.validation_status !== 'processed' && (
-                            <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => startEditing(record)}
-                              >
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => processRecord(record.id)}
-                                disabled={processing.has(record.id)}
-                              >
-                                <Upload className="h-3 w-3" />
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => deleteRecord(record.id)}
-                            disabled={processing.has(record.id)}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </TableCell>
+                  </TableHead>
+                  <TableHead className="w-16">Row</TableHead>
+                  <TableHead className="w-24">Status</TableHead>
+                  <TableHead className="w-32">VCPN</TableHead>
+                  <TableHead className="w-24">Vendor</TableHead>
+                  <TableHead className="w-32">Part Number</TableHead>
+                  <TableHead className="w-48">Description</TableHead>
+                  <TableHead className="w-20">Total Qty</TableHead>
+                  <TableHead className="w-80">Issues & Corrections Needed</TableHead>
+                  <TableHead className="w-32">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredRecords.map((record) => (
+                  <TableRow key={record.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedRecords.has(record.id)}
+                        onCheckedChange={() => toggleRecordSelection(record.id)}
+                      />
+                    </TableCell>
+                    <TableCell>{record.row_number}</TableCell>
+                    <TableCell>{getStatusBadge(record)}</TableCell>
+                    <TableCell>
+                      {editingRecord === record.id ? (
+                        <Input
+                          value={editData.vcpn || ''}
+                          onChange={(e) => setEditData(prev => ({ ...prev, vcpn: e.target.value }))}
+                          className="w-28"
+                        />
+                      ) : (
+                        <span className="font-mono text-xs">{record.vcpn}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingRecord === record.id ? (
+                        <Input
+                          value={editData.vendor_code || ''}
+                          onChange={(e) => setEditData(prev => ({ ...prev, vendor_code: e.target.value }))}
+                          className="w-20"
+                        />
+                      ) : (
+                        record.vendor_code
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingRecord === record.id ? (
+                        <Input
+                          value={editData.part_number || ''}
+                          onChange={(e) => setEditData(prev => ({ ...prev, part_number: e.target.value }))}
+                          className="w-28"
+                        />
+                      ) : (
+                        record.part_number
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingRecord === record.id ? (
+                        <Input
+                          value={editData.long_description || ''}
+                          onChange={(e) => setEditData(prev => ({ ...prev, long_description: e.target.value }))}
+                          className="w-44"
+                        />
+                      ) : (
+                        <div className="max-w-44 truncate" title={record.long_description}>
+                          {record.long_description}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {editingRecord === record.id ? (
+                        <Input
+                          type="number"
+                          value={editData.total_qty || 0}
+                          onChange={(e) => setEditData(prev => ({ ...prev, total_qty: parseInt(e.target.value) || 0 }))}
+                          className="w-16"
+                        />
+                      ) : (
+                        record.total_qty
+                      )}
+                    </TableCell>
+                    <TableCell className="w-80">
+                      <div className="max-h-24 overflow-y-auto">
+                        {renderValidationIssues(record)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-1">
+                        {editingRecord === record.id ? (
+                          <>
+                            <Button
+                              size="sm"
+                              onClick={() => saveRecord(record.id)}
+                              disabled={processing.has(record.id)}
+                            >
+                              <Save className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={cancelEditing}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            {record.validation_status !== 'processed' && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => startEditing(record)}
+                                  title="Edit record"
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => processRecord(record.id)}
+                                  disabled={processing.has(record.id)}
+                                  title="Process to inventory"
+                                >
+                                  <Upload className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => deleteRecord(record.id)}
+                              disabled={processing.has(record.id)}
+                              title="Delete record"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
           
           {filteredRecords.length === 0 && (
             <div className="text-center py-8 text-gray-500">
@@ -873,8 +1092,50 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
 
         {/* Pagination */}
         {pagination.totalItems > 0 && (
-          <div className="p-4 border-t bg-gray-50">
+          <div className="p-4 border-t bg-gray-50 flex-shrink-0">
             {renderPagination()}
+          </div>
+        )}
+
+        {/* Mass Correction Modal */}
+        {showMassCorrection && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Mass Correction</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Correction Type</label>
+                  <Select 
+                    value={massCorrection.type} 
+                    onValueChange={(value) => setMassCorrection(prev => ({ ...prev, type: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vcpn_fix">Auto-fix VCPN (vendor_code + part_number)</SelectItem>
+                      <SelectItem value="total_qty_fix">Recalculate Total Quantity</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="text-sm text-gray-600">
+                  This will apply the correction to {selectedRecords.size} selected records.
+                </div>
+                
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowMassCorrection(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={applyMassCorrection}>
+                    Apply Correction
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
