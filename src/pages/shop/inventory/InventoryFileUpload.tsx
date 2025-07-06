@@ -967,6 +967,7 @@ export function InventoryFileUpload() {
         });
         
         setProcessingStage(`File loaded: ${records.length} records split into ${fileChunks.length} chunks of ${CHUNK_SIZE} records each.`);
+        setShowUploadDialog(true); // Auto-open dialog when file is selected
       };
       reader.readAsText(file);
     }
@@ -1054,64 +1055,32 @@ export function InventoryFileUpload() {
 
   return (
     <>
-      {/* Main Upload Interface */}
+      {/* Original Simple Upload Interface */}
       <div className="space-y-6">
+        {/* Simple CSV Upload Card - matching original design */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Upload className="h-5 w-5" />
-              <span>Enhanced CSV Inventory Upload</span>
-            </CardTitle>
+            <CardTitle>Enhanced CSV Inventory Upload</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                  id="csv-upload"
-                />
-                <label htmlFor="csv-upload" className="cursor-pointer">
-                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                  <p className="mt-2 text-sm text-gray-600">
-                    Click to select a CSV file or drag and drop
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Maximum file size: 100MB (will be processed in chunks)
-                  </p>
-                </label>
-              </div>
-
-              {selectedFile && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <FileText className="h-4 w-4" />
-                      <span className="text-sm font-medium">{selectedFile.name}</span>
-                      <Badge variant="secondary">{formatFileSize(selectedFile.size)}</Badge>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowUploadDialog(true)}
-                    >
-                      Configure & Process
-                    </Button>
-                  </div>
-
-                  {chunks.length > 0 && (
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        File will be processed in {chunks.length} chunks of {CHUNK_SIZE} records each for optimal performance and recovery.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-              )}
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleFileSelect}
+                className="hidden"
+                id="csv-upload"
+              />
+              <label htmlFor="csv-upload" className="cursor-pointer">
+                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <p className="text-lg text-gray-600 mb-2">
+                  Click to select a CSV file or drag and drop
+                </p>
+                <p className="text-sm text-gray-500">
+                  Maximum file size: 100MB (will be processed in chunks)
+                </p>
+              </label>
             </div>
           </CardContent>
         </Card>
@@ -1209,12 +1178,12 @@ export function InventoryFileUpload() {
         </Card>
       </div>
 
-      {/* Enhanced Upload Dialog with Tabs */}
+      {/* Enhanced Upload Dialog with Tabs - Only shown when file is selected */}
       {showUploadDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">Enhanced CSV Upload & Processing</h2>
+              <h2 className="text-lg font-semibold">CSV Upload & Processing</h2>
               <Button
                 variant="outline"
                 size="sm"
