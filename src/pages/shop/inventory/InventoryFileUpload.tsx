@@ -70,6 +70,7 @@ interface MonitorData {
     progress: number;
     isStalled: boolean;
     stallDuration?: number;
+    lastProgressTime: string;
   };
   lastUpdated: string;
 }
@@ -137,25 +138,52 @@ export function InventoryFileUpload() {
     }
   }, [showMonitor, monitorSessionId]);
 
-  // Check for stalled sessions
-  const checkForStalledSessions = (sessions: UploadSession[]): UploadSession[] => {
-    const now = new Date();
-    const stallThresholdMs = 2 * 60 * 1000; // 2 minutes
+  // FIXED: Improved stall detection that works with existing database schema
+  const isSessionStalled = (session: UploadSession): { isStalled: boolean; stallDuration?: number; lastProgressTime: string } => {
+    // If session is not processing, it's not stalled
+    if (session.status !== 'processing') {
+      return { 
+        isStalled: false, 
+        lastProgressTime: session.updated_at || session.created_at 
+      };
+    }
     
-    return sessions.map(session => {
-      if (session.status === 'processing') {
-        const lastProcessedAt = session.last_processed_at ? new Date(session.last_processed_at) : new Date(session.updated_at);
-        const timeSinceLastProgress = now.getTime() - lastProcessedAt.getTime();
-        
-        if (timeSinceLastProgress > stallThresholdMs) {
-          return { ...session, status: 'stalled' as any };
-        }
-      }
-      return session;
+    const now = new Date();
+    const stallThresholdMs = 2 * 60 * 1000; // 2 minutes in milliseconds
+    
+    // Use last_processed_at if available, otherwise fall back to updated_at
+    const lastProgressTime = session.last_processed_at || session.updated_at || session.created_at;
+    const lastProgressDate = new Date(lastProgressTime);
+    
+    // Calculate time since last progress
+    const timeSinceLastProgress = now.getTime() - lastProgressDate.getTime();
+    
+    console.log('Stall Detection Debug:', {
+      sessionId: session.id,
+      status: session.status,
+      now: now.toISOString(),
+      lastProgressTime,
+      timeSinceLastProgress,
+      stallThresholdMs,
+      isStalled: timeSinceLastProgress > stallThresholdMs
     });
+    
+    if (timeSinceLastProgress > stallThresholdMs) {
+      const stallDurationMinutes = Math.floor(timeSinceLastProgress / 1000 / 60);
+      return { 
+        isStalled: true, 
+        stallDuration: stallDurationMinutes,
+        lastProgressTime 
+      };
+    }
+    
+    return { 
+      isStalled: false, 
+      lastProgressTime 
+    };
   };
 
-  // Load recent upload sessions with enhanced statistics
+  // Load recent upload sessions with enhanced stall detection
   const loadRecentSessions = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -167,36 +195,27 @@ export function InventoryFileUpload() {
 
       if (error) throw error;
       
-      // Check for stalled sessions
-      const sessionsWithStallCheck = checkForStalledSessions(data || []);
+      // Apply stall detection to each session
+      const sessionsWithStallCheck = (data || []).map(session => {
+        const stallInfo = isSessionStalled(session);
+        if (stallInfo.isStalled) {
+          // Mark as stalled in the local state (don't update database here)
+          return { 
+            ...session, 
+            status: 'stalled' as any,
+            stallDuration: stallInfo.stallDuration 
+          };
+        }
+        return session;
+      });
+      
       setRecentSessions(sessionsWithStallCheck);
     } catch (error) {
       console.error('Error loading recent sessions:', error);
     }
   };
 
-  // Detect if session is stalled
-  const isSessionStalled = (session: UploadSession): { isStalled: boolean; stallDuration?: number } => {
-    if (session.status !== 'processing') {
-      return { isStalled: false };
-    }
-    
-    const now = new Date();
-    const stallThresholdMs = 2 * 60 * 1000; // 2 minutes
-    const lastProcessedAt = session.last_processed_at ? new Date(session.last_processed_at) : new Date(session.updated_at);
-    const timeSinceLastProgress = now.getTime() - lastProcessedAt.getTime();
-    
-    if (timeSinceLastProgress > stallThresholdMs) {
-      return { 
-        isStalled: true, 
-        stallDuration: Math.floor(timeSinceLastProgress / 1000 / 60) // minutes
-      };
-    }
-    
-    return { isStalled: false };
-  };
-
-  // Load real-time monitor data for a session
+  // Load real-time monitor data with proper stall detection
   const loadMonitorData = async (sessionId: string) => {
     try {
       setIsLoadingMonitor(true);
@@ -232,7 +251,7 @@ export function InventoryFileUpload() {
       // Calculate progress percentage
       const progress = total > 0 ? Math.round((processed / total) * 100) : 0;
       
-      // Check for stall
+      // FIXED: Apply proper stall detection
       const stallCheck = isSessionStalled(session);
 
       const stats = {
@@ -246,11 +265,16 @@ export function InventoryFileUpload() {
         updated,
         progress,
         isStalled: stallCheck.isStalled,
-        stallDuration: stallCheck.stallDuration
+        stallDuration: stallCheck.stallDuration,
+        lastProgressTime: stallCheck.lastProgressTime
       };
 
       setMonitorData({
-        session,
+        session: {
+          ...session,
+          // Override status if stalled
+          status: stallCheck.isStalled ? 'stalled' : session.status
+        },
         stats,
         lastUpdated: new Date().toLocaleTimeString()
       });
@@ -272,30 +296,20 @@ export function InventoryFileUpload() {
     try {
       setIsResuming(sessionId);
       
-      // Get session data
-      const { data: session, error: sessionError } = await supabase
-        .from('csv_upload_sessions')
-        .select('*')
-        .eq('id', sessionId)
-        .single();
-
-      if (sessionError) throw sessionError;
-
-      // Get the original file data (we'll need to re-parse from the beginning)
-      // In a real implementation, you'd want to store the original CSV data
-      // For now, we'll mark the session as failed and suggest re-upload
-      
       toast({
         title: "Resume Processing",
         description: "Resuming processing from where it left off...",
       });
 
       // Reset session status and update timestamp
+      const now = new Date().toISOString();
       await supabase
         .from('csv_upload_sessions')
         .update({
           status: 'processing',
-          last_processed_at: new Date().toISOString(),
+          updated_at: now,
+          // Try to update last_processed_at if the column exists
+          last_processed_at: now,
           error_message: null
         })
         .eq('id', sessionId);
@@ -306,6 +320,7 @@ export function InventoryFileUpload() {
         .select('*')
         .eq('upload_session_id', sessionId)
         .is('processed_at', null)
+        .in('validation_status', ['valid', 'corrected'])
         .order('row_number');
 
       if (recordsError) throw recordsError;
@@ -316,7 +331,8 @@ export function InventoryFileUpload() {
           .from('csv_upload_sessions')
           .update({
             status: 'completed',
-            completed_at: new Date().toISOString()
+            completed_at: now,
+            updated_at: now
           })
           .eq('id', sessionId);
         
@@ -331,135 +347,150 @@ export function InventoryFileUpload() {
         return;
       }
 
-      // Process remaining records
-      let processedCount = session.processed_records || 0;
-      let validCount = session.valid_records || 0;
-      let invalidCount = session.invalid_records || 0;
-      let correctedCount = session.corrected_records || 0;
+      // Get current session data
+      const { data: currentSession, error: sessionError } = await supabase
+        .from('csv_upload_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single();
 
-      // Sync unprocessed valid/corrected records to inventory
-      const validRecords = unprocessedRecords.filter(r => 
-        r.validation_status === 'valid' || r.validation_status === 'corrected'
-      );
+      if (sessionError) throw sessionError;
 
-      for (const staging of validRecords) {
-        try {
-          const { data: existing, error: checkError } = await supabase
-            .from('inventory')
-            .select('id')
-            .eq('vcpn', staging.vcpn)
-            .single();
+      let processedCount = currentSession.processed_records || 0;
+      let insertedCount = 0;
+      let updatedCount = 0;
 
-          if (checkError && checkError.code !== 'PGRST116') {
-            throw checkError;
-          }
-
-          const inventoryData = {
-            name: staging.long_description || staging.part_number || 'Unknown Item',
-            description: staging.long_description,
-            sku: staging.part_number,
-            vcpn: staging.vcpn,
-            vendor_code: staging.vendor_code,
-            vendor_name: staging.vendor_name,
-            manufacturer_part_no: staging.manufacturer_part_no,
-            quantity: staging.total_qty,
-            price: staging.jobber_price,
-            cost: staging.cost,
-            case_qty: staging.case_qty,
-            weight: staging.weight,
-            height: staging.height,
-            length: staging.length,
-            width: staging.width,
-            upsable: staging.upsable,
-            is_oversized: staging.is_oversized,
-            is_hazmat: staging.is_hazmat,
-            is_chemical: staging.is_chemical,
-            is_non_returnable: staging.is_non_returnable,
-            prop65_toxicity: staging.prop65_toxicity,
-            upc_code: staging.upc_code,
-            aaia_code: staging.aaia_code,
-            east_qty: staging.east_qty,
-            midwest_qty: staging.midwest_qty,
-            california_qty: staging.california_qty,
-            southeast_qty: staging.southeast_qty,
-            pacific_nw_qty: staging.pacific_nw_qty,
-            texas_qty: staging.texas_qty,
-            great_lakes_qty: staging.great_lakes_qty,
-            florida_qty: staging.florida_qty,
-            total_qty: staging.total_qty,
-            is_kit: staging.is_kit,
-            kit_components: staging.kit_components,
-            ftp_upload_id: sessionId,
-            import_source: 'csv_upload',
-            updated_at: new Date().toISOString()
-          };
-
-          if (existing) {
-            await supabase
+      // Process unprocessed records in batches
+      const batchSize = 10;
+      for (let i = 0; i < unprocessedRecords.length; i += batchSize) {
+        const batch = unprocessedRecords.slice(i, i + batchSize);
+        
+        for (const staging of batch) {
+          try {
+            // Check if record already exists in inventory
+            const { data: existing, error: checkError } = await supabase
               .from('inventory')
-              .update(inventoryData)
-              .eq('id', existing.id);
-
-            await supabase
-              .from('csv_staging_records')
-              .update({ 
-                existing_inventory_id: existing.id,
-                action_type: 'update',
-                processed_at: new Date().toISOString()
-              })
-              .eq('id', staging.id);
-          } else {
-            const { data: newRecord } = await supabase
-              .from('inventory')
-              .insert([{
-                ...inventoryData,
-                created_at: new Date().toISOString()
-              }])
-              .select()
+              .select('id')
+              .eq('vcpn', staging.vcpn)
               .single();
 
-            await supabase
-              .from('csv_staging_records')
-              .update({ 
-                existing_inventory_id: newRecord?.id,
-                action_type: 'insert',
-                processed_at: new Date().toISOString()
-              })
-              .eq('id', staging.id);
-          }
+            if (checkError && checkError.code !== 'PGRST116') {
+              throw checkError;
+            }
 
-          processedCount++;
-          
-          // Update session progress every 10 records
-          if (processedCount % 10 === 0) {
-            await supabase
-              .from('csv_upload_sessions')
-              .update({
-                processed_records: processedCount,
-                last_processed_at: new Date().toISOString()
-              })
-              .eq('id', sessionId);
+            const inventoryData = {
+              name: staging.long_description || staging.part_number || 'Unknown Item',
+              description: staging.long_description,
+              sku: staging.part_number, // Map part_number to sku
+              vcpn: staging.vcpn,
+              vendor_code: staging.vendor_code,
+              vendor_name: staging.vendor_name,
+              manufacturer_part_no: staging.manufacturer_part_no,
+              quantity: staging.total_qty,
+              price: staging.jobber_price,
+              cost: staging.cost,
+              case_qty: staging.case_qty,
+              weight: staging.weight,
+              height: staging.height,
+              length: staging.length,
+              width: staging.width,
+              upsable: staging.upsable,
+              is_oversized: staging.is_oversized,
+              is_hazmat: staging.is_hazmat,
+              is_chemical: staging.is_chemical,
+              is_non_returnable: staging.is_non_returnable,
+              prop65_toxicity: staging.prop65_toxicity,
+              upc_code: staging.upc_code,
+              aaia_code: staging.aaia_code,
+              east_qty: staging.east_qty,
+              midwest_qty: staging.midwest_qty,
+              california_qty: staging.california_qty,
+              southeast_qty: staging.southeast_qty,
+              pacific_nw_qty: staging.pacific_nw_qty,
+              texas_qty: staging.texas_qty,
+              great_lakes_qty: staging.great_lakes_qty,
+              florida_qty: staging.florida_qty,
+              total_qty: staging.total_qty,
+              is_kit: staging.is_kit,
+              kit_components: staging.kit_components,
+              ftp_upload_id: sessionId,
+              import_source: 'csv_upload',
+              updated_at: now
+            };
+
+            if (existing) {
+              await supabase
+                .from('inventory')
+                .update(inventoryData)
+                .eq('id', existing.id);
+
+              await supabase
+                .from('csv_staging_records')
+                .update({ 
+                  existing_inventory_id: existing.id,
+                  action_type: 'update',
+                  processed_at: now
+                })
+                .eq('id', staging.id);
+                
+              updatedCount++;
+            } else {
+              const { data: newRecord } = await supabase
+                .from('inventory')
+                .insert([{
+                  ...inventoryData,
+                  created_at: now
+                }])
+                .select()
+                .single();
+
+              await supabase
+                .from('csv_staging_records')
+                .update({ 
+                  existing_inventory_id: newRecord?.id,
+                  action_type: 'insert',
+                  processed_at: now
+                })
+                .eq('id', staging.id);
+                
+              insertedCount++;
+            }
+
+            processedCount++;
+            
+          } catch (error) {
+            console.error('Error processing record:', error);
           }
-          
-        } catch (error) {
-          console.error('Error processing record:', error);
         }
+
+        // Update session progress after each batch
+        const updateTime = new Date().toISOString();
+        await supabase
+          .from('csv_upload_sessions')
+          .update({
+            processed_records: processedCount,
+            updated_at: updateTime,
+            last_processed_at: updateTime
+          })
+          .eq('id', sessionId);
       }
 
-      // Final update
+      // Final update - mark as completed
+      const finalTime = new Date().toISOString();
       await supabase
         .from('csv_upload_sessions')
         .update({
           status: 'completed',
-          processed_records: session.total_records,
-          completed_at: new Date().toISOString(),
-          last_processed_at: new Date().toISOString()
+          processed_records: currentSession.total_records,
+          completed_at: finalTime,
+          updated_at: finalTime,
+          last_processed_at: finalTime
         })
         .eq('id', sessionId);
 
       toast({
         title: "Resume Complete",
-        description: `Successfully resumed and completed processing. ${validRecords.length} records synced to inventory.`,
+        description: `Successfully resumed and completed processing. ${insertedCount} inserted, ${updatedCount} updated.`,
       });
 
       if (currentUser) {
@@ -545,6 +576,7 @@ export function InventoryFileUpload() {
       throw new Error('File size exceeds 50MB limit. Please use a smaller file for optimal performance.');
     }
 
+    const now = new Date().toISOString();
     const { data, error } = await supabase
       .from('csv_upload_sessions')
       .insert([{
@@ -559,7 +591,9 @@ export function InventoryFileUpload() {
         valid_records: 0,
         invalid_records: 0,
         corrected_records: 0,
-        last_processed_at: new Date().toISOString()
+        created_at: now,
+        updated_at: now,
+        last_processed_at: now
       }])
       .select()
       .single();
@@ -570,9 +604,11 @@ export function InventoryFileUpload() {
 
   // Update session progress with timestamp
   const updateSessionProgress = async (sessionId: string, updates: Partial<UploadSession>) => {
+    const now = new Date().toISOString();
     const updateData = {
       ...updates,
-      last_processed_at: new Date().toISOString()
+      updated_at: now,
+      last_processed_at: now
     };
     
     const { error } = await supabase
@@ -1204,14 +1240,15 @@ export function InventoryFileUpload() {
   };
 
   // Get session status with stall detection
-  const getSessionStatus = (session: UploadSession): { status: string; variant: any; isStalled: boolean } => {
+  const getSessionStatus = (session: UploadSession): { status: string; variant: any; isStalled: boolean; stallDuration?: number } => {
     const stallCheck = isSessionStalled(session);
     
     if (stallCheck.isStalled) {
       return { 
         status: `stalled (${stallCheck.stallDuration}m)`, 
         variant: 'destructive' as const,
-        isStalled: true 
+        isStalled: true,
+        stallDuration: stallCheck.stallDuration
       };
     }
     
@@ -1262,7 +1299,7 @@ export function InventoryFileUpload() {
                 </div>
               </div>
 
-              {/* Recent Upload Sessions with stall detection */}
+              {/* Recent Upload Sessions with enhanced stall detection */}
               {recentSessions.length > 0 && (
                 <Card className="mb-6">
                   <CardHeader>
@@ -1326,10 +1363,13 @@ export function InventoryFileUpload() {
                                   <span>Processing Progress</span>
                                   <span>{getSessionProgress(session)}%</span>
                                 </div>
-                                <Progress value={getSessionProgress(session)} className="h-2" />
+                                <Progress 
+                                  value={getSessionProgress(session)} 
+                                  className={`h-2 ${statusInfo.isStalled ? 'bg-red-100' : ''}`} 
+                                />
                                 {statusInfo.isStalled && (
                                   <p className="text-xs text-red-600 mt-1">
-                                    ⚠️ Processing stalled - no progress for {statusInfo.status.match(/\d+/)?.[0]} minutes
+                                    ⚠️ Processing stalled - no progress for {statusInfo.stallDuration} minutes
                                   </p>
                                 )}
                               </div>
@@ -1577,7 +1617,7 @@ export function InventoryFileUpload() {
         />
       )}
 
-      {/* Real-Time Monitor Interface with Stall Detection */}
+      {/* Real-Time Monitor Interface with Enhanced Stall Detection */}
       {showMonitor && monitorData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -1591,6 +1631,7 @@ export function InventoryFileUpload() {
                   </h2>
                   <p className="text-sm text-gray-600">{monitorData.session.original_filename}</p>
                   <p className="text-xs text-gray-400">Last updated: {monitorData.lastUpdated}</p>
+                  <p className="text-xs text-gray-400">Last progress: {formatDate(monitorData.stats.lastProgressTime)}</p>
                   {monitorData.stats.isStalled && (
                     <p className="text-sm text-red-600 font-medium">
                       ⚠️ Processing stalled for {monitorData.stats.stallDuration} minutes
@@ -1642,13 +1683,14 @@ export function InventoryFileUpload() {
                 </div>
               )}
 
-              {/* Stall Alert */}
+              {/* Enhanced Stall Alert */}
               {monitorData.stats.isStalled && (
                 <Alert className="mb-6 border-red-200 bg-red-50">
                   <AlertTriangle className="h-4 w-4 text-red-600" />
                   <AlertDescription className="text-red-800">
-                    Processing has stalled for {monitorData.stats.stallDuration} minutes. 
-                    No progress has been made since the last update. Click "Resume" to continue processing.
+                    <strong>Processing Stalled!</strong> No progress for {monitorData.stats.stallDuration} minutes. 
+                    Last progress was at {formatDate(monitorData.stats.lastProgressTime)}. 
+                    Click "Resume" to continue processing from where it left off.
                   </AlertDescription>
                 </Alert>
               )}
@@ -1717,7 +1759,7 @@ export function InventoryFileUpload() {
 
               {/* Auto-refresh indicator */}
               <div className="mt-4 text-xs text-gray-400 text-center">
-                🔄 Auto-refreshing every 3 seconds • Stall detection: 2 minutes
+                🔄 Auto-refreshing every 3 seconds • Stall detection: 2 minutes • Debug logs in console
               </div>
             </div>
           </div>
