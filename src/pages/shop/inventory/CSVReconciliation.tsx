@@ -34,7 +34,9 @@ import {
   Settings,
   Wand2,
   FileEdit,
-  Info
+  Info,
+  Zap,
+  Database
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -119,6 +121,7 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
     type: 'vcpn_fix',
     applyTo: 'selected'
   });
+  const [isProcessingMass, setIsProcessingMass] = useState(false);
   
   // Enhanced filtering and pagination state
   const [filters, setFilters] = useState({
@@ -145,6 +148,26 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
   useEffect(() => {
     applyFiltersAndPagination();
   }, [records, filters, pagination.currentPage, pagination.pageSize]);
+
+  // Enhanced normalization function for part numbers
+  const normalizePartNumber = (partNumber: string): string => {
+    if (!partNumber) return '';
+    
+    let cleaned = partNumber.trim();
+    
+    // Remove Excel formula formatting: ="10406" -> 10406, =10406 -> 10406
+    if (cleaned.startsWith('=')) {
+      cleaned = cleaned.substring(1); // Remove the = prefix
+      
+      // If it's wrapped in quotes after removing =, remove those too
+      if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || 
+          (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+        cleaned = cleaned.slice(1, -1);
+      }
+    }
+    
+    return cleaned;
+  };
 
   const loadSessionData = async () => {
     try {
@@ -205,14 +228,21 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
           description: 'Part number/SKU is required but missing',
           suggestion: 'Add a valid part number'
         });
-      } else if (note.includes('SKU normalized')) {
+      } else if (note.includes('SKU normalized') || note.includes('Excel formatting')) {
         const match = note.match(/SKU normalized: "([^"]*)" → "([^"]*)"/);
         if (match) {
           issues.push({
             type: 'invalid_format',
             field: 'part_number',
-            description: `SKU format corrected from "${match[1]}" to "${match[2]}"`,
-            suggestion: 'Excel formatting was removed'
+            description: `Excel formula prefix removed: "${match[1]}" → "${match[2]}"`,
+            suggestion: 'Excel = prefix was automatically removed'
+          });
+        } else {
+          issues.push({
+            type: 'invalid_format',
+            field: 'part_number',
+            description: 'Part number contains Excel formula prefix (=)',
+            suggestion: 'Remove = prefix from part number'
           });
         }
       } else if (note.includes('VCPN corrected') || note.includes('VCPN auto-generated')) {
@@ -356,6 +386,9 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
     try {
       setProcessing(prev => new Set([...prev, recordId]));
 
+      // Normalize part number to remove Excel prefixes
+      const normalizedPartNumber = normalizePartNumber(editData.part_number);
+
       // Recalculate total quantity
       const calculatedTotal = 
         (parseInt(editData.east_qty) || 0) +
@@ -367,11 +400,12 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
         (parseInt(editData.great_lakes_qty) || 0) +
         (parseInt(editData.florida_qty) || 0);
 
-      // Auto-correct VCPN
-      const correctedVCPN = editData.vendor_code + editData.part_number;
+      // Auto-correct VCPN with normalized part number
+      const correctedVCPN = editData.vendor_code + normalizedPartNumber;
 
       const updateData = {
         ...editData,
+        part_number: normalizedPartNumber,
         vcpn: correctedVCPN,
         total_qty: calculatedTotal,
         calculated_total_qty: calculatedTotal,
@@ -575,6 +609,74 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
     setSelectedRecords(new Set());
   };
 
+  // NEW: Mass cleanup function for Excel formula prefixes
+  const massCleanupExcelPrefixes = async () => {
+    if (!confirm('This will clean up Excel formula prefixes (=) from ALL part numbers in this session and recalculate VCPNs. Continue?')) {
+      return;
+    }
+
+    try {
+      setIsProcessingMass(true);
+      
+      // Get all records in the session that have = prefix in part numbers
+      const recordsWithPrefixes = records.filter(record => 
+        record.part_number && record.part_number.startsWith('=')
+      );
+
+      if (recordsWithPrefixes.length === 0) {
+        toast({
+          title: "No Issues Found",
+          description: "No records found with Excel formula prefixes",
+        });
+        return;
+      }
+
+      let updatedCount = 0;
+
+      for (const record of recordsWithPrefixes) {
+        const normalizedPartNumber = normalizePartNumber(record.part_number);
+        const correctedVCPN = record.vendor_code + normalizedPartNumber;
+
+        const updateData = {
+          part_number: normalizedPartNumber,
+          vcpn: correctedVCPN,
+          validation_status: 'corrected',
+          needs_review: false,
+          validation_notes: `Excel formula prefix removed: "${record.part_number}" → "${normalizedPartNumber}"; VCPN corrected to: "${correctedVCPN}"`
+        };
+
+        const { error } = await supabase
+          .from('csv_staging_records')
+          .update(updateData)
+          .eq('id', record.id);
+
+        if (error) {
+          console.error('Error updating record:', error);
+        } else {
+          updatedCount++;
+        }
+      }
+
+      toast({
+        title: "Mass Cleanup Complete",
+        description: `Cleaned up ${updatedCount} records with Excel formula prefixes`,
+      });
+
+      // Refresh data
+      await loadSessionData();
+
+    } catch (error) {
+      console.error('Error in mass cleanup:', error);
+      toast({
+        title: "Mass Cleanup Failed",
+        description: "Could not complete mass cleanup",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingMass(false);
+    }
+  };
+
   // Mass correction functions
   const applyMassCorrection = async () => {
     if (selectedRecords.size === 0) {
@@ -595,8 +697,10 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
         let updateData: any = {};
         
         if (massCorrection.type === 'vcpn_fix') {
-          // Auto-fix VCPN = vendor_code + part_number
-          updateData.vcpn = record.vendor_code + record.part_number;
+          // Normalize part number first, then auto-fix VCPN
+          const normalizedPartNumber = normalizePartNumber(record.part_number);
+          updateData.part_number = normalizedPartNumber;
+          updateData.vcpn = record.vendor_code + normalizedPartNumber;
           updateData.validation_notes = 'VCPN auto-corrected via mass correction';
         } else if (massCorrection.type === 'total_qty_fix') {
           // Recalculate total quantity
@@ -613,6 +717,12 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
           updateData.total_qty = calculatedTotal;
           updateData.calculated_total_qty = calculatedTotal;
           updateData.validation_notes = 'Total quantity recalculated via mass correction';
+        } else if (massCorrection.type === 'excel_cleanup') {
+          // Clean Excel prefixes and recalculate VCPN
+          const normalizedPartNumber = normalizePartNumber(record.part_number);
+          updateData.part_number = normalizedPartNumber;
+          updateData.vcpn = record.vendor_code + normalizedPartNumber;
+          updateData.validation_notes = `Excel prefix cleaned: "${record.part_number}" → "${normalizedPartNumber}"; VCPN corrected`;
         }
         
         updateData.validation_status = 'corrected';
@@ -912,6 +1022,21 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
                 <Wand2 className="h-4 w-4 mr-1" />
                 Mass Correction ({selectedRecords.size})
               </Button>
+              {/* NEW: Mass cleanup button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={massCleanupExcelPrefixes}
+                disabled={isProcessingMass}
+                className="border-orange-300 text-orange-700 hover:bg-orange-50"
+              >
+                {isProcessingMass ? (
+                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Zap className="h-4 w-4 mr-1" />
+                )}
+                Clean Excel Prefixes (All)
+              </Button>
             </div>
             
             <div className="text-sm text-gray-600">
@@ -990,7 +1115,9 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
                           className="w-28"
                         />
                       ) : (
-                        record.part_number
+                        <span className={record.part_number?.startsWith('=') ? 'text-red-600 font-mono' : 'font-mono'}>
+                          {record.part_number}
+                        </span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -1113,6 +1240,7 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="excel_cleanup">Clean Excel Prefixes & Fix VCPN</SelectItem>
                       <SelectItem value="vcpn_fix">Auto-fix VCPN (vendor_code + part_number)</SelectItem>
                       <SelectItem value="total_qty_fix">Recalculate Total Quantity</SelectItem>
                     </SelectContent>
@@ -1121,6 +1249,11 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
                 
                 <div className="text-sm text-gray-600">
                   This will apply the correction to {selectedRecords.size} selected records.
+                  {massCorrection.type === 'excel_cleanup' && (
+                    <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded">
+                      <strong>Excel Cleanup:</strong> Removes = prefixes from part numbers and recalculates VCPNs
+                    </div>
+                  )}
                 </div>
                 
                 <div className="flex justify-end space-x-2">

@@ -233,16 +233,21 @@ export function InventoryFileUpload() {
     return records;
   };
 
-  // Normalize SKU (Rule 1: Clean Excel formatting)
+  // ENHANCED: Normalize SKU (Rule 1: Clean Excel formatting) - Now handles all Excel prefix cases
   const normalizeSKU = (sku: string): string => {
     if (!sku) return '';
     
-    // Remove Excel formula formatting: ="10406" -> 10406
     let cleaned = sku.trim();
-    if (cleaned.startsWith('="') && cleaned.endsWith('"')) {
-      cleaned = cleaned.slice(2, -1);
-    } else if (cleaned.startsWith('=') && cleaned.includes('"')) {
-      cleaned = cleaned.replace(/^=["']?|["']?$/g, '');
+    
+    // Remove Excel formula formatting: ="10406" -> 10406, =10406 -> 10406, ='10406' -> 10406
+    if (cleaned.startsWith('=')) {
+      cleaned = cleaned.substring(1); // Remove the = prefix
+      
+      // If it's wrapped in quotes after removing =, remove those too
+      if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || 
+          (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+        cleaned = cleaned.slice(1, -1);
+      }
     }
     
     return cleaned;
@@ -264,7 +269,7 @@ export function InventoryFileUpload() {
     return total;
   };
 
-  // Validate and clean CSV record (All 3 validation rules)
+  // ENHANCED: Validate and clean CSV record (All 3 validation rules) - Now automatically fixes Excel prefixes
   const validateRecord = (record: CSVRecord): ValidationResult => {
     const result: ValidationResult = {
       isValid: true,
@@ -293,17 +298,21 @@ export function InventoryFileUpload() {
       return result;
     }
 
-    // Rule 1: Normalize SKU
+    // ENHANCED: Rule 1: Normalize SKU - Now handles all Excel prefix cases
     const cleanedSKU = normalizeSKU(originalSKU);
     if (cleanedSKU !== originalSKU) {
       result.corrected = true;
       result.cleanedData['PartNumber'] = cleanedSKU;
-      result.notes.push(`SKU normalized: "${originalSKU}" → "${cleanedSKU}"`);
+      if (originalSKU.startsWith('=')) {
+        result.notes.push(`Excel formula prefix removed: "${originalSKU}" → "${cleanedSKU}"`);
+      } else {
+        result.notes.push(`SKU normalized: "${originalSKU}" → "${cleanedSKU}"`);
+      }
     }
 
-    // Rule 2: Auto-correct VCPN if missing or incorrect
+    // Rule 2: Auto-correct VCPN if missing or incorrect - Now uses cleaned SKU
     const originalVCPN = record['VCPN'] || '';
-    const expectedVCPN = vendorCode + cleanedSKU;
+    const expectedVCPN = vendorCode + cleanedSKU; // Use cleaned SKU for VCPN calculation
     
     if (!originalVCPN || originalVCPN !== expectedVCPN) {
       result.corrected = true;
@@ -338,11 +347,11 @@ export function InventoryFileUpload() {
       validation_notes: validation.notes.join('; '),
       original_data: validation.originalData,
       
-      // Map CSV fields to staging table columns
+      // Map CSV fields to staging table columns - Use cleaned data
       vendor_name: record['VendorName'] || record['Vendor'] || null,
       vcpn: validation.cleanedData['VCPN'] || null,
       vendor_code: record['VendorCode'] || record['Vendor'] || null,
-      part_number: validation.cleanedData['PartNumber'] || null,
+      part_number: validation.cleanedData['PartNumber'] || null, // Use cleaned part number
       manufacturer_part_no: record['ManufacturerPartNo'] || null,
       long_description: record['LongDescription'] || record['Description'] || null,
       jobber_price: parseFloat(record['JobberPrice'] || '0') || null,
