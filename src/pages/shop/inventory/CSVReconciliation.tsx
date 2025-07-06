@@ -228,8 +228,8 @@ export function CSVReconciliation({ sessionId, onClose }: CSVReconciliationProps
           description: 'Part number/SKU is required but missing',
           suggestion: 'Add a valid part number'
         });
-      } else if (note.includes('SKU normalized') || note.includes('Excel formatting')) {
-        const match = note.match(/SKU normalized: "([^"]*)" → "([^"]*)"/);
+      } else if (note.includes('SKU normalized') || note.includes('Excel formatting') || note.includes('Excel formula prefix')) {
+        const match = note.match(/(?:SKU normalized|Excel formula prefix removed): "([^"]*)" → "([^"]*)"/);
         if (match) {
           issues.push({
             type: 'invalid_format',

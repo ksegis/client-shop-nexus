@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2 } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2, BarChart3, Activity } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CSVReconciliation } from './CSVReconciliation';
+import { CSVAuditDashboard } from './CSVAuditDashboard';
 
 // Types for CSV processing
 interface CSVRecord {
@@ -32,18 +33,18 @@ interface ProcessingProgress {
 interface UploadSession {
   id: string;
   filename: string;
-  original_filename: string; // FIXED: Use snake_case to match database
-  file_size: number; // FIXED: Use snake_case to match database
+  original_filename: string;
+  file_size: number;
   status: string;
-  total_records: number; // FIXED: Use snake_case to match database
-  processed_records: number; // FIXED: Use snake_case to match database
-  valid_records: number; // FIXED: Use snake_case to match database
-  invalid_records: number; // FIXED: Use snake_case to match database
-  corrected_records: number; // FIXED: Use snake_case to match database
-  error_message?: string; // FIXED: Use snake_case to match database
-  created_at: string; // FIXED: Use snake_case to match database
-  completed_at?: string; // FIXED: Use snake_case to match database
-  updated_at: string; // FIXED: Use snake_case to match database
+  total_records: number;
+  processed_records: number;
+  valid_records: number;
+  invalid_records: number;
+  corrected_records: number;
+  error_message?: string;
+  created_at: string;
+  completed_at?: string;
+  updated_at: string;
 }
 
 interface SyncSummary {
@@ -65,11 +66,15 @@ export function InventoryFileUpload() {
   const [recentSessions, setRecentSessions] = useState<UploadSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [canClose, setCanClose] = useState(true);
-  const [isDeleting, setIsDeleting] = useState<string | null>(null); // NEW: Track deletion state
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
   
-  // NEW: Reconciliation state
+  // Reconciliation state
   const [showReconciliation, setShowReconciliation] = useState(false);
   const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
+  
+  // NEW: Audit dashboard state
+  const [showAuditDashboard, setShowAuditDashboard] = useState(false);
+  const [auditSessionId, setAuditSessionId] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -89,7 +94,7 @@ export function InventoryFileUpload() {
     getCurrentUser();
   }, []);
 
-  // Load recent upload sessions
+  // Load recent upload sessions with enhanced statistics
   const loadRecentSessions = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -97,7 +102,7 @@ export function InventoryFileUpload() {
         .select('*')
         .eq('uploaded_by', userId)
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(10); // Show more recent sessions
 
       if (error) throw error;
       setRecentSessions(data || []);
@@ -106,7 +111,7 @@ export function InventoryFileUpload() {
     }
   };
 
-  // FIXED: Format date with proper error handling
+  // Format date with proper error handling
   const formatDate = (dateString: string): string => {
     try {
       if (!dateString) return 'Invalid Date';
@@ -118,7 +123,7 @@ export function InventoryFileUpload() {
     }
   };
 
-  // NEW: Delete upload session functionality
+  // Delete upload session functionality
   const deleteUploadSession = async (sessionId: string) => {
     if (!confirm('Are you sure you want to delete this upload session? This will also delete all associated staging records.')) {
       return;
@@ -134,7 +139,6 @@ export function InventoryFileUpload() {
 
       if (stagingError) {
         console.error('Error deleting staging records:', stagingError);
-        // Continue anyway - session might not have staging records
       }
 
       // Then delete the session
@@ -170,7 +174,6 @@ export function InventoryFileUpload() {
 
   // Create upload session
   const createUploadSession = async (filename: string, originalFilename: string, fileSize: number): Promise<string> => {
-    // Check file size limit (50MB for better performance)
     if (fileSize > 50 * 1024 * 1024) {
       throw new Error('File size exceeds 50MB limit. Please use a smaller file for optimal performance.');
     }
@@ -196,7 +199,7 @@ export function InventoryFileUpload() {
     return data.id;
   };
 
-  // Update session progress - FIXED: Use snake_case field names
+  // Update session progress
   const updateSessionProgress = async (sessionId: string, updates: Partial<UploadSession>) => {
     const { error } = await supabase
       .from('csv_upload_sessions')
@@ -224,7 +227,6 @@ export function InventoryFileUpload() {
         record[header] = values[index] || '';
       });
       
-      // Only include records with meaningful data
       if (record['LongDescription'] || record['PartNumber'] || record['VCPN'] || record['VendorCode']) {
         records.push(record);
       }
@@ -233,17 +235,15 @@ export function InventoryFileUpload() {
     return records;
   };
 
-  // ENHANCED: Normalize SKU (Rule 1: Clean Excel formatting) - Now handles all Excel prefix cases
+  // Enhanced normalization function for part numbers
   const normalizeSKU = (sku: string): string => {
     if (!sku) return '';
     
     let cleaned = sku.trim();
     
-    // Remove Excel formula formatting: ="10406" -> 10406, =10406 -> 10406, ='10406' -> 10406
     if (cleaned.startsWith('=')) {
-      cleaned = cleaned.substring(1); // Remove the = prefix
+      cleaned = cleaned.substring(1);
       
-      // If it's wrapped in quotes after removing =, remove those too
       if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || 
           (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
         cleaned = cleaned.slice(1, -1);
@@ -269,7 +269,7 @@ export function InventoryFileUpload() {
     return total;
   };
 
-  // ENHANCED: Validate and clean CSV record (All 3 validation rules) - Now automatically fixes Excel prefixes
+  // Validate and clean CSV record
   const validateRecord = (record: CSVRecord): ValidationResult => {
     const result: ValidationResult = {
       isValid: true,
@@ -279,7 +279,6 @@ export function InventoryFileUpload() {
       cleanedData: { ...record }
     };
 
-    // Rule 1: Validate required fields (vendor_code, sku)
     const vendorCode = record['VendorCode'] || record['Vendor'] || '';
     const originalSKU = record['PartNumber'] || record['SKU'] || '';
     
@@ -293,12 +292,11 @@ export function InventoryFileUpload() {
       result.notes.push('Missing SKU/PartNumber - record flagged as invalid');
     }
 
-    // If basic validation fails, return early
     if (!result.isValid) {
       return result;
     }
 
-    // ENHANCED: Rule 1: Normalize SKU - Now handles all Excel prefix cases
+    // Normalize SKU
     const cleanedSKU = normalizeSKU(originalSKU);
     if (cleanedSKU !== originalSKU) {
       result.corrected = true;
@@ -310,9 +308,9 @@ export function InventoryFileUpload() {
       }
     }
 
-    // Rule 2: Auto-correct VCPN if missing or incorrect - Now uses cleaned SKU
+    // Auto-correct VCPN
     const originalVCPN = record['VCPN'] || '';
-    const expectedVCPN = vendorCode + cleanedSKU; // Use cleaned SKU for VCPN calculation
+    const expectedVCPN = vendorCode + cleanedSKU;
     
     if (!originalVCPN || originalVCPN !== expectedVCPN) {
       result.corrected = true;
@@ -324,7 +322,7 @@ export function InventoryFileUpload() {
       }
     }
 
-    // Rule 3: Validate and correct total quantity
+    // Validate and correct total quantity
     const originalTotalQty = parseInt(record['TotalQty'] || '0') || 0;
     const calculatedTotalQty = calculateTotalQuantity(record);
     
@@ -347,11 +345,10 @@ export function InventoryFileUpload() {
       validation_notes: validation.notes.join('; '),
       original_data: validation.originalData,
       
-      // Map CSV fields to staging table columns - Use cleaned data
       vendor_name: record['VendorName'] || record['Vendor'] || null,
       vcpn: validation.cleanedData['VCPN'] || null,
       vendor_code: record['VendorCode'] || record['Vendor'] || null,
-      part_number: validation.cleanedData['PartNumber'] || null, // Use cleaned part number
+      part_number: validation.cleanedData['PartNumber'] || null,
       manufacturer_part_no: record['ManufacturerPartNo'] || null,
       long_description: record['LongDescription'] || record['Description'] || null,
       jobber_price: parseFloat(record['JobberPrice'] || '0') || null,
@@ -370,7 +367,6 @@ export function InventoryFileUpload() {
       upc_code: record['UPCCode'] || null,
       aaia_code: record['AAIACode'] || null,
       
-      // Warehouse quantities
       east_qty: parseInt(record['EastQty'] || '0') || 0,
       midwest_qty: parseInt(record['MidwestQty'] || '0') || 0,
       california_qty: parseInt(record['CaliforniaQty'] || '0') || 0,
@@ -382,7 +378,6 @@ export function InventoryFileUpload() {
       total_qty: parseInt(validation.cleanedData['TotalQty'] || '0') || 0,
       calculated_total_qty: calculateTotalQuantity(record),
       
-      // Kit fields
       is_kit: record['IsKit']?.toLowerCase() === 'true' || false,
       kit_components: record['KitComponents'] || null
     };
@@ -405,7 +400,6 @@ export function InventoryFileUpload() {
     };
 
     try {
-      // Get valid staging records
       const { data: stagingRecords, error: fetchError } = await supabase
         .from('csv_staging_records')
         .select('*')
@@ -416,7 +410,6 @@ export function InventoryFileUpload() {
 
       for (const staging of stagingRecords || []) {
         try {
-          // Check if record exists by VCPN
           const { data: existing, error: checkError } = await supabase
             .from('inventory')
             .select('id')
@@ -466,7 +459,6 @@ export function InventoryFileUpload() {
           };
 
           if (existing) {
-            // Update existing record
             const { error: updateError } = await supabase
               .from('inventory')
               .update(inventoryData)
@@ -475,7 +467,6 @@ export function InventoryFileUpload() {
             if (updateError) throw updateError;
             summary.updated++;
 
-            // Update staging record
             await supabase
               .from('csv_staging_records')
               .update({ 
@@ -485,7 +476,6 @@ export function InventoryFileUpload() {
               })
               .eq('id', staging.id);
           } else {
-            // Insert new record
             const { data: newRecord, error: insertError } = await supabase
               .from('inventory')
               .insert([inventoryData])
@@ -495,7 +485,6 @@ export function InventoryFileUpload() {
             if (insertError) throw insertError;
             summary.inserted++;
 
-            // Update staging record
             await supabase
               .from('csv_staging_records')
               .update({ 
@@ -525,11 +514,10 @@ export function InventoryFileUpload() {
     
     try {
       setIsUploading(true);
-      setCanClose(false); // Prevent closing during critical operations
+      setCanClose(false);
       setUploadProgress(0);
       setProcessingStage('Initializing upload session...');
 
-      // Create upload session
       sessionId = await createUploadSession(
         `${Date.now()}_${file.name}`,
         file.name,
@@ -540,20 +528,17 @@ export function InventoryFileUpload() {
       setUploadProgress(10);
       setProcessingStage('Reading CSV file...');
 
-      // Read and parse CSV
       const csvText = await file.text();
       const records = parseCSV(csvText);
 
       setUploadProgress(20);
       setProcessingStage(`Validating ${records.length} records...`);
 
-      // Update session with total records - FIXED: Use snake_case
       await updateSessionProgress(sessionId, {
         total_records: records.length,
         status: 'processing'
       });
 
-      // Process records in batches
       const batchSize = 50;
       let validCount = 0;
       let invalidCount = 0;
@@ -576,16 +561,13 @@ export function InventoryFileUpload() {
             correctedCount++;
           }
 
-          // Save to staging table
           await saveStagingRecord(sessionId, record, validation, i + j + 1);
         }
 
-        // Update progress
         const progress = 20 + ((i + batch.length) / records.length) * 60;
         setUploadProgress(Math.min(progress, 80));
         setProcessingStage(`Processed ${Math.min(i + batchSize, records.length)} of ${records.length} records...`);
 
-        // Update session progress - FIXED: Use snake_case
         await updateSessionProgress(sessionId, {
           processed_records: Math.min(i + batchSize, records.length),
           valid_records: validCount,
@@ -596,15 +578,13 @@ export function InventoryFileUpload() {
 
       setUploadProgress(85);
       setProcessingStage('Syncing to inventory...');
-      setCanClose(true); // Allow closing during sync phase
+      setCanClose(true);
 
-      // Sync valid records to inventory
       const syncSummary = await syncStagingToInventory(sessionId);
 
       setUploadProgress(95);
       setProcessingStage('Finalizing...');
 
-      // Update session as completed - FIXED: Use snake_case
       await updateSessionProgress(sessionId, {
         status: 'completed',
         completed_at: new Date().toISOString()
@@ -613,7 +593,6 @@ export function InventoryFileUpload() {
       setUploadProgress(100);
       setProcessingStage('Processing completed successfully!');
 
-      // Get final session data
       const { data: finalSession } = await supabase
         .from('csv_upload_sessions')
         .select('*')
@@ -631,19 +610,16 @@ export function InventoryFileUpload() {
         description: `Processed ${records.length} records. ${validCount} valid, ${invalidCount} invalid, ${correctedCount} corrected.`,
       });
 
-      // Refresh recent sessions
       if (currentUser) {
         loadRecentSessions(currentUser.id);
       }
 
     } catch (error) {
       console.error('Processing error:', error);
-      console.error('Upload process error:', error);
       
       setProcessingStage('Processing failed');
       
       if (sessionId) {
-        // FIXED: Use snake_case
         await updateSessionProgress(sessionId, {
           status: 'failed',
           error_message: error.message,
@@ -658,7 +634,7 @@ export function InventoryFileUpload() {
       });
     } finally {
       setIsUploading(false);
-      setCanClose(true); // Always allow closing after completion
+      setCanClose(true);
     }
   };
 
@@ -666,7 +642,6 @@ export function InventoryFileUpload() {
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Check file size before setting
       if (file.size > 50 * 1024 * 1024) {
         toast({
           title: "File Too Large",
@@ -678,7 +653,6 @@ export function InventoryFileUpload() {
 
       setSelectedFile(file);
       
-      // Preview first few rows
       const reader = new FileReader();
       reader.onload = (e) => {
         const csvText = e.target?.result as string;
@@ -695,11 +669,8 @@ export function InventoryFileUpload() {
     await processCSVInBackground(selectedFile);
   };
 
-  // FIXED: Reset upload state - now properly clears everything
+  // Reset upload state
   const resetUpload = () => {
-    console.log('🔄 Resetting upload state');
-    
-    // Reset all state
     setSelectedFile(null);
     setPreviewData([]);
     setUploadResult(null);
@@ -709,12 +680,10 @@ export function InventoryFileUpload() {
     setCanClose(true);
     setIsUploading(false);
     
-    // Clear file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     
-    // Reload recent sessions
     if (currentUser) {
       loadRecentSessions(currentUser.id);
     }
@@ -725,7 +694,7 @@ export function InventoryFileUpload() {
     });
   };
 
-  // Close dialog - FIXED: Now works during background processing
+  // Close dialog
   const closeDialog = () => {
     if (isUploading && !canClose) {
       toast({
@@ -738,7 +707,6 @@ export function InventoryFileUpload() {
     
     setShowUploadDialog(false);
     
-    // If processing is ongoing, show notification
     if (isUploading) {
       toast({
         title: "Processing continues in background",
@@ -747,27 +715,38 @@ export function InventoryFileUpload() {
     }
   };
 
-  // NEW: Open reconciliation interface - ENHANCED: Closes upload dialog
+  // Open reconciliation interface
   const openReconciliation = (sessionId: string) => {
     setReconciliationSessionId(sessionId);
     setShowReconciliation(true);
-    setShowUploadDialog(false); // Close the upload dialog
+    setShowUploadDialog(false);
   };
 
-  // NEW: Close reconciliation interface
+  // Close reconciliation interface
   const closeReconciliation = () => {
     setShowReconciliation(false);
     setReconciliationSessionId(null);
     
-    // Refresh sessions after reconciliation
     if (currentUser) {
       loadRecentSessions(currentUser.id);
     }
   };
 
-  // View session details (for reconciliation) - ENHANCED: Now opens reconciliation interface
-  const viewSessionDetails = (sessionId: string) => {
-    openReconciliation(sessionId);
+  // NEW: Open audit dashboard
+  const openAuditDashboard = (sessionId: string) => {
+    setAuditSessionId(sessionId);
+    setShowAuditDashboard(true);
+    setShowUploadDialog(false);
+  };
+
+  // NEW: Close audit dashboard
+  const closeAuditDashboard = () => {
+    setShowAuditDashboard(false);
+    setAuditSessionId(null);
+    
+    if (currentUser) {
+      loadRecentSessions(currentUser.id);
+    }
   };
 
   // Format file size
@@ -779,6 +758,14 @@ export function InventoryFileUpload() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // NEW: Get processing progress percentage for sessions
+  const getSessionProgress = (session: UploadSession): number => {
+    if (session.status === 'completed') return 100;
+    if (session.status === 'failed') return 0;
+    if (session.total_records === 0) return 0;
+    return Math.round((session.processed_records / session.total_records) * 100);
+  };
+
   return (
     <>
       <Button onClick={() => setShowUploadDialog(true)} className="flex items-center space-x-2">
@@ -788,13 +775,13 @@ export function InventoryFileUpload() {
 
       {showUploadDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              {/* Header with close button - FIXED */}
+              {/* Header with close button */}
               <div className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-xl font-semibold">Enhanced CSV Upload</h2>
-                  <p className="text-sm text-gray-600">Enhanced processing with validation and reconciliation</p>
+                  <p className="text-sm text-gray-600">Enhanced processing with validation, reconciliation, and audit tracking</p>
                 </div>
                 <Button
                   variant="ghost"
@@ -807,7 +794,7 @@ export function InventoryFileUpload() {
                 </Button>
               </div>
 
-              {/* Recent Upload Sessions - ENHANCED with delete functionality */}
+              {/* ENHANCED: Recent Upload Sessions with audit access */}
               {recentSessions.length > 0 && (
                 <Card className="mb-6">
                   <CardHeader>
@@ -827,51 +814,99 @@ export function InventoryFileUpload() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {recentSessions.map((session) => (
-                        <div key={session.id} className="flex items-center justify-between p-2 border rounded text-xs">
-                          <div className="flex items-center space-x-2 flex-1 min-w-0">
-                            <FileText className="w-3 h-3 flex-shrink-0" />
-                            <span className="font-medium truncate">{session.original_filename}</span>
-                            <span className="text-gray-500 flex-shrink-0">
-                              {session.total_records} records
-                            </span>
+                        <div key={session.id} className="border rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center space-x-2 flex-1 min-w-0">
+                              <FileText className="w-4 h-4 flex-shrink-0" />
+                              <span className="font-medium truncate">{session.original_filename}</span>
+                              <Badge 
+                                variant={session.status === 'completed' ? 'default' : 
+                                        session.status === 'failed' ? 'destructive' : 'secondary'}
+                                className="text-xs"
+                              >
+                                {session.status}
+                              </Badge>
+                            </div>
+                            <span className="text-xs text-gray-400">{formatDate(session.created_at)}</span>
                           </div>
-                          <div className="flex items-center space-x-2 flex-shrink-0">
-                            <Badge 
-                              variant={session.status === 'completed' ? 'default' : 
-                                      session.status === 'failed' ? 'destructive' : 'secondary'}
-                              className="text-xs"
-                            >
-                              {session.status}
-                            </Badge>
-                            <span className="text-gray-400">{formatDate(session.created_at)}</span>
-                            {/* ENHANCED: Review button now closes upload dialog and opens reconciliation */}
-                            {(session.invalid_records > 0 || session.corrected_records > 0) && (
+                          
+                          {/* ENHANCED: Detailed progress and statistics */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-2">
+                            <div>
+                              <span className="text-gray-500">Total:</span>
+                              <span className="font-mono ml-1">{session.total_records?.toLocaleString() || 0}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Processed:</span>
+                              <span className="font-mono ml-1">{session.processed_records?.toLocaleString() || 0}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Valid:</span>
+                              <span className="font-mono ml-1 text-green-600">{session.valid_records?.toLocaleString() || 0}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Invalid:</span>
+                              <span className="font-mono ml-1 text-red-600">{session.invalid_records?.toLocaleString() || 0}</span>
+                            </div>
+                          </div>
+                          
+                          {/* Progress bar for processing sessions */}
+                          {session.status === 'processing' && (
+                            <div className="mb-2">
+                              <div className="flex justify-between text-xs mb-1">
+                                <span>Processing Progress</span>
+                                <span>{getSessionProgress(session)}%</span>
+                              </div>
+                              <Progress value={getSessionProgress(session)} className="h-2" />
+                            </div>
+                          )}
+                          
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs text-gray-500">
+                              Size: {formatFileSize(session.file_size || 0)}
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              {/* NEW: Audit Dashboard button */}
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => openReconciliation(session.id)}
+                                onClick={() => openAuditDashboard(session.id)}
                                 className="h-6 px-2 text-xs"
                               >
-                                <Eye className="w-3 h-3 mr-1" />
-                                Review
+                                <BarChart3 className="w-3 h-3 mr-1" />
+                                Audit
                               </Button>
-                            )}
-                            {/* NEW: Delete button */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteUploadSession(session.id)}
-                              disabled={isDeleting === session.id}
-                              className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                            >
-                              {isDeleting === session.id ? (
-                                <RefreshCw className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-3 w-3" />
+                              
+                              {/* Review button for problematic records */}
+                              {(session.invalid_records > 0 || session.corrected_records > 0) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openReconciliation(session.id)}
+                                  className="h-6 px-2 text-xs"
+                                >
+                                  <Eye className="w-3 h-3 mr-1" />
+                                  Review
+                                </Button>
                               )}
-                            </Button>
+                              
+                              {/* Delete button */}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteUploadSession(session.id)}
+                                disabled={isDeleting === session.id}
+                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                              >
+                                {isDeleting === session.id ? (
+                                  <RefreshCw className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3 w-3" />
+                                )}
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -888,7 +923,7 @@ export function InventoryFileUpload() {
                       <div className="space-y-2">
                         <FileText className="w-12 h-12 text-blue-500 mx-auto" />
                         <p className="font-medium">{selectedFile.name}</p>
-                        <p className="text-sm text-gray-500">Enhanced processing with validation and reconciliation</p>
+                        <p className="text-sm text-gray-500">Enhanced processing with validation, reconciliation, and audit tracking</p>
                         <p className="text-xs text-gray-400">Size: {formatFileSize(selectedFile.size)}</p>
                         <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                           Select Different File
@@ -898,7 +933,7 @@ export function InventoryFileUpload() {
                       <div className="space-y-2">
                         <Upload className="w-12 h-12 text-gray-400 mx-auto" />
                         <p className="text-lg font-medium">Upload CSV File</p>
-                        <p className="text-sm text-gray-500">Enhanced processing with validation and reconciliation</p>
+                        <p className="text-sm text-gray-500">Enhanced processing with validation, reconciliation, and audit tracking</p>
                         <p className="text-xs text-gray-400">Maximum file size: 50MB</p>
                         <Button onClick={() => fileInputRef.current?.click()}>
                           Select File
@@ -999,22 +1034,36 @@ export function InventoryFileUpload() {
                         </div>
                       )}
 
-                      {/* ENHANCED: Review button now closes upload dialog and opens reconciliation */}
+                      {/* Action buttons */}
+                      <div className="flex space-x-2">
+                        {/* NEW: Audit Dashboard button */}
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => openAuditDashboard(uploadResult.sessionId)}
+                        >
+                          <BarChart3 className="w-4 h-4 mr-1" />
+                          View Audit Dashboard
+                        </Button>
+                        
+                        {/* Review button for problematic records */}
+                        {((uploadResult.session?.invalid_records || 0) > 0 || (uploadResult.session?.corrected_records || 0) > 0) && (
+                          <Button 
+                            size="sm" 
+                            onClick={() => openReconciliation(uploadResult.sessionId)}
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            Review & Correct
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Alert for records needing review */}
                       {((uploadResult.session?.invalid_records || 0) > 0 || (uploadResult.session?.corrected_records || 0) > 0) && (
                         <Alert>
                           <AlertTriangle className="h-4 w-4" />
                           <AlertDescription>
-                            <div className="text-sm">
-                              Some records need review. Use the reconciliation interface to correct errors and process remaining records.
-                            </div>
-                            <Button 
-                              size="sm" 
-                              className="mt-2"
-                              onClick={() => openReconciliation(uploadResult.sessionId)}
-                            >
-                              <Eye className="w-4 h-4 mr-1" />
-                              Open Reconciliation
-                            </Button>
+                            Some records need review. Use the reconciliation interface to correct errors and process remaining records.
                           </AlertDescription>
                         </Alert>
                       )}
@@ -1053,11 +1102,19 @@ export function InventoryFileUpload() {
         </div>
       )}
 
-      {/* NEW: CSV Reconciliation Interface - Separate from upload dialog */}
+      {/* CSV Reconciliation Interface */}
       {showReconciliation && reconciliationSessionId && (
         <CSVReconciliation
           sessionId={reconciliationSessionId}
           onClose={closeReconciliation}
+        />
+      )}
+
+      {/* NEW: CSV Audit Dashboard */}
+      {showAuditDashboard && auditSessionId && (
+        <CSVAuditDashboard
+          sessionId={auditSessionId}
+          onClose={closeAuditDashboard}
         />
       )}
     </>
