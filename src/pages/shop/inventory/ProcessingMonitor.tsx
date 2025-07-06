@@ -15,7 +15,9 @@ import {
   TrendingUp,
   X,
   Zap,
-  BarChart3
+  BarChart3,
+  Settings,
+  Bug
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -48,6 +50,8 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
   const [debugInfo, setDebugInfo] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
   const [processingSession, setProcessingSession] = useState<string | null>(null);
+  const [diagnosticsResults, setDiagnosticsResults] = useState<any>(null);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -62,247 +66,150 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
     try {
       setRefreshing(true);
       setError(null);
-      setDebugInfo('Starting to load sessions...');
+      setDebugInfo('Loading sessions...');
       
-      // Try different approaches to get the data
-      console.log('Attempting to load csv_upload_sessions...');
-      
-      // First, try with RPC function to bypass RLS
-      let allSessions: any[] = [];
-      
-      try {
-        // Try direct query first
-        const { data: directData, error: directError } = await supabase
-          .from('csv_upload_sessions')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(20);
+      const { data: sessions, error: sessionsError } = await supabase
+        .from('csv_upload_sessions')
+        .select(`
+          id,
+          status,
+          total_records,
+          processed_records,
+          valid_records,
+          invalid_records,
+          corrected_records,
+          created_at,
+          updated_at,
+          completed_at,
+          original_filename,
+          file_size,
+          error_message
+        `)
+        .order('created_at', { ascending: false })
+        .limit(20);
 
-        if (directError) {
-          console.log('Direct query failed:', directError);
-          throw directError;
-        }
-        
-        allSessions = directData || [];
-        setDebugInfo(`Direct query successful: ${allSessions.length} sessions`);
-        
-      } catch (directError: any) {
-        console.log('Direct query failed, trying alternative approach...');
-        
-        // If direct query fails due to RLS, try to use a more basic query
-        try {
-          const { data: basicData, error: basicError } = await supabase
-            .rpc('get_csv_sessions'); // This would need to be created as a function
-            
-          if (basicError) {
-            throw basicError;
-          }
-          
-          allSessions = basicData || [];
-          setDebugInfo(`RPC query successful: ${allSessions.length} sessions`);
-          
-        } catch (rpcError: any) {
-          console.log('RPC query also failed, using manual SQL...');
-          
-          // Last resort: try to get data using raw SQL
-          const { data: sqlData, error: sqlError } = await supabase
-            .from('csv_upload_sessions')
-            .select(`
-              id,
-              status,
-              total_records,
-              processed_records,
-              valid_records,
-              invalid_records,
-              corrected_records,
-              created_at,
-              updated_at,
-              completed_at,
-              original_filename,
-              file_size,
-              error_message
-            `)
-            .order('created_at', { ascending: false })
-            .limit(20);
-
-          if (sqlError) {
-            throw sqlError;
-          }
-          
-          allSessions = sqlData || [];
-          setDebugInfo(`SQL query successful: ${allSessions.length} sessions`);
-        }
+      if (sessionsError) {
+        throw sessionsError;
       }
-
-      console.log('Sessions loaded successfully:', allSessions.length);
-      setSessions(allSessions);
-
+      
+      setSessions(sessions || []);
+      setDebugInfo(`Successfully loaded ${sessions?.length || 0} sessions`);
+      
     } catch (error: any) {
       console.error('Error loading processing data:', error);
       const errorMessage = error?.message || 'Unknown error occurred';
       setError(`Database Error: ${errorMessage}`);
       setDebugInfo(`Error: ${errorMessage}`);
       
-      // If we can't load sessions, create a mock session for your stalled one
-      if (error?.code === '42703' || error?.message?.includes('user_id')) {
-        setDebugInfo('RLS/user_id issue detected. Creating mock session for testing...');
-        
-        // Create a mock session based on what we know from your screenshot
-        const mockSession: ProcessingSession = {
-          id: '9333a3ae-192c-476c-aa02-2d4f380f3d3e',
-          original_filename: 'Inventory.csv',
-          file_size: 26856506,
-          status: 'processing',
-          total_records: 124732,
-          processed_records: 72350,
-          valid_records: 72350,
-          invalid_records: 0,
-          corrected_records: 72350,
-          created_at: '2025-07-06T00:32:27.150Z',
-          updated_at: '2025-07-06T03:51:53.054552',
-          error_message: undefined
-        };
-        
-        setSessions([mockSession]);
-        setError(null);
-        setDebugInfo('Using mock session data for testing Resume functionality');
-      } else {
-        toast({
-          title: "Error Loading Data",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Error Loading Data",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const isSessionStalled = (session: ProcessingSession): boolean => {
-    // Only check processing sessions
-    if (session.status !== 'processing') {
-      console.log(`Session ${session.id}: Not processing (status: ${session.status})`);
-      return false;
-    }
-    
-    // Check if processing is incomplete
-    const totalRecords = session.total_records || 0;
-    const processedRecords = session.processed_records || 0;
-    const isIncomplete = processedRecords < totalRecords;
-    
-    if (!isIncomplete) {
-      console.log(`Session ${session.id}: Complete (${processedRecords}/${totalRecords})`);
-      return false;
-    }
-    
-    // Get current time and last update time
-    const now = new Date();
-    const lastUpdateString = session.updated_at || session.created_at;
-    
-    // Parse the timestamp - handle both ISO format and PostgreSQL timestamp
-    let lastUpdate: Date;
+  const runDiagnostics = async () => {
     try {
-      // If it contains 'T', it's ISO format
-      if (lastUpdateString.includes('T')) {
-        lastUpdate = new Date(lastUpdateString);
-      } else {
-        // Otherwise, treat as PostgreSQL timestamp
-        lastUpdate = new Date(lastUpdateString + 'Z'); // Add Z to treat as UTC
-      }
-    } catch (e) {
-      console.error(`Error parsing date: ${lastUpdateString}`, e);
-      lastUpdate = new Date(session.created_at);
+      setShowDiagnostics(true);
+      setDebugInfo('Running background processing diagnostics...');
+      
+      // Check for database functions
+      const { data: functions, error: functionsError } = await supabase
+        .rpc('sql', {
+          query: `
+            SELECT routine_name, routine_type
+            FROM information_schema.routines 
+            WHERE routine_name IN (
+              'process_csv_staging_records',
+              'process_all_pending_sessions', 
+              'resume_stalled_session',
+              'scheduled_csv_processing'
+            )
+          `
+        });
+
+      // Check for triggers
+      const { data: triggers, error: triggersError } = await supabase
+        .rpc('sql', {
+          query: `
+            SELECT trigger_name, event_object_table
+            FROM information_schema.triggers 
+            WHERE event_object_table IN ('csv_staging_records', 'csv_upload_sessions')
+          `
+        });
+
+      // Check for stalled sessions
+      const { data: stalledSessions, error: stalledError } = await supabase
+        .rpc('sql', {
+          query: `
+            SELECT 
+              id,
+              status,
+              total_records,
+              processed_records,
+              EXTRACT(EPOCH FROM (NOW() - updated_at))/3600 as hours_since_update
+            FROM csv_upload_sessions 
+            WHERE status = 'processing' 
+              AND EXTRACT(EPOCH FROM (NOW() - updated_at))/3600 > 0.5
+          `
+        });
+
+      setDiagnosticsResults({
+        functions: functions || [],
+        triggers: triggers || [],
+        stalledSessions: stalledSessions || [],
+        functionsError,
+        triggersError,
+        stalledError
+      });
+
+      setDebugInfo('Diagnostics completed. Check results below.');
+      
+    } catch (error: any) {
+      console.error('Error running diagnostics:', error);
+      setDebugInfo(`Diagnostics failed: ${error.message}`);
+      toast({
+        title: "Diagnostics Failed",
+        description: error.message,
+        variant: "destructive",
+      });
     }
-    
-    // Calculate time difference in milliseconds, then convert to hours
-    const timeDiffMs = now.getTime() - lastUpdate.getTime();
-    const hoursSinceUpdate = timeDiffMs / (1000 * 60 * 60);
-    
-    // Consider stalled if no update in 30 minutes (0.5 hours)
-    const stallThresholdHours = 0.5;
-    const isStalled = hoursSinceUpdate > stallThresholdHours;
-    
-    console.log(`Session ${session.id}: 
-      - Progress: ${processedRecords}/${totalRecords}
-      - Last update string: ${lastUpdateString}
-      - Last update parsed: ${lastUpdate.toISOString()}
-      - Current time: ${now.toISOString()}
-      - Hours since update: ${hoursSinceUpdate.toFixed(2)}
-      - Stall threshold: ${stallThresholdHours} hours
-      - Is stalled: ${isStalled}`);
-    
-    return isStalled;
   };
 
-  const getSessionProgress = (session: ProcessingSession): number => {
-    const total = session.total_records || 0;
-    const processed = session.processed_records || 0;
-    if (total === 0) return 0;
-    return Math.round((processed / total) * 100);
-  };
-
-  const getEstimatedCompletion = (session: ProcessingSession): string => {
-    if (session.status !== 'processing') return 'N/A';
-    
-    const start = new Date(session.created_at);
-    const now = new Date();
-    const elapsedMinutes = (now.getTime() - start.getTime()) / (1000 * 60);
-    
-    const processedRecords = session.processed_records || 0;
-    const totalRecords = session.total_records || 0;
-    
-    if (elapsedMinutes === 0 || !processedRecords) return 'Calculating...';
-    
-    const rate = processedRecords / elapsedMinutes;
-    const remaining = totalRecords - processedRecords;
-    
-    if (rate === 0) return 'Stalled';
-    
-    const estimatedMinutes = remaining / rate;
-    
-    if (estimatedMinutes < 60) {
-      return `${Math.ceil(estimatedMinutes)} minutes`;
-    } else {
-      const hours = Math.floor(estimatedMinutes / 60);
-      const minutes = Math.ceil(estimatedMinutes % 60);
-      return `${hours}h ${minutes}m`;
-    }
-  };
-
-  const resumeProcessing = async (sessionId: string) => {
+  const resumeSessionWithFunction = async (sessionId: string) => {
     try {
       setProcessingSession(sessionId);
       
-      console.log(`Attempting to resume processing for session: ${sessionId}`);
+      console.log(`Resuming session using database function: ${sessionId}`);
       
-      // Try to update the session directly
-      try {
-        const { error: updateError } = await supabase
-          .from('csv_upload_sessions')
-          .update({
-            status: 'processing',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', sessionId);
+      toast({
+        title: "Resuming Processing",
+        description: "Using database function to resume background processing...",
+      });
 
-        if (updateError) {
-          console.log('Direct update failed:', updateError);
-          throw updateError;
-        }
+      // Call the database function to resume processing
+      const { data, error } = await supabase
+        .rpc('resume_stalled_session', { session_id: sessionId });
 
+      if (error) {
+        throw error;
+      }
+
+      console.log('Resume function result:', data);
+
+      if (data?.success) {
         toast({
           title: "Processing Resumed",
-          description: "Session timestamp updated. Processing should continue automatically.",
+          description: "Background processing has been resumed successfully.",
         });
-        
-      } catch (updateError: any) {
-        console.log('Session update failed, trying alternative approach...');
-        
-        // If we can't update the session, at least show that we tried
+      } else {
         toast({
-          title: "Resume Attempted",
-          description: `Attempted to resume session ${sessionId}. Check database directly if processing doesn't continue.`,
+          title: "Resume Failed",
+          description: data?.message || "Could not resume processing",
           variant: "destructive",
         });
       }
@@ -310,11 +217,11 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
       // Refresh data after a delay
       setTimeout(loadProcessingData, 2000);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error resuming processing:', error);
       toast({
-        title: "Resume Processing Failed",
-        description: error instanceof Error ? error.message : "Could not resume processing for this session",
+        title: "Resume Failed",
+        description: error.message || "Could not resume processing",
         variant: "destructive",
       });
     } finally {
@@ -322,38 +229,67 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
     }
   };
 
-  const markSessionCompleted = async (sessionId: string) => {
-    if (!confirm('Mark this session as completed? This will stop further processing.')) {
-      return;
-    }
-
+  const processAllPendingSessions = async () => {
     try {
-      const { error } = await supabase
-        .from('csv_upload_sessions')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sessionId);
-
-      if (error) throw error;
-
+      setDebugInfo('Processing all pending sessions...');
+      
       toast({
-        title: "Session Completed",
-        description: "Session has been marked as completed",
+        title: "Processing All Sessions",
+        description: "Running background processing for all pending sessions...",
       });
 
-      loadProcessingData();
-      
-    } catch (error) {
-      console.error('Error marking session completed:', error);
+      const { data, error } = await supabase
+        .rpc('process_all_pending_sessions');
+
+      if (error) {
+        throw error;
+      }
+
+      console.log('Process all result:', data);
+
       toast({
-        title: "Update Failed",
-        description: "Could not update session status",
+        title: "Batch Processing Complete",
+        description: `Processed ${data?.sessions_processed || 0} sessions, ${data?.total_records_processed || 0} records.`,
+      });
+
+      setDebugInfo(`Batch processing completed: ${data?.sessions_processed || 0} sessions, ${data?.total_records_processed || 0} records`);
+      
+      // Refresh data
+      setTimeout(loadProcessingData, 2000);
+      
+    } catch (error: any) {
+      console.error('Error processing all sessions:', error);
+      toast({
+        title: "Batch Processing Failed",
+        description: error.message,
         variant: "destructive",
       });
+      setDebugInfo(`Batch processing failed: ${error.message}`);
     }
+  };
+
+  const isSessionStalled = (session: ProcessingSession): boolean => {
+    if (session.status !== 'processing') return false;
+    
+    const totalRecords = session.total_records || 0;
+    const processedRecords = session.processed_records || 0;
+    const isIncomplete = processedRecords < totalRecords;
+    
+    if (!isIncomplete) return false;
+    
+    const now = new Date();
+    const lastUpdate = new Date(session.updated_at || session.created_at);
+    const timeDiffMs = now.getTime() - lastUpdate.getTime();
+    const hoursSinceUpdate = timeDiffMs / (1000 * 60 * 60);
+    
+    return hoursSinceUpdate > 0.5; // 30 minutes
+  };
+
+  const getSessionProgress = (session: ProcessingSession): number => {
+    const total = session.total_records || 0;
+    const processed = session.processed_records || 0;
+    if (total === 0) return 0;
+    return Math.round((processed / total) * 100);
   };
 
   const formatDate = (dateString?: string): string => {
@@ -412,13 +348,29 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
             <div>
               <h2 className="text-2xl font-semibold flex items-center space-x-2">
                 <Activity className="h-6 w-6" />
-                <span>Processing Monitor (RLS Bypass)</span>
+                <span>Processing Monitor (Proper Fix)</span>
               </h2>
               <p className="text-gray-600 mt-1">
-                Real-time monitoring of CSV processing sessions
+                Real-time monitoring with proper background processing
               </p>
             </div>
             <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={runDiagnostics}
+              >
+                <Bug className="h-4 w-4 mr-1" />
+                Diagnostics
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={processAllPendingSessions}
+              >
+                <Zap className="h-4 w-4 mr-1" />
+                Process All
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -444,10 +396,76 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Debug Info:</strong> {debugInfo} | Current Time: {new Date().toISOString()}
+              <strong>Status:</strong> {debugInfo}
             </AlertDescription>
           </Alert>
         </div>
+
+        {/* Diagnostics Results */}
+        {showDiagnostics && diagnosticsResults && (
+          <div className="p-6 border-b">
+            <h3 className="text-lg font-medium mb-4">Background Processing Diagnostics</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Database Functions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {diagnosticsResults.functions.length > 0 ? (
+                    <div className="space-y-1">
+                      {diagnosticsResults.functions.map((func: any, index: number) => (
+                        <div key={index} className="text-sm">
+                          ✅ {func.routine_name} ({func.routine_type})
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-red-600">❌ No processing functions found</div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Database Triggers</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {diagnosticsResults.triggers.length > 0 ? (
+                    <div className="space-y-1">
+                      {diagnosticsResults.triggers.map((trigger: any, index: number) => (
+                        <div key={index} className="text-sm">
+                          ✅ {trigger.trigger_name} on {trigger.event_object_table}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-red-600">❌ No processing triggers found</div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Stalled Sessions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {diagnosticsResults.stalledSessions.length > 0 ? (
+                    <div className="space-y-1">
+                      {diagnosticsResults.stalledSessions.map((session: any, index: number) => (
+                        <div key={index} className="text-sm text-red-600">
+                          ⚠️ {session.id.substring(0, 8)}... ({session.hours_since_update.toFixed(1)}h stalled)
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-green-600">✅ No stalled sessions detected</div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
 
         {/* Error Display */}
         {error && (
@@ -516,7 +534,7 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
                           {isStalled && (
                             <Button
                               size="sm"
-                              onClick={() => resumeProcessing(session.id)}
+                              onClick={() => resumeSessionWithFunction(session.id)}
                               disabled={processingSession === session.id}
                               className="flex items-center space-x-1 bg-green-600 hover:bg-green-700"
                             >
@@ -526,17 +544,6 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
                                 <Play className="h-3 w-3" />
                               )}
                               <span>Resume</span>
-                            </Button>
-                          )}
-                          
-                          {session.status === 'processing' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => markSessionCompleted(session.id)}
-                            >
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Mark Complete
                             </Button>
                           )}
                         </div>
@@ -562,8 +569,10 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
                         </div>
                         
                         <div>
-                          <div className="text-sm text-gray-500">Estimated Completion</div>
-                          <div className="font-medium">{getEstimatedCompletion(session)}</div>
+                          <div className="text-sm text-gray-500">Remaining</div>
+                          <div className="font-medium">
+                            {((session.total_records || 0) - (session.processed_records || 0)).toLocaleString()} records
+                          </div>
                         </div>
                         
                         <div>
@@ -577,8 +586,8 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
                         <Alert variant="destructive">
                           <AlertTriangle className="h-4 w-4" />
                           <AlertDescription>
-                            <strong>Processing Stalled:</strong> This session hasn't been updated in over 30 minutes and has {((session.total_records || 0) - (session.processed_records || 0)).toLocaleString()} records remaining. 
-                            Click "Resume" to continue processing.
+                            <strong>Processing Stalled:</strong> This session has {((session.total_records || 0) - (session.processed_records || 0)).toLocaleString()} records remaining. 
+                            Click "Resume" to restart background processing using database functions.
                           </AlertDescription>
                         </Alert>
                       )}
@@ -592,12 +601,6 @@ export function ProcessingMonitor({ onClose }: ProcessingMonitorProps) {
                           </AlertDescription>
                         </Alert>
                       )}
-
-                      {/* Debug Info for this session */}
-                      <div className="text-xs text-gray-400 bg-gray-50 p-2 rounded">
-                        <strong>Debug:</strong> ID: {session.id}, Status: {session.status}, 
-                        Created: {session.created_at}, Updated: {session.updated_at || 'N/A'}
-                      </div>
                     </div>
                   </Card>
                 );
