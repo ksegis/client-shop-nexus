@@ -174,6 +174,8 @@ export function InventoryFileUpload() {
   // Load session chunks for processing - ONLY UNPROCESSED RECORDS
   const loadSessionChunks = async (sessionId: string) => {
     try {
+      console.log('🔍 Loading chunks for session:', sessionId);
+      
       // Get ONLY unprocessed records from staging
       const { data, error } = await supabase
         .from('csv_staging_records')
@@ -182,9 +184,15 @@ export function InventoryFileUpload() {
         .eq('is_processed', false)  // ONLY unprocessed records
         .order('row_number', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error querying staging records:', error);
+        throw error;
+      }
+      
+      console.log(`📊 Found ${data?.length || 0} unprocessed records in staging for session ${sessionId}`);
       
       if (!data || data.length === 0) {
+        console.log('⚠️ No unprocessed records found');
         toast({
           title: "No Unprocessed Records",
           description: "No unprocessed records found for this session. All records may already be processed.",
@@ -215,6 +223,8 @@ export function InventoryFileUpload() {
         });
       }
       
+      console.log(`✅ Generated ${sessionChunks.length} chunks from unprocessed records`);
+      
       setChunks(sessionChunks);
       setSelectedSessionForProcessing(sessionId);
       
@@ -244,13 +254,15 @@ export function InventoryFileUpload() {
         estimatedTimeRemaining: 0
       });
       
+      console.log(`📈 Session stats: ${allRecords?.length || 0} total, ${totalProcessed} processed, ${data.length} unprocessed`);
+      
       toast({
         title: "Unprocessed Records Loaded",
         description: `Loaded ${sessionChunks.length} chunks with ${data.length} unprocessed records ready for processing. (${totalProcessed} already processed)`,
       });
       
     } catch (error) {
-      console.error('Error loading session chunks:', error);
+      console.error('❌ Error loading session chunks:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast({
         title: "Load Failed",
@@ -1387,7 +1399,11 @@ export function InventoryFileUpload() {
                             <Button
                               variant="default"
                               size="sm"
-                              onClick={() => loadSessionChunks(session.id)}
+                              onClick={async () => {
+                                await loadSessionChunks(session.id);
+                                // Automatically switch to Processing tab after loading chunks
+                                setActiveTab('processing');
+                              }}
                               disabled={isProcessing}
                             >
                               <Play className="h-4 w-4 mr-1" />
