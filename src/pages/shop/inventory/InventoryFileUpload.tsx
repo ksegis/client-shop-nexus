@@ -119,6 +119,7 @@ export function InventoryFileUpload() {
   
   // Sessions management dialog state
   const [showSessionsDialog, setShowSessionsDialog] = useState(false);
+  const [selectedSessionForProcessing, setSelectedSessionForProcessing] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -167,6 +168,69 @@ export function InventoryFileUpload() {
       setRecentSessions(data || []);
     } catch (error) {
       console.error('Error loading recent sessions:', error);
+    }
+  };
+
+  // Load session chunks for processing
+  const loadSessionChunks = async (sessionId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('csv_staging_records')
+        .select('*')
+        .eq('upload_session_id', sessionId)
+        .order('row_number', { ascending: true });
+
+      if (error) throw error;
+      
+      // Convert staging records back to chunks
+      const records = data.map(record => record.original_data as CSVRecord);
+      const sessionChunks = createChunks(records);
+      
+      // Set session ID for all chunks
+      sessionChunks.forEach(chunk => {
+        chunk.sessionId = sessionId;
+        // Determine chunk status based on processed records
+        const chunkRecords = data.slice(chunk.startIndex, chunk.endIndex + 1);
+        const processedCount = chunkRecords.filter(r => r.processed_at).length;
+        
+        if (processedCount === 0) {
+          chunk.status = 'pending';
+        } else if (processedCount === chunkRecords.length) {
+          chunk.status = 'completed';
+        } else {
+          chunk.status = 'paused'; // Partially processed
+        }
+      });
+      
+      setChunks(sessionChunks);
+      setSelectedSessionForProcessing(sessionId);
+      
+      // Initialize processing stats
+      setProcessingStats({
+        totalRecords: records.length,
+        processedRecords: data.filter(r => r.processed_at).length,
+        validRecords: data.filter(r => r.validation_status === 'valid').length,
+        invalidRecords: data.filter(r => r.validation_status === 'invalid').length,
+        insertedRecords: data.filter(r => r.action_type === 'insert').length,
+        updatedRecords: data.filter(r => r.action_type === 'update').length,
+        failedRecords: data.filter(r => r.action_type === 'skip').length,
+        processingRate: 0,
+        successRate: 0,
+        estimatedTimeRemaining: 0
+      });
+      
+      toast({
+        title: "Session Loaded",
+        description: `Loaded ${sessionChunks.length} chunks for processing.`,
+      });
+      
+    } catch (error) {
+      console.error('Error loading session chunks:', error);
+      toast({
+        title: "Load Failed",
+        description: error instanceof Error ? error.message : 'Failed to load session',
+        variant: "destructive",
+      });
     }
   };
 
@@ -844,6 +908,9 @@ export function InventoryFileUpload() {
         setCurrentChunkIndex(i);
         const chunk = chunks[i];
 
+        // Skip already completed chunks
+        if (chunk.status === 'completed') continue;
+
         // Create session for this chunk if not exists
         if (!chunk.sessionId) {
           const chunkSessionId = await createUploadSession(
@@ -992,6 +1059,7 @@ export function InventoryFileUpload() {
     setIsProcessing(false);
     setIsPaused(false);
     setProcessingStartTime(null);
+    setSelectedSessionForProcessing(null);
     setProcessingStats({
       totalRecords: 0,
       processedRecords: 0,
@@ -1069,6 +1137,10 @@ export function InventoryFileUpload() {
   // Close sessions management dialog
   const closeSessionsDialog = () => {
     setShowSessionsDialog(false);
+    setSelectedSessionForProcessing(null);
+    setChunks([]);
+    setIsProcessing(false);
+    setIsPaused(false);
   };
 
   return (
@@ -1195,101 +1267,335 @@ export function InventoryFileUpload() {
         </Card>
       </div>
 
-      {/* Sessions Management Dialog */}
+      {/* Sessions Management Dialog - WITH COMPLETE PROCESSING FUNCTIONALITY */}
       <Dialog open={showSessionsDialog} onOpenChange={setShowSessionsDialog}>
-        <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               <span>Upload Sessions Management</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => currentUser && loadRecentSessions(currentUser.id)}
-              >
-                <RefreshCw className="h-4 w-4 mr-1" />
-                Refresh
-              </Button>
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => currentUser && loadRecentSessions(currentUser.id)}
+                >
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Refresh
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={closeSessionsDialog}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </DialogTitle>
           </DialogHeader>
-          <div className="mt-4">
-            {recentSessions.length === 0 ? (
-              <div className="text-center py-8">
-                <List className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p className="text-gray-500">No recent upload sessions found.</p>
-                <p className="text-sm text-gray-400">Upload a CSV file to get started.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {recentSessions.map((session) => {
-                  const statusInfo = getSessionStatus(session);
-                  const StatusIcon = statusInfo.icon;
-                  
-                  return (
-                    <div key={session.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <StatusIcon className="h-4 w-4" />
-                          <span className="font-medium text-sm">{session.original_filename}</span>
-                          <Badge variant={statusInfo.variant}>{statusInfo.status}</Badge>
-                          {session.chunk_number && (
-                            <Badge variant="outline">Chunk {session.chunk_number}</Badge>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-500 space-y-1">
-                          <div>
-                            {session.processed_records}/{session.total_records} records processed
-                            {session.total_records > 0 && (
-                              <span className="ml-2">
-                                ({Math.round((session.processed_records / session.total_records) * 100)}%)
-                              </span>
+          
+          <Tabs defaultValue="sessions" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="sessions">Sessions List</TabsTrigger>
+              <TabsTrigger value="processing" disabled={!selectedSessionForProcessing}>
+                Processing ({selectedSessionForProcessing ? 'Active' : 'None'})
+              </TabsTrigger>
+              <TabsTrigger value="monitor" disabled={!isProcessing}>
+                Monitor ({isProcessing ? 'Running' : 'Idle'})
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Sessions List Tab */}
+            <TabsContent value="sessions" className="mt-4">
+              {recentSessions.length === 0 ? (
+                <div className="text-center py-8">
+                  <List className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p className="text-gray-500">No recent upload sessions found.</p>
+                  <p className="text-sm text-gray-400">Upload a CSV file to get started.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentSessions.map((session) => {
+                    const statusInfo = getSessionStatus(session);
+                    const StatusIcon = statusInfo.icon;
+                    const canProcess = session.status === 'failed' || statusInfo.status.includes('stalled') || session.processed_records < session.total_records;
+                    
+                    return (
+                      <div key={session.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <StatusIcon className="h-4 w-4" />
+                            <span className="font-medium text-sm">{session.original_filename}</span>
+                            <Badge variant={statusInfo.variant}>{statusInfo.status}</Badge>
+                            {session.chunk_number && (
+                              <Badge variant="outline">Chunk {session.chunk_number}</Badge>
                             )}
                           </div>
-                          <div>
-                            Valid: {session.valid_records} | Invalid: {session.invalid_records} | Corrected: {session.corrected_records}
+                          <div className="text-xs text-gray-500 space-y-1">
+                            <div>
+                              {session.processed_records}/{session.total_records} records processed
+                              {session.total_records > 0 && (
+                                <span className="ml-2">
+                                  ({Math.round((session.processed_records / session.total_records) * 100)}%)
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              Valid: {session.valid_records} | Invalid: {session.invalid_records} | Corrected: {session.corrected_records}
+                            </div>
+                            <div>
+                              Created: {formatDate(session.created_at)} | Size: {formatFileSize(session.file_size)}
+                            </div>
                           </div>
-                          <div>
-                            Created: {formatDate(session.created_at)} | Size: {formatFileSize(session.file_size)}
-                          </div>
+                          {session.total_records > 0 && (
+                            <Progress 
+                              value={(session.processed_records / session.total_records) * 100} 
+                              className="mt-2 h-2"
+                            />
+                          )}
                         </div>
-                        {session.total_records > 0 && (
-                          <Progress 
-                            value={(session.processed_records / session.total_records) * 100} 
-                            className="mt-2 h-2"
-                          />
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-2 ml-4">
-                        {/* Review button for problematic records */}
-                        {((session.invalid_records || 0) > 0 || (session.corrected_records || 0) > 0) && (
+                        <div className="flex items-center space-x-2 ml-4">
+                          {/* Process/Restart button for failed or stalled sessions */}
+                          {canProcess && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => loadSessionChunks(session.id)}
+                              disabled={isProcessing}
+                            >
+                              <Play className="h-4 w-4 mr-1" />
+                              {session.processed_records > 0 ? 'Resume' : 'Start'}
+                            </Button>
+                          )}
+                          
+                          {/* Review button for problematic records */}
+                          {((session.invalid_records || 0) > 0 || (session.corrected_records || 0) > 0) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openReconciliation(session.id)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          )}
+                          
+                          {/* Delete button */}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => openReconciliation(session.id)}
+                            onClick={() => deleteUploadSession(session.id)}
+                            disabled={isDeleting === session.id}
                           >
-                            <Eye className="h-4 w-4" />
+                            {isDeleting === session.id ? (
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
                           </Button>
-                        )}
-                        
-                        {/* Delete button */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => deleteUploadSession(session.id)}
-                          disabled={isDeleting === session.id}
-                        >
-                          {isDeleting === session.id ? (
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                    );
+                  })}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Processing Tab */}
+            <TabsContent value="processing" className="mt-4">
+              {selectedSessionForProcessing ? (
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center justify-between">
+                        <span>Processing Control</span>
+                        <div className="flex space-x-2">
+                          {!isProcessing && (
+                            <Button
+                              onClick={startProcessing}
+                              disabled={chunks.length === 0}
+                              size="sm"
+                            >
+                              <Play className="h-4 w-4 mr-1" />
+                              Start Processing
+                            </Button>
+                          )}
+                          {isProcessing && !isPaused && (
+                            <Button
+                              onClick={pauseProcessing}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <Pause className="h-4 w-4 mr-1" />
+                              Pause
+                            </Button>
+                          )}
+                          {isProcessing && isPaused && (
+                            <Button
+                              onClick={resumeProcessing}
+                              size="sm"
+                            >
+                              <Play className="h-4 w-4 mr-1" />
+                              Resume
+                            </Button>
+                          )}
+                          {isProcessing && (
+                            <Button
+                              onClick={stopProcessing}
+                              variant="destructive"
+                              size="sm"
+                            >
+                              <Square className="h-4 w-4 mr-1" />
+                              Stop
+                            </Button>
+                          )}
+                        </div>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {processingStage && (
+                        <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                          <p className="text-sm text-blue-800">{processingStage}</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {chunks.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Chunk Status</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {chunks.map((chunk) => {
+                            const getStatusColor = (status: string) => {
+                              switch (status) {
+                                case 'completed': return 'bg-green-100 text-green-800';
+                                case 'processing': return 'bg-blue-100 text-blue-800';
+                                case 'failed': return 'bg-red-100 text-red-800';
+                                case 'paused': return 'bg-yellow-100 text-yellow-800';
+                                default: return 'bg-gray-100 text-gray-800';
+                              }
+                            };
+
+                            return (
+                              <div key={chunk.chunkNumber} className="flex items-center justify-between p-2 border rounded">
+                                <div className="flex items-center space-x-3">
+                                  <Badge variant="outline">Chunk {chunk.chunkNumber}</Badge>
+                                  <span className="text-sm">
+                                    Records {chunk.startIndex + 1}-{chunk.endIndex + 1} ({chunk.records.length} total)
+                                  </span>
+                                </div>
+                                <Badge className={getStatusColor(chunk.status)}>
+                                  {chunk.status}
+                                </Badge>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Play className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p className="text-gray-500">No session selected for processing.</p>
+                  <p className="text-sm text-gray-400">Select a session from the Sessions List to start processing.</p>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Monitor Tab */}
+            <TabsContent value="monitor" className="mt-4">
+              {isProcessing ? (
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Processing Statistics</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="text-center p-3 bg-blue-50 rounded-lg">
+                          <div className="text-2xl font-bold text-blue-600">{processingStats.totalRecords}</div>
+                          <div className="text-blue-800">Total Records</div>
+                        </div>
+                        <div className="text-center p-3 bg-green-50 rounded-lg">
+                          <div className="text-2xl font-bold text-green-600">{processingStats.processedRecords}</div>
+                          <div className="text-green-800">Processed</div>
+                        </div>
+                        <div className="text-center p-3 bg-purple-50 rounded-lg">
+                          <div className="text-2xl font-bold text-purple-600">{processingStats.insertedRecords}</div>
+                          <div className="text-purple-800">Inserted</div>
+                        </div>
+                        <div className="text-center p-3 bg-orange-50 rounded-lg">
+                          <div className="text-2xl font-bold text-orange-600">{processingStats.updatedRecords}</div>
+                          <div className="text-orange-800">Updated</div>
+                        </div>
+                      </div>
+
+                      {processingStats.totalRecords > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Overall Progress</span>
+                            <span>{Math.round((processingStats.processedRecords / processingStats.totalRecords) * 100)}%</span>
+                          </div>
+                          <Progress 
+                            value={(processingStats.processedRecords / processingStats.totalRecords) * 100} 
+                            className="h-3"
+                          />
+                        </div>
+                      )}
+
+                      <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium">Processing Rate:</span> {processingStats.processingRate.toFixed(1)} records/sec
+                        </div>
+                        <div>
+                          <span className="font-medium">Success Rate:</span> {processingStats.successRate.toFixed(1)}%
+                        </div>
+                        <div>
+                          <span className="font-medium">Valid Records:</span> {processingStats.validRecords}
+                        </div>
+                        <div>
+                          <span className="font-medium">Invalid Records:</span> {processingStats.invalidRecords}
+                        </div>
+                        {processingStats.estimatedTimeRemaining > 0 && (
+                          <div className="col-span-2">
+                            <span className="font-medium">Estimated Time Remaining:</span> {Math.round(processingStats.estimatedTimeRemaining / 60)} minutes
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Current Chunk Progress</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>Chunk {currentChunkIndex + 1} of {chunks.length}</span>
+                          <span>{isPaused ? 'Paused' : 'Processing...'}</span>
+                        </div>
+                        {chunks[currentChunkIndex] && (
+                          <div className="text-xs text-gray-600">
+                            Records {chunks[currentChunkIndex].startIndex + 1}-{chunks[currentChunkIndex].endIndex + 1}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Activity className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p className="text-gray-500">No active processing session.</p>
+                  <p className="text-sm text-gray-400">Start processing a session to monitor progress here.</p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
 
