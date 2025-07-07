@@ -202,8 +202,8 @@ export function InventoryFileUpload() {
         // Convert staging records back to CSV records
         const csvRecords = chunkRecords.map(record => record.original_data as CSVRecord);
         
-        // Determine chunk status based on processed records
-        const processedCount = chunkRecords.filter(r => r.processed_at).length;
+        // Determine chunk status based on is_processed field (not processed_at)
+        const processedCount = chunkRecords.filter(r => r.is_processed === true).length;
         let chunkStatus: 'pending' | 'processing' | 'completed' | 'failed' | 'paused';
         
         if (processedCount === 0) {
@@ -227,8 +227,8 @@ export function InventoryFileUpload() {
       setChunks(sessionChunks);
       setSelectedSessionForProcessing(sessionId);
       
-      // Initialize processing stats
-      const totalProcessed = data.filter(r => r.processed_at).length;
+      // Initialize processing stats based on is_processed field
+      const totalProcessed = data.filter(r => r.is_processed === true).length;
       const totalValid = data.filter(r => r.validation_status === 'valid').length;
       const totalInvalid = data.filter(r => r.validation_status === 'invalid').length;
       const totalInserted = data.filter(r => r.action_type === 'insert').length;
@@ -250,7 +250,7 @@ export function InventoryFileUpload() {
       
       toast({
         title: "Session Loaded",
-        description: `Loaded ${sessionChunks.length} chunks (${data.length} total records) for processing.`,
+        description: `Loaded ${sessionChunks.length} chunks (${data.length} total records) for processing. ${data.length - totalProcessed} records need processing.`,
       });
       
     } catch (error) {
@@ -826,6 +826,7 @@ export function InventoryFileUpload() {
             await supabase
               .from('csv_staging_records')
               .update({ 
+                is_processed: true,
                 processed_at: new Date().toISOString(),
                 action_type: syncResult.action
               })
