@@ -112,14 +112,22 @@ export function InventoryFileUpload() {
     estimatedTimeRemaining: 0
   });
   const [processingStartTime, setProcessingStartTime] = useState<Date | null>(null);
-  
-  // Reconciliation state
-  const [showReconciliation, setShowReconciliation] = useState(false);
-  const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
-  
+
   // Sessions management dialog state
   const [showSessionsDialog, setShowSessionsDialog] = useState(false);
   const [selectedSessionForProcessing, setSelectedSessionForProcessing] = useState<string | null>(null);
+  const [showReconciliation, setShowReconciliation] = useState(false);
+  const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
+  
+  // Add controlled tab state for sessions dialog
+  const [activeSessionTab, setActiveSessionTab] = useState('sessions');
+  
+  // Add state for unprocessed record counts
+  const [unprocessedCounts, setUnprocessedCounts] = useState({
+    totalRecords: 0,
+    totalChunks: 0,
+    sessionsAffected: 0
+  });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -269,6 +277,36 @@ export function InventoryFileUpload() {
         description: errorMessage,
         variant: "destructive",
       });
+    }
+  };
+
+  // Load unprocessed record counts for button display
+  const loadUnprocessedCounts = async () => {
+    try {
+      // Get ALL unprocessed records from staging
+      const { data, error } = await supabase
+        .from('csv_staging_records')
+        .select('upload_session_id')
+        .eq('is_processed', false);
+
+      if (error) {
+        console.error('Error loading unprocessed counts:', error);
+        return;
+      }
+
+      const totalRecords = data?.length || 0;
+      const totalChunks = Math.ceil(totalRecords / 5000);
+      const sessionsAffected = [...new Set(data?.map(r => r.upload_session_id) || [])].length;
+
+      setUnprocessedCounts({
+        totalRecords,
+        totalChunks,
+        sessionsAffected
+      });
+
+      console.log(`📊 Unprocessed counts: ${totalRecords} records, ${totalChunks} chunks, ${sessionsAffected} sessions`);
+    } catch (error) {
+      console.error('Error loading unprocessed counts:', error);
     }
   };
 
@@ -1387,7 +1425,6 @@ export function InventoryFileUpload() {
                 variant="default"
                 onClick={async () => {
                   await loadAllUnprocessedChunks();
-                  setActiveTab('processing');
                   openSessionsDialog();
                 }}
                 className="flex items-center justify-center space-x-2 h-16 bg-green-600 hover:bg-green-700"
@@ -1522,8 +1559,7 @@ export function InventoryFileUpload() {
                               size="sm"
                               onClick={async () => {
                                 await loadSessionChunks(session.id);
-                                // Automatically switch to Processing tab after loading chunks
-                                setActiveTab('processing');
+                                // Note: User will need to manually switch to Processing tab
                               }}
                               disabled={isProcessing}
                             >
