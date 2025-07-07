@@ -272,6 +272,105 @@ export function InventoryFileUpload() {
     }
   };
 
+  // Load ALL unprocessed chunks from staging - GLOBAL PROCESSING (NO SESSION FILTER)
+  const loadAllUnprocessedChunks = async () => {
+    try {
+      console.log('🌍 Loading ALL unprocessed records from staging (global processing)');
+      
+      // Get ALL unprocessed records from staging across ALL sessions
+      const { data, error } = await supabase
+        .from('csv_staging_records')
+        .select('*')
+        .eq('is_processed', false)  // ONLY unprocessed records - NO SESSION FILTER
+        .order('upload_session_id', { ascending: true })
+        .order('row_number', { ascending: true });
+
+      if (error) {
+        console.error('❌ Error querying ALL unprocessed staging records:', error);
+        throw error;
+      }
+      
+      console.log(`📊 Found ${data?.length || 0} total unprocessed records across ALL sessions`);
+      
+      if (!data || data.length === 0) {
+        console.log('⚠️ No unprocessed records found in entire staging table');
+        toast({
+          title: "No Unprocessed Records",
+          description: "No unprocessed records found in staging. All records may already be processed.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Generate chunks from ALL unprocessed records (global chunks)
+      const globalChunks: ChunkInfo[] = [];
+      const CHUNK_SIZE = 5000;
+      
+      for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+        const chunkRecords = data.slice(i, Math.min(i + CHUNK_SIZE, data.length));
+        const chunkNumber = Math.floor(i / CHUNK_SIZE) + 1;
+        
+        // Convert staging records back to CSV records with metadata
+        const csvRecords = chunkRecords.map(record => {
+          const csvRecord = record.original_data as CSVRecord;
+          // Add staging metadata to the CSV record for global processing
+          (csvRecord as any)._stagingMeta = {
+            upload_session_id: record.upload_session_id,
+            row_number: record.row_number,
+            id: record.id
+          };
+          return csvRecord;
+        });
+        
+        // All chunks are 'pending' since we only loaded unprocessed records
+        globalChunks.push({
+          chunkNumber,
+          startIndex: i,
+          endIndex: Math.min(i + CHUNK_SIZE, data.length) - 1,
+          records: csvRecords,
+          sessionId: 'GLOBAL', // Special session ID for global processing
+          status: 'pending'
+        });
+      }
+      
+      console.log(`✅ Generated ${globalChunks.length} global chunks from ALL unprocessed records`);
+      
+      setChunks(globalChunks);
+      setSelectedSessionForProcessing('GLOBAL');
+      
+      // Get global processing stats
+      const sessionIds = [...new Set(data.map(r => r.upload_session_id))];
+      console.log(`📈 Processing records from ${sessionIds.length} different sessions`);
+      
+      setProcessingStats({
+        totalRecords: data.length,
+        processedRecords: 0, // All are unprocessed
+        validRecords: data.filter(r => r.validation_status === 'valid').length,
+        invalidRecords: data.filter(r => r.validation_status === 'invalid').length,
+        insertedRecords: 0,
+        updatedRecords: 0,
+        failedRecords: 0,
+        processingRate: 0,
+        successRate: 0,
+        estimatedTimeRemaining: 0
+      });
+      
+      toast({
+        title: "Global Processing Ready",
+        description: `Loaded ${globalChunks.length} chunks with ${data.length} unprocessed records from ${sessionIds.length} sessions. Ready for global processing!`,
+      });
+      
+    } catch (error) {
+      console.error('❌ Error loading global unprocessed chunks:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast({
+        title: "Global Load Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
   // Format date with proper error handling
   const formatDate = (dateString: string): string => {
     try {
@@ -800,6 +899,11 @@ export function InventoryFileUpload() {
           const record = batch[j];
           const rowNumber = chunk.startIndex + i + j + 1;
           
+          // For global processing, get the actual staging metadata
+          const stagingMeta = (record as any)._stagingMeta;
+          const actualSessionId = stagingMeta ? stagingMeta.upload_session_id : sessionId;
+          const actualRowNumber = stagingMeta ? stagingMeta.row_number : rowNumber;
+          
           // Validate record
           const validation = validateRecord(record);
           
@@ -816,7 +920,7 @@ export function InventoryFileUpload() {
           // Skip saving to staging for existing sessions - records already exist
           // Only process valid records to inventory
           if (validation.isValid) {
-            const syncResult = await syncRecordToInventory(sessionId, record, validation);
+            const syncResult = await syncRecordToInventory(actualSessionId, record, validation);
             
             switch (syncResult.action) {
               case 'insert':
@@ -830,7 +934,7 @@ export function InventoryFileUpload() {
                 break;
             }
 
-            // Mark staging record as processed
+            // Mark staging record as processed using actual session ID and row number
             await supabase
               .from('csv_staging_records')
               .update({ 
@@ -838,8 +942,8 @@ export function InventoryFileUpload() {
                 processed_at: new Date().toISOString(),
                 action_type: syncResult.action
               })
-              .eq('upload_session_id', sessionId)
-              .eq('row_number', rowNumber);
+              .eq('upload_session_id', actualSessionId)
+              .eq('row_number', actualRowNumber);
           }
 
           // Update progress every PROGRESS_UPDATE_INTERVAL records
@@ -1276,6 +1380,23 @@ export function InventoryFileUpload() {
                 <div className="text-left">
                   <div className="font-medium">Manage Sessions</div>
                   <div className="text-xs text-gray-600">View and process upload sessions</div>
+                </div>
+              </Button>
+              
+              <Button
+                variant="default"
+                onClick={async () => {
+                  await loadAllUnprocessedChunks();
+                  setActiveTab('processing');
+                  openSessionsDialog();
+                }}
+                className="flex items-center justify-center space-x-2 h-16 bg-green-600 hover:bg-green-700"
+                disabled={isProcessing}
+              >
+                <Play className="h-6 w-6" />
+                <div className="text-left">
+                  <div className="font-medium">Process All Unprocessed</div>
+                  <div className="text-xs text-green-100">Process all unprocessed records globally</div>
                 </div>
               </Button>
               
