@@ -182,46 +182,75 @@ export function InventoryFileUpload() {
 
       if (error) throw error;
       
-      // Convert staging records back to chunks
-      const records = data.map(record => record.original_data as CSVRecord);
-      const sessionChunks = createChunks(records);
+      if (!data || data.length === 0) {
+        toast({
+          title: "No Records Found",
+          description: "No staging records found for this session.",
+          variant: "destructive",
+        });
+        return;
+      }
       
-      // Set session ID for all chunks
-      sessionChunks.forEach(chunk => {
-        chunk.sessionId = sessionId;
+      // Convert staging records back to chunks of 5000
+      const sessionChunks: ChunkInfo[] = [];
+      const CHUNK_SIZE = 5000;
+      
+      for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+        const chunkRecords = data.slice(i, Math.min(i + CHUNK_SIZE, data.length));
+        const chunkNumber = Math.floor(i / CHUNK_SIZE) + 1;
+        
+        // Convert staging records back to CSV records
+        const csvRecords = chunkRecords.map(record => record.original_data as CSVRecord);
+        
         // Determine chunk status based on processed records
-        const chunkRecords = data.slice(chunk.startIndex, chunk.endIndex + 1);
         const processedCount = chunkRecords.filter(r => r.processed_at).length;
+        let chunkStatus: 'pending' | 'processing' | 'completed' | 'failed' | 'paused';
         
         if (processedCount === 0) {
-          chunk.status = 'pending';
+          chunkStatus = 'pending';
         } else if (processedCount === chunkRecords.length) {
-          chunk.status = 'completed';
+          chunkStatus = 'completed';
         } else {
-          chunk.status = 'paused'; // Partially processed
+          chunkStatus = 'paused'; // Partially processed
         }
-      });
+        
+        sessionChunks.push({
+          chunkNumber,
+          startIndex: i,
+          endIndex: Math.min(i + CHUNK_SIZE, data.length) - 1,
+          records: csvRecords,
+          sessionId: sessionId,
+          status: chunkStatus
+        });
+      }
       
       setChunks(sessionChunks);
       setSelectedSessionForProcessing(sessionId);
       
       // Initialize processing stats
+      const totalProcessed = data.filter(r => r.processed_at).length;
+      const totalValid = data.filter(r => r.validation_status === 'valid').length;
+      const totalInvalid = data.filter(r => r.validation_status === 'invalid').length;
+      const totalInserted = data.filter(r => r.action_type === 'insert').length;
+      const totalUpdated = data.filter(r => r.action_type === 'update').length;
+      const totalFailed = data.filter(r => r.action_type === 'skip').length;
+      
       setProcessingStats({
-        totalRecords: records.length,
-        processedRecords: data.filter(r => r.processed_at).length,
-        validRecords: data.filter(r => r.validation_status === 'valid').length,
-        invalidRecords: data.filter(r => r.validation_status === 'invalid').length,
-        insertedRecords: data.filter(r => r.action_type === 'insert').length,
-        updatedRecords: data.filter(r => r.action_type === 'update').length,
-        failedRecords: data.filter(r => r.action_type === 'skip').length,
+        totalRecords: data.length,
+        processedRecords: totalProcessed,
+        validRecords: totalValid,
+        invalidRecords: totalInvalid,
+        insertedRecords: totalInserted,
+        updatedRecords: totalUpdated,
+        failedRecords: totalFailed,
         processingRate: 0,
-        successRate: 0,
+        successRate: totalProcessed > 0 ? ((totalInserted + totalUpdated) / totalProcessed) * 100 : 0,
         estimatedTimeRemaining: 0
       });
       
       toast({
         title: "Session Loaded",
-        description: `Loaded ${sessionChunks.length} chunks for processing.`,
+        description: `Loaded ${sessionChunks.length} chunks (${data.length} total records) for processing.`,
       });
       
     } catch (error) {
