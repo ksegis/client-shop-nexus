@@ -5,7 +5,8 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2, BarChart3, Activity, Play, Pause, Square, AlertCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, Clock, Eye, RefreshCw, X, Trash2, BarChart3, Activity, Play, Pause, Square, AlertCircle, List, Settings } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CSVReconciliation } from './CSVReconciliation';
@@ -115,6 +116,9 @@ export function InventoryFileUpload() {
   // Reconciliation state
   const [showReconciliation, setShowReconciliation] = useState(false);
   const [reconciliationSessionId, setReconciliationSessionId] = useState<string | null>(null);
+  
+  // Sessions management dialog state
+  const [showSessionsDialog, setShowSessionsDialog] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -1041,6 +1045,7 @@ export function InventoryFileUpload() {
     setReconciliationSessionId(sessionId);
     setShowReconciliation(true);
     setShowUploadDialog(false);
+    setShowSessionsDialog(false);
   };
 
   // Close reconciliation interface
@@ -1053,15 +1058,38 @@ export function InventoryFileUpload() {
     }
   };
 
+  // Open sessions management dialog
+  const openSessionsDialog = () => {
+    setShowSessionsDialog(true);
+    if (currentUser) {
+      loadRecentSessions(currentUser.id);
+    }
+  };
+
+  // Close sessions management dialog
+  const closeSessionsDialog = () => {
+    setShowSessionsDialog(false);
+  };
+
   return (
     <>
-      {/* Main Upload Interface */}
+      {/* Main Upload Interface - SIMPLIFIED */}
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Upload className="h-5 w-5" />
-              <span>Enhanced CSV Inventory Upload</span>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Upload className="h-5 w-5" />
+                <span>Enhanced CSV Inventory Upload</span>
+              </div>
+              <Button
+                variant="outline"
+                onClick={openSessionsDialog}
+                className="flex items-center space-x-2"
+              >
+                <List className="h-4 w-4" />
+                <span>Manage Sessions</span>
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -1117,11 +1145,62 @@ export function InventoryFileUpload() {
           </CardContent>
         </Card>
 
-        {/* Recent Sessions */}
+        {/* Quick Actions Card */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Recent Upload Sessions</span>
+            <CardTitle className="flex items-center space-x-2">
+              <Settings className="h-5 w-5" />
+              <span>Quick Actions</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Button
+                variant="outline"
+                onClick={openSessionsDialog}
+                className="flex items-center justify-center space-x-2 h-16"
+              >
+                <List className="h-6 w-6" />
+                <div className="text-left">
+                  <div className="font-medium">Manage Sessions</div>
+                  <div className="text-xs text-gray-600">View and process upload sessions</div>
+                </div>
+              </Button>
+              
+              <Button
+                variant="outline"
+                onClick={() => toast({ title: "Feature coming soon", description: "Inventory management features will be available soon." })}
+                className="flex items-center justify-center space-x-2 h-16"
+              >
+                <BarChart3 className="h-6 w-6" />
+                <div className="text-left">
+                  <div className="font-medium">View Inventory</div>
+                  <div className="text-xs text-gray-600">Browse current inventory</div>
+                </div>
+              </Button>
+              
+              <Button
+                variant="outline"
+                onClick={() => toast({ title: "Feature coming soon", description: "Analytics dashboard will be available soon." })}
+                className="flex items-center justify-center space-x-2 h-16"
+              >
+                <Activity className="h-6 w-6" />
+                <div className="text-left">
+                  <div className="font-medium">Analytics</div>
+                  <div className="text-xs text-gray-600">Upload and sync statistics</div>
+                </div>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sessions Management Dialog */}
+      <Dialog open={showSessionsDialog} onOpenChange={setShowSessionsDialog}>
+        <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Upload Sessions Management</span>
               <Button
                 variant="outline"
                 size="sm"
@@ -1130,11 +1209,15 @@ export function InventoryFileUpload() {
                 <RefreshCw className="h-4 w-4 mr-1" />
                 Refresh
               </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
             {recentSessions.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No recent upload sessions found.</p>
+              <div className="text-center py-8">
+                <List className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p className="text-gray-500">No recent upload sessions found.</p>
+                <p className="text-sm text-gray-400">Upload a CSV file to get started.</p>
+              </div>
             ) : (
               <div className="space-y-3">
                 {recentSessions.map((session) => {
@@ -1142,9 +1225,9 @@ export function InventoryFileUpload() {
                   const StatusIcon = statusInfo.icon;
                   
                   return (
-                    <div key={session.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div key={session.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
                       <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
+                        <div className="flex items-center space-x-2 mb-2">
                           <StatusIcon className="h-4 w-4" />
                           <span className="font-medium text-sm">{session.original_filename}</span>
                           <Badge variant={statusInfo.variant}>{statusInfo.status}</Badge>
@@ -1206,9 +1289,9 @@ export function InventoryFileUpload() {
                 })}
               </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Enhanced Upload Dialog with Tabs */}
       {showUploadDialog && (
