@@ -45,6 +45,8 @@ interface UploadSession {
   created_at: string;
   completed_at?: string;
   updated_at: string;
+  chunk_number?: number;
+  parent_session_id?: string;
   last_processed_at?: string;
 }
 
@@ -155,7 +157,7 @@ export function InventoryFileUpload() {
         .select('*')
         .eq('uploaded_by', userId)
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(20); // Show more recent sessions
 
       if (error) throw error;
       setRecentSessions(data || []);
@@ -287,8 +289,8 @@ export function InventoryFileUpload() {
     }
   };
 
-  // Create upload session - using existing schema only
-  const createUploadSession = async (filename: string, originalFilename: string, fileSize: number): Promise<string> => {
+  // Create upload session
+  const createUploadSession = async (filename: string, originalFilename: string, fileSize: number, chunkNumber?: number, parentSessionId?: string): Promise<string> => {
     const { data, error } = await supabase
       .from('csv_upload_sessions')
       .insert([{
@@ -302,7 +304,10 @@ export function InventoryFileUpload() {
         processed_records: 0,
         valid_records: 0,
         invalid_records: 0,
-        corrected_records: 0
+        corrected_records: 0,
+        chunk_number: chunkNumber,
+        parent_session_id: parentSessionId,
+        last_processed_at: new Date().toISOString()
       }])
       .select()
       .single();
@@ -313,29 +318,17 @@ export function InventoryFileUpload() {
 
   // Update session progress
   const updateSessionProgress = async (sessionId: string, updates: Partial<UploadSession>) => {
+    const updateData = {
+      ...updates,
+      last_processed_at: new Date().toISOString()
+    };
+
     const { error } = await supabase
       .from('csv_upload_sessions')
-      .update(updates)
+      .update(updateData)
       .eq('id', sessionId);
 
     if (error) throw error;
-  };
-
-  // Check for existing records to prevent duplicates
-  const checkExistingRecords = async (vcpns: string[]): Promise<Set<string>> => {
-    if (vcpns.length === 0) return new Set();
-    
-    const { data, error } = await supabase
-      .from('inventory')
-      .select('vcpn')
-      .in('vcpn', vcpns);
-      
-    if (error) {
-      console.error('Error checking existing records:', error);
-      return new Set();
-    }
-    
-    return new Set(data.map(record => record.vcpn));
   };
 
   // Enhanced CSV parsing with column mapping
@@ -457,11 +450,6 @@ export function InventoryFileUpload() {
     return total;
   };
 
-  // Generate VCPN
-  const generateVCPN = (vendorCode: string, partNumber: string): string => {
-    return (vendorCode || '') + (partNumber || '');
-  };
-
   // Validate and clean CSV record
   const validateRecord = (record: CSVRecord): ValidationResult => {
     const result: ValidationResult = {
@@ -503,7 +491,7 @@ export function InventoryFileUpload() {
 
     // Auto-correct VCPN
     const originalVCPN = record['VCPN'] || '';
-    const expectedVCPN = generateVCPN(vendorCode, cleanedSKU);
+    const expectedVCPN = vendorCode + cleanedSKU;
     
     if (!originalVCPN || originalVCPN !== expectedVCPN) {
       result.corrected = true;
@@ -529,11 +517,11 @@ export function InventoryFileUpload() {
   };
 
   // Save staging record
-  const saveStagingRecord = async (sessionId: string, record: CSVRecord, validation: ValidationResult, rowNumber: number, validationStatus?: string) => {
+  const saveStagingRecord = async (sessionId: string, record: CSVRecord, validation: ValidationResult, rowNumber: number) => {
     const stagingData = {
       upload_session_id: sessionId,
       row_number: rowNumber,
-      validation_status: validationStatus || (validation.isValid ? 'valid' : (validation.corrected ? 'corrected' : 'invalid')),
+      validation_status: validation.isValid ? 'valid' : (validation.corrected ? 'corrected' : 'invalid'),
       needs_review: !validation.isValid || validation.corrected,
       validation_notes: validation.notes.join('; '),
       original_data: validation.originalData,
@@ -605,7 +593,7 @@ export function InventoryFileUpload() {
       const inventoryData = {
         name: record['LongDescription'] || validation.cleanedData['PartNumber'] || 'Unknown Item',
         description: record['LongDescription'],
-        sku: validation.cleanedData['PartNumber'],
+        sku: validation.cleanedData['PartNumber'], // Map part_number to sku
         vcpn: validation.cleanedData['VCPN'],
         vendor_code: record['VendorCode'] || record['Vendor'],
         vendor_name: record['VendorName'] || record['Vendor'],
@@ -638,8 +626,9 @@ export function InventoryFileUpload() {
         is_kit: record['IsKit']?.toLowerCase() === 'true' || false,
         kit_components: record['KitComponents'] || null,
         ftp_upload_id: sessionId,
-        import_source: 'csv_upload',
-        imported_at: new Date().toISOString()
+        import_source: 'csv_upload'
+        // FIXED: Removed imported_at field - column doesn't exist in inventory table
+        // The created_at and updated_at fields are automatically managed by the database
       };
 
       if (existing) {
@@ -664,7 +653,7 @@ export function InventoryFileUpload() {
     }
   };
 
-  // Process a single chunk with real-time inventory sync and duplicate checking
+  // Process a single chunk with real-time inventory sync
   const processChunk = async (chunk: ChunkInfo): Promise<void> => {
     if (!chunk.sessionId) {
       throw new Error('Chunk session ID not set');
@@ -674,7 +663,6 @@ export function InventoryFileUpload() {
     let validCount = 0;
     let invalidCount = 0;
     let correctedCount = 0;
-    let duplicateCount = 0;
     let insertedCount = 0;
     let updatedCount = 0;
     let failedCount = 0;
@@ -687,15 +675,6 @@ export function InventoryFileUpload() {
     ));
 
     try {
-      // Pre-check for duplicates
-      const allVcpns = chunk.records.map(record => {
-        const vendorCode = record['VendorCode'] || record['Vendor'] || '';
-        const partNumber = normalizeSKU(record['PartNumber'] || record['SKU'] || '');
-        return generateVCPN(vendorCode, partNumber);
-      }).filter(vcpn => vcpn);
-
-      const existingVcpns = await checkExistingRecords(allVcpns);
-
       // Process records in batches
       for (let i = 0; i < chunk.records.length; i += BATCH_SIZE) {
         if (isPaused) {
@@ -716,75 +695,62 @@ export function InventoryFileUpload() {
           
           // Validate record
           const validation = validateRecord(record);
-          const vcpn = validation.cleanedData['VCPN'];
           
-          // Check if it's a duplicate
-          if (existingVcpns.has(vcpn)) {
-            duplicateCount++;
-            // Save as duplicate
-            await saveStagingRecord(sessionId, record, {
-              isValid: false,
-              corrected: false,
-              notes: ['Record already exists in inventory'],
-              originalData: record,
-              cleanedData: record
-            }, rowNumber, 'duplicate');
+          if (validation.isValid) {
+            validCount++;
           } else {
-            if (validation.isValid) {
-              validCount++;
-            } else {
-              invalidCount++;
-            }
+            invalidCount++;
+          }
+          
+          if (validation.corrected) {
+            correctedCount++;
+          }
+
+          // Save to staging
+          await saveStagingRecord(sessionId, record, validation, rowNumber);
+
+          // Real-time inventory sync for valid records
+          if (validation.isValid) {
+            const syncResult = await syncRecordToInventory(sessionId, record, validation);
             
-            if (validation.corrected) {
-              correctedCount++;
+            switch (syncResult.action) {
+              case 'insert':
+                insertedCount++;
+                break;
+              case 'update':
+                updatedCount++;
+                break;
+              case 'skip':
+                failedCount++;
+                break;
             }
 
-            // Save to staging
-            await saveStagingRecord(sessionId, record, validation, rowNumber);
-
-            // Real-time inventory sync for valid records
-            if (validation.isValid) {
-              const syncResult = await syncRecordToInventory(sessionId, record, validation);
-              
-              switch (syncResult.action) {
-                case 'insert':
-                  insertedCount++;
-                  break;
-                case 'update':
-                  updatedCount++;
-                  break;
-                case 'skip':
-                  failedCount++;
-                  break;
-              }
-
-              // Mark staging record as processed
-              await supabase
-                .from('csv_staging_records')
-                .update({ 
-                  processed_at: new Date().toISOString(),
-                  action_type: syncResult.action
-                })
-                .eq('upload_session_id', sessionId)
-                .eq('row_number', rowNumber);
-            }
+            // Mark staging record as processed
+            await supabase
+              .from('csv_staging_records')
+              .update({ 
+                processed_at: new Date().toISOString(),
+                action_type: syncResult.action
+              })
+              .eq('upload_session_id', sessionId)
+              .eq('row_number', rowNumber);
           }
 
           // Update progress every PROGRESS_UPDATE_INTERVAL records
           if ((i + j + 1) % PROGRESS_UPDATE_INTERVAL === 0) {
             const processedInChunk = i + j + 1;
+            const chunkProgress = (processedInChunk / chunk.records.length) * 100;
             
             // Update session progress
             await updateSessionProgress(sessionId, {
               processed_records: processedInChunk,
               valid_records: validCount,
-              invalid_records: invalidCount + duplicateCount,
+              invalid_records: invalidCount,
               corrected_records: correctedCount
             });
 
             // Update overall stats
-            updateProcessingStats(processedInChunk, validCount, invalidCount + duplicateCount, insertedCount, updatedCount, failedCount);
+            updateProcessingStats(processedInChunk, validCount, invalidCount, insertedCount, updatedCount, failedCount);
           }
         }
       }
@@ -801,7 +767,7 @@ export function InventoryFileUpload() {
         status: 'completed',
         processed_records: chunk.records.length,
         valid_records: validCount,
-        invalid_records: invalidCount + duplicateCount,
+        invalid_records: invalidCount,
         corrected_records: correctedCount,
         completed_at: new Date().toISOString()
       });
@@ -868,29 +834,30 @@ export function InventoryFileUpload() {
     setCurrentChunkIndex(0);
 
     try {
-      // Create a single session for all chunks
-      const mainSessionId = await createUploadSession(
-        selectedFile?.name || 'unknown',
-        selectedFile?.name || 'unknown',
-        selectedFile?.size || 0
-      );
-      
-      setCurrentSessionId(mainSessionId);
-
       for (let i = 0; i < chunks.length; i++) {
         if (isPaused) break;
 
         setCurrentChunkIndex(i);
         const chunk = chunks[i];
 
-        // Set session ID for this chunk
-        setChunks(prev => prev.map(c => 
-          c.chunkNumber === chunk.chunkNumber 
-            ? { ...c, sessionId: mainSessionId }
-            : c
-        ));
-        
-        chunk.sessionId = mainSessionId;
+        // Create session for this chunk if not exists
+        if (!chunk.sessionId) {
+          const chunkSessionId = await createUploadSession(
+            `${selectedFile?.name}_chunk_${chunk.chunkNumber}`,
+            selectedFile?.name || 'unknown',
+            selectedFile?.size || 0,
+            chunk.chunkNumber
+          );
+          
+          // Update chunk with session ID
+          setChunks(prev => prev.map(c => 
+            c.chunkNumber === chunk.chunkNumber 
+              ? { ...c, sessionId: chunkSessionId }
+              : c
+          ));
+          
+          chunk.sessionId = chunkSessionId;
+        }
 
         await processChunk(chunk);
       }
@@ -980,7 +947,7 @@ export function InventoryFileUpload() {
       reader.onload = (e) => {
         const csvText = e.target?.result as string;
         const records = parseCSVFile(csvText);
-        setPreviewData(records.slice(0, 5));
+        setPreviewData(records.slice(0, 5)); // Show more preview records
         
         // Create chunks
         const fileChunks = createChunks(records);
@@ -1001,7 +968,6 @@ export function InventoryFileUpload() {
         });
         
         setProcessingStage(`File loaded: ${records.length} records split into ${fileChunks.length} chunks of ${CHUNK_SIZE} records each.`);
-        setShowUploadDialog(true);
       };
       reader.readAsText(file);
     }
@@ -1089,32 +1055,64 @@ export function InventoryFileUpload() {
 
   return (
     <>
-      {/* Original Simple Upload Interface */}
+      {/* Main Upload Interface */}
       <div className="space-y-6">
-        {/* Simple CSV Upload Card - matching original design */}
         <Card>
           <CardHeader>
-            <CardTitle>Enhanced CSV Inventory Upload</CardTitle>
+            <CardTitle className="flex items-center space-x-2">
+              <Upload className="h-5 w-5" />
+              <span>Enhanced CSV Inventory Upload</span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleFileSelect}
-                className="hidden"
-                id="csv-upload"
-              />
-              <label htmlFor="csv-upload" className="cursor-pointer">
-                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                <p className="text-lg text-gray-600 mb-2">
-                  Click to select a CSV file or drag and drop
-                </p>
-                <p className="text-sm text-gray-500">
-                  Maximum file size: 100MB (will be processed in chunks)
-                </p>
-              </label>
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="csv-upload"
+                />
+                <label htmlFor="csv-upload" className="cursor-pointer">
+                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-2 text-sm text-gray-600">
+                    Click to select a CSV file or drag and drop
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Maximum file size: 100MB (will be processed in chunks)
+                  </p>
+                </label>
+              </div>
+
+              {selectedFile && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <FileText className="h-4 w-4" />
+                      <span className="text-sm font-medium">{selectedFile.name}</span>
+                      <Badge variant="secondary">{formatFileSize(selectedFile.size)}</Badge>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowUploadDialog(true)}
+                    >
+                      Configure & Process
+                    </Button>
+                  </div>
+
+                  {chunks.length > 0 && (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        File will be processed in {chunks.length} chunks of {CHUNK_SIZE} records each for optimal performance and recovery.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -1150,6 +1148,9 @@ export function InventoryFileUpload() {
                           <StatusIcon className="h-4 w-4" />
                           <span className="font-medium text-sm">{session.original_filename}</span>
                           <Badge variant={statusInfo.variant}>{statusInfo.status}</Badge>
+                          {session.chunk_number && (
+                            <Badge variant="outline">Chunk {session.chunk_number}</Badge>
+                          )}
                         </div>
                         <div className="text-xs text-gray-500 space-y-1">
                           <div>
@@ -1209,12 +1210,12 @@ export function InventoryFileUpload() {
         </Card>
       </div>
 
-      {/* Enhanced Upload Dialog with Tabs - Only shown when file is selected */}
+      {/* Enhanced Upload Dialog with Tabs */}
       {showUploadDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">CSV Upload & Processing</h2>
+              <h2 className="text-lg font-semibold">Enhanced CSV Upload & Processing</h2>
               <Button
                 variant="outline"
                 size="sm"
