@@ -171,27 +171,29 @@ export function InventoryFileUpload() {
     }
   };
 
-  // Load session chunks for processing
+  // Load session chunks for processing - ONLY UNPROCESSED RECORDS
   const loadSessionChunks = async (sessionId: string) => {
     try {
+      // Get ONLY unprocessed records from staging
       const { data, error } = await supabase
         .from('csv_staging_records')
         .select('*')
         .eq('upload_session_id', sessionId)
+        .eq('is_processed', false)  // ONLY unprocessed records
         .order('row_number', { ascending: true });
 
       if (error) throw error;
       
       if (!data || data.length === 0) {
         toast({
-          title: "No Records Found",
-          description: "No staging records found for this session.",
+          title: "No Unprocessed Records",
+          description: "No unprocessed records found for this session. All records may already be processed.",
           variant: "destructive",
         });
         return;
       }
       
-      // Convert staging records back to chunks of 5000
+      // Generate chunks from ONLY unprocessed records
       const sessionChunks: ChunkInfo[] = [];
       const CHUNK_SIZE = 5000;
       
@@ -202,41 +204,35 @@ export function InventoryFileUpload() {
         // Convert staging records back to CSV records
         const csvRecords = chunkRecords.map(record => record.original_data as CSVRecord);
         
-        // Determine chunk status based on is_processed field (not processed_at)
-        const processedCount = chunkRecords.filter(r => r.is_processed === true).length;
-        let chunkStatus: 'pending' | 'processing' | 'completed' | 'failed' | 'paused';
-        
-        if (processedCount === 0) {
-          chunkStatus = 'pending';
-        } else if (processedCount === chunkRecords.length) {
-          chunkStatus = 'completed';
-        } else {
-          chunkStatus = 'paused'; // Partially processed
-        }
-        
+        // All chunks are 'pending' since we only loaded unprocessed records
         sessionChunks.push({
           chunkNumber,
           startIndex: i,
           endIndex: Math.min(i + CHUNK_SIZE, data.length) - 1,
           records: csvRecords,
           sessionId: sessionId,
-          status: chunkStatus
+          status: 'pending'  // All unprocessed records are pending
         });
       }
       
       setChunks(sessionChunks);
       setSelectedSessionForProcessing(sessionId);
       
-      // Initialize processing stats based on is_processed field
-      const totalProcessed = data.filter(r => r.is_processed === true).length;
-      const totalValid = data.filter(r => r.validation_status === 'valid').length;
-      const totalInvalid = data.filter(r => r.validation_status === 'invalid').length;
-      const totalInserted = data.filter(r => r.action_type === 'insert').length;
-      const totalUpdated = data.filter(r => r.action_type === 'update').length;
-      const totalFailed = data.filter(r => r.action_type === 'skip').length;
+      // Get total session stats (all records, not just unprocessed)
+      const { data: allRecords } = await supabase
+        .from('csv_staging_records')
+        .select('*')
+        .eq('upload_session_id', sessionId);
+      
+      const totalProcessed = allRecords?.filter(r => r.is_processed === true).length || 0;
+      const totalValid = allRecords?.filter(r => r.validation_status === 'valid').length || 0;
+      const totalInvalid = allRecords?.filter(r => r.validation_status === 'invalid').length || 0;
+      const totalInserted = allRecords?.filter(r => r.action_type === 'insert').length || 0;
+      const totalUpdated = allRecords?.filter(r => r.action_type === 'update').length || 0;
+      const totalFailed = allRecords?.filter(r => r.action_type === 'skip').length || 0;
       
       setProcessingStats({
-        totalRecords: data.length,
+        totalRecords: allRecords?.length || 0,
         processedRecords: totalProcessed,
         validRecords: totalValid,
         invalidRecords: totalInvalid,
@@ -249,15 +245,16 @@ export function InventoryFileUpload() {
       });
       
       toast({
-        title: "Session Loaded",
-        description: `Loaded ${sessionChunks.length} chunks (${data.length} total records) for processing. ${data.length - totalProcessed} records need processing.`,
+        title: "Unprocessed Records Loaded",
+        description: `Loaded ${sessionChunks.length} chunks with ${data.length} unprocessed records ready for processing. (${totalProcessed} already processed)`,
       });
       
     } catch (error) {
       console.error('Error loading session chunks:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       toast({
         title: "Load Failed",
-        description: error instanceof Error ? error.message : 'Failed to load session',
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -746,7 +743,8 @@ export function InventoryFileUpload() {
       }
     } catch (error) {
       console.error('Error syncing record to inventory:', error);
-      return { action: 'skip', error: error.message };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { action: 'skip', error: errorMessage };
     }
   };
 
@@ -803,10 +801,8 @@ export function InventoryFileUpload() {
             correctedCount++;
           }
 
-          // Save to staging
-          await saveStagingRecord(sessionId, record, validation, rowNumber);
-
-          // Real-time inventory sync for valid records
+          // Skip saving to staging for existing sessions - records already exist
+          // Only process valid records to inventory
           if (validation.isValid) {
             const syncResult = await syncRecordToInventory(sessionId, record, validation);
             
@@ -872,6 +868,7 @@ export function InventoryFileUpload() {
 
     } catch (error) {
       console.error('Error processing chunk:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       
       // Mark chunk as failed
       setChunks(prev => prev.map(c => 
@@ -883,10 +880,10 @@ export function InventoryFileUpload() {
       // Update session with error
       await updateSessionProgress(sessionId, {
         status: 'failed',
-        error_message: error.message
+        error_message: errorMessage
       });
 
-      throw error;
+      throw new Error(errorMessage);
     }
   };
 
@@ -973,10 +970,11 @@ export function InventoryFileUpload() {
 
     } catch (error) {
       console.error('Error in chunk processing:', error);
-      setProcessingStage(`Processing failed: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setProcessingStage(`Processing failed: ${errorMessage}`);
       toast({
         title: "Processing Failed",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
