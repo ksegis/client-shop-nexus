@@ -148,6 +148,7 @@ export function InventoryFileUpload() {
       
       if (user) {
         loadRecentSessions(user.id);
+        loadUnprocessedCounts(); // Load unprocessed counts when user is available
       }
     };
     getCurrentUser();
@@ -375,6 +376,9 @@ export function InventoryFileUpload() {
       
       setChunks(globalChunks);
       setSelectedSessionForProcessing('GLOBAL');
+      
+      // Refresh unprocessed counts after loading chunks
+      await loadUnprocessedCounts();
       
       // Get global processing stats
       const sessionIds = [...new Set(data.map(r => r.upload_session_id))];
@@ -1022,7 +1026,19 @@ export function InventoryFileUpload() {
 
     } catch (error) {
       console.error('Error processing chunk:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        errorType: typeof error,
+        errorString: String(error),
+        errorJSON: JSON.stringify(error, Object.getOwnPropertyNames(error))
+      });
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : (typeof error === 'object' && error !== null)
+          ? JSON.stringify(error, Object.getOwnPropertyNames(error))
+          : String(error);
       
       // Mark chunk as failed
       setChunks(prev => prev.map(c => 
@@ -1124,7 +1140,20 @@ export function InventoryFileUpload() {
 
     } catch (error) {
       console.error('Error in chunk processing:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Processing error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        errorType: typeof error,
+        errorString: String(error),
+        errorJSON: JSON.stringify(error, Object.getOwnPropertyNames(error))
+      });
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : (typeof error === 'object' && error !== null)
+          ? JSON.stringify(error, Object.getOwnPropertyNames(error))
+          : String(error);
+          
       setProcessingStage(`Processing failed: ${errorMessage}`);
       toast({
         title: "Processing Failed",
@@ -1425,15 +1454,21 @@ export function InventoryFileUpload() {
                 variant="default"
                 onClick={async () => {
                   await loadAllUnprocessedChunks();
+                  setActiveSessionTab('processing'); // Switch to Processing tab
                   openSessionsDialog();
                 }}
                 className="flex items-center justify-center space-x-2 h-16 bg-green-600 hover:bg-green-700"
-                disabled={isProcessing}
+                disabled={isProcessing || unprocessedCounts.totalRecords === 0}
               >
                 <Play className="h-6 w-6" />
                 <div className="text-left">
                   <div className="font-medium">Process All Unprocessed</div>
-                  <div className="text-xs text-green-100">Process all unprocessed records globally</div>
+                  <div className="text-xs text-green-100">
+                    {unprocessedCounts.totalRecords > 0 
+                      ? `${unprocessedCounts.totalRecords.toLocaleString()} records • ${unprocessedCounts.totalChunks} chunks • ${unprocessedCounts.sessionsAffected} sessions`
+                      : 'No unprocessed records found'
+                    }
+                  </div>
                 </div>
               </Button>
               
@@ -1491,7 +1526,7 @@ export function InventoryFileUpload() {
             </DialogTitle>
           </DialogHeader>
           
-          <Tabs defaultValue="sessions" className="w-full">
+          <Tabs value={activeSessionTab} onValueChange={setActiveSessionTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="sessions">Sessions List</TabsTrigger>
               <TabsTrigger value="processing" disabled={!selectedSessionForProcessing}>
@@ -1559,7 +1594,7 @@ export function InventoryFileUpload() {
                               size="sm"
                               onClick={async () => {
                                 await loadSessionChunks(session.id);
-                                // Note: User will need to manually switch to Processing tab
+                                setActiveSessionTab('processing'); // Switch to Processing tab
                               }}
                               disabled={isProcessing}
                             >
