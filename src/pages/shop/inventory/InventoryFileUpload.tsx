@@ -41,14 +41,12 @@ interface UploadSession {
   processed_records: number;
   valid_records: number;
   invalid_records: number;
-  corrected_records: number;
+  corrected_records?: number;
   error_message?: string;
-  created_at: string;
-  completed_at?: string;
-  updated_at: string;
-  chunk_number?: number;
-  parent_session_id?: string;
+  created_at?: string;
+  updated_at?: string;
   last_processed_at?: string;
+  parent_session_id?: string;
 }
 
 interface SyncSummary {
@@ -552,7 +550,6 @@ export function InventoryFileUpload() {
         valid_records: 0,
         invalid_records: 0,
         corrected_records: 0,
-        chunk_number: chunkNumber,
         parent_session_id: parentSessionId,
         last_processed_at: new Date().toISOString()
       }])
@@ -1558,14 +1555,13 @@ export function InventoryFileUpload() {
                           <div className="flex items-center space-x-2 mb-2">
                             <StatusIcon className="h-4 w-4" />
                             <span className="font-medium text-sm">{session.original_filename}</span>
-                            <Badge variant={statusInfo.variant}>{statusInfo.status}</Badge>
-                            {session.chunk_number && (
-                              <Badge variant="outline">Chunk {session.chunk_number}</Badge>
+                            <Badge variant={statusVariant}>{session.status}</Badge>
+                            {session.parent_session_id && (
+                              <Badge variant="outline">Child Session</Badge>
                             )}
                           </div>
-                          <div className="text-xs text-gray-500 space-y-1">
-                            <div>
-                              {session.processed_records}/{session.total_records} records processed
+                          <div className="text-sm text-gray-600">
+                            {session.processed_records}/{session.total_records} records processed
                               {session.total_records > 0 && (
                                 <span className="ml-2">
                                   ({Math.round((session.processed_records / session.total_records) * 100)}%)
