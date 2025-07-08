@@ -45,7 +45,6 @@ interface UploadSession {
   error_message?: string;
   created_at?: string;
   updated_at?: string;
-  last_processed_at?: string;
   parent_session_id?: string;
 }
 
@@ -439,7 +438,7 @@ export function InventoryFileUpload() {
     }
 
     const now = new Date();
-    const lastProcessedAt = session.last_processed_at || session.updated_at;
+    const lastProcessedAt = session.updated_at;
     
     if (!lastProcessedAt) {
       return { isStalled: false };
@@ -550,8 +549,7 @@ export function InventoryFileUpload() {
         valid_records: 0,
         invalid_records: 0,
         corrected_records: 0,
-        parent_session_id: parentSessionId,
-        last_processed_at: new Date().toISOString()
+        parent_session_id: parentSessionId
       }])
       .select()
       .single();
@@ -562,14 +560,9 @@ export function InventoryFileUpload() {
 
   // Update session progress
   const updateSessionProgress = async (sessionId: string, updates: Partial<UploadSession>) => {
-    const updateData = {
-      ...updates,
-      last_processed_at: new Date().toISOString()
-    };
-
     const { error } = await supabase
       .from('csv_upload_sessions')
-      .update(updateData)
+      .update(updates)
       .eq('id', sessionId);
 
     if (error) throw error;
