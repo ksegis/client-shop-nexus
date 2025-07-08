@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CSVReconciliation } from './CSVReconciliation';
 
-// Types for CSV processing
+// Types for CSV  processing
 interface CSVRecord {
   [key: string]: string;
 }
