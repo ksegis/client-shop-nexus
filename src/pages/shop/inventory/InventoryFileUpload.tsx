@@ -1555,25 +1555,24 @@ export function InventoryFileUpload() {
                           <div className="flex items-center space-x-2 mb-2">
                             <StatusIcon className="h-4 w-4" />
                             <span className="font-medium text-sm">{session.original_filename}</span>
-                            <Badge variant={statusVariant}>{session.status}</Badge>
+                            <Badge variant={statusInfo.variant}>{session.status}</Badge>
                             {session.parent_session_id && (
                               <Badge variant="outline">Child Session</Badge>
                             )}
                           </div>
                           <div className="text-sm text-gray-600">
                             {session.processed_records}/{session.total_records} records processed
-                              {session.total_records > 0 && (
-                                <span className="ml-2">
-                                  ({Math.round((session.processed_records / session.total_records) * 100)}%)
-                                </span>
-                              )}
-                            </div>
-                            <div>
-                              Valid: {session.valid_records} | Invalid: {session.invalid_records} | Corrected: {session.corrected_records}
-                            </div>
-                            <div>
-                              Created: {formatDate(session.created_at)} | Size: {formatFileSize(session.file_size)}
-                            </div>
+                            {session.total_records > 0 && (
+                              <span className="ml-2">
+                                ({Math.round((session.processed_records / session.total_records) * 100)}%)
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            Valid: {session.valid_records} | Invalid: {session.invalid_records} | Corrected: {session.corrected_records}
+                          </div>
+                          <div>
+                            Created: {formatDate(session.created_at)} | Size: {formatFileSize(session.file_size)}
                           </div>
                           {session.total_records > 0 && (
                             <Progress 
