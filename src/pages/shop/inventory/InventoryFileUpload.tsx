@@ -43,9 +43,12 @@ interface UploadSession {
   invalid_records: number;
   corrected_records?: number;
   error_message?: string;
+  uploaded_by?: string;
   created_at?: string;
+  started_at?: string;
+  completed_at?: string;
   updated_at?: string;
-  parent_session_id?: string;
+  user_id?: string;
 }
 
 interface SyncSummary {
@@ -534,7 +537,7 @@ export function InventoryFileUpload() {
   };
 
   // Create upload session
-  const createUploadSession = async (filename: string, originalFilename: string, fileSize: number, chunkNumber?: number, parentSessionId?: string): Promise<string> => {
+  const createUploadSession = async (filename: string, originalFilename: string, fileSize: number, chunkNumber?: number): Promise<string> => {
     const { data, error } = await supabase
       .from('csv_upload_sessions')
       .insert([{
@@ -548,8 +551,7 @@ export function InventoryFileUpload() {
         processed_records: 0,
         valid_records: 0,
         invalid_records: 0,
-        corrected_records: 0,
-        parent_session_id: parentSessionId
+        corrected_records: 0
       }])
       .select()
       .single();
@@ -1549,9 +1551,6 @@ export function InventoryFileUpload() {
                             <StatusIcon className="h-4 w-4" />
                             <span className="font-medium text-sm">{session.original_filename}</span>
                             <Badge variant={statusInfo.variant}>{session.status}</Badge>
-                            {session.parent_session_id && (
-                              <Badge variant="outline">Child Session</Badge>
-                            )}
                           </div>
                           <div className="text-sm text-gray-600">
                             {session.processed_records}/{session.total_records} records processed
