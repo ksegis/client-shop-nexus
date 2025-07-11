@@ -1,4 +1,4 @@
-// Fixed version of PricingManagement with SKU field added
+// Enhanced PricingManagement with Soft Delete Solution
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -25,7 +25,9 @@ import {
   CheckCircle,
   Clock,
   DollarSign,
-  Calculator
+  Calculator,
+  Archive,
+  RotateCcw
 } from 'lucide-react';
 import { getSupabaseClient } from "@/lib/supabase";
 
@@ -57,6 +59,10 @@ interface PricingRecord {
   minimum_markup_percentage: number;
   last_supplier_cost?: number;
   last_cost_check?: string;
+  // ✅ NEW: Soft delete fields
+  deleted_at?: string;
+  deleted_by?: string;
+  deletion_reason?: string;
 }
 
 interface PriceRecommendation {
@@ -95,7 +101,7 @@ interface InventoryPart {
 const PricingManagement: React.FC = () => {
   const supabase = getSupabaseClient();
   
-  // State (same as original)
+  // State (same as original plus soft delete states)
   const [pricingRecords, setPricingRecords] = useState<PricingRecord[]>([]);
   const [inventoryParts, setInventoryParts] = useState<InventoryPart[]>([]);
   const [pricingSearchTerm, setPricingSearchTerm] = useState('');
@@ -107,10 +113,16 @@ const PricingManagement: React.FC = () => {
   const [selectedInventoryPart, setSelectedInventoryPart] = useState<InventoryPart | null>(null);
   const [priceRecommendations, setPriceRecommendations] = useState<{ [vcpn: string]: PriceRecommendation }>({});
   
-  // ✅ Track current tab for auto-clearing
+  // ✅ NEW: Soft delete states
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [deletingRecord, setDeletingRecord] = useState<string | null>(null);
+  const [deletionReason, setDeletionReason] = useState('');
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  
+  // Track current tab for auto-clearing
   const [currentTab, setCurrentTab] = useState('pricing');
   
-  // ✅ Track if price was manually set by user
+  // Track if price was manually set by user
   const [priceManuallySet, setPriceManuallySet] = useState(false);
   const lastCalculatedPrice = useRef<number>(0);
   
@@ -149,7 +161,7 @@ const PricingManagement: React.FC = () => {
     minimum_markup_percentage: 15
   });
 
-  // ✅ ENHANCED: Automatic list price calculation
+  // Automatic list price calculation
   const calculateListPrice = useCallback((cost: number, markupPercent: number): number => {
     if (!cost || cost <= 0 || !markupPercent || markupPercent < 0) {
       return 0;
@@ -159,14 +171,14 @@ const PricingManagement: React.FC = () => {
     return Math.round(calculatedPrice * 100) / 100; // Round to 2 decimal places
   }, []);
 
-  // ✅ NEW: Clear search results and reset form
+  // Clear search results and reset form
   const clearSearchResults = useCallback(() => {
     setInventorySearchTerm('');
     setInventoryParts([]);
     setSelectedInventoryPart(null);
   }, []);
 
-  // ✅ NEW: Reset form to initial state
+  // Reset form to initial state
   const resetForm = useCallback(() => {
     setFormData({
       keystone_vcpn: '',
@@ -191,7 +203,7 @@ const PricingManagement: React.FC = () => {
     clearSearchResults();
   }, [clearSearchResults]);
 
-  // ✅ NEW: Handle tab changes with cleanup
+  // Handle tab changes with cleanup
   const handleTabChange = (newTab: string) => {
     setCurrentTab(newTab);
     
@@ -201,7 +213,7 @@ const PricingManagement: React.FC = () => {
     }
   };
 
-  // ✅ IMPROVED: Smart auto-calculation that respects manual changes
+  // Smart auto-calculation that respects manual changes
   useEffect(() => {
     if (formData.cost && formData.markup_percentage) {
       const newCalculatedPrice = calculateListPrice(formData.cost, formData.markup_percentage);
@@ -227,7 +239,7 @@ const PricingManagement: React.FC = () => {
     }
   }, [formData.cost, formData.markup_percentage, calculateListPrice, priceManuallySet]);
 
-  // ✅ NEW: Handle manual price input
+  // Handle manual price input
   const handlePriceChange = (newPrice: number) => {
     const calculatedPrice = calculateListPrice(formData.cost || 0, formData.markup_percentage || 0);
     
@@ -244,15 +256,15 @@ const PricingManagement: React.FC = () => {
     }));
   };
 
-  // ✅ NEW: Reset manual flag when form is cleared or new item selected
+  // Reset manual flag when form is cleared or new item selected
   const resetPriceManualFlag = () => {
     setPriceManuallySet(false);
     lastCalculatedPrice.current = 0;
   };
 
-  // ✅ ENHANCED: Better error handling function
+  // Enhanced error handling function
   const handleDatabaseError = (error: any, operation: string) => {
-    console.error(`Error ${operation}:`, error);
+    console.error(`❌ Error ${operation}:`, error);
     
     let userMessage = `Error ${operation}`;
     
@@ -260,7 +272,7 @@ const PricingManagement: React.FC = () => {
       if (error.message.includes('duplicate key')) {
         userMessage = 'A pricing record with this VCPN already exists';
       } else if (error.message.includes('foreign key')) {
-        userMessage = 'Invalid reference to inventory item';
+        userMessage = 'Cannot delete: This pricing record is referenced by price history. Use archive instead.';
       } else if (error.message.includes('not assigned yet') || error.message.includes('RLS')) {
         userMessage = 'Database permission issue - please contact administrator';
       } else if (error.message.includes('violates check constraint')) {
@@ -274,7 +286,7 @@ const PricingManagement: React.FC = () => {
     return userMessage;
   };
 
-  // ✅ ENHANCED: Validate form data before saving
+  // Validate form data before saving
   const validateFormData = (data: Partial<PricingRecord>): string[] => {
     const errors: string[] = [];
     
@@ -305,7 +317,7 @@ const PricingManagement: React.FC = () => {
     return errors;
   };
 
-  // ✅ ENHANCED: Safe data preparation for database
+  // Safe data preparation for database
   const prepareDataForDatabase = (data: Partial<PricingRecord>): any => {
     return {
       keystone_vcpn: data.keystone_vcpn?.trim() || '',
@@ -330,7 +342,7 @@ const PricingManagement: React.FC = () => {
     };
   };
 
-  // Load pricing records (same as original)
+  // ✅ ENHANCED: Load pricing records with soft delete support
   const loadPricingRecords = async (searchTerm: string = '') => {
     setIsLoading(true);
     try {
@@ -338,6 +350,13 @@ const PricingManagement: React.FC = () => {
         .from('pricing_records')
         .select('*')
         .order('created_at', { ascending: false });
+
+      // ✅ NEW: Filter by deleted status
+      if (showDeleted) {
+        query = query.not('deleted_at', 'is', null);
+      } else {
+        query = query.is('deleted_at', null);
+      }
 
       if (searchTerm) {
         query = query.or(`part_name.ilike.%${searchTerm}%,keystone_vcpn.ilike.%${searchTerm}%,part_sku.ilike.%${searchTerm}%`);
@@ -350,7 +369,9 @@ const PricingManagement: React.FC = () => {
       }
       
       setPricingRecords(data || []);
-      checkForNegativeMargins(data || []);
+      if (!showDeleted) {
+        checkForNegativeMargins(data || []);
+      }
     } catch (error) {
       handleDatabaseError(error, 'loading pricing records');
     } finally {
@@ -381,7 +402,7 @@ const PricingManagement: React.FC = () => {
     }
   };
 
-  // ✅ ENHANCED: Save pricing record with better error handling
+  // Save pricing record with better error handling
   const savePricingRecord = async () => {
     try {
       console.log('🔥 Starting save operation...');
@@ -429,7 +450,6 @@ const PricingManagement: React.FC = () => {
           created_at: new Date().toISOString()
         };
         
-        // ✅ ENHANCED: Try insert with better error handling
         const { data: insertResult, error } = await supabase
           .from('pricing_records')
           .insert(insertData)
@@ -444,7 +464,7 @@ const PricingManagement: React.FC = () => {
         console.log('✅ Insert successful:', insertResult);
       }
 
-      // ✅ ENHANCED: Reset form and clear search results after save
+      // Reset form and clear search results after save
       resetForm();
       setEditingRecord(null);
       setIsCreateDialogOpen(false);
@@ -459,34 +479,84 @@ const PricingManagement: React.FC = () => {
     }
   };
 
-  // ✅ ENHANCED: Delete with better error handling
-  const deletePricingRecord = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this pricing record?')) return;
-
+  // ✅ NEW: Soft delete function
+  const softDeletePricingRecord = async (id: string, reason: string = '') => {
     try {
-      console.log('🗑️ Deleting record:', id);
+      console.log('🗑️ Soft deleting record:', id);
       
       const { error } = await supabase
         .from('pricing_records')
-        .delete()
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: 'admin',
+          deletion_reason: reason || 'Archived by user',
+          status: 'inactive'
+        })
         .eq('id', id);
 
       if (error) {
-        console.error('❌ Delete error:', error);
-        handleDatabaseError(error, 'deleting pricing record');
+        console.error('❌ Soft delete error:', error);
+        handleDatabaseError(error, 'archiving pricing record');
         return;
       }
       
-      console.log('✅ Delete successful');
+      console.log('✅ Soft delete successful');
       await loadPricingRecords(pricingSearchTerm);
-      alert('Pricing record deleted successfully!');
+      alert('Pricing record archived successfully!');
     } catch (error) {
-      console.error('❌ Exception in delete operation:', error);
-      handleDatabaseError(error, 'deleting pricing record');
+      console.error('❌ Exception in soft delete operation:', error);
+      handleDatabaseError(error, 'archiving pricing record');
     }
   };
 
-  // Keep all other functions from original (checkForNegativeMargins, generateNegativeMarginRecommendation, etc.)
+  // ✅ NEW: Restore function
+  const restorePricingRecord = async (id: string) => {
+    try {
+      console.log('🔄 Restoring record:', id);
+      
+      const { error } = await supabase
+        .from('pricing_records')
+        .update({
+          deleted_at: null,
+          deleted_by: null,
+          deletion_reason: null,
+          status: 'active'
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.error('❌ Restore error:', error);
+        handleDatabaseError(error, 'restoring pricing record');
+        return;
+      }
+      
+      console.log('✅ Restore successful');
+      await loadPricingRecords(pricingSearchTerm);
+      alert('Pricing record restored successfully!');
+    } catch (error) {
+      console.error('❌ Exception in restore operation:', error);
+      handleDatabaseError(error, 'restoring pricing record');
+    }
+  };
+
+  // ✅ NEW: Handle delete button click
+  const handleDeleteClick = (id: string) => {
+    setDeletingRecord(id);
+    setDeletionReason('');
+    setIsDeleteDialogOpen(true);
+  };
+
+  // ✅ NEW: Confirm soft delete
+  const confirmSoftDelete = async () => {
+    if (deletingRecord) {
+      await softDeletePricingRecord(deletingRecord, deletionReason);
+      setIsDeleteDialogOpen(false);
+      setDeletingRecord(null);
+      setDeletionReason('');
+    }
+  };
+
+  // Keep all other functions from original (checkForNegativeMargins, etc.)
   const checkForNegativeMargins = (records: PricingRecord[]) => {
     const negativeMarginRecommendations: { [vcpn: string]: PriceRecommendation } = {};
     
@@ -540,12 +610,15 @@ const PricingManagement: React.FC = () => {
     };
   };
 
-  // Get status badge (same as original)
+  // Get status badge
   const getStatusBadge = (record: PricingRecord) => {
     const now = new Date();
     const endDate = record.effective_end_date ? new Date(record.effective_end_date) : null;
     
-    if (record.status === 'inactive') {
+    // ✅ NEW: Handle deleted status
+    if (record.deleted_at) {
+      return { status: 'Archived', variant: 'secondary' as const };
+    } else if (record.status === 'inactive') {
       return { status: 'Inactive', variant: 'secondary' as const };
     } else if (endDate && endDate < now) {
       return { status: 'Expired', variant: 'destructive' as const };
@@ -554,14 +627,14 @@ const PricingManagement: React.FC = () => {
     }
   };
 
-  // Save settings (same as original)
+  // Save settings
   const saveSettings = () => {
     localStorage.setItem('pricingSettings', JSON.stringify(pricingSettings));
     setIsSettingsDialogOpen(false);
     alert('Settings saved successfully!');
   };
 
-  // ✅ ENHANCED: Manual recalculate function that resets manual flag
+  // Manual recalculate function that resets manual flag
   const recalculateListPrice = () => {
     if (formData.cost && formData.markup_percentage) {
       const newListPrice = calculateListPrice(formData.cost, formData.markup_percentage);
@@ -569,12 +642,12 @@ const PricingManagement: React.FC = () => {
         ...prev,
         list_price: newListPrice
       }));
-      setPriceManuallySet(false); // ✅ NEW: Reset manual flag when user explicitly recalculates
+      setPriceManuallySet(false);
       lastCalculatedPrice.current = newListPrice;
     }
   };
 
-  // ✅ ENHANCED: Handle inventory item selection with auto-clear
+  // Handle inventory item selection with auto-clear
   const handleInventorySelection = (part: InventoryPart) => {
     setSelectedInventoryPart(part);
     const calculatedPrice = calculateListPrice(part.cost, pricingSettings.defaultMarkupPercent);
@@ -590,10 +663,10 @@ const PricingManagement: React.FC = () => {
     resetPriceManualFlag();
     lastCalculatedPrice.current = calculatedPrice;
     
-    // ✅ NEW: Clear search results after selection
+    // Clear search results after selection
     setTimeout(() => {
       clearSearchResults();
-    }, 500); // Small delay to show selection feedback
+    }, 500);
   };
 
   // Load settings on component mount
@@ -605,7 +678,12 @@ const PricingManagement: React.FC = () => {
     loadPricingRecords();
   }, []);
 
-  // Search effects (same as original)
+  // ✅ NEW: Reload when showDeleted changes
+  useEffect(() => {
+    loadPricingRecords(pricingSearchTerm);
+  }, [showDeleted]);
+
+  // Search effects
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       loadPricingRecords(pricingSearchTerm);
@@ -620,7 +698,6 @@ const PricingManagement: React.FC = () => {
       }, 300);
       return () => clearTimeout(timeoutId);
     } else {
-      // ✅ NEW: Clear results when search term is empty
       setInventoryParts([]);
     }
   }, [inventorySearchTerm]);
@@ -628,18 +705,6 @@ const PricingManagement: React.FC = () => {
   // Get recommendation count
   const recommendationCount = Object.keys(priceRecommendations).length;
   const negativeMarginCount = Object.values(priceRecommendations).filter(r => r.isNegativeMargin).length;
-
-  // ✅ ENHANCED: Add debug info for troubleshooting
-  const debugInfo = {
-    formDataValid: validateFormData(formData).length === 0,
-    hasRequiredFields: !!(formData.keystone_vcpn && formData.part_name && formData.cost && formData.list_price),
-    formDataPreview: prepareDataForDatabase(formData),
-    calculatedPrice: formData.cost && formData.markup_percentage ? calculateListPrice(formData.cost, formData.markup_percentage) : 0,
-    priceManuallySet: priceManuallySet,
-    lastCalculatedPrice: lastCalculatedPrice.current,
-    searchResultsCount: inventoryParts.length,
-    currentTab: currentTab
-  };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -724,22 +789,7 @@ const PricingManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* ✅ ENHANCED: Debug info for troubleshooting */}
-      {process.env.NODE_ENV === 'development' && (
-        <Alert>
-          <AlertDescription>
-            <strong>Debug Info:</strong> Form Valid: {debugInfo.formDataValid ? '✅' : '❌'} | 
-            Required Fields: {debugInfo.hasRequiredFields ? '✅' : '❌'} | 
-            Records: {pricingRecords.length} | 
-            Calculated: ${debugInfo.calculatedPrice.toFixed(2)} | 
-            Manual: {debugInfo.priceManuallySet ? '🔒' : '🔄'} | 
-            Search Results: {debugInfo.searchResultsCount} | 
-            Tab: {debugInfo.currentTab}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* ✅ NEW: Price calculation status indicator */}
+      {/* Price calculation status indicator */}
       {priceManuallySet && (
         <Alert className="border-blue-300 bg-blue-50">
           <DollarSign className="h-4 w-4 text-blue-600" />
@@ -760,7 +810,7 @@ const PricingManagement: React.FC = () => {
       )}
 
       {/* Critical Negative Margin Alert */}
-      {negativeMarginCount > 0 && (
+      {negativeMarginCount > 0 && !showDeleted && (
         <Alert className="border-red-500 bg-red-50">
           <AlertTriangle className="h-4 w-4 text-red-600" />
           <AlertDescription className="text-red-800">
@@ -770,7 +820,7 @@ const PricingManagement: React.FC = () => {
       )}
 
       {/* Recommendations Alert */}
-      {recommendationCount > 0 && (
+      {recommendationCount > 0 && !showDeleted && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
@@ -799,7 +849,7 @@ const PricingManagement: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle>Pricing Records</CardTitle>
-              <div className="flex gap-4">
+              <div className="flex gap-4 items-center">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <Input
@@ -808,6 +858,18 @@ const PricingManagement: React.FC = () => {
                     onChange={(e) => setPricingSearchTerm(e.target.value)}
                     className="pl-10"
                   />
+                </div>
+                {/* ✅ NEW: Show deleted toggle */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="showDeleted"
+                    checked={showDeleted}
+                    onChange={(e) => setShowDeleted(e.target.checked)}
+                  />
+                  <Label htmlFor="showDeleted" className="text-sm">
+                    Show Archived ({showDeleted ? 'On' : 'Off'})
+                  </Label>
                 </div>
               </div>
             </CardHeader>
@@ -826,17 +888,23 @@ const PricingManagement: React.FC = () => {
                         <th className="text-left p-2">List Price</th>
                         <th className="text-left p-2">Markup</th>
                         <th className="text-left p-2">Status</th>
+                        {/* ✅ NEW: Show deletion info for archived records */}
+                        {showDeleted && <th className="text-left p-2">Deleted</th>}
                         <th className="text-left p-2">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {pricingRecords.map((record) => {
                         const statusBadge = getStatusBadge(record);
-                        const hasNegativeMargin = record.list_price < record.cost;
+                        const hasNegativeMargin = record.list_price < record.cost && !record.deleted_at;
+                        const isDeleted = !!record.deleted_at;
                         
                         return (
-                          <tr key={record.id} className={`border-b hover:bg-gray-50 ${hasNegativeMargin ? 'bg-red-50' : ''}`}>
-                            <td className="p-2">{record.part_name}</td>
+                          <tr key={record.id} className={`border-b hover:bg-gray-50 ${hasNegativeMargin ? 'bg-red-50' : ''} ${isDeleted ? 'bg-gray-50 opacity-75' : ''}`}>
+                            <td className="p-2">
+                              {isDeleted && <Archive className="w-4 h-4 inline mr-2 text-gray-500" />}
+                              {record.part_name}
+                            </td>
                             <td className="p-2">
                               <span className="text-sm text-gray-600">
                                 {record.part_sku || 'N/A'}
@@ -864,27 +932,57 @@ const PricingManagement: React.FC = () => {
                                 {statusBadge.status}
                               </Badge>
                             </td>
+                            {/* ✅ NEW: Show deletion info */}
+                            {showDeleted && (
+                              <td className="p-2 text-xs text-gray-500">
+                                {record.deleted_at && (
+                                  <div>
+                                    <div>{new Date(record.deleted_at).toLocaleDateString()}</div>
+                                    <div>by {record.deleted_by}</div>
+                                    {record.deletion_reason && (
+                                      <div className="italic">{record.deletion_reason}</div>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            )}
                             <td className="p-2">
                               <div className="flex gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingRecord(record);
-                                    setFormData(record);
-                                    setPriceManuallySet(true); // ✅ NEW: Mark as manual when editing existing record
-                                    setIsCreateDialogOpen(true);
-                                  }}
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => deletePricingRecord(record.id!)}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                                {!isDeleted ? (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setEditingRecord(record);
+                                        setFormData(record);
+                                        setPriceManuallySet(true);
+                                        setIsCreateDialogOpen(true);
+                                      }}
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </Button>
+                                    {/* ✅ NEW: Archive button instead of delete */}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleDeleteClick(record.id!)}
+                                      title="Archive this pricing record"
+                                    >
+                                      <Archive className="w-4 h-4" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  /* ✅ NEW: Restore button for archived records */
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => restorePricingRecord(record.id!)}
+                                    title="Restore this pricing record"
+                                  >
+                                    <RotateCcw className="w-4 h-4" />
+                                  </Button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -898,7 +996,7 @@ const PricingManagement: React.FC = () => {
           </Card>
         </TabsContent>
 
-        {/* Create Pricing Tab */}
+        {/* Create Pricing Tab - same as original but with enhanced form */}
         <TabsContent value="create">
           <Card>
             <CardHeader>
@@ -921,7 +1019,7 @@ const PricingManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {/* ✅ ENHANCED: Inventory Results with auto-clear */}
+                {/* Inventory Results with auto-clear */}
                 {inventoryParts.length > 0 && inventorySearchTerm && (
                   <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
                     <div className="flex justify-between items-center mb-2">
@@ -954,7 +1052,7 @@ const PricingManagement: React.FC = () => {
                   </div>
                 )}
 
-                {/* ✅ ENHANCED: Form Fields with SKU field */}
+                {/* Form Fields with SKU field */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="vcpn">Keystone VCPN *</Label>
@@ -1002,10 +1100,9 @@ const PricingManagement: React.FC = () => {
                         type="number"
                         step="0.01"
                         value={formData.list_price}
-                        onChange={(e) => handlePriceChange(Number(e.target.value))} // ✅ NEW: Use smart handler
+                        onChange={(e) => handlePriceChange(Number(e.target.value))}
                         className={!formData.list_price || formData.list_price <= 0 ? 'border-red-300' : ''}
                       />
-                      {/* ✅ ENHANCED: Manual recalculate button with better tooltip */}
                       <Button
                         type="button"
                         variant="outline"
@@ -1017,7 +1114,6 @@ const PricingManagement: React.FC = () => {
                         <Calculator className="w-4 h-4" />
                       </Button>
                     </div>
-                    {/* ✅ ENHANCED: Show calculated price info with manual status */}
                     {formData.cost && formData.markup_percentage && (
                       <div className="text-xs text-gray-500 mt-1">
                         Auto-calculated: ${calculateListPrice(formData.cost, formData.markup_percentage).toFixed(2)} 
@@ -1067,7 +1163,7 @@ const PricingManagement: React.FC = () => {
                   <Label htmlFor="autoUpdate">Enable Auto-Update</Label>
                 </div>
 
-                {/* ✅ ENHANCED: Show validation status */}
+                {/* Show validation status */}
                 {validateFormData(formData).length > 0 && (
                   <Alert className="border-red-300 bg-red-50">
                     <AlertTriangle className="h-4 w-4 text-red-600" />
@@ -1092,7 +1188,7 @@ const PricingManagement: React.FC = () => {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={resetForm} // ✅ ENHANCED: Use resetForm function
+                    onClick={resetForm}
                   >
                     <X className="w-4 h-4 mr-2" />
                     Clear Form
@@ -1131,7 +1227,40 @@ const PricingManagement: React.FC = () => {
         </TabsContent>
       </Tabs>
 
-      {/* ✅ ENHANCED: Create/Edit Dialog with SKU field */}
+      {/* ✅ NEW: Soft Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive Pricing Record</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              This will archive the pricing record instead of permanently deleting it. 
+              You can restore it later if needed.
+            </p>
+            <div>
+              <Label htmlFor="deletionReason">Reason for archiving (optional)</Label>
+              <Textarea
+                id="deletionReason"
+                value={deletionReason}
+                onChange={(e) => setDeletionReason(e.target.value)}
+                placeholder="Enter reason for archiving this record..."
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={confirmSoftDelete} variant="destructive">
+                <Archive className="w-4 h-4 mr-2" />
+                Archive Record
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create/Edit Dialog with SKU field */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1187,7 +1316,7 @@ const PricingManagement: React.FC = () => {
                     type="number"
                     step="0.01"
                     value={formData.list_price}
-                    onChange={(e) => handlePriceChange(Number(e.target.value))} // ✅ NEW: Use smart handler in dialog too
+                    onChange={(e) => handlePriceChange(Number(e.target.value))}
                     className={!formData.list_price || formData.list_price <= 0 ? 'border-red-300' : ''}
                   />
                   <Button
@@ -1222,7 +1351,7 @@ const PricingManagement: React.FC = () => {
               />
             </div>
             
-            {/* ✅ ENHANCED: Show validation in dialog too */}
+            {/* Show validation in dialog too */}
             {validateFormData(formData).length > 0 && (
               <Alert className="border-red-300 bg-red-50">
                 <AlertTriangle className="h-4 w-4 text-red-600" />
