@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { shippingQuoteService } from '../../../services/shipping_quote_service';
 import { dropshipOrderService } from '../../../services/dropship_order_service';
-import { supabase } from '../../../lib/supabase'; // Use shared Supabase client
+import { getSupabaseClient } from '../../../lib/supabase'; // Use correct export
+
+const supabase = getSupabaseClient(); // Get the singleton instance
 
 interface Profile {
   id: string;
