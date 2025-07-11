@@ -1,4 +1,4 @@
-// Enhanced PricingManagement with Soft Delete Solution
+// Enhanced PricingManagement with Fixed Status Constraint
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { getSupabaseClient } from "@/lib/supabase";
 
-// Types (same as original)
+// Types (same as before)
 interface PricingRecord {
   id?: string;
   keystone_vcpn: string;
@@ -59,7 +59,7 @@ interface PricingRecord {
   minimum_markup_percentage: number;
   last_supplier_cost?: number;
   last_cost_check?: string;
-  // ✅ NEW: Soft delete fields
+  // Soft delete fields
   deleted_at?: string;
   deleted_by?: string;
   deletion_reason?: string;
@@ -101,7 +101,7 @@ interface InventoryPart {
 const PricingManagement: React.FC = () => {
   const supabase = getSupabaseClient();
   
-  // State (same as original plus soft delete states)
+  // State (same as before)
   const [pricingRecords, setPricingRecords] = useState<PricingRecord[]>([]);
   const [inventoryParts, setInventoryParts] = useState<InventoryPart[]>([]);
   const [pricingSearchTerm, setPricingSearchTerm] = useState('');
@@ -113,7 +113,7 @@ const PricingManagement: React.FC = () => {
   const [selectedInventoryPart, setSelectedInventoryPart] = useState<InventoryPart | null>(null);
   const [priceRecommendations, setPriceRecommendations] = useState<{ [vcpn: string]: PriceRecommendation }>({});
   
-  // ✅ NEW: Soft delete states
+  // Soft delete states
   const [showDeleted, setShowDeleted] = useState(false);
   const [deletingRecord, setDeletingRecord] = useState<string | null>(null);
   const [deletionReason, setDeletionReason] = useState('');
@@ -161,24 +161,22 @@ const PricingManagement: React.FC = () => {
     minimum_markup_percentage: 15
   });
 
-  // Automatic list price calculation
+  // All the utility functions (same as before)
   const calculateListPrice = useCallback((cost: number, markupPercent: number): number => {
     if (!cost || cost <= 0 || !markupPercent || markupPercent < 0) {
       return 0;
     }
     
     const calculatedPrice = cost * (1 + markupPercent / 100);
-    return Math.round(calculatedPrice * 100) / 100; // Round to 2 decimal places
+    return Math.round(calculatedPrice * 100) / 100;
   }, []);
 
-  // Clear search results and reset form
   const clearSearchResults = useCallback(() => {
     setInventorySearchTerm('');
     setInventoryParts([]);
     setSelectedInventoryPart(null);
   }, []);
 
-  // Reset form to initial state
   const resetForm = useCallback(() => {
     setFormData({
       keystone_vcpn: '',
@@ -203,63 +201,11 @@ const PricingManagement: React.FC = () => {
     clearSearchResults();
   }, [clearSearchResults]);
 
-  // Handle tab changes with cleanup
   const handleTabChange = (newTab: string) => {
     setCurrentTab(newTab);
-    
-    // Clear search results when navigating away from create tab
     if (currentTab === 'create' && newTab !== 'create') {
       clearSearchResults();
     }
-  };
-
-  // Smart auto-calculation that respects manual changes
-  useEffect(() => {
-    if (formData.cost && formData.markup_percentage) {
-      const newCalculatedPrice = calculateListPrice(formData.cost, formData.markup_percentage);
-      
-      // Only auto-update if:
-      // 1. Price hasn't been manually set by user, AND
-      // 2. Current price is 0 (initial state), OR
-      // 3. Current price matches the last calculated price (meaning it was auto-calculated)
-      const shouldAutoUpdate = !priceManuallySet && (
-        formData.list_price === 0 || 
-        formData.list_price === lastCalculatedPrice.current
-      );
-      
-      if (shouldAutoUpdate) {
-        setFormData(prev => ({
-          ...prev,
-          list_price: newCalculatedPrice
-        }));
-      }
-      
-      // Always update the last calculated price for reference
-      lastCalculatedPrice.current = newCalculatedPrice;
-    }
-  }, [formData.cost, formData.markup_percentage, calculateListPrice, priceManuallySet]);
-
-  // Handle manual price input
-  const handlePriceChange = (newPrice: number) => {
-    const calculatedPrice = calculateListPrice(formData.cost || 0, formData.markup_percentage || 0);
-    
-    // If the new price is different from the calculated price, mark as manually set
-    if (Math.abs(newPrice - calculatedPrice) > 0.01) {
-      setPriceManuallySet(true);
-    } else {
-      setPriceManuallySet(false);
-    }
-    
-    setFormData(prev => ({
-      ...prev,
-      list_price: newPrice
-    }));
-  };
-
-  // Reset manual flag when form is cleared or new item selected
-  const resetPriceManualFlag = () => {
-    setPriceManuallySet(false);
-    lastCalculatedPrice.current = 0;
   };
 
   // Enhanced error handling function
@@ -273,10 +219,14 @@ const PricingManagement: React.FC = () => {
         userMessage = 'A pricing record with this VCPN already exists';
       } else if (error.message.includes('foreign key')) {
         userMessage = 'Cannot delete: This pricing record is referenced by price history. Use archive instead.';
+      } else if (error.message.includes('check constraint')) {
+        if (error.message.includes('status_check')) {
+          userMessage = 'Invalid status value. Please use a valid status (active, pending, expired).';
+        } else {
+          userMessage = 'Invalid data values - please check all fields';
+        }
       } else if (error.message.includes('not assigned yet') || error.message.includes('RLS')) {
         userMessage = 'Database permission issue - please contact administrator';
-      } else if (error.message.includes('violates check constraint')) {
-        userMessage = 'Invalid data values - please check all fields';
       } else {
         userMessage = `Database error: ${error.message}`;
       }
@@ -342,7 +292,7 @@ const PricingManagement: React.FC = () => {
     };
   };
 
-  // ✅ ENHANCED: Load pricing records with soft delete support
+  // Load pricing records with soft delete support
   const loadPricingRecords = async (searchTerm: string = '') => {
     setIsLoading(true);
     try {
@@ -351,7 +301,7 @@ const PricingManagement: React.FC = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      // ✅ NEW: Filter by deleted status
+      // Filter by deleted status
       if (showDeleted) {
         query = query.not('deleted_at', 'is', null);
       } else {
@@ -379,7 +329,7 @@ const PricingManagement: React.FC = () => {
     }
   };
 
-  // Load inventory parts (same as original)
+  // Load inventory parts
   const loadInventoryParts = async (searchTerm: string = '') => {
     try {
       let query = supabase
@@ -407,19 +357,16 @@ const PricingManagement: React.FC = () => {
     try {
       console.log('🔥 Starting save operation...');
       
-      // Validate form data
       const validationErrors = validateFormData(formData);
       if (validationErrors.length > 0) {
         alert('Please fix the following errors:\n' + validationErrors.join('\n'));
         return;
       }
       
-      // Prepare data for database
       const dbData = prepareDataForDatabase(formData);
       console.log('📝 Prepared data:', dbData);
       
       if (editingRecord) {
-        // Update existing record
         console.log('🔄 Updating existing record...');
         
         const updateData = {
@@ -441,7 +388,6 @@ const PricingManagement: React.FC = () => {
         
         console.log('✅ Update successful');
       } else {
-        // Create new record
         console.log('➕ Creating new record...');
         
         const insertData = {
@@ -464,14 +410,10 @@ const PricingManagement: React.FC = () => {
         console.log('✅ Insert successful:', insertResult);
       }
 
-      // Reset form and clear search results after save
       resetForm();
       setEditingRecord(null);
       setIsCreateDialogOpen(false);
-
-      // Reload records
       await loadPricingRecords(pricingSearchTerm);
-      
       alert('Pricing record saved successfully!');
     } catch (error) {
       console.error('❌ Exception in save operation:', error);
@@ -479,18 +421,19 @@ const PricingManagement: React.FC = () => {
     }
   };
 
-  // ✅ NEW: Soft delete function
+  // ✅ FIXED: Soft delete function with correct status value
   const softDeletePricingRecord = async (id: string, reason: string = '') => {
     try {
       console.log('🗑️ Soft deleting record:', id);
       
+      // ✅ FIX: Don't change status to 'inactive' - keep original status or use 'expired'
       const { error } = await supabase
         .from('pricing_records')
         .update({
           deleted_at: new Date().toISOString(),
           deleted_by: 'admin',
-          deletion_reason: reason || 'Archived by user',
-          status: 'inactive'
+          deletion_reason: reason || 'Archived by user'
+          // ✅ REMOVED: status: 'inactive' - this was causing the constraint violation
         })
         .eq('id', id);
 
@@ -509,18 +452,19 @@ const PricingManagement: React.FC = () => {
     }
   };
 
-  // ✅ NEW: Restore function
+  // ✅ FIXED: Restore function with correct status value
   const restorePricingRecord = async (id: string) => {
     try {
       console.log('🔄 Restoring record:', id);
       
+      // ✅ FIX: Restore to 'active' status (which should be valid)
       const { error } = await supabase
         .from('pricing_records')
         .update({
           deleted_at: null,
           deleted_by: null,
           deletion_reason: null,
-          status: 'active'
+          status: 'active' // ✅ Explicitly set to 'active' which should be valid
         })
         .eq('id', id);
 
@@ -539,14 +483,14 @@ const PricingManagement: React.FC = () => {
     }
   };
 
-  // ✅ NEW: Handle delete button click
+  // Handle delete button click
   const handleDeleteClick = (id: string) => {
     setDeletingRecord(id);
     setDeletionReason('');
     setIsDeleteDialogOpen(true);
   };
 
-  // ✅ NEW: Confirm soft delete
+  // Confirm soft delete
   const confirmSoftDelete = async () => {
     if (deletingRecord) {
       await softDeletePricingRecord(deletingRecord, deletionReason);
@@ -615,26 +559,64 @@ const PricingManagement: React.FC = () => {
     const now = new Date();
     const endDate = record.effective_end_date ? new Date(record.effective_end_date) : null;
     
-    // ✅ NEW: Handle deleted status
     if (record.deleted_at) {
       return { status: 'Archived', variant: 'secondary' as const };
-    } else if (record.status === 'inactive') {
-      return { status: 'Inactive', variant: 'secondary' as const };
-    } else if (endDate && endDate < now) {
+    } else if (record.status === 'pending') {
+      return { status: 'Pending', variant: 'secondary' as const };
+    } else if (record.status === 'expired' || (endDate && endDate < now)) {
       return { status: 'Expired', variant: 'destructive' as const };
     } else {
       return { status: 'Active', variant: 'default' as const };
     }
   };
 
-  // Save settings
+  // Auto-calculation effects and other utility functions (same as before)
+  useEffect(() => {
+    if (formData.cost && formData.markup_percentage) {
+      const newCalculatedPrice = calculateListPrice(formData.cost, formData.markup_percentage);
+      
+      const shouldAutoUpdate = !priceManuallySet && (
+        formData.list_price === 0 || 
+        formData.list_price === lastCalculatedPrice.current
+      );
+      
+      if (shouldAutoUpdate) {
+        setFormData(prev => ({
+          ...prev,
+          list_price: newCalculatedPrice
+        }));
+      }
+      
+      lastCalculatedPrice.current = newCalculatedPrice;
+    }
+  }, [formData.cost, formData.markup_percentage, calculateListPrice, priceManuallySet]);
+
+  const handlePriceChange = (newPrice: number) => {
+    const calculatedPrice = calculateListPrice(formData.cost || 0, formData.markup_percentage || 0);
+    
+    if (Math.abs(newPrice - calculatedPrice) > 0.01) {
+      setPriceManuallySet(true);
+    } else {
+      setPriceManuallySet(false);
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      list_price: newPrice
+    }));
+  };
+
+  const resetPriceManualFlag = () => {
+    setPriceManuallySet(false);
+    lastCalculatedPrice.current = 0;
+  };
+
   const saveSettings = () => {
     localStorage.setItem('pricingSettings', JSON.stringify(pricingSettings));
     setIsSettingsDialogOpen(false);
     alert('Settings saved successfully!');
   };
 
-  // Manual recalculate function that resets manual flag
   const recalculateListPrice = () => {
     if (formData.cost && formData.markup_percentage) {
       const newListPrice = calculateListPrice(formData.cost, formData.markup_percentage);
@@ -647,7 +629,6 @@ const PricingManagement: React.FC = () => {
     }
   };
 
-  // Handle inventory item selection with auto-clear
   const handleInventorySelection = (part: InventoryPart) => {
     setSelectedInventoryPart(part);
     const calculatedPrice = calculateListPrice(part.cost, pricingSettings.defaultMarkupPercent);
@@ -663,7 +644,6 @@ const PricingManagement: React.FC = () => {
     resetPriceManualFlag();
     lastCalculatedPrice.current = calculatedPrice;
     
-    // Clear search results after selection
     setTimeout(() => {
       clearSearchResults();
     }, 500);
@@ -678,7 +658,7 @@ const PricingManagement: React.FC = () => {
     loadPricingRecords();
   }, []);
 
-  // ✅ NEW: Reload when showDeleted changes
+  // Reload when showDeleted changes
   useEffect(() => {
     loadPricingRecords(pricingSearchTerm);
   }, [showDeleted]);
@@ -706,6 +686,9 @@ const PricingManagement: React.FC = () => {
   const recommendationCount = Object.keys(priceRecommendations).length;
   const negativeMarginCount = Object.values(priceRecommendations).filter(r => r.isNegativeMargin).length;
 
+  // The rest of the component JSX remains exactly the same as the previous version
+  // (I'm keeping the same UI structure to avoid breaking anything)
+  
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
@@ -859,7 +842,6 @@ const PricingManagement: React.FC = () => {
                     className="pl-10"
                   />
                 </div>
-                {/* ✅ NEW: Show deleted toggle */}
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -888,7 +870,6 @@ const PricingManagement: React.FC = () => {
                         <th className="text-left p-2">List Price</th>
                         <th className="text-left p-2">Markup</th>
                         <th className="text-left p-2">Status</th>
-                        {/* ✅ NEW: Show deletion info for archived records */}
                         {showDeleted && <th className="text-left p-2">Deleted</th>}
                         <th className="text-left p-2">Actions</th>
                       </tr>
@@ -932,7 +913,6 @@ const PricingManagement: React.FC = () => {
                                 {statusBadge.status}
                               </Badge>
                             </td>
-                            {/* ✅ NEW: Show deletion info */}
                             {showDeleted && (
                               <td className="p-2 text-xs text-gray-500">
                                 {record.deleted_at && (
@@ -962,7 +942,6 @@ const PricingManagement: React.FC = () => {
                                     >
                                       <Edit className="w-4 h-4" />
                                     </Button>
-                                    {/* ✅ NEW: Archive button instead of delete */}
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -973,7 +952,6 @@ const PricingManagement: React.FC = () => {
                                     </Button>
                                   </>
                                 ) : (
-                                  /* ✅ NEW: Restore button for archived records */
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -996,7 +974,7 @@ const PricingManagement: React.FC = () => {
           </Card>
         </TabsContent>
 
-        {/* Create Pricing Tab - same as original but with enhanced form */}
+        {/* Create Pricing Tab - keeping same structure */}
         <TabsContent value="create">
           <Card>
             <CardHeader>
@@ -1019,7 +997,7 @@ const PricingManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Inventory Results with auto-clear */}
+                {/* Inventory Results */}
                 {inventoryParts.length > 0 && inventorySearchTerm && (
                   <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
                     <div className="flex justify-between items-center mb-2">
@@ -1052,7 +1030,7 @@ const PricingManagement: React.FC = () => {
                   </div>
                 )}
 
-                {/* Form Fields with SKU field */}
+                {/* Form Fields */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="vcpn">Keystone VCPN *</Label>
@@ -1199,7 +1177,7 @@ const PricingManagement: React.FC = () => {
           </Card>
         </TabsContent>
 
-        {/* Recommendations Tab - simplified for now */}
+        {/* Recommendations Tab */}
         <TabsContent value="recommendations">
           <Card>
             <CardHeader>
@@ -1227,7 +1205,7 @@ const PricingManagement: React.FC = () => {
         </TabsContent>
       </Tabs>
 
-      {/* ✅ NEW: Soft Delete Confirmation Dialog */}
+      {/* Soft Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1260,7 +1238,7 @@ const PricingManagement: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Create/Edit Dialog with SKU field */}
+      {/* Create/Edit Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
