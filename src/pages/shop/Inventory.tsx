@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Edit, Trash2, Upload, AlertTriangle, FileText, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { InventoryFileUpload} from './inventory/InventoryFileUpload';
 
 // Basic inventory item type
 interface BasicInventoryItem {
@@ -88,7 +89,7 @@ export default function Inventory() {
   });
   const [searchTerm, setSearchTerm] = useState('');
 
-  // CSV Upload states
+  // Legacy CSV Upload states (keeping for backward compatibility - but hidden from UI)
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -296,7 +297,6 @@ export default function Inventory() {
       }
 
       console.log('✅ Item updated:', data.id);
-
       resetForm();
       setIsEditDialogOpen(false);
       setEditingItem(null);
@@ -404,7 +404,7 @@ export default function Inventory() {
     setIsEditDialogOpen(true);
   };
 
-  // CSV Upload Functions
+  // Legacy CSV Upload Functions (keeping for backward compatibility - but hidden from UI)
   const handleUploadClick = () => {
     console.log('📤 Upload CSV button clicked');
     setIsUploadDialogOpen(true);
@@ -750,10 +750,8 @@ export default function Inventory() {
           <Button onClick={() => fetchInventory(pagination.currentPage, pagination.pageSize, searchTerm)} variant="outline">
             Refresh
           </Button>
-          <Button variant="outline" onClick={handleUploadClick}>
-            <Upload className="w-4 h-4 mr-2" />
-            Upload CSV
-          </Button>
+          <InventoryFileUpload />
+          {/* REMOVED: Legacy upload button - keeping functionality for reference but hiding from UI */}
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={resetForm}>
@@ -883,11 +881,11 @@ export default function Inventory() {
         </CardContent>
       </Card>
 
-      {/* CSV Upload Dialog */}
+      {/* Legacy CSV Upload Dialog - KEEPING FOR REFERENCE BUT HIDDEN FROM UI */}
       <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Upload Inventory CSV</DialogTitle>
+            <DialogTitle>Upload Inventory CSV (Legacy)</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-6">
@@ -1301,7 +1299,7 @@ export default function Inventory() {
               </div>
             </div>
             <div className="mt-2 text-xs text-gray-500">
-              ✅ Pagination enabled • ✅ Search functionality • ✅ CSV upload • ✅ RLS workaround
+              ✅ Enhanced CSV Upload • ✅ Background Processing • ✅ Validation & Reconciliation • ✅ Legacy Support
             </div>
           </div>
         </CardContent>
