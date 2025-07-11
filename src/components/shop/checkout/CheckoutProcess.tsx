@@ -1,12 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { shippingQuoteService } from '../../../services/shipping_quote_service';
 import { dropshipOrderService } from '../../../services/dropship_order_service';
-
-// Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_TOKEN;
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabase } from '../../../lib/supabase'; // Use shared Supabase client
 
 interface Profile {
   id: string;
@@ -221,7 +216,7 @@ export const CheckoutProcess: React.FC<CheckoutProcessProps> = ({
         .from('profiles')
         .select('id, first_name, last_name, email, phone, street_address, city, state, zip_code, country')
         .eq('role', 'customer')
-        .eq('active', true)  // Changed from is_active to active
+        .eq('active', true)
         .or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
         .limit(10);
 
